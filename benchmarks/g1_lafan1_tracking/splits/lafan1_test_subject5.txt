@@ -1,0 +1,9 @@
+# LAFAN1's own test split (Harvey et al. 2020, "Robust Motion In-betweening", and the dataset's repository):
+# subject 5 is the test set. These are the 7 subject-5 clips among the 40 retargeted to the G1 (data/lafan1_g1).
+dance2_subject5
+fallAndGetUp1_subject5
+fight1_subject5
+jumps1_subject5
+run1_subject5
+walk1_subject5
+walk3_subject5

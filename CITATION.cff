@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use NDM Gym, please cite it as below."
+title: "NDM Gym: Neural Dynamics Modeling Gym"
+authors:
+  - name: "NDM Gym Contributors"
+repository-code: "https://github.com/Frank-ZY-Dou/ndm-gym"
+license: MIT
+version: 0.1.1
+date-released: 2026-10-30

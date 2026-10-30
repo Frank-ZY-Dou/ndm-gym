@@ -1,0 +1,35 @@
+# LAFAN1's own training split (Harvey et al. 2020): subjects 1-4. These are the 33 clips among the 40 retargeted to
+# the G1 (data/lafan1_g1) that are not in lafan1_test_subject5.txt; train on them with --clips.
+dance1_subject1
+dance1_subject2
+dance1_subject3
+dance2_subject1
+dance2_subject2
+dance2_subject3
+dance2_subject4
+fallAndGetUp1_subject1
+fallAndGetUp1_subject4
+fallAndGetUp2_subject2
+fallAndGetUp2_subject3
+fallAndGetUp3_subject1
+fight1_subject2
+fight1_subject3
+fightAndSports1_subject1
+fightAndSports1_subject4
+jumps1_subject1
+jumps1_subject2
+run1_subject2
+run2_subject1
+run2_subject4
+sprint1_subject2
+sprint1_subject4
+walk1_subject1
+walk1_subject2
+walk2_subject1
+walk2_subject3
+walk2_subject4
+walk3_subject1
+walk3_subject2
+walk3_subject3
+walk3_subject4
+walk4_subject1

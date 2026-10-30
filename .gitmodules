@@ -1,0 +1,3 @@
+[submodule "third_party/supermimic"]
+	path = third_party/supermimic
+	url = https://github.com/zita-ch/supermimic_vibed.git

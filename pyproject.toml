@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ndm_gym"
+version = "0.1.1"
+description = "NDM Gym (Neural Dynamics Modeling Gym): neural world models for physics-based humanoid control"
+authors = [{ name = "NDM Gym Contributors" }]
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+# Runtime dependencies come from the Isaac Lab 3 environment (see scripts/setup.sh); nothing is pinned here.
+dependencies = []
+
+[project.urls]
+Repository = "https://github.com/Frank-ZY-Dou/ndm-gym"
+
+[project.scripts]
+ndm-train = "ndm_gym.train:main"
+ndm-eval = "ndm_gym.evaluate:main"
+
+[project.optional-dependencies]
+test = ["pytest"]
+dev = ["pytest", "ruff==0.6.9", "pre-commit"]
+
+[tool.setuptools.packages.find]
+include = ["ndm_gym*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: minutes on CPU (deselect with -m 'not slow')"]
+
+[tool.ruff]
+line-length = 150
+target-version = "py312"
+extend-exclude = ["third_party"]
+
+[tool.ruff.lint.per-file-ignores]
+# standalone scripts: sys.path or environment set-up before imports, compact one-liners
+"tools/*" = ["E402", "E701", "E702"]
