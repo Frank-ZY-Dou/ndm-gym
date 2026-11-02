@@ -1,8 +1,11 @@
 """Regression test of this repository's SuperTrack components on synthetic clips and states: they reproduce the outputs
-in tests/data/supertrack_golden.pt, written on CPU by tests/data/make_supertrack_golden.py with this implementation.
-SuperTrack has no public reference implementation; the components shared with SuperMimic and SuperMimic's updates are
-compared with the upstream reproduction in test_upstream_equivalence and test_algo_equivalence."""
+in tests/data/supertrack_golden.pt, written on CPU by tests/data/make_supertrack_golden.py with this implementation, and
+its full updates reproduce tests/data/supertrack_update_golden.pt (tests/data/make_supertrack_update_golden.py). Both
+files pin the behavior of the code that wrote them. SuperTrack has no public reference implementation; the components
+shared with SuperMimic and SuperMimic's updates are compared with the upstream reproduction in test_upstream_equivalence
+and test_algo_equivalence."""
 
+import importlib.util
 import os
 
 import pytest
@@ -11,20 +14,14 @@ import torch
 from conftest import REPO
 
 TOL = dict(rtol=1e-6, atol=1e-6)
+# a full update runs 32 imagined steps and their backward pass: the build that wrote the file reproduces it bit for bit,
+# the tolerance leaves room for other CPUs' kernels
+UPDATE_TOL = dict(rtol=1e-5, atol=1e-6)
 
 
 @pytest.fixture(scope="module")
 def golden():
     return torch.load(os.path.join(REPO, "tests", "data", "supertrack_golden.pt"))
-
-
-@pytest.fixture(scope="module")
-def synthetic_motion(golden, kin):
-    """The motion library of the synthetic clips stored with the golden outputs."""
-    from ndm_gym.motion.library import MotionLib
-    from ndm_gym.motion.sources import Clip
-
-    return MotionLib([Clip(**c) for c in golden["clips"]], kin, "cpu")
 
 
 def test_accel_world_model(golden):
@@ -55,6 +52,43 @@ def test_losses(golden, kin, synthetic_motion):
     bal = LossBalancer(4)
     bal.calibrate(terms.mean(0), torch.ones(4))
     torch.testing.assert_close(bal.w, golden["bal_w"], **TOL)
+
+
+def test_loss_balancer_calibrated():
+    """``calibrated`` (checked at every update without reading the device once set) follows ``ready``, also across
+    loaded states."""
+    from ndm_gym.algos.supertrack import LossBalancer
+
+    a, b = LossBalancer(4), LossBalancer(4)
+    assert not a.calibrated and not bool(a.ready)
+    a.calibrate(torch.rand(4) + 0.1, torch.ones(4))
+    assert a.calibrated and bool(a.ready)
+    b.load_state_dict(a.state_dict())
+    assert b.calibrated
+    a.load_state_dict(LossBalancer(4).state_dict())
+    assert not a.calibrated and not bool(a.ready)
+
+
+def test_updates(golden):
+    """Two world-model updates and two policy updates (imagination noise, the task's penalties and the failure penalty on;
+    a replay with starts too close to their clip's end) return what tests/data/supertrack_update_golden.pt holds and leave
+    the same loss weights and normalizers: ``updates`` of the script that wrote the file, run again on this code."""
+    path = os.path.join(REPO, "tests", "data", "make_supertrack_update_golden.py")
+    spec = importlib.util.spec_from_file_location("make_supertrack_update_golden", path)
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    want = torch.load(gen.OUT)
+    got = gen.updates(golden["clips"])
+    for kind in ("wm_updates", "pi_updates"):
+        assert len(got[kind]) == len(want[kind])
+        for i, (a, b) in enumerate(zip(got[kind], want[kind])):
+            assert len(a) == len(b)
+            for j, (x, y) in enumerate(zip(a, b)):
+                torch.testing.assert_close(x, y, equal_nan=True, **UPDATE_TOL, msg=lambda m: f"{kind}[{i}][{j}]: {m}")
+    for kind in ("bal_wm", "bal_pi", "norms"):
+        assert got[kind].keys() == want[kind].keys()
+        for k in want[kind]:
+            torch.testing.assert_close(got[kind][k], want[kind][k], **UPDATE_TOL, msg=lambda m: f"{kind}[{k}]: {m}")
 
 
 def test_center_of_mass(kin, motion):

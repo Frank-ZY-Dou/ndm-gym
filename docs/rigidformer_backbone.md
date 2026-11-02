@@ -27,6 +27,8 @@ offset) is the simulator's PD target minus q, and τ̂ = clip(kp·e − kd·q̇,
 from `ndm_gym/robots/g1.py`. Four global values follow the tokens: friction and the torso center-of-mass offset.
 `TokenInputNorm` normalizes the 634 = 30 × 21 + 4 raw features and appends the 90 body-position coordinates divided by
 0.1 m for the rotary attention, so the input noise of `step` (`--wm_input_noise`) moves those positions by noise × 0.1 m.
+With anchors (section 3) the raw features end with every body's rotary points (the anchors' centroid with `mean`, 90
+values; the anchors with `concat`, 90 K), which take the body positions' place in the rotary attention.
 
 ## 3. Architecture
 
@@ -45,6 +47,17 @@ y    = [root head(z_pelvis) | joint head(z_b) in G1 joint order]                
   frequencies in [1, 10] rad/m (24 of 32 channels, 4 frequencies per coordinate at the sizes below), so query-key products
   depend only on relative positions; registers sit at the origin. The tree bias is a learned, zero-initialized bias per
   head and per number of joints between two bodies (0 to 16; pairs involving a register form one more class).
+- Anchor RoPE (RigidFormer's ARoPE, off by default): `--rf_anchors K` gives every body K anchor points, the first K of
+  RigidFormer's farthest point sampling (rule `centroid_farthest`) over its visual-mesh vertices in the link frame,
+  which move with the body. `--rf_anchor_mode mean` (the default) mean-pools the anchors' rotary angles; the angles
+  being linear in the position, these are the angles of the anchors' centroid, so the inputs carry that body-fixed point
+  (3 values per body after the global context) and the blocks see one rotary point per body, as without anchors.
+  `concat` gives each of the 3K anchor coordinates its own channel pairs (K = 4 at head width 32: one frequency, 1 rad/m,
+  per coordinate; a K whose coordinates cannot share the channels equally is refused). `--rf_rope_center` measures the
+  rotary positions from their centroid over the bodies (and anchors), where the zero-angle registers then sit; the body
+  tokens' query-key products do not change. RigidFormer's v1 configuration is `--rf_anchors 4 --rf_rope_center` (mode
+  `mean`, interleaved channel pairs as here). Both modes change only the rotary tables the blocks take, so they combine
+  with every speed option of section 6.
 - Output layout: the root components, then each joint component over the 29 joints. With both heads at zero, the first
   prediction is the output normalizer's mean, as with the MLP's zero-initialized last layer.
 - The residual stream is fp32; matrix multiplications run under the training's bf16 autocast (`--amp bf16`). The default
@@ -66,8 +79,12 @@ Size flags, with the defaults of `ndm_gym/train.py`: `--rf_dim 128` (token width
 arguments keep their defaults. Against policy-gradient spikes in the BPTT through the frozen world model (off by
 default): `--rf_rope_detach` (no gradient through the rotary positions; the positions still reach the token features),
 and for either backbone `--bptt_clip_k k` (each rollout's state gradient after every imagined step capped at k times the
-batch median) and `--wm_bptt_fp32` (no bf16 autocast in the world model during the BPTT). `tools/grad_stats.py` measures
-their effect on a checkpoint at learning rate 0. The MLP's flags `--wm_hidden`, `--wm_act` and `--wm_no_ln` must stay at
+batch median), `--wm_bptt_fp32` (no bf16 autocast in the world model during the BPTT), `--pi_rollout_clip k` (each
+rollout's part of the policy gradient over the horizon at most k times the median over the rollouts, sized by the
+gradient that reaches the policy's output) and `--bptt_decay lam` (the gradient through every imagined state times lam).
+`tools/grad_stats.py` measures their effect on a checkpoint at learning rate 0; with `--anatomy` it also takes every
+update's gradient apart by imagined step and by rollout (`ndm_gym/algos/rollout_grads.py`) and evaluates robust
+aggregations of the rollouts on the same batches. The MLP's flags `--wm_hidden`, `--wm_act` and `--wm_no_ln` must stay at
 their defaults; `rigidformer_kwargs` raises an error instead of ignoring them. Targets, output normalizers, integration
 and losses are those of the MLP world models. The world-model fit compiles one step instead of the whole k-step rollout,
 which as one graph takes about 10 min to compile (one step: about 2 min). Benchmark settings and results:
@@ -106,9 +123,103 @@ As in training, (a) compiles the MLP's whole rollout and RigidFormer's single st
 trunk (`checkpoint="frozen"`); without recomputation, RF-XS and RF-S run out of the 40 GB. With `checkpoint="always"`,
 RF-S takes 170 ms and 1.6 GB in (a). Without the tree bias, RoPE or registers, RF-S takes 158, 149 and 140 ms in (a).
 
+Speed options (`add_speed_args`, off by default; with all of them off the code path is the one above):
+
+- `--rf_fused_train`: each block's forward and backward passes as fused Triton kernels (`ndm_gym/kernels/rf_train.py`).
+  The forward pass is one kernel, which also keeps the residual after the attention; the backward pass is two kernels
+  between cuBLAS products with qkvg's and the output projection's weights, and the parameters' gradients are bf16
+  products over all tokens with fp32 outputs. The products round their inputs to bf16 as autocast does; RMSNorms,
+  softmax, gates and FiLM stay in fp32. One RF-S block, forward and backward, GPU time: 2.75 instead of 3.63 ms with the
+  parameters trained (2048 windows), 2.87 instead of 4.65 ms frozen (4096 rollouts). A block keeps two (N, T, d) tensors
+  for its backward pass, which lowers the runs' peak memory from 17 to 12 GB. It launches more and smaller kernels than
+  the compiled block and is faster only with `--wm_cudagraphs` and `--pi_cudagraphs`. The kernels replace the blocks'
+  passes under bf16 autocast; passes without autocast (the BPTT of `--wm_bptt_fp32`, the fp32 penalty of
+  `--wm_smooth_w`) run the blocks as without the option. Refused with `--amp none`.
+- `--rf_bptt_keep_blocks` (with `--rf_fused_train`, not with `--wm_bptt_fp32`): the policy's BPTT keeps the fused
+  blocks' saved tensors and recomputes only the read-out (`checkpoint="frozen_readout"`), with the same results and
+  about 12 GB more at 4096 rollouts × 32 steps.
+- `--combo_kernels`: inductor launches independent small kernels of a compiled graph as one
+  (`torch._inductor.config.combo_kernels`); RigidFormer's world-model step at 2048 windows: 93 forward and 307 backward
+  kernels instead of 223 and 498.
+- `--compile_eager` (either backbone): the forward kinematics the training otherwise runs eagerly, as compiled functions:
+  the collection's reward (`TrackingSim.reward_fn`), the world model's normalizer features (`Algo.norm_inputs`: for
+  RigidFormer its token features with their forward kinematics, for the MLP its invariant features) and SuperMimic's
+  critic input in the policy loss. Eagerly each is several hundred small launches, which left the collection CPU-bound
+  (SuperTrack-RF: 125 ms per iteration, 48 ms of it on the GPU; with the option 65 and 28 ms) and the GPU of
+  SuperMimic's policy update partly idle (SuperMimic-RF: 496 ms per iteration, 450 ms with the option). Equal up to
+  float rounding.
+- `--rf_fit_keep_ops` (with `--rf_fused_train`): the world-model fit's fused forward passes also keep the bf16 operands
+  their backward passes would recompute (the normalized input and FiLM output, the q/k/v/gate products: about 100 MB
+  per block at 2048 windows, 2.4 GB during the fit), and the backward passes read them and run the SwiGLU half as a
+  hidden-chunk kernel, a cuBLAS product and a row kernel. One block, forward and backward at 2048 windows: 2.46 instead
+  of 2.71 ms. Equal up to float rounding; the BPTT's passes (frozen parameters) are unchanged.
+
+Training iterations per second (A100-SXM4-40GB; medians of 40 iterations after compilation, from the study's
+checkpoints; "existing": `--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3`, with `--critic_cudagraphs` for
+SuperMimic and `--rf_fused_rope` for RigidFormer, which `--rf_fused_train` replaces; each column adds its option to the
+previous ones):
+
+| | default | existing | + `--rf_fused_train` | + `--combo_kernels` | + `--rf_bptt_keep_blocks` |
+|---|---|---|---|---|---|
+| SuperTrack-RF | 0.452 | 0.535 | 0.706 | 0.739 | 0.787 |
+| SuperMimic-RF | 0.407 | 0.522 | 0.682 | 0.708 | 0.755 |
+| SuperTrack (MLP) | 1.188 | 3.126 | – | 3.196 | – |
+| SuperMimic (MLP) | 1.264 | 2.747 | – | 2.799 | – |
+
+Peak memory of SuperTrack-RF: 17.1 GB by default, 12.0 GB with `--rf_fused_train`, 26.2 GB with `--rf_bptt_keep_blocks`
+as well (SuperMimic-RF: 16.1, 11.6, 25.6 GB).
+
+The anchor RoPE in RigidFormer's v1 configuration (`--rf_anchors 4 --rf_rope_center`) with every option of the last
+column, measured in one session next to the same runs without it: SuperTrack-RF 0.775 against 0.772 iterations per
+second, SuperMimic-RF 0.741 against 0.742; GPU time per iteration 1210 against 1207 ms and 1236 against 1233 ms; the same
+peak memory.
+
+`--compile_eager` and `--rf_fit_keep_ops`, measured in that session next to the same runs without them; each column adds
+its option to the previous ones, starting from every option of the table above (for RigidFormer measured again, hence
+0.772 and 0.742 rather than 0.787 and 0.755) or, for the MLP, every option that applies to it:
+
+| | options above | + `--compile_eager` | + `--rf_fit_keep_ops` |
+|---|---|---|---|
+| SuperTrack-RF | 0.772 | 0.816 | 0.852 |
+| SuperMimic-RF | 0.742 | 0.811 | 0.848 |
+| SuperTrack (MLP) | 3.192 | 3.366 | – |
+| SuperMimic (MLP) | 2.802 | 3.259 | – |
+
+The `--rf_fit_keep_ops` column also has two exact changes to `--rf_fused_train`'s backward pass, which no longer
+zero-fills a buffer it overwrites or the gradients of outputs that no loss reads (the same bits as before); with
+`--compile_eager` they make 0.823 for SuperTrack-RF and 0.818 for SuperMimic-RF. `--rf_fit_keep_ops` shortens the
+world-model fit's backward pass (GPU time per iteration, SuperTrack-RF: 526 to 473 ms) and lengthens its forward pass
+(171 to 182 ms). With the v1 anchor RoPE and both options: SuperTrack-RF 0.848, SuperMimic-RF 0.847. Peak memory changes
+by at most 0.1 GB (the policy update's BPTT sets it). Without `--rf_bptt_keep_blocks`, `--compile_eager` takes
+SuperTrack-RF from 0.731 to 0.763 iterations per second and SuperMimic-RF from 0.697 to 0.759.
+
+Gradients against fp32 (the default path without autocast and TF32; 8 batches of 512 windows and of 1024 rollouts from
+replays of the checkpoints' policies, median relative error of all parameters' gradients): the world-model fit 0.14 with
+`--rf_fused_train` and 0.16 by default for SuperTrack-RF, 0.10 and 0.11 for SuperMimic-RF. The policy update's
+gradient through 32 imagined steps: 0.66 and 0.75 for SuperTrack-RF, 0.75 and 0.70 for SuperMimic-RF; with MLP world
+models 0.38 (SuperTrack) and 0.73 (SuperMimic); through 8 steps (SuperMimic-RF) 0.24 and 0.23, and 0.03 between the two
+paths. The BPTT amplifies rounding: a 10⁻⁶ relative change of the start velocities moves the fp32 gradient by
+10⁻⁵-10⁻² (once 0.22, SuperTrack-RF), and the difference stays at 0.66-0.74 with the world model in fp32
+(`--wm_bptt_fp32`), with the policy in fp32, or with both (TF32 products).
+
+Trainings of 400 iterations from scratch (seed 1) differ from the default run about as much as a repeat of the default
+run does. Mean relative differences per logged iteration from iteration 100, for `--rf_fused_train` alone, all the speed
+options above, and the repeat: world-model loss 1.9%, 4.4% and 4.3% (SuperTrack-RF), 5.8%, 3.8% and 7.3%
+(SuperMimic-RF); normalized episode return 35%, 37% and 45%, and 12%, 18% and 16%. With all the options these runs made
+0.778 and 0.733 iterations per second, by default 0.393 and 0.404.
+
+The same trainings with `--compile_eager` and `--rf_fit_keep_ops` added to all the options, against those four runs of
+each algorithm (in parentheses the range among the four): SuperTrack-RF, two runs, world-model loss 1.3-6.3% (1.9-4.4%),
+policy loss 1.7-3.6% (2.0-4.0%), normalized episode return 51-85% (35-46%); with `--compile_eager` alone (one run)
+1.2-3.8%, 1.1-3.4% and 41-57%, with `--rf_fit_keep_ops` alone (two runs) 1.5-5.2%, 2.1-4.5% and 25-50%. SuperMimic-RF,
+two runs: world-model loss 2.5-6.2% (3.3-7.3%), policy loss 2.6-11.6% (3.4-9.6%), normalized episode return 5-19%
+(12-18%). Single runs reach either side of the four runs' range: over iterations 100-400, the mean episode length of
+SuperTrack-RF was 47.6 and 46.8 with both options, 53.2 with `--compile_eager` alone and 62.2 and 52.2 with
+`--rf_fit_keep_ops` alone, against 51.7-60.4; that of SuperMimic-RF 62.9 and 81.5 against 71.5-91.3.
+
 ## 7. Validation
 
-`python -m pytest tests/test_rigidformer_backbone.py` runs 15 test cases on CPU (`-m "not slow"` skips the two slow
+`python -m pytest tests/test_rigidformer_backbone.py` runs 30 test cases on CPU (`-m "not slow"` skips the two slow
 ones); like the other tests, they need the G1 assets and the LAFAN1 motions in `data/`. They check:
 
 - features: forward kinematics and offset scale, shapes, pelvis token, absolute heights, each body's own joint, PD error
@@ -116,8 +227,28 @@ ones); like the other tests, they need the G1 assets and the LAFAN1 motions in `
 - read-out: the layout, joint j read from the token of the body that owns it, and `step` equal to an MLP world model's
   while the heads are at zero (both algorithms);
 - training: gradients to the setpoints, context, velocities and all parameters; checkpointing (same outputs and
-  gradients; by default only while frozen); input noise; the training-flag mapping and its errors; the wrench channel;
+  gradients; by default only while frozen; `frozen_readout` the same bits); input noise; the training-flag mapping and
+  its errors; the wrench channel;
+- anchor RoPE: the farthest point sampling (ties, order independence, duplicates, prefix) and the body anchors; the
+  rotary tables the blocks take against RigidFormer's definitions computed directly in float64 (one point per body, 4
+  anchors with `mean` and `concat`, each with and without `--rf_rope_center`); translation invariance of the query-key
+  products; `--rf_anchors 1` equal to the network without anchors; both modes' inputs, invariances and refusals; the
+  centring;
 - learning (slow): each world model fits the one-step dynamics of a random teacher MLP world model on 128 states.
+
+`python -m pytest tests/test_rf_train.py` checks `--rf_fused_train` on a GPU (skipped without one): a block's output
+and every gradient (input, rotary tables, attention bias, FiLM context, parameters) against the fp32 block, next to the
+bf16-autocast block's own errors, over token counts, batch sizes, options, tile settings and frozen parameters, also
+with `--rf_fit_keep_ops` (its output the same bits as without; operands kept only while the parameters train); bitwise
+determinism; the whole network eager and compiled, trained and frozen, and with `--rf_bptt_keep_blocks` (the same
+bits), also with the anchor RoPE (RigidFormer's v1 configuration and `concat`) and `--rf_fit_keep_ops`; both world
+models' 4-step rollouts with the anchor RoPE and with `--rf_fit_keep_ops`, fit and BPTT; the refusals. With
+`NDM_RF_TRAIN_CKPT` (a LAFAN1 RigidFormer checkpoint) and `NDM_RF_TRAIN_DATA` (a recording of its policy,
+`python -m ndm_gym.wmbench.collect`) set, also the world-model fit on recorded windows.
+
+`tests/test_lafan1_training.py` checks `--compile_eager`: which functions it compiles (both algorithms, on CPU, with the
+same bits when the compiler is replaced by the identity) and, on a GPU, the compiled reward, normalizer features
+(RigidFormer and MLP) and SuperMimic's critic input with its gradients against the eager ones.
 
 ## Reference
 

@@ -6,6 +6,7 @@ MPJPE-local with Welch 95% intervals over three seeds, and the verdicts.
            the same checkpoint (eval.csv) as context
   check 2  sample efficiency: <root>/logs/c2_<algo>[_rf]_s4-6/eval.csv at iterations 4000, 6000 and 8000
   check 3  unseen motions: <root>/logs/h200_c3_<algo>[_rf]_s1-3/ckpt_<last>_eval.json, split into the 7 held-out clips
+           (--c3_runs and --seeds name other runs, e.g. rfd_{a}_{m}_ho_s{s} on seeds 7 8 9)
            and the 33 training clips of benchmarks/g1_lafan1_tracking/splits; every checkpoint as context
 
 Usage: python tools/rf_checks.py <check> --root <directory with logs/ and results/> [--md <out.md>] [--csv <out.csv>]
@@ -118,14 +119,21 @@ def split_scores(res, names):
             "mpjpe_l": statistics.mean(res["per_clip_err"][n]["mpjpe_l"] for n in names)}  # fmt: skip
 
 
-def check3(root):
+def seed_text(seeds) -> str:
+    """'seeds 1-3' for a consecutive run of seeds, else 'seeds 1, 5, 9'."""
+    seeds = list(seeds)
+    return f"seeds {seeds[0]}-{seeds[-1]}" if seeds == list(range(seeds[0], seeds[-1] + 1)) else "seeds " + ", ".join(map(str, seeds))
+
+
+def check3(root, runs="h200_c3_{a}{k}_s{s}", seeds=(1, 2, 3)):
+    """runs: the run names, with {a} the algorithm, {s} the seed and the model as {k} ("" or "_rf") or {m} ("mlp" or "rf")."""
     train, test = read_list(os.path.join(SPLITS, "lafan1_train_subjects1-4.txt")), read_list(os.path.join(SPLITS, "lafan1_test_subject5.txt"))
     out, curves = [], []
     for a, name in ALGOS:
         scores = {}
         for k in ("", "_rf"):
-            for s in (1, 2, 3):
-                d = os.path.join(root, "logs", f"h200_c3_{a}{k}_s{s}")
+            for s in seeds:
+                d = os.path.join(root, "logs", runs.format(a=a, k=k, m="rf" if k else "mlp", s=s))
                 with open(os.path.join(d, "clips.txt")) as f:
                     trained = f.read().split()
                 if len(trained) != len(train) or set(trained) != set(train):
@@ -142,24 +150,24 @@ def check3(root):
                     scores[(k, s, it)] = {"held-out": split_scores(res, test), "training": split_scores(res, train)}
         last = C3_ITERS[a]
         for part in ("held-out", "training"):
-            rows, verdict, _ = compare([scores[("", s, last)][part] for s in (1, 2, 3)], [scores[("_rf", s, last)][part] for s in (1, 2, 3)])
+            rows, verdict, _ = compare([scores[("", s, last)][part] for s in seeds], [scores[("_rf", s, last)][part] for s in seeds])
             out.append({"algo": name, "case": f"{part} clips, it {last}" + ("" if part == "held-out" else " (context)"), "rows": rows,
                         "verdict": verdict if part == "held-out" else "context, no verdict"})  # fmt: skip
-        gap = {k: [{m: scores[(k, s, last)]["held-out"][m] - scores[(k, s, last)]["training"][m] for m, *_ in METRICS} for s in (1, 2, 3)]
+        gap = {k: [{m: scores[(k, s, last)]["held-out"][m] - scores[(k, s, last)]["training"][m] for m, *_ in METRICS} for s in seeds]
                for k in ("", "_rf")}  # fmt: skip
         rows, _, _ = compare(gap[""], gap["_rf"])
         out.append({"algo": name, "case": "held-out minus training (context)", "rows": rows, "verdict": "context, no verdict"})
         for it in sorted({it for (_, _, it) in scores}):
-            if all(("", s, it) in scores and ("_rf", s, it) in scores for s in (1, 2, 3)):
+            if all(("", s, it) in scores and ("_rf", s, it) in scores for s in seeds):
                 for k, label in (("", "MLP"), ("_rf", "RigidFormer")):
-                    v = [scores[(k, s, it)]["held-out"] for s in (1, 2, 3)]
+                    v = [scores[(k, s, it)]["held-out"] for s in seeds]
                     curves.append({"algo": name, "model": label, "iteration": it, "held-out return": statistics.mean(x["norm_return"] for x in v),
                                    "held-out failed": statistics.mean(x["n_failed"] for x in v),
                                    "held-out MPJPE-local (mm)": 1e3 * statistics.mean(x["mpjpe_l"] for x in v)})  # fmt: skip
-    return out, "Check 3: unseen motions (RigidFormer minus MLP, seeds 1-3, LAFAN1 subject 5 held out)", curves
+    return out, f"Check 3: unseen motions (RigidFormer minus MLP, {seed_text(seeds)}, LAFAN1 subject 5 held out)", curves
 
 
-def markdown(title, out, curves=None):
+def markdown(title, out, curves=None, seeds="seeds 1-3"):
     lines = [f"### {title}", "", "| algorithm | case | metric | MLP | RigidFormer | RF - MLP [95% CI] | verdict |", "|---|---|---|---|---|---|---|"]
     for o in out:
         if not o["rows"]:
@@ -170,7 +178,7 @@ def markdown(title, out, curves=None):
             lines.append(f"| {o['algo'] if i == 0 else ''} | {o['case'] if i == 0 else ''} | {r['metric']} | {r['mlp']:{f}} | {r['rf']:{f}} | {ci} | "
                          f"{o['verdict'] if i == 0 else ''} |")  # fmt: skip
     if curves:
-        lines += ["", "Held-out clips at every checkpoint (mean over seeds 1-3; context):", "",
+        lines += ["", f"Held-out clips at every checkpoint (mean over {seeds}; context):", "",
                   "| algorithm | model | iteration | return | failed clips | MPJPE-local (mm) |", "|---|---|---|---|---|---|"]  # fmt: skip
         for c in curves:
             lines.append(f"| {c['algo']} | {c['model']} | {c['iteration']} | {c['held-out return']:.3f} | {c['held-out failed']:.2f} | "
@@ -184,6 +192,8 @@ def main():
     p.add_argument("--root", required=True, help="directory holding the runs' logs/ (and results/ for check 1)")
     p.add_argument("--md", default=None)
     p.add_argument("--csv", default=None)
+    p.add_argument("--c3_runs", default="h200_c3_{a}{k}_s{s}", help="check 3's run names ({a}, {s}, and {k} = '' / '_rf' or {m} = mlp / rf)")
+    p.add_argument("--seeds", type=int, nargs="+", default=[1, 2, 3], help="check 3's seeds")
     args = p.parse_args()
     curves = None
     if args.check == 1:
@@ -191,8 +201,8 @@ def main():
     elif args.check == 2:
         out, title = check2(args.root)
     else:
-        out, title, curves = check3(args.root)
-    md = markdown(title, out, curves)
+        out, title, curves = check3(args.root, args.c3_runs, tuple(args.seeds))
+    md = markdown(title, out, curves, seed_text(args.seeds))
     print(md)
     if args.md:
         open(args.md, "w").write(md)

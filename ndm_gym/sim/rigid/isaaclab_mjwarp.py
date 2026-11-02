@@ -251,6 +251,7 @@ class TrackingSim:
         self.bin_w_avg = torch.full((motion.num_bins,), 1.0 / motion.num_bins, device=dev)
         self.done_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.failed_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
+        self.reward_fn = mdp.reward  # the step's reward without an object; train.py --compile_eager sets its compiled version
         self.reset(torch.arange(self.N, device=dev))
 
     # ------------------------------------------------------------------ friction
@@ -295,9 +296,12 @@ class TrackingSim:
         probs = 0.5 / m.num_bins + 0.4 * soft + 0.1 * self.bin_w_avg / self.bin_w_avg.sum()
         bins = torch.multinomial(probs, n, replacement=True)
         start = m.bin_start[bins]
-        end = torch.minimum(start + 50, m.clip_end[m.bin_clip[bins]])  # keep >= 1 step before the clip end
+        last = m.clip_end[m.bin_clip[bins]]
+        end = torch.minimum(start + 50, last)  # keep >= 1 step before the clip end
         f = start + (torch.rand(n, device=self.device) * (end - start).float()).long()
-        return f, bins
+        # a clip of 50 k + 1 frames has a last bin of one frame, its last: a start there would step past the clip, so it
+        # starts one frame earlier (no LAFAN1 clip has such a length, so their resets are unchanged)
+        return torch.minimum(f, last - 1), bins
 
     def reset(self, env_ids: torch.Tensor, frames: torch.Tensor | None = None):
         if len(env_ids) == 0:
@@ -382,7 +386,7 @@ class TrackingSim:
         So1 = self.object_state() if self.object is not None else None
         f1 = f + 1
         if So1 is None:
-            r, terms = self.mdp.reward(S1, f1, a, a_prev, terms=True)
+            r, terms = self.reward_fn(S1, f1, a, a_prev, terms=True)
             term = self.mdp.termination(S1, f1)
         else:
             r, terms = self.mdp.reward(S1, f1, a, a_prev, terms=True, So=So1)

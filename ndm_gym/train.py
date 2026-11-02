@@ -1,7 +1,9 @@
 """Training loop (SuperMimic Algorithm A.1): collect -> fit world model -> BPTT policy update.
 
 ``--algo`` selects the algorithm (:mod:`ndm_gym.algos`); the simulator, observations, networks, replay buffer and
-schedule are shared. Run: ``python -m ndm_gym.train --algo supertrack|supermimic --log_dir logs/<run>``.
+schedule are shared. Run: ``python -m ndm_gym.train --algo supertrack|supermimic --log_dir logs/<run>``. ``--resume``
+continues from a run's ``last.pt`` (the networks with their normalizers, the optimizers' states, the algorithm's own
+state); the replay buffer is not saved, so a resumed run refills it with ``--warmup_steps`` of collection.
 """
 
 from __future__ import annotations
@@ -28,7 +30,14 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--imag_start_perturb", type=float, default=0.0, help="both: std of horizontal root-velocity kicks on imagination starts (m/s)")
     parser.add_argument("--bptt_clip_k", type=float, default=0.0,
                         help="both: in the policy's BPTT, cap each rollout's state gradient after every imagined step at k x the batch median (0: off)")
-    parser.add_argument("--wm_bptt_fp32", action="store_true", help="both: the world model without bf16 autocast in the policy's BPTT")
+    parser.add_argument("--bptt_decay", type=float, default=1.0,
+                        help="both: in the policy's BPTT, the gradient through every imagined state times this (a loss d steps after an action "
+                        "weighs lam^d; 1: off)")  # fmt: skip
+    parser.add_argument("--pi_rollout_clip", type=float, default=0.0,
+                        help="both: each rollout's part of the policy gradient at most k x the median over the rollouts, sized by the gradient "
+                        "that reaches the policy's output (0: off)")  # fmt: skip
+    parser.add_argument("--wm_bptt_fp32", action="store_true",
+                        help="both: the world model without bf16 autocast in the policy's BPTT (its matmuls still run in TF32 under allow_tf32)")
     parser.add_argument("--imag_fail_starts", type=float, default=0.0,
                         help="both: fraction of imagination starts drawn from the last steps before the replay's terminations")
     parser.add_argument("--imag_fail_window", type=int, default=50, help="both: steps before a termination that count as pre-failure (50 = 1 s)")
@@ -53,6 +62,10 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--wm_act", type=str, default="silu", choices=["silu", "gelu", "elu", "mish", "relu"])
     parser.add_argument("--wm_no_ln", action="store_true", help="world model without LayerNorm")
     parser.add_argument("--wm_input_noise", type=float, default=0.0, help="std of noise on normalized world-model inputs while fitting")
+    parser.add_argument("--wm_smooth_w", type=float, default=0.0,
+                        help="both: weight of a finite-difference Jacobian penalty on the world model's network while fitting (0: off)")  # fmt: skip
+    parser.add_argument("--wm_smooth_eps", type=float, default=0.1, help="both: the smoothness penalty's input step (normalized units, >= 0.01)")
+    parser.add_argument("--wm_smooth_dirs", type=int, default=1, help="both: the smoothness penalty's random input directions per window")
     parser.add_argument("--wm_backbone", type=str, default="mlp", choices=["mlp", "rigidformer"], help="world-model network")
     parser.add_argument("--rf_dim", type=int, default=128, help="rigidformer: token width")
     parser.add_argument("--rf_layers", type=int, default=3, help="rigidformer: Transformer blocks")
@@ -61,6 +74,14 @@ def add_train_args(parser: argparse.ArgumentParser):
     parser.add_argument("--rf_no_tree_bias", action="store_true", help="rigidformer: no kinematic-tree attention bias")
     parser.add_argument("--rf_no_rope", action="store_true", help="rigidformer: no rotary body positions")
     parser.add_argument("--rf_rope_detach", action="store_true", help="rigidformer: no gradient through the rotary positions in the policy's BPTT")
+    parser.add_argument("--rf_fused_rope", action="store_true",
+                        help="rigidformer: the rotary embedding fused into one elementwise expression (faster when compiled, equal up to rounding)")
+    parser.add_argument("--rf_anchors", type=int, default=1,
+                        help="rigidformer: anchor points per body for the rotary attention (RigidFormer's ARoPE; 1: the link origin)")
+    parser.add_argument("--rf_anchor_mode", type=str, default="mean", choices=["mean", "concat"],
+                        help="rigidformer, --rf_anchors > 1: the anchors' rotary angles mean-pooled (ARoPE, their centroid's) or concatenated")
+    parser.add_argument("--rf_rope_center", action="store_true",
+                        help="rigidformer: rotary positions relative to their centroid over the bodies (and anchors), where the registers sit")
     parser.add_argument("--wm_sample", type=str, default="uniform", choices=["uniform", "prioritized"],
                         help="world-model window sampling: uniform, or proportional to the window's last error^alpha")
     parser.add_argument("--wm_prio_alpha", type=float, default=0.6)
@@ -113,11 +134,78 @@ def training_reward_cfg(reward_std_scale: float):
     return cfg
 
 
+def elementwise_3x3_products():
+    """``--elementwise_3x3``: inside compiled functions, inductor decomposes the batched matrix products whose dimensions
+    are all at most 3 (rotation matrices, 3-vectors) into fp32 elementwise products and sums that it fuses with their
+    neighbours, instead of one cuBLAS call each; under allow_tf32, cuBLAS runs the products with a transposed factor
+    (R^T R') as TF32 tensor-core GEMMs on 64 x 64 tiles (relative error 6e-4), the others in fp32."""
+    import torch
+    import torch._functorch.config
+    import torch._inductor.config
+    from torch._inductor import decomposition
+
+    default = decomposition.decompositions[torch.ops.aten.bmm.default]
+
+    def bmm(a, b, out_dtype=None):
+        if out_dtype is None and a.dtype == torch.float32 and max(a.shape[1], a.shape[2], b.shape[2]) <= 3:
+            return (a.unsqueeze(-1) * b.unsqueeze(1)).sum(2)
+        return default(a, b, out_dtype)
+
+    decomposition.decompositions[torch.ops.aten.bmm.default] = bmm
+    decomposition.fast_random_decomps.cache_clear()
+    # the compile caches do not key on the decomposition table: a cached graph would keep the cuBLAS products
+    torch._inductor.config.fx_graph_cache = False
+    torch._functorch.config.enable_autograd_cache = False
+
+
+def combo_kernels():
+    """``--combo_kernels``: inside compiled functions, inductor runs independent kernels of a graph as one launch
+    (``torch._inductor.config.combo_kernels``): the world models' kinematics, features and losses are many small kernels
+    (an A100, RigidFormer's world-model step at 2048 windows: 223 forward and 498 backward kernels without, 93 and 307
+    with). The kernels' code is generated as without; the combined kernels' launch configurations may differ."""
+    import torch._inductor.config
+
+    torch._inductor.config.combo_kernels = True
+
+
+def add_speed_args(parser: argparse.ArgumentParser):
+    """Speed options of the training run (off by default). The tools that rebuild a run's arguments (tools/grad_stats.py)
+    add them after ``add_train_args``, as ``parse_args`` does."""
+    parser.add_argument("--fused_adam", action="store_true",
+                        help="Adam's fused CUDA kernel for every optimizer, one launch per step (changes results)")
+    parser.add_argument("--elementwise_3x3", action="store_true",
+                        help="3x3 products in compiled functions as fused fp32 elementwise products (elementwise_3x3_products; changes results)")
+    parser.add_argument("--wm_cudagraphs", action="store_true",
+                        help="the world-model update's compiled rollout (RigidFormer: step) and loss as CUDA graphs (same kernels)")
+    parser.add_argument("--pi_cudagraphs", action="store_true",
+                        help="the policy update's compiled imagination step and losses as CUDA graphs (same kernels)")
+    parser.add_argument("--critic_cudagraphs", action="store_true",
+                        help="supermimic: the critic's minibatch step as a CUDA graph, with capturable Adam (changes results)")
+    parser.add_argument("--combo_kernels", action="store_true",
+                        help="independent small kernels of compiled functions launched together (combo_kernels; may change results by rounding)")
+    parser.add_argument("--compile_eager", action="store_true",
+                        help="compile the forward kinematics that otherwise run eagerly: the collection's reward and world-model normalizer "
+                             "features, supermimic's critic input in the policy loss (hundreds of small launches each; changes results by rounding)")
+    parser.add_argument("--rf_fused_train", action="store_true",
+                        help="rigidformer: the blocks' bf16 forward and backward passes as fused Triton kernels (kernels/rf_train.py; changes "
+                             "results; fp32 passes as without)")
+    parser.add_argument("--rf_fit_keep_ops", action="store_true",
+                        help="rigidformer, with --rf_fused_train: the world-model fit's fused forward passes keep the bf16 operands their "
+                             "backward passes recompute (equal up to rounding; about 2.4 GB more during the fit at 2048 windows)")
+    parser.add_argument("--rf_bptt_keep_blocks", action="store_true",
+                        help="rigidformer, with --rf_fused_train: the policy's BPTT keeps the fused blocks' tensors, recomputing only the "
+                             "read-out (same results, about 12 GB more at 4096 rollouts x 32 steps)")
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     add_train_args(parser)
+    add_speed_args(parser)
     add_launcher_args(parser)
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.critic_cudagraphs and args.algo != "supermimic":
+        parser.error("--critic_cudagraphs: only SuperMimic has a critic")
+    return args
 
 
 def main():
@@ -127,19 +215,23 @@ def main():
 
     import ndm_gym.core.nets as nets
     from ndm_gym.algos import ALGOS
-    from ndm_gym.algos.common import lr_at
+    from ndm_gym.algos.common import lr_at, set_lr
     from ndm_gym.buffer import ReplayBuffer
     from ndm_gym.motion.library import MotionLib
     from ndm_gym.motion.sources import lafan1, read_clip_list, select
     from ndm_gym.robots import g1
     from ndm_gym.sim.rigid.isaaclab_mjwarp import TrackingSim, make_sim
-    from ndm_gym.state import normalize_xi, unflatten_state
+    from ndm_gym.state import unflatten_state
     from ndm_gym.tasks.tracking import MDP, OBS_DIM
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     torch.manual_seed(args.seed)
     nets.AMP_DTYPE = torch.bfloat16 if args.amp == "bf16" else None
+    if args.elementwise_3x3:
+        elementwise_3x3_products()
+    if args.combo_kernels:
+        combo_kernels()
     dev = "cuda:0"
     os.makedirs(args.log_dir, exist_ok=True)
     json.dump(vars(args), open(os.path.join(args.log_dir, "args.json"), "w"), indent=2)
@@ -158,6 +250,9 @@ def main():
     if args.resume:
         ck = torch.load(args.resume, map_location=dev)
         assert ck["args"]["algo"] == args.algo, (ck["args"]["algo"], args.algo)
+        # the optimizers' settings are loaded with their state: another Adam implementation would be replaced by the saved one
+        assert ck["args"].get("fused_adam", False) == args.fused_adam, "--fused_adam must match the checkpoint's run"
+        assert ck["args"].get("critic_cudagraphs", False) == args.critic_cudagraphs, "--critic_cudagraphs must match the checkpoint's run"
         algo.load_state_dict(ck)
         start_it, wall_offset, sim_steps = ck["iteration"], ck["wall_time"], ck["sim_steps"]
     profile = bool(int(os.environ.get("SM_PROFILE", "0")))
@@ -165,10 +260,12 @@ def main():
     sim_cfg = make_sim(dev, args)
     with launch_simulation(sim_cfg, args):
         env = TrackingSim(sim_cfg, args.num_envs, motion, mdp, gamma=args.gamma)
+        if args.compile_eager:
+            env.reward_fn = torch.compile(mdp.reward)
         assert torch.allclose(env.default_q, mdp.default_q), (env.default_q, mdp.default_q)
         if algo.residual:
             assert torch.equal(env.alpha, algo.alpha), (env.alpha, algo.alpha)
-        buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev)
+        buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev, priorities=args.wm_sample == "prioritized")
         obs_hist = torch.zeros(args.num_envs, Hh, OBS_DIM, device=dev)
 
         @torch.no_grad()
@@ -180,15 +277,12 @@ def main():
                 fresh = env.ep_step == 0
                 obs_hist = torch.where(fresh[:, None, None], o.unsqueeze(1).expand_as(obs_hist), torch.cat((obs_hist[:, 1:], o.unsqueeze(1)), 1))
                 g = motion.goal(env.f, K)
-                algo.pi.obs_norm.update(o)
-                algo.pi.goal_norm.update(g)
+                algo.update_pi_norms(o, g)
                 a = algo.setpoint(algo.pi(obs_hist, g), env.f)
                 a = torch.clamp(a + args.action_noise * torch.randn_like(a), -20, 20)
-                out = env.step(a)
+                out = env.step(a, S)  # S: the state just read, nothing written since
                 buffer.add(out)
-                S0, S1 = unflatten_state(out["s"]), unflatten_state(out["s1"])
-                algo.wm.in_norm.update(algo.wm.inputs(S0, out["a"], normalize_xi(out["xi"])))
-                algo.wm.out_norm.update(algo.wm.targets(S0, S1))
+                algo.update_wm_norms(unflatten_state(out["s"]), unflatten_state(out["s1"]), out["a"], out["xi"])
                 sim_steps += args.num_envs
                 stats["r"].append(out["r"].mean() / 0.1)
                 stats["rate"].append(out["terms"]["action_rate"].mean())
@@ -199,8 +293,8 @@ def main():
                     stats["done"].append(out["done"].float().sum())
 
         stats = {"r": [], "rate": [], "ep_len": [], "ep_ret": [], "term": [], "done": []}
-        if start_it == 0:
-            collect(args.warmup_steps, stats)
+        # the replay buffer is not checkpointed: a resumed run refills it with --warmup_steps of collection, as a new run starts
+        collect(args.warmup_steps, stats)
         log_f = open(os.path.join(args.log_dir, "train_log.csv"), "a")
         if start_it == 0:
             log_f.write("iteration,wall_h,sim_steps,wm_loss,wm_err8,pi_loss,v_loss,imag_rew,pi_gradnorm,imag_survival,sim_rew,ep_len,"
@@ -216,8 +310,7 @@ def main():
             else:
                 lr = lr_at(it, args.lr, args.lr_decay_iters)
             for o in algo.optimizers:
-                for gparam in o.param_groups:
-                    gparam["lr"] = lr
+                set_lr(o, lr)
             if args.wm_lr is not None:
                 for gparam in algo.opt_wm.param_groups:
                     gparam["lr"] = lr * args.wm_lr / args.lr

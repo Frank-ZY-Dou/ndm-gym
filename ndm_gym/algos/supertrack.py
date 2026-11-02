@@ -19,12 +19,12 @@ from ..buffer import ReplayBuffer
 from ..core.kinematics import ArticulationKinematics
 from ..core.rotations import mat_to_6d, so3_log, yaw_mat
 from ..motion.library import MotionLib
-from ..robots.g1 import G1_JOINT_NAMES, action_scale
+from ..robots.g1 import G1_JOINT_NAMES, NUM_J, action_scale
 from ..state import CONTROL_DT, normalize_xi, unflatten_state
 from ..tasks.tracking import MAX_STEP_REWARD
 from ..worldmodels.accel import AccelWorldModel
 from ..worldmodels.rigidformer import rigidformer_kwargs
-from .common import Algo, cap_rollout_grads, reference_setpoints, set_requires_grad
+from .common import Algo, cap_rollout_grads, clip_rollout_policy_grads, decay_rollout_grads, reference_setpoints, set_requires_grad
 
 WM_TERMS = ("pos", "vel", "rot", "ang")
 LOCAL_TERMS = ("lpos", "lvel", "lrot", "lang", "hei", "up")
@@ -109,6 +109,19 @@ class LossBalancer(nn.Module):
         self.register_buffer("w", torch.zeros(n))
         self.register_buffer("scale", torch.zeros(n))  # typical per-element error of each term at calibration
         self.register_buffer("ready", torch.zeros((), dtype=torch.bool))
+        self._calibrated = False  # host copy of ready once it is set
+
+    @property
+    def calibrated(self) -> bool:
+        """``ready``, read from the device only until it is set: it never changes back (a loaded state is read again),
+        so the check at every update does not synchronize with the GPU."""
+        if not self._calibrated:
+            self._calibrated = bool(self.ready)
+        return self._calibrated
+
+    def _load_from_state_dict(self, *args, **kwargs):
+        super()._load_from_state_dict(*args, **kwargs)
+        self._calibrated = False
 
     @torch.no_grad()
     def calibrate(self, terms: torch.Tensor, n_elements: torch.Tensor):
@@ -116,6 +129,7 @@ class LossBalancer(nn.Module):
         self.w.copy_(1.0 / terms)
         self.scale.copy_(terms / n_elements)
         self.ready.fill_(True)
+        self._calibrated = True
 
 
 class SuperTrack(Algo):
@@ -139,9 +153,11 @@ class SuperTrack(Algo):
         self.term_mult[[self.terms.index("hei"), self.terms.index("up")]] = args.st_balance_w
         # optional trick: later steps of the imagined window weigh more (1 at the first step, 1 + st_late_w at the last)
         self.late = 1 + args.st_late_w * torch.arange(self.HZ, device=dev) / (self.HZ - 1) if args.st_late_w != 0 else None
-        self.st_wm_terms = torch.compile(self._st_wm_terms)
-        self.st_imag_step = torch.compile(self._st_imag_step)
-        self.st_track = torch.compile(self._st_track)
+        self.st_wm_terms = torch.compile(self._st_wm_terms, **self.wm_compile)
+        self.st_imag_step = torch.compile(self._st_imag_step, **self.pi_compile)
+        self.st_track = torch.compile(self._st_track, **self.pi_compile)
+        if self.pi_graphs:
+            self.mark_static_tensors()
 
     @staticmethod
     def world_model_cls(a):
@@ -169,18 +185,22 @@ class SuperTrack(Algo):
 
     def wm_loss(self, S_hat, w):
         terms, per_window = self.st_wm_terms(S_hat, w["s1"], w["mask"])
-        if not self.bal_wm.ready:
+        if not self.bal_wm.calibrated:
             self.bal_wm.calibrate(terms.detach(), torch.ones_like(terms))
         return (self.bal_wm.w * terms).sum(), torch.full((), float("nan"), device=self.dev), (per_window.detach() * self.bal_wm.w).sum(-1)
 
     # ------------------------------------------------------------------ policy (Alg. 2)
-    def _st_imag_step(self, S, o_hist, f, xi, xi_n, g):
+    def _st_imag_step(self, S, o_hist, f, xi, xi_n, g, tap=None):
         a = self.pi(o_hist, g)
+        if tap is not None:  # --pi_rollout_clip: the gradient that reaches the policy's output lands in tap.grad
+            a = a + tap
         f1 = f + 1
         u = a + self.args.st_imag_noise * torch.randn_like(a) + self.ref_u[f1]  # PD offset about the reference pose
         S1 = self.wm.step(S, u, xi_n)
         if self.args.bptt_clip_k > 0:
             S1 = cap_rollout_grads(S1, self.args.bptt_clip_k)
+        if self.bptt_decay != 1.0:
+            S1 = decay_rollout_grads(S1, self.bptt_decay)
         o1 = self.mdp.add_noise(self.mdp.obs(S1, u, xi, f1))
         o_hist = torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1)
         return S1, a, o_hist, f1, self.motion.goal(f1, self.K)
@@ -205,6 +225,8 @@ class SuperTrack(Algo):
 
     def policy_update(self, buffer: ReplayBuffer):
         args, mdp = self.args, self.mdp
+        if self.pi_graphs:
+            torch.compiler.cudagraph_mark_step_begin()
         s, h = self.sample_valid_starts(buffer, args.pi_batch)
         S = unflatten_state(s["s"])
         xi, f = s["xi"], s["f"]
@@ -215,14 +237,18 @@ class SuperTrack(Algo):
         if args.wm_bptt_fp32:
             self.wm.amp = False
         g = self.motion.goal(f, self.K)
-        Ss, As, Fs = [], [], []
+        Ss, As, Fs, taps = [], [], [], []
         for t in range(self.HZ):
-            S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
+            if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
+                taps.append((o_hist, g, torch.zeros(args.pi_batch, NUM_J, device=self.dev, requires_grad=True)))
+                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g, taps[-1][2])
+            else:
+                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
             Ss.append(S), As.append(a), Fs.append(f)
         flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
         S_all, f_all = tuple(flat([St[i] for St in Ss]) for i in range(6)), flat(Fs)
         terms, sq_terms, n_el = self.st_track(S_all, f_all)
-        if not self.bal_pi.ready:
+        if not self.bal_pi.calibrated:
             self.bal_pi.calibrate(terms.detach(), n_el * self.HZ)
         A = torch.stack(As)
         loss = (self.bal_pi.w * self.term_mult * terms).sum() + args.st_reg * ((A**2).mean() + A.abs().mean())
@@ -248,6 +274,8 @@ class SuperTrack(Algo):
             loss = loss + self.w_rate * rate + self.w_limit * limit
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
+        if taps:
+            clip_rollout_policy_grads(self.pi, taps, self.pi_rollout_clip)
         gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
         nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
         if torch.isfinite(gn):

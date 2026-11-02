@@ -27,14 +27,17 @@ def _args():
 
 
 def _fill(buffer_cls, motion, seed):
-    """Deterministic replay data: noisy reference states, their next reference states, random setpoints."""
+    """Deterministic replay data: noisy reference states, their next reference states, random setpoints. About 30% of
+    the states lie within a horizon (32 frames) of their clip's end, where the policy update must not start."""
     from ndm_gym.state import flatten_state
 
     buf = buffer_cls(T, N, DEV)
     g = torch.Generator().manual_seed(seed)
     for t in range(T):
         f, S, xi = random_states(motion, N, seed=1000 + t)
-        f = torch.minimum(f + t, motion.clip_end[motion.clip_id[f]] - 40)
+        end = motion.clip_end[motion.clip_id[f]]
+        f = torch.minimum(f + t, end - 40)
+        f = torch.where(torch.rand(N, generator=g) < 0.3, end - torch.randint(1, 32, (N,), generator=g), f)
         buf.add({"s": flatten_state(S), "s1": flatten_state(motion.ref_state(f + 1)), "a": torch.randn(N, 29, generator=g),
                  "a_prev": torch.randn(N, 29, generator=g), "xi": xi, "r": torch.rand(N, generator=g), "f": f,
                  "ep_step": torch.full((N,), t, dtype=torch.int32), "done": torch.rand(N, generator=g) < 0.05})  # fmt: skip

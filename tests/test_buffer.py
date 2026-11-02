@@ -64,3 +64,28 @@ def test_windows_end_in_the_window_before_a_failure():
 def test_no_failure_in_replay():
     b = _replay(20, {(0, 5): "timeout", (1, 9): "timeout"})
     assert b.pre_failure_starts(10, 3, 5, failed) is None
+
+
+def test_add_keeps_priorities():
+    """With priorities (--wm_sample prioritized), every added row starts at the highest priority so far, also after the
+    ring wraps; without them the buffer keeps none and refuses prioritized sampling."""
+    import pytest
+
+    from ndm_gym.buffer import FIELDS, ReplayBuffer
+
+    tr = {k: torch.zeros((3,) + ((s,) if isinstance(s, int) else s), dtype=dt) for k, (s, dt) in FIELDS.items()}
+    b = ReplayBuffer(4, 3, DEV)
+    b.add(tr), b.add(tr)
+    torch.testing.assert_close(b.prio, torch.ones(4, 3))
+    b.update_priorities((torch.tensor([0, 1]), torch.tensor([2, 0])), torch.tensor([5.0, 0.25]))
+    b.add(tr)
+    torch.testing.assert_close(b.prio[2], torch.full((3,), 5.0 + 1e-6))
+    b.update_priorities((torch.tensor([2]), torch.tensor([1])), torch.tensor([7.0]))
+    b.add(tr), b.add(tr)  # rows 3 and 0: the ring wraps
+    torch.testing.assert_close(b.prio[3], torch.full((3,), 7.0 + 1e-6))
+    torch.testing.assert_close(b.prio[0], torch.full((3,), 7.0 + 1e-6))
+    b = ReplayBuffer(4, 3, DEV, priorities=False)
+    b.add(tr)
+    assert b.prio is None
+    with pytest.raises(ValueError):
+        b.sample_windows_prioritized(2, 1, 0.6)

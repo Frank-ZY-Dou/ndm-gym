@@ -22,11 +22,12 @@ FIELDS = {
 
 class ReplayBuffer:
     """``fields``: name -> (shape, dtype) of a transition, FIELDS (LAFAN1 tracking) by default; ``window_keys``: the
-    fields a k-step window returns."""
+    fields a k-step window returns; ``priorities``: keep the window priorities of ``sample_windows_prioritized`` (without
+    them, ``add`` skips their upkeep, a reduction over the whole buffer at every step)."""
 
     window_keys = ("s", "s1", "a", "xi", "done")
 
-    def __init__(self, T: int, N: int, device: str, fields: dict | None = None):
+    def __init__(self, T: int, N: int, device: str, fields: dict | None = None, priorities: bool = True):
         self.T, self.N, self.device = T, N, device
         self.fields = FIELDS if fields is None else fields
         self.data = {}
@@ -35,12 +36,13 @@ class ReplayBuffer:
             self.data[k] = torch.zeros(shp, dtype=dt, device=device)
         self.ptr, self.size = 0, 0
         # priority of the window starting at each (row, env), for error-prioritized world-model fitting
-        self.prio = torch.ones(T, N, device=device)
+        self.prio = torch.ones(T, N, device=device) if priorities else None
 
     def add(self, tr: dict):
         for k in self.fields:
             self.data[k][self.ptr] = tr[k]
-        self.prio[self.ptr] = self.prio.max()  # new data is sampled at least as often as the hardest seen so far
+        if self.prio is not None:
+            self.prio[self.ptr] = self.prio.max()  # new data is sampled at least as often as the hardest seen so far
         self.ptr = (self.ptr + 1) % self.T
         self.size = min(self.size + 1, self.T)
 
@@ -65,6 +67,7 @@ class ReplayBuffer:
     def sample_windows_prioritized(self, B: int, k: int, alpha: float):
         """Like ``sample_windows`` but with start probability proportional to priority^alpha (no importance
         weighting: emphasizing hard transitions is the point). Also returns the starts for ``update_priorities``."""
+        self._need_priorities()
         n_t = self.size - k + 1
         rows0 = self._row(torch.arange(n_t, device=self.device))
         idx = torch.multinomial(self.prio[rows0].flatten() ** alpha, B, replacement=True)
@@ -78,13 +81,26 @@ class ReplayBuffer:
         return out
 
     def update_priorities(self, start: tuple, err: torch.Tensor, eps: float = 1e-6):
+        self._need_priorities()
         self.prio[start] = err.detach().float() + eps
+
+    def _need_priorities(self):
+        if self.prio is None:
+            raise ValueError("this replay buffer keeps no window priorities (ReplayBuffer(..., priorities=False))")
+
+    def sample_start_points(self, B: int):
+        """B start points drawn uniformly: their age (0 = oldest) and env."""
+        age = torch.randint(0, self.size, (B,), device=self.device)
+        env = torch.randint(0, self.N, (B,), device=self.device)
+        return age, env
 
     def sample_starts(self, B: int, hist: int):
         """Start points for imagination plus the indices of their observation history (oldest first)."""
-        age = torch.randint(0, self.size, (B,), device=self.device)
-        env = torch.randint(0, self.N, (B,), device=self.device)
-        return self.starts_at(age, env, hist)
+        return self.starts_at(*self.sample_start_points(B), hist)
+
+    def at(self, key: str, age: torch.Tensor, env: torch.Tensor) -> torch.Tensor:
+        """Field ``key`` at ``age`` (0 = oldest) of ``env``."""
+        return self.data[key][self._row(age), env]
 
     def terminations(self, failed):
         """Age (0 = oldest) and env of every stored termination, and the age of its episode's first stored state.
@@ -99,17 +115,22 @@ class ReplayBuffer:
         first = age - torch.minimum(self.data["ep_step"][rows, envs].long(), age)  # episode start, or the buffer's
         return age, envs, first
 
-    def pre_failure_starts(self, B: int, hist: int, window: int, failed):
-        """B start points like ``sample_starts``, from the last ``window`` steps before the replay's terminations: a
-        termination drawn uniformly, then a state among the ``window`` up to and including its last one, inside its
-        episode and the buffer. None while the replay holds no termination (``failed`` as in ``terminations``)."""
+    def pre_failure_points(self, B: int, window: int, failed):
+        """B start points (age, env) from the last ``window`` steps before the replay's terminations: a termination
+        drawn uniformly, then a state among the ``window`` up to and including its last one, inside its episode and the
+        buffer. None while the replay holds no termination (``failed`` as in ``terminations``)."""
         age, envs, first = self.terminations(failed)
         if len(age) == 0:
             return None
         i = torch.randint(0, len(age), (B,), device=self.device)
         reach = (age[i] - first[i]).clamp(max=window - 1)
         back = (torch.rand(B, device=self.device) * (reach + 1)).long()
-        return self.starts_at(age[i] - back, envs[i], hist)
+        return age[i] - back, envs[i]
+
+    def pre_failure_starts(self, B: int, hist: int, window: int, failed):
+        """B start points like ``sample_starts`` from ``pre_failure_points``; None while the replay holds no termination."""
+        points = self.pre_failure_points(B, window, failed)
+        return None if points is None else self.starts_at(*points, hist)
 
     def pre_failure_windows(self, B: int, k: int, window: int, failed, generator: torch.Generator | None = None):
         """Up to B k-step windows like ``sample_windows`` whose last step lies in the last ``window`` steps up to and

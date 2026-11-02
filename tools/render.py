@@ -7,6 +7,7 @@ Usage: MUJOCO_GL=egl python tools/render.py traj.npz out.mp4 --clips dance1_subj
 """
 
 import argparse
+import ctypes
 import os
 import re
 import subprocess
@@ -59,6 +60,35 @@ def two_robot_xml() -> str:
     return xml.replace("<asset>", visual + "<asset>", 1)
 
 
+EGL_CUDA_DEVICE_NV = 0x323A  # EGL_NV_device_cuda
+
+
+def check_egl_device():
+    """Refuse to render on a GPU other than the one CUDA_VISIBLE_DEVICES names: EGL enumerates every GPU whatever
+    CUDA_VISIBLE_DEVICES says, and MuJoCo opens its context on MUJOCO_EGL_DEVICE_ID or on the first device. The EGL
+    devices of the visible GPUs are those that have a CUDA id (EGL_NV_device_cuda)."""
+    cvd = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+    if os.environ.get("MUJOCO_GL") != "egl" or not cvd:
+        return
+    from mujoco.egl import egl_ext
+    from OpenGL import EGL
+
+    proc = EGL.eglGetProcAddress(b"eglQueryDeviceAttribEXT")
+    if not proc:
+        raise RuntimeError("EGL lacks eglQueryDeviceAttribEXT: cannot tell which EGL device is the GPU CUDA_VISIBLE_DEVICES names")
+    query = ctypes.CFUNCTYPE(ctypes.c_uint, ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_ssize_t))(ctypes.cast(proc, ctypes.c_void_p).value)
+    visible = []
+    for i, dev in enumerate(egl_ext.eglQueryDevicesEXT(max_devices=64)):
+        cuda = ctypes.c_ssize_t(-1)
+        if query(ctypes.cast(dev, ctypes.c_void_p).value, EGL_CUDA_DEVICE_NV, ctypes.byref(cuda)):
+            visible.append(i)
+    want = os.environ.get("MUJOCO_EGL_DEVICE_ID")
+    if not visible or want is None or int(want) not in visible:
+        fix = f"set MUJOCO_EGL_DEVICE_ID={visible[0]}" if visible else "no EGL device is a visible GPU"
+        raise RuntimeError(f"CUDA_VISIBLE_DEVICES={cvd} is EGL device {visible} but MUJOCO_EGL_DEVICE_ID is {want}: EGL ignores "
+                           f"CUDA_VISIBLE_DEVICES and would render on another GPU; {fix}")  # fmt: skip
+
+
 def _font(i, size):
     return ImageFont.truetype(FONTS[i], size) if os.path.exists(FONTS[i]) else ImageFont.load_default(size=size)
 
@@ -78,6 +108,14 @@ def _pill(draw, xy, parts, pad=(10, 6), anchor="la"):
         x += wi + gap
 
 
+def draw_mark(draw, width, height, bold, fill=(28, 30, 34, 110)):
+    """The small NDM Gym mark at the bottom right of a width x height frame, in the bold font of the frame's labels
+    (_font(0, round(20 * height / 432)))."""
+    m = round(12 * (height / 432))
+    mark = "NDM Gym"
+    draw.text((width - m - draw.textlength(mark, font=bold), height - m - bold.size), mark, font=bold, fill=fill)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("traj")
@@ -92,6 +130,7 @@ def main():
     ap.add_argument("--subtitle", type=str, default="", help="label after the title, e.g. the seed")
     ap.add_argument("--global_ghost", action="store_true", help="draw the reference at its global xy instead of anchored to the robot")
     a = ap.parse_args()
+    check_egl_device()
 
     d = dict(np.load(a.traj))
     names = list(d["names"])
@@ -148,8 +187,7 @@ def main():
             _pill(draw, (a.width - m, m), [(clock, small, MUTED)], anchor="ra")
             if fell_at is not None:
                 _pill(draw, (m, a.height - m - round(34 * s)), [("terminated", bold, RED)])
-            mark = "NDM Gym"
-            draw.text((a.width - m - draw.textlength(mark, font=bold), a.height - m - bold.size), mark, font=bold, fill=(28, 30, 34, 110))
+            draw_mark(draw, a.width, a.height, bold)
             img = Image.alpha_composite(img, over).convert("RGB")
             ff.stdin.write(np.asarray(img).tobytes())
     ff.stdin.close()

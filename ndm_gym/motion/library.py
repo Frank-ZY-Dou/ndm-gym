@@ -1,5 +1,5 @@
-"""Reference motion library: clips from any source resampled to 50 Hz, with FK of tracked bodies, and for
-human-object interaction the object's reference."""
+"""Reference motion library: clips from any source at 50 Hz (resampled, unless recorded at 50 Hz), with FK of tracked
+bodies, and for human-object interaction the object's reference and the scene's other objects."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ class MotionLib:
     def __init__(self, clips: list[Clip], kin: ArticulationKinematics, device: str):
         self.device = device
         self.names = [c.name for c in clips]
+        self.meta = [c.meta for c in clips]  # each clip's source description, if its loader gives one
         objects = {c.obj_name for c in clips}
         if len(objects) > 1:
             raise ValueError(f"one object per motion library (a task), or none; got {sorted(map(str, objects))}")
@@ -26,13 +27,40 @@ class MotionLib:
         for field in ("obj_joint", "contact"):
             if len({getattr(c, field) is None for c in clips}) > 1:
                 raise ValueError(f"{field} is given for some clips and missing for others")
+        if len({None if c.contact is None else c.contact.shape[1] for c in clips}) > 1:
+            raise ValueError("the clips have different numbers of contact flags")
+        extras = {c.extra_names for c in clips}
+        if len(extras) > 1:
+            raise ValueError(f"the clips' other objects differ: {sorted(map(str, extras))}")
+        self.extra_names = extras.pop()  # the scene's other objects (static props), or None
+        if self.extra_names is not None and not self.has_object:
+            raise ValueError("other objects need the interacted object")
+        n_extra = 0 if self.extra_names is None else len(self.extra_names)
         ps, qs, js = [], [], []
-        ops, oqs, ojs, cts = [], [], [], []
+        ops, oqs, ojs, cts, eps, eqs = [], [], [], [], [], []
         lens = []
         for c in clips:
             p, quat, j, src_fps = c.root_p, c.root_quat, c.joints, c.fps
-            # resample to 50 Hz
             T_src = p.shape[0]
+            if n_extra and not c.extra_p.shape[:2] == c.extra_quat.shape[:2] == (T_src, n_extra):
+                raise ValueError(f"clip {c.name}: the other objects' poses must cover every frame")
+            if abs(src_fps * CONTROL_DT - 1) < 1e-9:
+                # recorded at 50 Hz: every frame as it is, as HDMI takes its clips (interpolating at the integer sample times
+                # would round them, and the frame count below can lose the last frame to floating point, e.g. of 928)
+                if self.has_object and (c.obj_p is None or c.obj_quat is None or c.obj_p.shape[0] != T_src or c.obj_quat.shape[0] != T_src):
+                    raise ValueError(f"clip {c.name}: the object pose must cover every frame")
+                ps.append(p), qs.append(quat), js.append(j)
+                lens.append(T_src)
+                if self.has_object:
+                    ops.append(c.obj_p), oqs.append(c.obj_quat)
+                    if c.obj_joint is not None:
+                        ojs.append(c.obj_joint)
+                    if c.contact is not None:
+                        cts.append(c.contact)
+                    if n_extra:
+                        eps.append(c.extra_p), eqs.append(c.extra_quat)
+                continue
+            # resample to 50 Hz
             dur = (T_src - 1) / src_fps
             n = int(np.floor(dur / CONTROL_DT)) + 1
             t = torch.arange(n, dtype=torch.float32) * CONTROL_DT * src_fps
@@ -52,6 +80,9 @@ class MotionLib:
                     ojs.append(c.obj_joint[i0] * (1 - a[:, None]) + c.obj_joint[i0 + 1] * a[:, None])
                 if c.contact is not None:
                     cts.append(c.contact[torch.round(t).long().clamp(max=T_src - 1)])  # flags: nearest source frame
+                if n_extra:
+                    eps.append(c.extra_p[i0] * (1 - a[:, None, None]) + c.extra_p[i0 + 1] * a[:, None, None])
+                    eqs.append(quat_slerp(c.extra_quat[i0], c.extra_quat[i0 + 1], a[:, None].expand(n, n_extra)))
         self.clip_len = torch.tensor(lens, device=device)
         self.clip_start = torch.cumsum(torch.cat((torch.zeros(1, dtype=torch.long), torch.tensor(lens[:-1], dtype=torch.long))), 0).to(device)  # dtype: one clip gives an empty (float) tensor
         self.clip_end = self.clip_start + self.clip_len - 1  # last valid frame (inclusive)
@@ -85,7 +116,24 @@ class MotionLib:
             self.obj_v = cat([_gradient(op, CONTROL_DT) for op in ops])
             self.obj_w = cat([_angular_velocity(quat_to_mat(q)) for q in oqs])
             self.obj_joint = cat(ojs) if ojs else None
+            # flags per frame, aligned with the poses; a source may read them ahead of the poses
             self.contact = cat(cts) if cts else None
+            if n_extra:
+                self.extra_p = cat(eps)  # (num_frames, n, 3), in the order of extra_names
+                self.extra_R = cat([quat_to_mat(q) for q in eqs])  # (num_frames, n, 3, 3)
+        # the source's own reference velocities (HDMI's clips: not finite differences of the poses), frame by frame
+        if len({c.src_vel is None for c in clips}) > 1:
+            raise ValueError("src_vel is given for some clips and missing for others")
+        self.src_vel = None
+        if clips[0].src_vel is not None:
+            if len({tuple(c.src_vel["keypoint_names"]) for c in clips}) > 1:
+                raise ValueError("the clips' source velocities name different keypoints")
+            if any(abs(c.fps * CONTROL_DT - 1) > 1e-9 for c in clips):
+                raise ValueError("a source's own velocities need clips recorded at 50 Hz (they are not resampled)")
+            keys = [k for k in clips[0].src_vel if k != "keypoint_names"]
+            if any(sorted(k for k in c.src_vel if k != "keypoint_names") != sorted(keys) for c in clips):
+                raise ValueError("the clips' source velocities hold different arrays")
+            self.src_vel = {"keypoint_names": list(clips[0].src_vel["keypoint_names"]), **{k: cat([c.src_vel[k] for c in clips]) for k in keys}}
         # per-frame static goal parts: q, qd, root velocities in the root frame
         Rt = self.root_R.transpose(-1, -2)
         self.root_v_local = (Rt @ self.root_v.unsqueeze(-1)).squeeze(-1)
@@ -141,6 +189,13 @@ class MotionLib:
         if not self.has_object:
             raise ValueError("this motion library has no object")
         return self.obj_p[f], self.obj_R[f], self.obj_v[f], self.obj_w[f]
+
+    def ref_extras(self, f: torch.Tensor):
+        """The other objects' reference poses at frames f: positions (B, n, 3) and rotation matrices (B, n, 3, 3), in the
+        order of ``extra_names``."""
+        if self.extra_names is None:
+            raise ValueError("this motion library has no other objects")
+        return self.extra_p[f], self.extra_R[f]
 
     def object_goal(self, f: torch.Tensor, K: int) -> torch.Tensor:
         """The object's K future reference frames in the reference root's heading frame at f: position relative to the

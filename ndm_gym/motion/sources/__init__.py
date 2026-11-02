@@ -1,5 +1,5 @@
 """Motion sources. Each loader returns a list of :class:`Clip` (root pose and joint angles at the source rate, and for
-human-object interaction the object's pose)."""
+human-object interaction the object's pose and the scene's other objects)."""
 
 from __future__ import annotations
 
@@ -19,6 +19,13 @@ class Clip(NamedTuple):
     obj_quat: torch.Tensor | None = None  # (T, 4) world object orientation, wxyz
     obj_joint: torch.Tensor | None = None  # (T, k) joint of an articulated object (door hinge), if any
     contact: torch.Tensor | None = None  # (T, c) reference contact flags, if any
+    extra_names: tuple[str, ...] | None = None  # the scene's other objects (static props), if any
+    extra_p: torch.Tensor | None = None  # (T, n, 3) their world positions
+    extra_quat: torch.Tensor | None = None  # (T, n, 4) their world orientations, wxyz
+    meta: dict | None = None  # the source's description of the clip (the converted format's sidecar), if any
+    # the source's own reference velocities, if it stores them (HDMI: not finite differences of the poses):
+    # keypoint_names, keypoint_lin_vel / keypoint_ang_vel (T, b, 3), joint_vel (T, J), object_joint_vel (T, k) if articulated
+    src_vel: dict | None = None
 
 
 def read_clip_list(path: str) -> list[str]:

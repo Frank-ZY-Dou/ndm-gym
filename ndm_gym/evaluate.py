@@ -85,7 +85,7 @@ def _loop_graph(env, kin, motion, mdp, pi, K: int, Hh: int, residual: bool, ref_
         for k, v in m.items():
             err[k].add_(torch.where(alive, v, 0.0))
         env.f.copy_(torch.minimum(env.f, clip_end - 1))
-        return {"S": S, "a": a, "alive": alive, "out": out, "m": m}
+        return {"S": S, "o": o, "a": a, "alive": alive, "out": out, "m": m}
 
     graph = outs = None
     t = 0

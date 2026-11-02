@@ -43,7 +43,7 @@
 <td><img src="docs/media/rf/fight1_subject2.webp" alt="fight1_subject2"/></td>
 </tr>
 </table>
-<p align="center"><i>SuperTrack-RF (left) and SuperMimic-RF (right): the RigidFormer setting picked so far (RF-S, world-model learning rate 4e-4; online tuning in progress), seed 2, checkpoints at equal iterations (12,670 / 13,540) on an A100. Same clips and windows.</i></p>
+<p align="center"><i>SuperTrack-RF (left) and SuperMimic-RF (right): the final configurations with every speed option, seed 8, 3 h checkpoints (12,677 / 10,694 iterations) on an A100. Same clips and windows.</i></p>
 <!-- videos_rf:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
@@ -52,6 +52,7 @@ MuJoCo-Warp, the Unitree G1 with 29 DoF, LAFAN1 motions), so a comparison change
 
 ## 🔥 News
 
+- **[2026-11]** RigidFormer's final configurations and training speed options: SuperTrack-RF and SuperMimic-RF on fresh seeds ([results](#-results)).
 - **[2026-10]** A benchmark covering SuperTrack and SuperMimic on G1 / LAFAN1: [results](#-results) and [ablations](benchmarks/g1_lafan1_tracking/ablations.md).
 - **[2026-10]** [RigidFormer](https://frank-zy-dou.github.io/projects/RigidFormer/) world-model backbone (`--wm_backbone rigidformer`).
 - **[2026-10]** First release, equivalence-tested against an unofficial SuperMimic reproduction (no official code is released).
@@ -73,7 +74,10 @@ MuJoCo-Warp, the Unitree G1 with 29 DoF, LAFAN1 motions), so a comparison change
 | world-model parameters | 8.75 M (SuperTrack), 8.82 M (SuperMimic) | 0.88 M |
 
 Benchmark settings: SuperTrack adds `--st_fail_w 5 --st_balance_w 4`, SuperMimic `--reward_std_scale 0.7 --action_noise 0.3
---imag_start_perturb 0.3`, and the RigidFormer runs `--wm_lr 4e-4`.
+--imag_start_perturb 0.3`. RigidFormer runs add `--wm_lr 4e-4`; tuned online, SuperTrack-RF uses `--st_balance_w 2
+--wm_batches 5` and SuperMimic-RF `--imag_start_perturb 0.4 --wm_batches 7`. Speed options, which leave the algorithms
+unchanged: `--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops` (RigidFormer), `--wm_cudagraphs --pi_cudagraphs
+--fused_adam --elementwise_3x3 --combo_kernels --compile_eager` (both backbones), `--critic_cudagraphs` (SuperMimic).
 
 ## 🛠️ Installation
 
@@ -127,6 +131,18 @@ each seed averages three standard evaluations (the push rows use one push test).
 | iterations in 3 h | 12,670 | 13,540 |
 <!-- results:end -->
 
+With the RigidFormer world model: the final configurations with every speed option, fresh seeds 7-9, 3 h on one A100.
+
+| | SuperTrack-RF | SuperMimic-RF |
+|---|---|---|
+| normalized return | 0.832 ± 0.003 | 0.804 ± 0.007 |
+| failed clips (of 40) | 0.4 ± 0.5 | 0.8 ± 0.4 |
+| MPJPE, root-relative (mm) | 21.0 ± 1.3 | 33.1 ± 0.5 |
+| joint-angle error (deg) | 2.24 ± 0.05 | 6.05 ± 0.62 |
+| failed clips under root pushes of 1 m/s every 2 s | 5.3 ± 1.2 | 1.3 ± 0.6 |
+| failed clips under root pushes of 2 m/s every 2 s | 24.3 ± 3.1 | 9.0 ± 2.0 |
+| iterations in 3 h | 12,676 | 10,710 |
+
 ### Key findings
 
 1. **Main comparison.** Return and failed clips are on par (0.832 and 0.824; 0.9 and 1.2 of 40). SuperTrack tracks more
@@ -152,12 +168,14 @@ each seed averages three standard evaluations (the push rows use one push test).
      (the MLP keeps 2e-4), the open-loop error is 7-16% lower in distribution and 11-21% lower out of it (three fits
      each, all significant); at the shared default 2e-4 it is -4% / -11% for SuperTrack's model and +8% / +0% for
      SuperMimic's (only the -11% significant). It has a tenth of the parameters.
-   - Its policies are not better at equal iterations, and an iteration costs about 3x as much.
+   - Tuned online as the MLP was, its policies are not better at equal iterations. With every speed option, SuperTrack-RF /
+     SuperMimic-RF reach return 0.832 / 0.804 and MPJPE 21.0 / 33.1 mm in 3 h; the MLP runs about 3x more iterations in
+     that time, where SuperTrack's return is 0.861 and SuperMimic's MLP drops late (0.137 at about 33k iterations)
+     ([details](benchmarks/g1_lafan1_tracking/results.md#rigidformers-final-configurations)).
    - Three pre-declared checks ([results](benchmarks/g1_lafan1_tracking/results.md#rigidformer-check-1-dynamics-shifts)):
      under friction and payload shifts, 9 of 10 conditions show no significant difference (SuperTrack-RF's MPJPE is
      higher at friction 0.5); the sample-efficiency hypothesis holds for neither algorithm; on 7 held-out LAFAN1 clips,
      neither generalizes significantly better or worse.
-   - It is now being tuned online, as the MLP was.
 6. **H100.**
    - SuperTrack first reaches return 0.82 after 1.25 h and SuperMimic after 1.48 h (the paper reports 1.2 h with its own
      configuration).
@@ -259,14 +277,6 @@ Simulation:
   arXiv preprint, 2025. [arXiv:2511.04831](https://arxiv.org/abs/2511.04831)
 - **MuJoCo:** E. Todorov, T. Erez, Y. Tassa. *MuJoCo: A physics engine for model-based control.* IROS 2012.
   [DOI](https://doi.org/10.1109/IROS.2012.6386109)
-
-Planned (human-object interaction):
-- **HDMI:** H. Weng, Y. Li, N. Sobanbabu, Z. Wang, Z. Luo, T. He, D. Ramanan, G. Shi. *HDMI: Learning Interactive
-  Humanoid Whole-Body Control from Human Videos.* arXiv preprint, 2025.
-  [arXiv:2509.16757](https://arxiv.org/abs/2509.16757) · [code](https://github.com/LeCAR-Lab/HDMI)
-- **OmniRetarget** (data): L. Yang, X. Huang, Z. Wu, A. Kanazawa, P. Abbeel, C. Sferrazza, C. K. Liu, R. Duan, G. Shi.
-  *OmniRetarget: Interaction-Preserving Data Generation for Humanoid Whole-Body Loco-Manipulation and Scene
-  Interaction.* arXiv preprint, 2025. [arXiv:2509.26633](https://arxiv.org/abs/2509.26633)
 
 ## 📝 Citation
 

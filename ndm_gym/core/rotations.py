@@ -58,8 +58,9 @@ def axis_angle_to_mat(axis: torch.Tensor, angle: torch.Tensor) -> torch.Tensor:
     ).reshape(angle.shape + (3, 3))  # fmt: skip
 
 
-def so3_exp(v: torch.Tensor) -> torch.Tensor:
-    """Rotation vector (..., 3) -> matrix, smooth at zero."""
+def so3_exp(v: torch.Tensor, elementwise: bool = False) -> torch.Tensor:
+    """Rotation vector (..., 3) -> matrix, smooth at zero. ``elementwise``: K @ K written out as products and sums, which
+    torch.compile fuses with the rest instead of launching a batched matmul (equal up to float rounding)."""
     theta2 = (v * v).sum(-1, keepdim=True)
     theta = torch.sqrt(theta2 + 1e-12)
     small = theta2 < 1e-8
@@ -67,6 +68,8 @@ def so3_exp(v: torch.Tensor) -> torch.Tensor:
     b = torch.where(small, 0.5 - theta2 / 24, (1 - torch.cos(theta)) / (theta2 + 1e-12))
     K = skew(v)
     eye = torch.eye(3, device=v.device, dtype=v.dtype).expand(K.shape)
+    if elementwise:
+        return eye + a[..., None] * K + b[..., None] * (K.unsqueeze(-1) * K.unsqueeze(-3)).sum(-2)
     return eye + a[..., None] * K + b[..., None] * (K @ K)
 
 

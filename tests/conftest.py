@@ -58,6 +58,31 @@ def mdp(kin, motion):
     return MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=DEV))
 
 
+def synthetic_clips(sim: bool = False) -> list[dict]:
+    """The three synthetic clips stored with tests/data/supertrack_golden.pt (tests/data/make_supertrack_golden.py), as
+    Clip keyword arguments: tests that need motions but not LAFAN1's. ``sim``: one source frame fewer (199 frames at
+    50 Hz instead of 201), for the simulator, whose 50-frame reset bins would otherwise end in a one-frame bin at each
+    clip's last frame, from which TrackingSim.sample_frames starts an episode whose first step reads the next frame."""
+    clips = torch.load(os.path.join(REPO, "tests", "data", "supertrack_golden.pt"))["clips"]
+    return [{**c, **{k: c[k][:-1] for k in ("root_p", "root_quat", "joints")}} for c in clips] if sim else clips
+
+
+@pytest.fixture(scope="session")
+def synthetic_motion(kin):
+    from ndm_gym.motion.library import MotionLib
+    from ndm_gym.motion.sources import Clip
+
+    return MotionLib([Clip(**c) for c in synthetic_clips()], kin, DEV)
+
+
+@pytest.fixture(scope="session")
+def synthetic_mdp(kin, synthetic_motion):
+    from ndm_gym.robots import g1
+    from ndm_gym.tasks.tracking import MDP
+
+    return MDP(kin, synthetic_motion, torch.tensor(g1.default_joint_pos_list(), device=DEV))
+
+
 def random_states(motion, n: int, seed: int):
     """Reference states near the clips' starts with noise on every component (deterministic)."""
     from ndm_gym.core.rotations import so3_exp

@@ -139,7 +139,7 @@ def main():
     with launch_simulation(sim_cfg, args), torch.no_grad():
         env = TrackingSim(sim_cfg, args.num_envs, motion, mdp)
         ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
-        buffer = ReplayBuffer(args.steps, args.num_envs, dev)
+        buffer = ReplayBuffer(args.steps, args.num_envs, dev, priorities=False)  # the file stores the transitions only
         obs_hist = torch.zeros(args.num_envs, Hh, OBS_DIM, device=dev)
         ids = torch.arange(args.num_envs, device=dev)
         n_term = 0
