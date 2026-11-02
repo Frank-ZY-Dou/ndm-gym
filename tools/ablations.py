@@ -123,10 +123,10 @@ STUDY = [
     ("SuperTrack", "st_noimagnoise", "without the imagination noise on the offsets"),
     ("SuperMimic", "sm_nocritic", "without the critic"),
     ("SuperTrack", "st_paper", "the paper's objective (without the penalty, balance weights, task penalties, root terms)"),
-    ("SuperTrack", "st_rf", "RigidFormer world model (SuperTrack-RF), at 3 h (equal wall-clock)", "h3"),
-    ("SuperTrack", "st_rf", "RigidFormer world model (SuperTrack-RF), at the MLP runs' 3 h iteration count (equal iterations)"),
-    ("SuperMimic", "sm_rf", "RigidFormer world model (SuperMimic-RF), at 3 h (equal wall-clock)", "h3"),
-    ("SuperMimic", "sm_rf", "RigidFormer world model (SuperMimic-RF), at the MLP runs' 3 h iteration count (equal iterations)"),
+    ("SuperTrack", "st_rf", "RigidFormer world model before its tuning, at 3 h (equal wall-clock)", "h3"),
+    ("SuperTrack", "st_rf", "RigidFormer world model before its tuning, at the MLP runs' 3 h iteration count (equal iterations)"),
+    ("SuperMimic", "sm_rf", "RigidFormer world model before its tuning, at 3 h (equal wall-clock)", "h3"),
+    ("SuperMimic", "sm_rf", "RigidFormer world model before its tuning, at the MLP runs' 3 h iteration count (equal iterations)"),
 ]
 FULL = {"SuperTrack": "final_st", "SuperMimic": "final_sm"}
 STUDY_METRICS = [("norm_return", "return", 1.0, ".3f"), ("n_failed", "failed clips", 1.0, ".2f"), ("mpjpe_l", "MPJPE-local (mm)", 1e3, ".1f"),
@@ -512,17 +512,26 @@ README_STUDY = [
     ("st_noimagnoise", "", "SuperTrack", "imagination noise on the offsets", -1),
     ("st_paper", "", "SuperTrack", "the four additions to the paper's objective together", -1),
     ("st_smperturb", "", "SuperTrack", "SuperMimic's action noise and imagination kicks", 1),
-    ("st_rf", "h3", "SuperTrack", "RigidFormer world model (SuperTrack-RF), at 3 h", 1),
-    ("st_rf", "", "SuperTrack", "RigidFormer world model (SuperTrack-RF), at equal iterations", 1),
     ("sm_rs1", "", "SuperMimic", "narrower reward kernels (×0.7)", -1),
     ("sm_noise01", "", "SuperMimic", "simulator action noise 0.3 instead of 0.1", -1),
     ("sm_nokick", "", "SuperMimic", "imagination kicks", -1),
     ("sm_nocritic", "", "SuperMimic", "the critic", -1),
     ("sm_r1", "", "SuperMimic", "the tuned changes together (against round 1)", -1),
     ("sm_residual", "", "SuperMimic", "offsets about the reference pose (SuperTrack's actions)", 1),
-    ("sm_rf", "h3", "SuperMimic", "RigidFormer world model (SuperMimic-RF), at 3 h", 1),
-    ("sm_rf", "", "SuperMimic", "RigidFormer world model (SuperMimic-RF), at equal iterations", 1),
 ]
+# RigidFormer's policy rows, after its tuning (the study's rows before it stay in table D): the tuned configurations
+# against the MLP finals at equal iterations (seeds 1-3) and the final configurations with every speed option against the
+# MLP with the same options at 3 h (seeds 7-9; results.md, "RigidFormer tuned online" and "RigidFormer's final
+# configurations"), by the study's rule: algorithm, factor, the effects whose Welch 95% interval excludes 0 as (metric,
+# +1 better / -1 worse)
+README_RF = [
+    ("SuperTrack", "RigidFormer world model, tuned (SuperTrack-RF), at equal iterations", []),
+    ("SuperTrack", "RigidFormer world model, final configuration (SuperTrack-RF), at 3 h, where the MLP runs 2.8x the iterations",
+     [("return", -1), ("mpjpe_mm", -1), ("push2", -1)]),
+    ("SuperMimic", "RigidFormer world model, tuned (SuperMimic-RF), at equal iterations", []),
+    ("SuperMimic", "RigidFormer world model, final configuration (SuperMimic-RF), at 3 h, where the MLP runs 3.1x the iterations and "
+     "its evaluations drop late", [("return", 1), ("failed", 1), ("push1", 1), ("push2", 1)]),
+]  # fmt: skip
 # the study's metrics that decide a verdict (joint-angle error is reported in table D but, as in the preliminary rows,
 # does not decide): column, effect-word key, +1 when higher is better
 STUDY_VERDICT = [("norm_return", "return", 1), ("n_failed", "failed", -1), ("mpjpe_l", "mpjpe_mm", -1), ("push1", "push1", -1),
@@ -537,6 +546,10 @@ def study_readme_rows(study):
             continue
         effs = [(key, sign * better * (1 if row[f"d_{col}"] > 0 else -1)) for col, key, better in STUDY_VERDICT if row[f"sig_{col}"]]
         out.append({"group": f"{algo}, seeds 1-3", "factor": factor, "verdict": verdict(effs), "effect": _push_words(effs),
+                    "codes": ";".join(f"{m}{'+' if d > 0 else '-'}" for m, d in effs), "note": "", "d_in_lo": "", "d_in_hi": "",
+                    "d_ood_lo": "", "d_ood_hi": ""})  # fmt: skip
+    for algo, factor, effs in README_RF:
+        out.append({"group": algo, "factor": factor, "verdict": verdict(effs), "effect": _push_words(effs),
                     "codes": ";".join(f"{m}{'+' if d > 0 else '-'}" for m, d in effs), "note": "", "d_in_lo": "", "d_in_hi": "",
                     "d_ood_lo": "", "d_ood_hi": ""})  # fmt: skip
     order = list(VERDICT_MARK)
@@ -797,7 +810,7 @@ def rf_online_rows(log_dirs):
 
 def rf_online_markdown(rows, missing):
     out = [f"**E. RigidFormer online** (seeds 1-3, from the training logs, equal iterations): MLP (the full configurations) against "
-           "RigidFormer (SuperTrack-RF and SuperMimic-RF). The world-model errors are measured on the replay batches it trains on, "
+           "RigidFormer before its tuning. The world-model errors are measured on the replay batches it trains on, "
            f"before the update on that batch: each run's own policy data, not held out. They are averaged over each run's last {RF_LATE} iterations; "
            f"mean ± std over seeds. The policy-gradient statistics use the log rows after iteration {RF_PI_FROM}, each the mean "
            "over 50 iterations.", ""]
@@ -816,8 +829,9 @@ def rf_online_markdown(rows, missing):
 def readme_markdown(rows):
     """The README's verdict table: the leave-one-out study's rows and the offline world-model rows (the preliminary
     single-seed rows stay in ablations.md)."""
-    out = ["✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. Policy rows: leave-one-out study, seeds 1-3, 3 h; an effect "
-           "counts when its Welch 95% interval against the full configuration excludes 0 (return, failed clips, MPJPE, failed "
+    out = ["✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. Policy rows: leave-one-out study, seeds 1-3, 3 h; RigidFormer "
+           "rows: the tuned configurations at equal iterations (seeds 1-3) and the final ones at 3 h against the MLP with the same "
+           "speed options (seeds 7-9). An effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed "
            "clips under 1 and 2 m/s pushes). World-model rows: open-loop 32-step error of offline fits, three per variant "
            "(bold: significant). Preliminary single-seed runs and all numbers: "
            "[`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).", "",

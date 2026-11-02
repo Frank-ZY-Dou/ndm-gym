@@ -168,14 +168,16 @@ With the RigidFormer world model: the final configurations with every speed opti
      (the MLP keeps 2e-4), the open-loop error is 7-16% lower in distribution and 11-21% lower out of it (three fits
      each, all significant); at the shared default 2e-4 it is -4% / -11% for SuperTrack's model and +8% / +0% for
      SuperMimic's (only the -11% significant). It has a tenth of the parameters.
-   - Tuned online as the MLP was, its policies are not better at equal iterations. With every speed option, SuperTrack-RF /
-     SuperMimic-RF reach return 0.832 / 0.804 and MPJPE 21.0 / 33.1 mm in 3 h; the MLP runs about 3x more iterations in
-     that time, where SuperTrack's return is 0.861 and SuperMimic's MLP drops late (0.137 at about 33k iterations)
-     ([details](benchmarks/g1_lafan1_tracking/results.md#rigidformers-final-configurations)).
+   - Tuned online as the MLP was, its policies show no significant difference from the MLP's at equal iterations
+     ([details](benchmarks/g1_lafan1_tracking/results.md#rigidformer-tuned-online)). With every speed option,
+     SuperTrack-RF / SuperMimic-RF reach return 0.832 / 0.804 and MPJPE 21.0 / 33.1 mm in 3 h; the MLP runs about 3x more
+     iterations in that time, where SuperTrack's return is 0.861 and SuperMimic's MLP drops late (0.137 at about 33k
+     iterations) ([details](benchmarks/g1_lafan1_tracking/results.md#rigidformers-final-configurations)).
    - Three pre-declared checks ([results](benchmarks/g1_lafan1_tracking/results.md#rigidformer-check-1-dynamics-shifts)):
      under friction and payload shifts, 9 of 10 conditions show no significant difference (SuperTrack-RF's MPJPE is
      higher at friction 0.5); the sample-efficiency hypothesis holds for neither algorithm; on 7 held-out LAFAN1 clips,
-     neither generalizes significantly better or worse.
+     neither generalizes significantly better or worse. Repeated with the final configurations (seeds 7-9), the held-out
+     return is the same for SuperTrack-RF and 0.005 lower for SuperMimic-RF [-0.009, -0.000].
 6. **H100.**
    - SuperTrack first reaches return 0.82 after 1.25 h and SuperMimic after 1.48 h (the paper reports 1.2 h with its own
      configuration).
@@ -189,7 +191,7 @@ With the RigidFormer world model: the final configurations with every speed opti
 ## 🔬 Ablations
 
 <!-- ablations:begin -->
-✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. Policy rows: leave-one-out study, seeds 1-3, 3 h; an effect counts when its Welch 95% interval against the full configuration excludes 0 (return, failed clips, MPJPE, failed clips under 1 and 2 m/s pushes). World-model rows: open-loop 32-step error of offline fits, three per variant (bold: significant). Preliminary single-seed runs and all numbers: [`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).
+✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. Policy rows: leave-one-out study, seeds 1-3, 3 h; RigidFormer rows: the tuned configurations at equal iterations (seeds 1-3) and the final ones at 3 h against the MLP with the same speed options (seeds 7-9). An effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed clips under 1 and 2 m/s pushes). World-model rows: open-loop 32-step error of offline fits, three per variant (bold: significant). Preliminary single-seed runs and all numbers: [`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).
 
 | | | factor | effect |
 |---|---|---|---|
@@ -200,17 +202,17 @@ With the RigidFormer world model: the final configurations with every speed opti
 | ⚖️ | SuperTrack | failure penalty | fewer failed clips, higher MPJPE, fewer failed clips under 1 and 2 m/s pushes |
 | ❌ | SuperTrack | imagination noise on the offsets | more failed clips at 2 m/s pushes |
 | ❌ | SuperTrack | SuperMimic's action noise and imagination kicks | higher MPJPE |
-| ❌ | SuperTrack | RigidFormer world model (SuperTrack-RF), at 3 h | lower return, more failed clips, higher MPJPE |
-| ❌ | SuperTrack | RigidFormer world model (SuperTrack-RF), at equal iterations | higher MPJPE |
+| ❌ | SuperTrack | RigidFormer world model, final configuration (SuperTrack-RF), at 3 h, where the MLP runs 2.8x the iterations | lower return, higher MPJPE, more failed clips at 2 m/s pushes |
 | ➖ | SuperTrack | balance weights | none beyond seed noise |
+| ➖ | SuperTrack | RigidFormer world model, tuned (SuperTrack-RF), at equal iterations | none beyond seed noise |
 | ✅ | SuperMimic | narrower reward kernels (×0.7) | lower MPJPE, fewer failed clips at 1 m/s pushes |
 | ✅ | SuperMimic | simulator action noise 0.3 instead of 0.1 | fewer failed clips at 1 m/s pushes |
 | ✅ | SuperMimic | imagination kicks | fewer failed clips under 1 and 2 m/s pushes |
 | ✅ | SuperMimic | the critic | higher return, fewer failed clips, fewer failed clips under 1 and 2 m/s pushes |
 | ✅ | SuperMimic | the tuned changes together (against round 1) | fewer failed clips under 1 and 2 m/s pushes |
 | ✅ | SuperMimic | offsets about the reference pose (SuperTrack's actions) | lower MPJPE |
-| ❌ | SuperMimic | RigidFormer world model (SuperMimic-RF), at 3 h | lower return, higher MPJPE, more failed clips at 1 m/s pushes |
-| ➖ | SuperMimic | RigidFormer world model (SuperMimic-RF), at equal iterations | none beyond seed noise |
+| ✅ | SuperMimic | RigidFormer world model, final configuration (SuperMimic-RF), at 3 h, where the MLP runs 3.1x the iterations and its evaluations drop late | higher return, fewer failed clips, fewer failed clips under 1 and 2 m/s pushes |
+| ➖ | SuperMimic | RigidFormer world model, tuned (SuperMimic-RF), at equal iterations | none beyond seed noise |
 | ✅ | World model, offline | more training data | open-loop error **-22%** in distribution, **-19%** out of it |
 | ✅ | World model, offline | no LayerNorm (both world models) | open-loop error **-17 to -16%** in distribution, **-14%** out of it |
 | ✅ | World model, offline | RigidFormer backbone at the default learning rate, SuperTrack's model | open-loop error -4% in distribution, **-11%** out of it |
