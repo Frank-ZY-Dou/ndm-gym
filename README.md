@@ -48,10 +48,15 @@
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 NDM Gym trains controllers that learn through a world model. Every algorithm shares one pipeline (Isaac Lab 3 with
-MuJoCo-Warp, the Unitree G1 with 29 DoF, LAFAN1 motions), so a comparison changes only the algorithm.
+MuJoCo-Warp, the Unitree G1 with 29 DoF, LAFAN1 motions), so a comparison changes only the algorithm. It also covers
+HDMI's human-object interaction tasks and MuscleVAE's muscle-actuated character, where the neural dynamics models
+(NDMs) stand in for the simulator too.
 
 ## 🔥 News
 
+- **[2026-11]** HDMI's 13 human-object interaction tasks (HDMI's PPO teacher as the model-free baseline), MuscleVAE's
+  muscle-actuated character, NDMs as simulators ([throughput](benchmarks/ndm_speed/results.md)), RigidFormer inference
+  kernels, and two G1s tracking a two-person clip in one scene ([results](benchmarks/g1_boxing/results.md)).
 - **[2026-11]** RigidFormer's final configurations and training speed options: SuperTrack-RF and SuperMimic-RF on fresh seeds ([results](#-results)).
 - **[2026-10]** A benchmark covering SuperTrack and SuperMimic on G1 / LAFAN1: [results](#-results) and [ablations](benchmarks/g1_lafan1_tracking/ablations.md).
 - **[2026-10]** [RigidFormer](https://frank-zy-dou.github.io/projects/RigidFormer/) world-model backbone (`--wm_backbone rigidformer`).
@@ -60,6 +65,11 @@ MuJoCo-Warp, the Unitree G1 with 29 DoF, LAFAN1 motions), so a comparison change
 ## ✨ Features
 
 - **Algorithms:** SuperTrack and SuperMimic, both learning by backpropagation through a world model.
+- **Tasks:** motion tracking on LAFAN1 (G1); HDMI's 13 human-object interaction tasks (G1, contact forces predicted by
+  the world model); MuscleVAE's character with 284 Hill-type muscles and fatigue; two G1s in one scene tracking a
+  two-person clip.
+- **NDMs as simulators:** throughput and open-loop accuracy against the physics engine, with inference paths as fused
+  Triton kernels ([results](benchmarks/ndm_speed/results.md)).
 - **World models:** acceleration (SuperTrack) and increment (SuperMimic) models, each with an MLP or a
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
@@ -110,6 +120,71 @@ python -m ndm_gym.wmbench.collect --ckpt logs/st/ckpt_006000.pt --out wm_train.p
 python -m ndm_gym.wmbench.collect --ckpt logs/st/ckpt_006000.pt --out wm_test.pt --seed 1
 python -m ndm_gym.wmbench.fit --algo supertrack --train wm_train.pt --test st=wm_test.pt --out wm_st.csv
 ```
+
+<details>
+<summary><b>Human-object interaction (HDMI's tasks)</b></summary>
+
+```bash
+bash tools/download_hdmi.sh && python tools/convert_hdmi.py    # HDMI's clips and objects into data/hdmi/ (not redistributed)
+MUJOCO_GL=egl python tools/render_hoi.py suitcase.mp4 --task move_suitcase    # a reference clip in HDMI's look; --states: a recorded rollout
+
+# one task (13 in ndm_gym/tasks/hdmi_tasks.py); HDMI's PPO teacher as the model-free baseline
+python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack --st_fail_w 5 --st_contact_force --max_hours 3 --log_dir logs/hoi_st
+python -m ndm_gym.train_hoi --task move_suitcase --algo supermimic --action_noise 0.3 --max_hours 3 --log_dir logs/hoi_sm
+python -m ndm_gym.train_ppo_hoi --task move_suitcase --max_hours 3 --log_dir logs/hoi_ppo
+python -m ndm_gym.evaluate_hoi --run_dir logs/hoi_st      # every checkpoint; --ckpt for one
+
+# the NDM as a simulator: transitions, an offline fit with its open-loop errors, throughput against physics
+python -m ndm_gym.wmbench.collect_hoi --task move_suitcase --seed 0 --out hoi_s0.pt
+python -m ndm_gym.wmbench.collect_hoi --task move_suitcase --seed 1 --out hoi_s1.pt
+python -m ndm_gym.wmbench.fit_hoi --task move_suitcase --kind accel --backbone rigidformer --train hoi_s0.pt --test held=hoi_s1.pt --out fit.csv
+python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode physics --num_envs 4096 --out speed.csv
+python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode ndm --backbone rigidformer --compile reduce-overhead --num_envs 4096 --out speed.csv
+```
+
+</details>
+
+<details>
+<summary><b>MuscleVAE</b></summary>
+
+```bash
+bash tools/download_musclevae.sh && python tools/convert_musclevae.py   # character, muscles, motions (not redistributed)
+bash tools/download_mass_meshes.sh                                      # MASS's bone meshes, for rendering
+
+# their released tracking policy in our simulator (Newton, 120 Hz, muscle forces every substep), then a render in their look
+bash tools/download_musclevae_pretrained.sh
+python tools/replay_musclevae.py --out_dir replay
+MUJOCO_GL=egl python tools/render_musclevae.py walk.mp4 --states replay/states_lafan_walk_0.npz --ref
+
+# SuperTrack and SuperMimic on the character; evaluation; transitions for a muscle NDM and the simulator's throughput
+python -m ndm_gym.train_muscles --algo supertrack --st_fail_w 5 --st_balance_w 4 --max_hours 12 --log_dir logs/mus_st
+python tools/evaluate_muscles.py --ckpt logs/mus_st/last.pt
+python -m ndm_gym.wmbench.collect_muscles --out mvae/data
+python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joint_damping ode --out speed_muscles.csv
+```
+
+</details>
+
+<details>
+<summary><b>Two G1s, one two-person clip</b></summary>
+
+```bash
+# InterHuman's clip retargeted to two G1s (see the tool's docstring; HoloMotion's HoloRetarget and a licensed SMPL model)
+python tools/convert_interhuman.py --pkl <InterHuman>/motions/1566.pkl --smpl_model <SMPL_NEUTRAL.pkl> \
+    --robot_mjcf data/g1_description/g1_29dof.xml --out data/interhuman/interhuman_1566.npz
+
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --motions interhuman --paired \
+    --motion_dir data/interhuman/interhuman_1566.npz --max_hours 3 --log_dir logs/box_st
+ndm-eval --run_dir logs/box_st --ckpt <ckpt> --motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz --record box.npz
+MUJOCO_GL=egl python tools/render.py box.npz box.mp4 --pair --seconds 11
+
+# throughput of the two-robot scene: physics, and a RigidFormer checkpoint's world model with its inference path
+python -m ndm_gym.wmbench.speed_pair --pair data/interhuman/interhuman_1566.npz --mode physics --num_envs 4096 --out speed.csv
+python -m ndm_gym.wmbench.speed_pair --pair data/interhuman/interhuman_1566.npz --mode ndm --wm_ckpt <ckpt> \
+    --inference_copy amp --fused --rf_kernels whole --num_envs 4096 --out speed.csv
+```
+
+</details>
 
 ## 📊 Results
 
@@ -188,6 +263,35 @@ With the RigidFormer world model: the final configurations with every speed opti
      0.854 ± 0.003 with 0.2 failed clips, and 3.0 / 11.7 clips fail under 1 / 2 m/s pushes
      ([details](benchmarks/g1_lafan1_tracking/results.md#noise-check-supermimic-with-action-noise-01)).
 
+### NDMs as simulators (HDMI's scenes)
+
+One H100 80GB, 4096 environments, million env-steps per second (in parentheses, the ratio to physics). The MLP runs as
+a bf16 copy, the RigidFormer with fused Triton blocks ([details](benchmarks/ndm_speed/results.md)).
+
+| task | physics | MLP | RigidFormer |
+|---|---|---|---|
+| move_suitcase | 0.35 | 16.28 (45.9x) | 2.30 (6.5x) |
+| open_door-feet | 0.44 | 16.47 (37.1x) | 2.31 (5.2x) |
+| truman | 0.36 | 16.21 (45.3x) | 2.30 (6.4x) |
+
+With the acceleration parameterization, the RigidFormer's open-loop errors are lower than the MLP's on all 13 tasks for
+keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76).
+
+### Two G1s, one two-person clip
+
+Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
+redistributed); 3 h of training each on an A100 80GB, five evaluations of the last checkpoint
+([details](benchmarks/g1_boxing/results.md)).
+
+| | pair success | return | global MPJPE | local MPJPE | iterations in 3 h |
+|---|---|---|---|---|---|
+| SuperTrack, MLP | 5 / 5 | 0.887 | 0.106 m | 12.5 mm | 31,428 |
+| SuperTrack, RigidFormer | 5 / 5 | 0.839 | 0.196 m | 23.7 mm | 12,424 |
+| SuperMimic, MLP | 5 / 5 | 0.886 | 0.096 m | 20.0 mm | 29,768 |
+
+At 4096 pairs the physics runs 0.31 M robot-steps per second; with their inference paths the MLP runs 8.4 M (27.0x) and
+the RigidFormer 1.9 M (6.0x).
+
 ## 🔬 Ablations
 
 <!-- ablations:begin -->
@@ -230,6 +334,10 @@ With the RigidFormer world model: the final configurations with every speed opti
 |---|---|
 | [`benchmarks/g1_lafan1_tracking/`](benchmarks/g1_lafan1_tracking/) | the benchmark covering SuperTrack and SuperMimic: results and ablations |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
+| [`docs/hoi_design.md`](docs/hoi_design.md), [`docs/hdmi_task_spec.md`](docs/hdmi_task_spec.md) | human-object interaction: design, and HDMI's task as implemented, with references into HDMI's code |
+| [`docs/musclevae_design.md`](docs/musclevae_design.md) | MuscleVAE: simulator, muscle model, policy port, validation |
+| [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
+| [`benchmarks/g1_boxing/`](benchmarks/g1_boxing/) | two G1s tracking a two-person clip: tracking and speed |
 
 <details>
 <summary><b>Repository layout</b></summary>
@@ -237,17 +345,18 @@ With the RigidFormer world model: the final configurations with every speed opti
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers |
-| `ndm_gym/robots/g1.py` | Unitree G1 29-DoF spec: joints, actuators, default pose, assets |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`) |
-| `ndm_gym/sim/rigid/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator with return-based resets |
-| `ndm_gym/tasks/tracking.py` | observations, the tracking reward of SuperMimic's setup, termination, critic features |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `rigidformer.py` (backbone) |
-| `ndm_gym/policies/` | tracking policy and critic |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py` |
-| `ndm_gym/wmbench/` | offline world-model benchmark |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval` |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`) |
+| `ndm_gym/sim/rigid/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator (one or two G1s); HDMI's scenes (`hdmi_sim.py`); MuscleVAE on Newton (`muscle_sim.py`) |
+| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup); `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py` |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`; inference copies (`g1_infer.py`) |
+| `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
+| `ndm_gym/policies/` | tracking policy and critic; HOI and muscle policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `hoi_algos.py`, `muscle_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`) |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
-| `benchmarks/` | studies run with the library: results and ablations |
+| `benchmarks/` | studies run with the library: results, ablations, speed |
 | `tests/` | equivalence tests against the upstream code, component tests |
 | `third_party/supermimic` | upstream checkout (submodule) for the equivalence tests |
 
@@ -269,10 +378,19 @@ Implemented:
 - **RigidFormer:** Z. Dou, M. Guo, H. Wu, D. Roble, T. Stuyck, W. Matusik. *RigidFormer: Learning Rigid Dynamics using
   Transformers.* arXiv preprint, 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196) ·
   [project page](https://frank-zy-dou.github.io/projects/RigidFormer/)
+- **HDMI** (the human-object interaction tasks): H. Weng, Y. Li, N. Sobanbabu, Z. Wang, Z. Luo, T. He, D. Ramanan,
+  G. Shi. *HDMI: Learning Interactive Humanoid Whole-Body Control from Human Videos.* arXiv preprint, 2025.
+  [arXiv:2509.16757](https://arxiv.org/abs/2509.16757) · [code](https://github.com/LeCAR-Lab/HDMI)
+- **MuscleVAE** (the muscle-actuated character): Y. Feng, X. Xu, L. Liu. *MuscleVAE: Model-Based Controllers of
+  Muscle-Actuated Characters.* SIGGRAPH Asia 2023 Conference Papers. [DOI](https://doi.org/10.1145/3610548.3618137) ·
+  [arXiv:2312.07340](https://arxiv.org/abs/2312.07340) · [code](https://github.com/wangchek/MuscleVAE_)
 
 Data:
 - **LAFAN1** (motions and the held-out split, subject 5): F. G. Harvey, M. Yurick, D. Nowrouzezahrai, C. Pal. *Robust
   Motion In-betweening.* SIGGRAPH 2020. [DOI](https://doi.org/10.1145/3386569.3392480)
+- **MASS** (MuscleVAE's skeleton and the bone meshes of our renders): S. Lee, M. Park, K. Lee, J. Lee. *Scalable
+  Muscle-Actuated Human Simulation and Control.* ACM Transactions on Graphics 38(4), 2019.
+  [DOI](https://doi.org/10.1145/3306346.3322972)
 
 Simulation:
 - **Isaac Lab:** M. Mittal et al. *Isaac Lab: A GPU-Accelerated Simulation Framework for Multi-Modal Robot Learning.*
@@ -299,4 +417,8 @@ MIT ([`LICENSE`](LICENSE)). The code started from [zita-ch/supermimic_vibed](htt
 CC BY-NC-ND 4.0) and their G1 retargets (Hugging Face
 [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)), which
 stay under that license, are downloaded by `tools/download_data.sh` and not redistributed. The G1 description (URDF,
-meshes) is BSD-3-Clause (Unitree).
+meshes) is BSD-3-Clause (Unitree). HDMI and MuscleVAE have no license: their files are downloaded at pinned commits by
+`tools/download_hdmi.sh` and `tools/download_musclevae*.sh`, used locally and never committed, and nothing of their code
+is copied (the task and the policy are re-implemented from their papers and documented behavior). MASS's bone meshes
+(Apache-2.0) are downloaded by `tools/download_mass_meshes.sh`. InterHuman (CC BY-NC-SA 4.0) is not redistributed;
+`tools/convert_interhuman.py` calls HoloMotion's HoloRetarget (Apache-2.0) from the user's own installation.
