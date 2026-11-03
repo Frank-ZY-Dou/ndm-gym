@@ -116,7 +116,8 @@ class MotionLib:
             self.obj_v = cat([_gradient(op, CONTROL_DT) for op in ops])
             self.obj_w = cat([_angular_velocity(quat_to_mat(q)) for q in oqs])
             self.obj_joint = cat(ojs) if ojs else None
-            # flags per frame, aligned with the poses; a source may read them ahead of the poses
+            # flags per frame, aligned with the poses; a source may read them ahead of the poses (HDMI's sidecar:
+            # contact_lead_frames, tools/convert_hdmi.py)
             self.contact = cat(cts) if cts else None
             if n_extra:
                 self.extra_p = cat(eps)  # (num_frames, n, 3), in the order of extra_names

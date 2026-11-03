@@ -102,9 +102,20 @@ def clip_rollout_policy_grads(pi: TrackingPolicy, taps: list, k: float) -> int:
     backward pass has accumulated all rollouts' parts in the parameters' .grad; the policy runs again on the clipped
     rollouts' inputs and adds (w_b - 1) times their parts, w_b = k median / size_b < 1. Rollouts without a gradient do
     not count in the median. Returns the number of clipped rollouts."""
-    if any(t.grad is None for _, _, t in taps):  # every step's output reaches a later loss: a missing gradient is a broken tap
+    def rerun(idx):
+        obs, goal = (torch.stack([x[i][idx].detach() for x in taps]).flatten(0, 1) for i in (0, 1))
+        return pi(obs, goal)
+
+    return clip_rollout_output_grads(rerun, [t for _, _, t in taps], k)
+
+
+def clip_rollout_output_grads(rerun, outs: list, k: float) -> int:
+    """``clip_rollout_policy_grads`` for a policy of any inputs: ``outs`` per imagined step the zero tensor (B, J) added to
+    the policy's output, whose .grad is the output's adjoint, and ``rerun(idx)`` the policy's output again on the steps'
+    inputs of the rollouts ``idx``, steps outer ((H * len(idx), J), detached inputs). Returns the number of clipped rollouts."""
+    if any(t.grad is None for t in outs):  # every step's output reaches a later loss: a missing gradient is a broken tap
         raise RuntimeError("--pi_rollout_clip: no gradient reached the policy's output at some imagined step")
-    A = torch.stack([t.grad for _, _, t in taps])  # (H, B, J)
+    A = torch.stack([t.grad for t in outs])  # (H, B, J)
     size = A.square().sum((0, 2)).sqrt()
     live = size > 0
     if not bool(live.any()):
@@ -112,11 +123,34 @@ def clip_rollout_policy_grads(pi: TrackingPolicy, taps: list, k: float) -> int:
     w = k * size[live].median() / size.clamp_min(1e-30)
     idx = (live & (w < 1)).nonzero().squeeze(-1)
     if len(idx):
-        obs, goal = (torch.stack([x[i][idx].detach() for x in taps]).flatten(0, 1) for i in (0, 1))
         cot = ((w[idx] - 1)[None, :, None] * A[:, idx]).flatten(0, 1)
         with torch.enable_grad():
-            pi(obs, goal).backward(cot)
+            rerun(idx).backward(cot)
     return len(idx)
+
+
+def smoothness_penalty(net: nn.Module, x: torch.Tensor, eps: float, n: int, keep: torch.Tensor | None = None) -> torch.Tensor:
+    """``--wm_smooth_w``'s penalty of a world model's network ``net`` (normalized inputs to normalized outputs) at its
+    normalized inputs ``x`` (N, D): the mean over the rows (those where ``keep`` (N,) holds, if given) and ``n`` random
+    unit directions u of ||net(x + eps u) - net(x)||^2 / eps^2, both passes in fp32 (``Algo._wm_smoothness``)."""
+    u = torch.randn((n,) + x.shape, device=x.device)
+    u = u / u.norm(dim=-1, keepdim=True)
+    y = run_mlp(net, torch.cat((x.unsqueeze(0), x + eps * u)).flatten(0, 1), amp=False).unflatten(0, (n + 1, -1))
+    d = ((y[1:] - y[:1]) ** 2).sum(-1)  # (n, N)
+    if keep is None:
+        return d.mean() / eps**2
+    return torch.where(keep, d, 0.0).sum() / (n * keep.sum().clamp(min=1)) / eps**2  # a left-out row's value may be non-finite
+
+
+def check_smoothness_args(args):
+    """``--wm_smooth_w``'s arguments as ``Algo`` checks them; the defaults where an entry point's arguments lack them."""
+    w = getattr(args, "wm_smooth_w", 0.0)
+    if w < 0 or (w > 0 and args.wm_smooth_dirs < 1):
+        raise ValueError("--wm_smooth_w must be >= 0, and with it --wm_smooth_dirs >= 1")
+    if w > 0 and args.wm_smooth_eps < 0.01:
+        raise ValueError(f"--wm_smooth_eps {args.wm_smooth_eps}: must be >= 0.01 with --wm_smooth_w. The finite difference runs in fp32, "
+                         "whose matmuls round their inputs to TF32 under allow_tf32 (trained world models: x1.07 at 0.01, x4 at 0.001)")
+    return w
 
 
 def decay_rollout_grads(S: tuple, lam: float) -> tuple:
@@ -164,12 +198,7 @@ class Algo:
         self.wm_step = torch.compile(self.wm.step, **self.wm_compile) if rf else self.wm.step
         self.wm_rollout = self._wm_rollout if rf else torch.compile(self._wm_rollout, **self.wm_compile)
         # optional trick (--wm_smooth_w): the world model's network penalized for steep changes about the replay's inputs
-        self.smooth_w = getattr(args, "wm_smooth_w", 0.0)
-        if self.smooth_w < 0 or (self.smooth_w > 0 and args.wm_smooth_dirs < 1):
-            raise ValueError("--wm_smooth_w must be >= 0, and with it --wm_smooth_dirs >= 1")
-        if self.smooth_w > 0 and args.wm_smooth_eps < 0.01:
-            raise ValueError(f"--wm_smooth_eps {args.wm_smooth_eps}: must be >= 0.01 with --wm_smooth_w. The finite difference runs in fp32, "
-                             "whose matmuls round their inputs to TF32 under allow_tf32 (trained world models: x1.07 at 0.01, x4 at 0.001)")
+        self.smooth_w = check_smoothness_args(args)
         self.wm_smoothness = torch.compile(self._wm_smoothness, **self.wm_compile)
         # optional trick (--bptt_decay): the policy's BPTT gradient through the imagined states decays by lam per step
         self.bptt_decay = getattr(args, "bptt_decay", 1.0)
@@ -239,12 +268,8 @@ class Algo:
         bf16 penalty was 1.05 times the exact one at eps 0.1 and 3.5 times at 0.01. Under train.py's allow_tf32 the fp32
         matmuls round their inputs to TF32 (10-bit mantissa): 1.0004 times the exact one at 0.1, 1.007 at 0.03, 1.07 at
         0.01, hence the floor of 0.01 on eps."""
-        eps, n = self.args.wm_smooth_eps, self.args.wm_smooth_dirs
         x = self.wm.in_norm(self.wm.inputs(unflatten_state(s0), a0, normalize_xi(xi0)))
-        u = torch.randn((n,) + x.shape, device=x.device)
-        u = u / u.norm(dim=-1, keepdim=True)
-        y = run_mlp(self.wm.net, torch.cat((x.unsqueeze(0), x + eps * u)).flatten(0, 1), amp=False).unflatten(0, (n + 1, -1))
-        return ((y[1:] - y[:1]) ** 2).sum(-1).mean() / eps**2
+        return smoothness_penalty(self.wm.net, x, self.args.wm_smooth_eps, self.args.wm_smooth_dirs)
 
     @torch.no_grad()
     def update_wm_norms(self, S0, S1, a, xi):
