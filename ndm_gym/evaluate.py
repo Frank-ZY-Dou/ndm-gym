@@ -116,7 +116,9 @@ def _loop_graph(env, kin, motion, mdp, pi, K: int, Hh: int, residual: bool, ref_
 
 
 def evaluate(env, kin, motion, mdp, ck: dict, record: str | None = None, push: PushCfg | None = None, graph: bool = False) -> dict:
-    """``graph``: each step as one CUDA graph (_loop_graph; the same values; no ``record``)."""
+    """``graph``: each step as one CUDA graph (_loop_graph; the same values; no ``record``). In the two-robot scene
+    (PairedTrackingSim) each instance plays its own side of its env's two-person clip (``env.instance_clip``), the
+    results are per instance (named by their clips), and ``pairs`` gives each two-person clip's outcome."""
     import numpy as np
     import torch
 
@@ -138,11 +140,16 @@ def evaluate(env, kin, motion, mdp, ck: dict, record: str | None = None, push: P
     pi = TrackingPolicy(OBS_DIM, 73 * K, hist=Hh).to(dev)
     pi.load_state_dict(ck["pi"])
     pi.eval()
+    clip_of = getattr(env, "instance_clip", None)  # the two-robot scene: each instance's clip; otherwise instance c plays clip c
+    if clip_of is not None and (push is not None or graph):
+        raise ValueError("the two-robot scene's evaluation has no pushes and no --graph")
+    names = motion.names if clip_of is None else [motion.names[i] for i in clip_of.tolist()]
+    clip_len = motion.clip_len if clip_of is None else motion.clip_len[clip_of]
     ids = torch.arange(C, device=dev)
     env.done_eval[:] = False
     env.failed_eval[:] = False
-    env.reset(ids, motion.clip_start.clone())
-    clip_end = motion.clip_end.clone()
+    env.reset(ids, motion.clip_start.clone() if clip_of is None else motion.clip_start[clip_of])
+    clip_end = motion.clip_end.clone() if clip_of is None else motion.clip_end[clip_of]
     ret = torch.zeros(C, device=dev)
     steps = torch.zeros(C, device=dev)
     err = {k: torch.zeros(C, device=dev) for k in METRICS}
@@ -184,21 +191,34 @@ def evaluate(env, kin, motion, mdp, ck: dict, record: str | None = None, push: P
             for k, v in m.items():
                 err[k] += torch.where(alive, v, 0.0)
             env.f = torch.minimum(env.f, clip_end - 1)  # finished clips keep stepping; keep f+1 in range
-    norm = ret / ((motion.clip_len - 1).float() * MAX_STEP_REWARD)
+    norm = ret / ((clip_len - 1).float() * MAX_STEP_REWARD)
     err = {k: v / steps for k, v in err.items()}
     res = {
         "norm_return": norm.mean().item(),
-        "norm_return_framew": (ret.sum() / ((motion.clip_len - 1).sum() * MAX_STEP_REWARD)).item(),
+        "norm_return_framew": (ret.sum() / ((clip_len - 1).sum() * MAX_STEP_REWARD)).item(),
         "n_failed": int(env.failed_eval.sum().item()),
-        "failed": [motion.names[i] for i in env.failed_eval.nonzero().flatten().tolist()],
+        "failed": [names[i] for i in env.failed_eval.nonzero().flatten().tolist()],
         **{k: v.mean().item() for k, v in err.items()},
-        "per_clip": {motion.names[i]: round(norm[i].item(), 4) for i in range(C)},
-        "per_clip_err": {motion.names[i]: {k: round(v[i].item(), 5) for k, v in err.items()} for i in range(C)},
+        "per_clip": {names[i]: round(norm[i].item(), 4) for i in range(C)},
+        "per_clip_err": {names[i]: {k: round(v[i].item(), 5) for k, v in err.items()} for i in range(C)},
     }
+    if clip_of is not None:  # a two-person clip succeeds when neither robot terminated
+        P = C // 2
+        both = ~(env.failed_eval[:P] | env.failed_eval[P:])
+        res["pair_success"] = both.float().mean().item()
+        res["pairs"] = {}
+        for i in range(P):
+            res["pairs"][motion.meta[int(clip_of[i])]["pair"]] = {
+                "success": bool(both[i]),
+                "failed": [names[j] for j in (i, P + i) if env.failed_eval[j]],
+                "norm_return": round(0.5 * (norm[i] + norm[P + i]).item(), 4),
+                "mpjpe_g": round(0.5 * (err["mpjpe_g"][i] + err["mpjpe_g"][P + i]).item(), 5),
+            }
     if record:
-        np.savez_compressed(record, names=np.array(motion.names), **{k: torch.stack(v).numpy() for k, v in traj.items()},
+        starts = motion.clip_start if clip_of is None else motion.clip_start[clip_of]  # per recorded column
+        np.savez_compressed(record, names=np.array(names), **{k: torch.stack(v).numpy() for k, v in traj.items()},
                             ref_root_p=motion.root_p.cpu().numpy(), ref_root_R=motion.root_R.cpu().numpy(), ref_q=motion.q.cpu().numpy(),
-                            clip_start=motion.clip_start.cpu().numpy(), clip_len=motion.clip_len.cpu().numpy())  # fmt: skip
+                            clip_start=starts.cpu().numpy(), clip_len=clip_len.cpu().numpy())  # fmt: skip
     return res
 
 
@@ -209,6 +229,8 @@ def parse_args():
     parser.add_argument("--ckpt", type=str, default=None, help="evaluate one checkpoint")
     parser.add_argument("--record", type=str, default=None, help="save trajectories (npz) for rendering")
     parser.add_argument("--motion_dir", type=str, default=os.path.join(REPO, "data", "lafan1_g1"))
+    parser.add_argument("--motions", type=str, default="lafan1", choices=["lafan1", "interhuman"], help="the clips' source, as train.py's")
+    parser.add_argument("--paired", action="store_true", help="the two-robot scene, as train.py's (two-person clips, both sides at once)")
     parser.add_argument("--every", type=int, default=1, help="evaluate every n-th checkpoint")
     parser.add_argument("--push_mag", type=float, nargs="+", default=None,
                         help="--ckpt mode robustness test: one evaluation per horizontal root-velocity push magnitude (m/s)")  # fmt: skip
@@ -231,24 +253,27 @@ def main():
     import torch
 
     from ndm_gym.motion.library import MotionLib
-    from ndm_gym.motion.sources import lafan1
+    from ndm_gym.motion.sources import interhuman, lafan1
     from ndm_gym.robots import g1
-    from ndm_gym.sim.rigid.isaaclab_mjwarp import TrackingSim, make_sim
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, TrackingSim, make_sim
     from ndm_gym.tasks.tracking import MDP
 
     torch.backends.cuda.matmul.allow_tf32 = True
     dev = "cuda:0"
     kin = g1.kinematics(dev)
-    motion = MotionLib(lafan1.load_dir(args.motion_dir), kin, dev)
+    motion = MotionLib(interhuman.load(args.motion_dir) if args.motions == "interhuman" else lafan1.load_dir(args.motion_dir), kin, dev)
     mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev))
     C = len(motion.names)
     assert args.push_mag is None or (args.ckpt and not args.record), "--push_mag needs --ckpt and no --record"
     assert args.repeats == 1 or (args.ckpt and not args.record), "--repeats needs --ckpt and no --record"
     assert (args.friction is None and not args.payload) or (args.ckpt and not args.record), "--friction / --payload need --ckpt and no --record"
+    assert not args.paired or (args.motions == "interhuman" and args.push_mag is None and not args.graph), \
+        "--paired: two-person clips, no pushes, no --graph"  # fmt: skip
 
-    sim_cfg = make_sim(dev, args)
+    sim_cfg = make_sim(dev, args, paired=args.paired)
     with launch_simulation(sim_cfg, args):
-        env = TrackingSim(sim_cfg, C, motion, mdp, eval_mode=True, eval_friction=args.friction, eval_payload=args.payload)
+        env = (PairedTrackingSim if args.paired else TrackingSim)(sim_cfg, C, motion, mdp, eval_mode=True, eval_friction=args.friction,
+                                                                  eval_payload=args.payload)  # fmt: skip
         if args.ckpt:
             ck = torch.load(args.ckpt, map_location=dev)
             results = []

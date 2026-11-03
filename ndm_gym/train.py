@@ -82,6 +82,10 @@ def add_train_args(parser: argparse.ArgumentParser):
                         help="rigidformer, --rf_anchors > 1: the anchors' rotary angles mean-pooled (ARoPE, their centroid's) or concatenated")
     parser.add_argument("--rf_rope_center", action="store_true",
                         help="rigidformer: rotary positions relative to their centroid over the bodies (and anchors), where the registers sit")
+    parser.add_argument("--rf_merge", type=str, default="none", choices=["none", "distal", "coincident", "joints"],
+                        help="rigidformer: bodies that share a token (worldmodels.rigidformer.token_groups): distal (the G1's wrists and ankles, "
+                        "24 tokens), coincident (also its waist with the torso and its shoulders' pitch and roll links, 20 tokens) or joints "
+                        "(one token per anatomical joint, 14 tokens)")  # fmt: skip
     parser.add_argument("--wm_sample", type=str, default="uniform", choices=["uniform", "prioritized"],
                         help="world-model window sampling: uniform, or proportional to the window's last error^alpha")
     parser.add_argument("--wm_prio_alpha", type=float, default=0.6)
@@ -114,6 +118,12 @@ def add_train_args(parser: argparse.ArgumentParser):
                         help="also checkpoint when the training wall-clock time first reaches each of these hours")  # fmt: skip
     parser.add_argument("--log_every", type=int, default=50)
     parser.add_argument("--motion_dir", type=str, default=os.path.join(REPO, "data", "lafan1_g1"))
+    parser.add_argument("--motions", type=str, default="lafan1", choices=["lafan1", "interhuman"],
+                        help="the clips' source: LAFAN1's G1 CSVs, or two-person clips retargeted to two G1s "
+                        "(tools/convert_interhuman.py)")  # fmt: skip
+    parser.add_argument("--paired", action="store_true",
+                        help="the two-robot scene: each env's two G1s track the two sides of a two-person clip "
+                        "(--num_envs counts robots)")  # fmt: skip
     parser.add_argument("--clips", type=str, default=None,
                         help="train on the clips listed in this file (one name per line) instead of every clip in --motion_dir")  # fmt: skip
     parser.add_argument("--log_dir", type=str, default=os.path.join(REPO, "logs", "run"))
@@ -205,6 +215,8 @@ def parse_args():
     args = parser.parse_args()
     if args.critic_cudagraphs and args.algo != "supermimic":
         parser.error("--critic_cudagraphs: only SuperMimic has a critic")
+    if args.paired and (args.motions != "interhuman" or args.num_envs % 2):
+        parser.error("--paired: two-person clips (--motions interhuman) and an even --num_envs (two robots per env)")
     return args
 
 
@@ -220,7 +232,7 @@ def main():
     from ndm_gym.motion.library import MotionLib
     from ndm_gym.motion.sources import lafan1, read_clip_list, select
     from ndm_gym.robots import g1
-    from ndm_gym.sim.rigid.isaaclab_mjwarp import TrackingSim, make_sim
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, TrackingSim, make_sim
     from ndm_gym.state import unflatten_state
     from ndm_gym.tasks.tracking import MDP, OBS_DIM
 
@@ -237,7 +249,12 @@ def main():
     json.dump(vars(args), open(os.path.join(args.log_dir, "args.json"), "w"), indent=2)
 
     kin = g1.kinematics(dev)
-    clips = lafan1.load_dir(args.motion_dir)
+    if args.motions == "interhuman":
+        from ndm_gym.motion.sources import interhuman
+
+        clips = interhuman.load(args.motion_dir)
+    else:
+        clips = lafan1.load_dir(args.motion_dir)
     if args.clips:
         clips = select(clips, read_clip_list(args.clips))
         with open(os.path.join(args.log_dir, "clips.txt"), "w") as f:  # the clips trained on, whatever the list file says later
@@ -257,9 +274,9 @@ def main():
         start_it, wall_offset, sim_steps = ck["iteration"], ck["wall_time"], ck["sim_steps"]
     profile = bool(int(os.environ.get("SM_PROFILE", "0")))
 
-    sim_cfg = make_sim(dev, args)
+    sim_cfg = make_sim(dev, args, paired=args.paired)
     with launch_simulation(sim_cfg, args):
-        env = TrackingSim(sim_cfg, args.num_envs, motion, mdp, gamma=args.gamma)
+        env = (PairedTrackingSim if args.paired else TrackingSim)(sim_cfg, args.num_envs, motion, mdp, gamma=args.gamma)
         if args.compile_eager:
             env.reward_fn = torch.compile(mdp.reward)
         assert torch.allclose(env.default_q, mdp.default_q), (env.default_q, mdp.default_q)

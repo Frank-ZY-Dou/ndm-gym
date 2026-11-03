@@ -260,7 +260,7 @@ def test_checkpointing_frozen_readout(kin, batch, monkeypatch):
 def test_external_wrench_channel(kin, batch):
     from ndm_gym.worldmodels.rigidformer import TOKEN_DIM, WRENCH_DIM
 
-    # the channel lives in the backbone; the world models pass no forces yet
+    # the channel lives in the backbone; the world models pass no forces
     net = rf_models(kin, ext_wrench=True)[0].net
     with pytest.raises(ValueError):
         net.inputs(batch.S, batch.u, batch.xi_n)
@@ -323,6 +323,9 @@ def test_rigidformer_kwargs_from_training_args():
     assert kw["checkpoint"] == "frozen"  # also for the checkpoints from before --rf_bptt_keep_blocks
     keep = {**a, "wm_backbone": "rigidformer", "rf_fused_train": True, "rf_bptt_keep_blocks": True}
     assert rigidformer_kwargs(keep)["checkpoint"] == "frozen_readout"
+    assert kw["merge"] == "none" and rigidformer_kwargs({**a, "wm_backbone": "rigidformer", "rf_merge": "distal"})["merge"] == "distal"
+    with pytest.raises(ValueError):
+        rigidformer_kwargs({**a, "rf_merge": "distal"})  # an option of the RigidFormer, not of the MLP
     for bad in ({"wm_backbone": "mlp"}, {"rf_fused_train": False}, {"wm_bptt_fp32": True}):
         with pytest.raises(ValueError):
             rigidformer_kwargs({**keep, **bad})
@@ -648,3 +651,101 @@ def test_rope_center(kin, batch):
             ys.append((net(xin), net(moved)))
         torch.testing.assert_close(ys[0][1], ys[0][0], atol=1e-4, rtol=1e-4)
         assert not torch.allclose(ys[1][1], ys[1][0], atol=1e-3)
+
+
+def test_token_groups(kin):
+    """--rf_merge's tokens on the G1: one per body; the wrists and ankles (distal, 24 tokens); also the waist with the torso
+    and the shoulders' pitch and roll links (coincident, 20 tokens), each a serial chain of links within 5 cm; one token
+    per anatomical joint (joints, 14 tokens)."""
+    from ndm_gym.worldmodels.rigidformer import MERGE_GAP, MERGE_MODES, token_groups
+
+    def named(mode):
+        return [tuple(kin.body_names[b] for b in g) for g in token_groups(kin, mode)]
+
+    assert named("none") == [(n,) for n in kin.body_names]
+    distal = {(f"{s}_ankle_pitch_link", f"{s}_ankle_roll_link") for s in ("left", "right")}
+    distal |= {(f"{s}_wrist_roll_link", f"{s}_wrist_pitch_link", f"{s}_wrist_yaw_link") for s in ("left", "right")}
+    assert len(named("distal")) == 24 and {g for g in named("distal") if len(g) > 1} == distal
+    more = {(f"{s}_shoulder_pitch_link", f"{s}_shoulder_roll_link") for s in ("left", "right")}
+    more.add(("waist_yaw_link", "waist_roll_link", "torso_link"))
+    assert len(named("coincident")) == 20 and {g for g in named("coincident") if len(g) > 1} == distal | more
+    joints = {tuple(f"{s}_{j}_{a}_link" for a in ("pitch", "roll", "yaw")) for s in ("left", "right") for j in ("hip", "shoulder")}
+    joints |= {(f"{s}_ankle_pitch_link", f"{s}_ankle_roll_link") for s in ("left", "right")}
+    joints |= {g for g in distal if "wrist" in g[0]} | {("waist_yaw_link", "waist_roll_link", "torso_link")}
+    assert len(named("joints")) == 14 and {g for g in named("joints") if len(g) > 1} == joints
+    for mode in MERGE_MODES:
+        groups = token_groups(kin, mode)
+        assert sorted(b for g in groups for b in g) == list(range(30)) and [g[0] for g in groups] == sorted(g[0] for g in groups)
+        for g in groups:
+            for a, b in zip(g, g[1:]):
+                assert kin.parent[b] == a and (mode == "joints" or float(kin.off_p[b].norm()) <= MERGE_GAP)
+    with pytest.raises(ValueError):
+        token_groups(kin, "all")
+
+
+@pytest.mark.parametrize("merge", ["distal", "coincident", "joints"])
+def test_merged_tokens(kin, batch, merge):
+    """With --rf_merge: the token count, the tree of tokens (each token one joint from its parent's), the step's shapes,
+    every joint its own output (the read-out per body: the joints of one token differ, and the joint head reads each
+    joint's own body), gradients to every parameter, and heading and translation invariance."""
+    from ndm_gym.core.rotations import axis_angle_to_mat
+    from ndm_gym.state import flatten_state
+    from ndm_gym.worldmodels.rigidformer import token_groups
+
+    groups = token_groups(kin, merge)
+    Rz = axis_angle_to_mat(torch.tensor([0.0, 0.0, 1.0]), torch.tensor(1.1))
+    rot = lambda x: (Rz @ x.unsqueeze(-1)).squeeze(-1)  # noqa: E731
+    p, R, v, w, q, qd = batch.S
+    S2 = (rot(p) + torch.tensor([3.0, -2.0, 0.0]), Rz @ R, rot(v), rot(w), q, qd)
+    for wm, out in zip(rf_models(kin, merge=merge), (35, 70)):
+        net = wm.net
+        assert net.n_tok == len(groups) and net.rel.shape == (len(groups) + 2, len(groups) + 2)
+        for t, g in enumerate(groups[1:], 1):
+            assert int(net.rel[t, int(net.tok_of_body[kin.parent[g[0]]])]) == 1
+        randomize_zero_init(net)
+        fit_norms(wm, batch)
+        x = wm.inputs(batch.S, batch.u, batch.xi_n)
+        y = net(wm.in_norm(x))
+        assert y.shape == (N, out) and torch.isfinite(y).all()
+        for g in (g for g in groups if len(g) > 1):
+            cols = [net.root_out + kin.joint_idx[b] for b in g]
+            assert all((y[:, a] - y[:, b]).abs().max() > 1e-4 for a, b in zip(cols, cols[1:])), [kin.body_names[b] for b in g]
+        torch.testing.assert_close(net(wm.in_norm(wm.inputs(S2, batch.u, batch.xi_n))), y, atol=1e-4, rtol=1e-4)
+        u, v1 = batch.u.clone().requires_grad_(True), batch.S[2].clone().requires_grad_(True)
+        S1 = wm.step((batch.S[0], batch.S[1], v1, *batch.S[3:]), u, batch.xi_n)
+        assert all(a.shape == b.shape and torch.isfinite(a).all() for a, b in zip(S1, batch.S))
+        (flatten_state(S1) * torch.randn(N, 71, generator=torch.Generator().manual_seed(6))).sum().backward()
+        assert u.grad.abs().sum() > 0 and v1.grad.abs().sum() > 0
+        for name, prm in net.named_parameters():
+            assert prm.grad is not None and torch.isfinite(prm.grad).all() and prm.grad.abs().sum() > 0, name
+
+    # joint j's outputs come from the body that owns joint j, as without merging
+    class TokenIndex(torch.nn.Module):
+        def forward(self, z):
+            return torch.arange(1.0, z.shape[1] + 1).view(1, -1, 1).expand(z.shape[0], -1, 1)
+
+    from ndm_gym.worldmodels.rigidformer import RigidFormerNet
+
+    net = RigidFormerNet(kin, root_out=6, joint_out=1, merge=merge, **SMALL)
+    net.joint_head = TokenIndex()
+    y = net(net.make_input_norm()(net.inputs(batch.S, batch.u, batch.xi_n)))[:, 6:]
+    owner = torch.tensor([kin.joint_idx.index(j) for j in range(29)], dtype=torch.float32)
+    torch.testing.assert_close(y, owner.expand(N, -1))
+
+
+def test_merge_and_fused_train_refusals(kin):
+    """Merging needs FiLM, one rotary point per body and no rope_center; the fused training kernels' shapes (powers of two)
+    are checked when the network is built: RF-S, a merged network of 32 tokens and a 64-wide one of 16 tokens (SwiGLU 160,
+    in chunks of 32) pass, other token counts and the width 96 are refused."""
+    from ndm_gym.worldmodels.rigidformer import RigidFormerNet
+
+    for kw in ({"film": False}, {"anchors": 4}, {"rope_center": True}):
+        with pytest.raises(ValueError):
+            RigidFormerNet(kin, 6, 1, merge="distal", **SMALL, **kw)
+    RigidFormerNet(kin, 6, 1, fused_train=True)  # RF-S: 30 body tokens + 2 registers, width 128, head width 32
+    RigidFormerNet(kin, 6, 1, fused_train=True, merge="coincident", registers=12)  # 20 + 12 tokens
+    net = RigidFormerNet(kin, 6, 1, fused_train=True, merge="joints", dim=64, layers=2, heads=2)  # 14 + 2 tokens, head width 32
+    assert net.chunk == 32 and RigidFormerNet(kin, 6, 1, fused_train=True).chunk == 64
+    for kw in ({"merge": "distal"}, {"merge": "coincident", "registers": 0}, {"dim": 96, "layers": 2, "heads": 3}):
+        with pytest.raises(ValueError, match="powers of two"):
+            RigidFormerNet(kin, 6, 1, fused_train=True, **kw)

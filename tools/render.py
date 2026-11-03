@@ -4,6 +4,8 @@ The simulated robot is drawn solid; the reference motion is a translucent ghost 
 at little cost: a directional key light that follows the robot and casts shadows, a fill light, a softly reflecting floor with a
 fine grid, multisample anti-aliasing, a smoothly following camera and a small NDM Gym mark.
 Usage: MUJOCO_GL=egl python tools/render.py traj.npz out.mp4 --clips dance1_subject1 jumps1_subject1 --seconds 12
+``--pair``: a two-robot evaluation (evaluate --paired --record): both robots of each named two-person clip in one view
+(red and blue hands), each with its reference as a ghost at the reference's own place, seen from the side of the pair.
 """
 
 import argparse
@@ -60,6 +62,89 @@ def two_robot_xml() -> str:
     return xml.replace("<asset>", visual + "<asset>", 1)
 
 
+HANDS_RGBA = ("0.80 0.16 0.14 1", "0.13 0.34 0.82 1")  # the first and the second robot's hands
+
+
+def pair_xml() -> str:
+    """Two solid robots (the second's names prefixed b_), their two ghosts (ref_, ref_b_), with two_robot_xml's studio
+    look; the key light is fixed above the scene, as two robots have no single center of mass to follow."""
+    xml = two_robot_xml()
+    xml = xml.replace(re.search(r'\n      <light name="key"[^>]*/>', xml).group(0), "", 1)
+    start = xml.index('<body name="pelvis"')
+    robot = xml[start : xml.index('<body name="ref_pelvis"')]
+    ghost = xml[xml.index('<body name="ref_pelvis"') : xml.index('<light name="fill"')]
+
+    def hands(body: str, rgba: str) -> str:  # the rubber hands' geoms in this robot's color
+        return re.sub(r'(<geom [^>]*?)rgba="[^"]*"([^>]*mesh="(?:left|right)_rubber_hand")', r'\1rgba="' + rgba + r'"\2', body)
+
+    second = re.sub(r' name="([^"]+)"', r' name="b_\1"', robot)
+    ghost_b = re.sub(r' name="ref_([^"]+)"', r' name="ref_b_\1"', ghost)
+    xml = xml.replace(robot, hands(robot, HANDS_RGBA[0]) + hands(second, HANDS_RGBA[1]), 1)
+    xml = xml.replace(ghost, ghost + ghost_b, 1)
+    key = ('<light name="key" directional="true" pos="0 0 4" dir="-0.3 0.25 -1" castshadow="true" diffuse="0.58 0.57 0.55" '
+           'specular="0.2 0.2 0.2"/>')  # fmt: skip
+    # the fixed light's shadow map covers 20 m around the scene, so no floor in view lies past its edge (where the shadow
+    # lookup speckles the floor), at twice the resolution of the one-robot look
+    xml = xml.replace('<light name="fill"', key + '\n    <light name="fill"', 1).replace('shadowclip="2.0"', 'shadowclip="20.0"', 1)
+    return xml.replace('shadowsize="8192"', 'shadowsize="16384"', 1)
+
+
+def render_pairs(a, d, renderer, model, data, cam, fonts, ff):
+    """--pair: each named two-person clip (or every one) with both robots, their references as ghosts at the reference's
+    own place; the camera looks at the pair's midpoint from its side."""
+    bold, regular, small = fonts
+    names = list(d["names"])
+    pairs = a.clips or sorted({n.rsplit("_p", 1)[0] for n in names})
+    stride = int(round(50 / a.fps))
+    s = a.height / 432
+    for pair in pairs:
+        cols = [names.index(f"{pair}_p1"), names.index(f"{pair}_p2")]
+        T = d["root_p"].shape[0]
+        t0 = int(a.start * 50)
+        t1 = min(T, t0 + int(a.seconds * 50))
+        fell = [None, None]
+        look = None
+        d0 = d["root_p"][t0, cols[1], :2] - d["root_p"][t0, cols[0], :2]
+        cam.azimuth = float(np.degrees(np.arctan2(d0[1], d0[0]))) + 90.0  # the line between them across the view
+        for t in range(t0, t1, stride):
+            for k, c in enumerate(cols):
+                alive = d["alive"][t, c]
+                if not alive and fell[k] is None:
+                    fell[k] = t
+                tt = t if alive else fell[k]
+                f = int(d["f"][tt, c])
+                o = 36 * k
+                data.qpos[o : o + 3] = d["root_p"][tt, c]
+                data.qpos[o + 3 : o + 7] = d["root_quat"][tt, c]
+                data.qpos[o + 7 : o + 36] = d["q"][tt, c]
+                g = 72 + 36 * k
+                data.qpos[g : g + 3] = d["ref_root_p"][f]
+                data.qpos[g + 3 : g + 7] = _mat_to_quat(d["ref_root_R"][f])
+                data.qpos[g + 7 : g + 36] = d["ref_q"][f]
+            mujoco.mj_kinematics(model, data)
+            mujoco.mj_comPos(model, data)
+            mujoco.mj_camlight(model, data)
+            target = np.array([0.5 * (data.qpos[0] + data.qpos[36]), 0.5 * (data.qpos[1] + data.qpos[37]), 0.7])
+            look = target if look is None else look + 0.18 * (target - look)
+            cam.lookat[:] = look
+            renderer.update_scene(data, camera=cam)
+            img = Image.fromarray(renderer.render()).convert("RGBA")
+            over = Image.new("RGBA", img.size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(over)
+            m = round(12 * s)
+            parts = [(a.title, bold, INK)] + ([(a.subtitle, regular, MUTED)] if a.subtitle else [])
+            if a.title or a.subtitle:
+                _pill(draw, (m, m), parts)
+            f0 = int(d["f"][t if fell[0] is None else fell[0], cols[0]])
+            _pill(draw, (a.width - m, m), [(f"{pair}   {(f0 - int(d['clip_start'][cols[0]])) * 0.02:4.1f} s", small, MUTED)], anchor="ra")
+            for k, who in enumerate(("red", "blue")):
+                if fell[k] is not None:
+                    _pill(draw, (m, a.height - m - round(34 * s) * (k + 1) - k * m), [(f"{who} terminated", bold, RED)])
+            draw_mark(draw, a.width, a.height, bold)
+            img = Image.alpha_composite(img, over).convert("RGB")
+            ff.stdin.write(np.asarray(img).tobytes())
+
+
 EGL_CUDA_DEVICE_NV = 0x323A  # EGL_NV_device_cuda
 
 
@@ -110,7 +195,8 @@ def _pill(draw, xy, parts, pad=(10, 6), anchor="la"):
 
 def draw_mark(draw, width, height, bold, fill=(28, 30, 34, 110)):
     """The small NDM Gym mark at the bottom right of a width x height frame, in the bold font of the frame's labels
-    (_font(0, round(20 * height / 432)))."""
+    (_font(0, round(20 * height / 432))); tools/render_musclevae.py and tools/render_hoi.py (in white, on a dark floor)
+    draw it too."""
     m = round(12 * (height / 432))
     mark = "NDM Gym"
     draw.text((width - m - draw.textlength(mark, font=bold), height - m - bold.size), mark, font=bold, fill=fill)
@@ -129,16 +215,17 @@ def main():
     ap.add_argument("--title", type=str, default="", help="bold label, e.g. the method")
     ap.add_argument("--subtitle", type=str, default="", help="label after the title, e.g. the seed")
     ap.add_argument("--global_ghost", action="store_true", help="draw the reference at its global xy instead of anchored to the robot")
+    ap.add_argument("--pair", action="store_true", help="a two-robot evaluation: --clips names two-person clips (default: every one)")
     a = ap.parse_args()
     check_egl_device()
 
     d = dict(np.load(a.traj))
     names = list(d["names"])
-    model = mujoco.MjModel.from_xml_string(two_robot_xml())
+    model = mujoco.MjModel.from_xml_string(pair_xml() if a.pair else two_robot_xml())
     data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, a.height, a.width)
     cam = mujoco.MjvCamera()
-    cam.distance, cam.azimuth, cam.elevation = 3.0, 140.0, -12.0
+    cam.distance, cam.azimuth, cam.elevation = (3.6 if a.pair else 3.0), 140.0, -12.0
     s = a.height / 432  # label sizes scale with the frame
     bold, regular, small = _font(0, round(20 * s)), _font(1, round(18 * s)), _font(1, round(15 * s))
     clips = a.clips or names
@@ -147,6 +234,9 @@ def main():
          "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
         stdin=subprocess.PIPE,
     )  # fmt: skip
+    if a.pair:
+        render_pairs(a, d, renderer, model, data, cam, (bold, regular, small), ff)
+        clips = []
     stride = int(round(50 / a.fps))
     for clip in clips:
         c = names.index(clip)

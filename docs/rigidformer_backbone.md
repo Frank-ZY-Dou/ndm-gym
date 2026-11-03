@@ -102,6 +102,21 @@ which as one graph takes about 10 min to compile (one step: about 2 min). Benchm
 
 All four have head width 32, two registers, the tree bias and RoPE; both algorithms' counts round to these values.
 
+Fewer tokens (`--rf_merge`, default `none`: one token per body). A link may share its parent's token when the parent is
+not the pelvis and has no other child (`token_groups`). `coincident`: when the link's origin lies within 5 cm of the
+parent's, i.e. serial hinges whose axes nearly meet: the G1's wrists (roll, pitch and yaw links; origins 3.8 and 4.6 cm
+apart), ankles (pitch and roll links, 1.8 cm), the waist's yaw and roll links with the torso (4.4 and 0 cm) and each
+shoulder's pitch and roll links (4.0 cm): 20 tokens (the next closest pair, a hip's pitch and roll links, is 6.0 cm
+apart). `distal`: only the chains that end at a leaf, the wrists and ankles: 24 tokens. `joints`: one token per
+anatomical joint, the hinges named `<joint>_{pitch,roll,yaw}_joint` along a chain: the pelvis, the waist (with the
+torso), and per side the hip, knee, ankle, shoulder, elbow and wrist: 14 tokens, 16 with the two registers (a power of
+two, as the fused kernels need). A token's input is its members' token features side by side (zero-padded to three),
+through one shared embedding; its rotary position is its last member's link origin; the tree bias counts the joints
+between tokens in the tree of tokens. In the read-out every body takes its token's features plus a learned embedding of
+the body (bodies that share a token only), then the per-body SwiGLU fusion and heads as before, so every joint keeps its
+own output. The inputs, the step and the outputs do not change. The fused training kernels (`--rf_fused_train`) need
+token counts, widths and head widths that are powers of two; other settings are refused when the network is built.
+
 ## 6. Speed and memory
 
 Measured on one A100-SXM4-40GB (PyTorch 2.11.0+cu126, bf16 autocast, TF32, default `torch.compile`) with noisy LAFAN1
@@ -216,6 +231,16 @@ two runs: world-model loss 2.5-6.2% (3.3-7.3%), policy loss 2.6-11.6% (3.4-9.6%)
 (12-18%). Single runs reach either side of the four runs' range: over iterations 100-400, the mean episode length of
 SuperTrack-RF was 47.6 and 46.8 with both options, 53.2 with `--compile_eager` alone and 62.2 and 52.2 with
 `--rf_fit_keep_ops` alone, against 51.7-60.4; that of SuperMimic-RF 62.9 and 81.5 against 71.5-91.3.
+
+As a simulator (inference only), the G1 world models take HDMI's inference paths (`worldmodels/g1_infer.py`,
+`worldmodels/g1_fused.py`, `kernels/rf_block.py`; `wmbench/speed_pair.py` times them): an inference copy with the network
+in bf16 end to end or in fp32 under autocast, token attention and the relation bias gathered once; the step's features
+(the forward kinematics and token features, or the MLP's invariant features) and integration as two Triton kernels; the
+blocks as fused kernels (`FusedBlock`, the model as trained or its fp32 copy; a model trained with `--rf_fused_train` runs
+them instead of the training kernels); the whole network in one kernel (`FusedG1RigidFormerNet`, refused on an H100 while
+Triton 3.6 miscompiles it there). Each path is compared with the model on the GPU before use and refused on a mismatch:
+the fused features and integration within float rounding of `inputs` and `step`, the network no further from its fp32
+values than the model under bf16 autocast (the bf16 copy: twice its mean and four times its largest error).
 
 ## 7. Validation
 

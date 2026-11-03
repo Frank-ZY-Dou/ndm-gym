@@ -34,6 +34,7 @@ followed by the global context (friction and torso center-of-mass offset, normal
 from __future__ import annotations
 
 import math
+import re
 
 import torch
 import torch.nn as nn
@@ -52,6 +53,50 @@ WRENCH_DIM = 6
 GLOBAL_DIM = 1 + 3
 XI_OFFSET_SCALE = 0.01  # ndm_gym.state.normalize_xi divides the joint calibration offsets by this
 POS_SCALE = 0.1  # m; scale of the body positions TokenInputNorm passes through for the rotary attention
+MERGE_MODES = ("none", "distal", "coincident", "joints")  # token_groups
+MERGE_GAP = 0.05  # m; token_groups: a link joins its parent's token when its origin lies this close to the parent's
+
+
+def token_groups(kin: ArticulationKinematics, mode: str = "none", gap: float = MERGE_GAP) -> list[list[int]]:
+    """The bodies each token holds (``RigidFormerNet(merge=...)``), tokens in tree order, members proximal to distal. A
+    link only ever joins its parent's token, and only when the parent is not the root and has no other child (a serial
+    chain).
+
+    "none": one token per body. "coincident": a link joins when its origin lies within ``gap`` of its parent's
+    (``kin.off_p``): serial hinges whose axes nearly meet. "distal": only those of the "coincident" chains that end at a
+    leaf. "joints": one token per anatomical joint, the hinges named ``<joint>_{pitch,roll,yaw}_joint`` along a chain.
+    On the G1 (``kinematics``; 30 bodies): "distal" merges each wrist's roll, pitch and yaw links (origins 3.8 and 4.6
+    cm apart) and each ankle's pitch and roll links (1.8 cm), 24 tokens; "coincident" also the waist's yaw and roll links
+    with the torso (4.4 and 0 cm) and each shoulder's pitch and roll links (4.0 cm), 20 tokens (the next closest pair, a
+    hip's pitch and roll links, is 6.0 cm apart); "joints" merges every hip's, shoulder's and wrist's three links, every
+    ankle's two and the waist's two with the torso, 14 tokens: the pelvis, the waist, and per side the hip, knee, ankle,
+    shoulder, elbow and wrist."""
+    if mode not in MERGE_MODES:
+        raise ValueError(f"token merging must be one of {MERGE_MODES}, got {mode!r}")
+    parent, B = list(kin.parent), kin.num_bodies
+    children = [[c for c in range(B) if parent[c] == b] for b in range(B)]
+    names = [None] + [G1_JOINT_NAMES[kin.joint_idx[b]] for b in range(1, B)]
+    axis_joint = [None] + [re.fullmatch(r"(.+)_(pitch|roll|yaw)_joint", n) for n in names[1:]]
+
+    def joins(b: int, p: int) -> bool:
+        if mode == "none" or p <= 0 or len(children[p]) != 1:
+            return False
+        if mode == "joints":
+            return bool(axis_joint[b] and axis_joint[p] and axis_joint[b].group(1) == axis_joint[p].group(1))
+        return float(kin.off_p[b].norm()) <= gap
+
+    groups, of = [], {}
+    for b in range(B):
+        if joins(b, parent[b]):
+            of[b] = of[parent[b]]
+            groups[of[b]].append(b)
+        else:
+            of[b] = len(groups)
+            groups.append([b])
+    if mode == "distal":  # a chain that does not end at a leaf goes back to one token per body
+        groups = sorted((g for grp in groups for g in ([grp] if len(grp) == 1 or not children[grp[-1]] else [[b] for b in grp])),
+                        key=lambda g: g[0])  # fmt: skip
+    return groups
 
 
 def tree_hops(parent: list[int]) -> torch.Tensor:
@@ -276,13 +321,20 @@ class RigidFormerNet(nn.Module):
             RigidFormer's model.rope_center_positions, so that the zero-angle registers sit at that centroid instead
             of the pelvis's ground projection; the body tokens' query-key products do not change (rotary products
             depend on differences), so only the registers' attention does. Off by default.
+        merge: bodies that share a token (``token_groups``: "none", the default, one token per body; "distal",
+            "coincident" or "joints"), for fewer tokens. A token's input is its members' token features side by side, proximal to
+            distal, zero-padded to the largest group (one shared embedding over that width, then a learned embedding per
+            token); its rotary position is its last (distal) member's link origin; the tree bias counts the joints
+            between tokens in the tree of tokens (a group's inner joints not counted). The read-out gives every body
+            the features of its token plus a learned embedding of the body (bodies sharing a token only), then the
+            SwiGLU fusion and heads as without merging. The inputs, the step and the outputs are unchanged.
     """
 
     def __init__(self, kin: ArticulationKinematics, root_out: int, joint_out: int, dim: int = 128, layers: int = 3,
                  heads: int = 4, ffn_mult: float = 2.5, registers: int = 2, rope: bool = True, rope_max_freq: float = 10.0,
                  rope_detach: bool = False, tree_bias: bool = True, film: bool = True, head_layers: tuple[int, ...] | None = None,
                  ext_wrench: bool = False, checkpoint: str = "frozen", fused_rope: bool = False, fused_train: bool = False, anchors: int = 1,
-                 anchor_mode: str = "mean", rope_center: bool = False, keep_ops: bool = False):  # fmt: skip
+                 anchor_mode: str = "mean", rope_center: bool = False, keep_ops: bool = False, merge: str = "none"):  # fmt: skip
         super().__init__()
         B = kin.num_bodies
         assert kin.parent[0] == -1 and all(p >= 0 for p in kin.parent[1:]), kin.parent
@@ -293,6 +345,18 @@ class RigidFormerNet(nn.Module):
             raise ValueError("rope_detach needs the rotary positions (rope=True)")
         if fused_train and (fused_rope or not film):
             raise ValueError("fused_train needs FiLM conditioning (film=True) and excludes fused_rope, which it would leave unused")
+        groups = token_groups(kin, merge)
+        self.merge, self.n_tok = merge, len(groups)  # tokens of the bodies (one per body without merging)
+        if merge != "none" and (not film or anchors != 1 or rope_center):
+            raise ValueError("merge needs FiLM conditioning (film=True), one rotary point per body (anchors=1) and no rope_center")
+        if fused_train:  # the fused kernels' shapes (kernels/rf_train.py, check_block), refused here before any training
+            p2 = lambda n: n > 0 and n & (n - 1) == 0  # noqa: E731
+            T, hd = self.n_tok + registers, dim // heads
+            if not (p2(T) and T >= 16 and p2(dim) and p2(hd) and hd >= 32 and int(ffn_mult * dim) % 32 == 0):
+                raise ValueError(f"fused_train (--rf_fused_train) supports token counts, widths and head widths that are powers of two (T "
+                                 f">= 16, head width >= 32) and a SwiGLU width that is a multiple of 32; got {self.n_tok} body tokens + "
+                                 f"{registers} registers, width {dim}, head width {hd}, SwiGLU width {int(ffn_mult * dim)}")  # fmt: skip
+        self.chunk = 64 if int(ffn_mult * dim) % 64 == 0 else 32  # the fused kernels' SwiGLU columns per step (64 for RF-S)
         if keep_ops and not fused_train:
             raise ValueError("keep_ops keeps the fused blocks' operands: it needs fused_train")
         self.ext_wrench, self.checkpoint, self.rope_detach, self.fused_train = ext_wrench, checkpoint, rope_detach, fused_train
@@ -330,9 +394,17 @@ class RigidFormerNet(nn.Module):
             self.register_buffer("pos_index", (torch.arange(B).unsqueeze(-1) * self.tok_dim + torch.arange(3)).flatten(),
                                  persistent=False)  # fmt: skip
 
+        if merge != "none":  # each token's members (slots padded with the zero row B), last member, and each body's token
+            G = max(len(g) for g in groups)
+            self.register_buffer("slots", torch.tensor([g + [B] * (G - len(g)) for g in groups]), persistent=False)
+            self.register_buffer("rep", torch.tensor([g[-1] for g in groups]), persistent=False)
+            tok_of_body = torch.tensor([t for b in range(B) for t, g in enumerate(groups) if b in g])
+            self.register_buffer("tok_of_body", tok_of_body, persistent=False)
+            self.register_buffer("shared", torch.tensor([[float(len(groups[int(t)]) > 1)] for t in tok_of_body]), persistent=False)
+
         self.ctx_net = nn.Sequential(nn.Linear(GLOBAL_DIM, 64), nn.SiLU()) if film else None
-        self.embed = nn.Linear(self.tok_dim + (0 if film else GLOBAL_DIM), dim)
-        self.body_emb = nn.Parameter(0.5 * torch.randn(B, dim))
+        self.embed = nn.Linear(self.tok_dim * (1 if merge == "none" else G) + (0 if film else GLOBAL_DIM), dim)
+        self.body_emb = nn.Parameter(0.5 * torch.randn(self.n_tok, dim))  # one per token (per body without merging)
         self.registers = nn.Parameter(0.02 * torch.randn(1, registers, dim)) if registers else None
         self.blocks = nn.ModuleList(Block(dim, heads, ffn_mult, 64 if film else 0, fused_rope=fused_rope) for _ in range(layers))
         hd = dim // heads
@@ -343,10 +415,11 @@ class RigidFormerNet(nn.Module):
         self.rope = Rope3d(n_rot, rope_max_freq, max(self.n_rot_pts, 1)) if rope else None
         self.rel_bias = None
         if tree_bias:
-            hops = tree_hops(kin.parent)
-            T = B + registers
+            # merged: the tree of tokens, a token's parent that of its first member's parent
+            hops = tree_hops(kin.parent) if merge == "none" else tree_hops([int(self.tok_of_body[kin.parent[g[0]]]) if g[0] else -1 for g in groups])
+            T = self.n_tok + registers
             rel = torch.full((T, T), int(hops.max()) + 1, dtype=torch.long)  # register pairs: their own class
-            rel[:B, :B] = hops
+            rel[: self.n_tok, : self.n_tok] = hops
             self.register_buffer("rel", rel, persistent=False)
             self.rel_bias = nn.Parameter(torch.zeros(heads, int(hops.max()) + 2))
         self.head_layers = tuple(head_layers) if head_layers is not None else (0, layers)
@@ -359,6 +432,8 @@ class RigidFormerNet(nn.Module):
         for m in (self.root_head, self.joint_head):
             nn.init.zeros_(m.weight)
             nn.init.zeros_(m.bias)
+        if merge != "none":  # the read-out's embedding of the bodies that share a token
+            self.unmerge_emb = nn.Parameter(0.5 * torch.randn(B, dim * len(self.head_layers)))
 
     @property
     def out_dim(self) -> int:
@@ -429,6 +504,9 @@ class RigidFormerNet(nn.Module):
             tok = torch.cat((tok, ctx.unsqueeze(1).expand(-1, B, -1)), -1)
         else:
             c = self.ctx_net(ctx)
+        if self.merge != "none":  # each token's members side by side (zero-padded), at its last member's position
+            tok = torch.cat((tok, tok.new_zeros(N, 1, self.tok_dim)), 1)[:, self.slots].flatten(-2)
+            pos = pos[:, self.rep]
         h = self.embed(tok).float() + self.body_emb
         if self.n_reg:
             h = torch.cat((h, self.registers.expand(N, -1, -1)), 1)
@@ -440,7 +518,7 @@ class RigidFormerNet(nn.Module):
             from ..kernels.rf_train import rf_block_train
 
             for blk in self.blocks:
-                h = rf_block_train(blk, h, cos, sin, bias, c, keep_ops=self.keep_ops)
+                h = rf_block_train(blk, h, cos, sin, bias, c, chunk=self.chunk, keep_ops=self.keep_ops)
                 hs.append(h)
         else:
             for blk in self.blocks:
@@ -451,7 +529,11 @@ class RigidFormerNet(nn.Module):
     def _readout(self, *hs):
         """The read-out of the head layers' token features: SwiGLU fusion of the body tokens, root and joint heads."""
         B = self.n_body
-        z = torch.cat([h[:, :B] for h in hs], -1)
+        if self.merge == "none":
+            z = torch.cat([h[:, :B] for h in hs], -1)
+        else:  # every body its token's features, plus its own embedding where bodies share the token
+            z = torch.cat([h[:, : self.n_tok] for h in hs], -1)[:, self.tok_of_body] + self.unmerge_emb * self.shared.to(
+                self.unmerge_emb.dtype)  # the buffer in the embedding's dtype (bf16 in a bf16 inference copy)
         u, g = self.head_w12(self.head_norm(z)).chunk(2, -1)
         z = self.head_w3(u * F.silu(g))
         y_joint = self.joint_head(z[:, 1:]).index_select(1, self.body_of_joint)  # (N, J, joint_out), G1 joint order
@@ -467,6 +549,8 @@ def rigidformer_kwargs(a: dict) -> dict | None:
                 raise ValueError(f"--{flag} configures the RigidFormer backbone, not the MLP")
         if a.get("rf_anchors", 1) != 1 or a.get("rf_anchor_mode", "mean") != "mean" or a.get("rf_rope_center", False):
             raise ValueError("--rf_anchors/--rf_anchor_mode/--rf_rope_center configure the RigidFormer backbone, not the MLP")
+        if a.get("rf_merge", "none") != "none":
+            raise ValueError("--rf_merge configures the RigidFormer backbone, not the MLP")
         return None
     if a["wm_backbone"] != "rigidformer":
         raise ValueError(f"unknown world-model backbone {a['wm_backbone']!r}")
@@ -484,5 +568,5 @@ def rigidformer_kwargs(a: dict) -> dict | None:
                 tree_bias=not a["rf_no_tree_bias"], rope=not a["rf_no_rope"], rope_detach=a.get("rf_rope_detach", False),
                 fused_rope=a.get("rf_fused_rope", False), fused_train=fused_train, checkpoint="frozen_readout" if keep_blocks else "frozen",
                 anchors=a.get("rf_anchors", 1), anchor_mode=a.get("rf_anchor_mode", "mean"), rope_center=a.get("rf_rope_center", False),
-                keep_ops=a.get("rf_fit_keep_ops", False))  # fmt: skip
+                keep_ops=a.get("rf_fit_keep_ops", False), merge=a.get("rf_merge", "none"))  # fmt: skip
 
