@@ -216,6 +216,7 @@ def main():
     ap.add_argument("--subtitle", type=str, default="", help="label after the title, e.g. the seed")
     ap.add_argument("--global_ghost", action="store_true", help="draw the reference at its global xy instead of anchored to the robot")
     ap.add_argument("--pair", action="store_true", help="a two-robot evaluation: --clips names two-person clips (default: every one)")
+    ap.add_argument("--distance", type=float, default=None, help="camera distance in m (default: 3.6 with --pair, else 3.0)")
     a = ap.parse_args()
     check_egl_device()
 
@@ -225,7 +226,7 @@ def main():
     data = mujoco.MjData(model)
     renderer = mujoco.Renderer(model, a.height, a.width)
     cam = mujoco.MjvCamera()
-    cam.distance, cam.azimuth, cam.elevation = (3.6 if a.pair else 3.0), 140.0, -12.0
+    cam.distance, cam.azimuth, cam.elevation = a.distance or (3.6 if a.pair else 3.0), 140.0, -12.0
     s = a.height / 432  # label sizes scale with the frame
     bold, regular, small = _font(0, round(20 * s)), _font(1, round(18 * s)), _font(1, round(15 * s))
     clips = a.clips or names

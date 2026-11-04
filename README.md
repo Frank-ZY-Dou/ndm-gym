@@ -287,6 +287,9 @@ Two G1s in one scene, with robot-robot contacts, track the two sides of an Inter
 redistributed); 3 h of training each on an A100 80GB, five evaluations of the last checkpoint
 ([details](benchmarks/g1_boxing/results.md)).
 
+<p align="center"><img src="docs/media/boxing/interhuman_1566.webp" alt="interhuman_1566"/></p>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right), MLP world models, 3 h. Blue ghosts: the references.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
 | | pair success | return | global MPJPE | local MPJPE | iterations in 3 h |
 |---|---|---|---|---|---|
 | SuperTrack, MLP | 5 / 5 | 0.887 | 0.106 m | 12.5 mm | 31,428 |
