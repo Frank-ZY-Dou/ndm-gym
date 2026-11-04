@@ -5,6 +5,7 @@
 <img src="https://img.shields.io/badge/Python-3.12-3776ab" alt="Python 3.12">
 <a href="https://github.com/isaac-sim/IsaacLab"><img src="https://img.shields.io/badge/Isaac_Lab-3.0-76b900" alt="Isaac Lab 3.0"></a>
 <a href="https://github.com/google-deepmind/mujoco_warp"><img src="https://img.shields.io/badge/MuJoCo_Warp-GPU-0b6fae" alt="MuJoCo Warp"></a>
+<a href="https://huggingface.co/frankzydou/ndm-gym"><img src="https://img.shields.io/badge/Weights-Hugging_Face-ffd21e" alt="Weights on Hugging Face"></a>
 
 **Neural Dynamics Modeling Gym**: neural world models for physics-based humanoid control.
 </div>
@@ -54,6 +55,7 @@ HDMI's human-object interaction tasks and MuscleVAE's muscle-actuated character,
 
 ## 🔥 News
 
+- **[2026-11]** Trained weights on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym): the G1 / LAFAN1 runs behind the [results](#-results).
 - **[2026-11]** HDMI's 13 human-object interaction tasks (HDMI's PPO teacher as the model-free baseline), MuscleVAE's
   muscle-actuated character, NDMs as simulators ([throughput](benchmarks/ndm_speed/results.md)), RigidFormer inference
   kernels, and two G1s tracking a two-person clip in one scene ([results](benchmarks/g1_boxing/results.md)).
@@ -217,6 +219,8 @@ With the RigidFormer world model: the final configurations with every speed opti
 | failed clips under root pushes of 1 m/s every 2 s | 5.3 ± 1.2 | 1.3 ± 0.6 |
 | failed clips under root pushes of 2 m/s every 2 s | 24.3 ± 3.1 | 9.0 ± 2.0 |
 | iterations in 3 h | 12,676 | 10,710 |
+
+The checkpoints of both tables are on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym) (`g1_lafan1_tracking/`; non-commercial use, as LAFAN1).
 
 ### Key findings
 
