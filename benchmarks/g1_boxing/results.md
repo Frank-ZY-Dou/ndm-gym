@@ -13,21 +13,20 @@ Setup:
 - Scene (`--motions interhuman --paired`): two G1s per environment, each tracking its side with the LAFAN1 task; a pair
   resets and ends together; each robot's world model sees only its own state. 4096 robots in 2048 environments.
 - Configurations: README's final ones with every speed option, `--seed 0`. SuperTrack-MLP `--algo supertrack --st_fail_w 5
-  --st_balance_w 4`; SuperTrack-RigidFormer `--algo supertrack --st_fail_w 5 --st_balance_w 2 --wm_backbone rigidformer
-  --wm_lr 4e-4 --wm_batches 5`; SuperMimic-MLP `--algo supermimic --reward_std_scale 0.7 --action_noise 0.3
-  --imag_start_perturb 0.3`.
+  --st_balance_w 4`; SuperMimic-MLP `--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3`.
+  The speed tables' RigidFormer is SuperTrack-RigidFormer's (`--algo supertrack --st_fail_w 5 --st_balance_w 2
+  --wm_backbone rigidformer --wm_lr 4e-4 --wm_batches 5`).
 
 ## Tracking
 
 | configuration | iterations in 3 h | it/s (world model only, then) | pair success | normalized return | global MPJPE (m) | local MPJPE (mm) |
 |---|---|---|---|---|---|---|
 | SuperTrack, MLP | 31,428 | 4.90, 3.09 | 5 / 5 | 0.887 (0.885-0.888) | 0.106 (0.103-0.109) | 12.5 (12.5-12.5) |
-| SuperTrack, RigidFormer | 12,424 | 2.48, 1.21 | 5 / 5 | 0.839 (0.790-0.853) | 0.196 (0.156-0.312) | 23.7 (19.2-40.6) |
 | SuperMimic, MLP | 29,768 | 5.19, 2.90 | 5 / 5 | 0.886 (0.885-0.886) | 0.096 (0.094-0.101) | 20.0 (19.9-20.1) |
 
 Means over the five evaluations, their range in parentheses. Per robot (normalized return): SuperTrack-MLP 0.881 and
-0.892, SuperTrack-RigidFormer 0.863 and 0.815, SuperMimic-MLP 0.879 and 0.892. SuperMimic ran with the MLP world model
-only. SuperTrack-MLP's evaluation ran on an A100 40GB, the others' on the A100 80GB they trained on.
+0.892, SuperMimic-MLP 0.879 and 0.892. SuperTrack-MLP's evaluation ran on an A100 40GB, SuperMimic-MLP's on the A100 80GB
+it trained on.
 
 ## Speed
 

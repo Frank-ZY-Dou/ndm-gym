@@ -293,7 +293,6 @@ redistributed); 3 h of training each on an A100 80GB, five evaluations of the la
 | | pair success | return | global MPJPE | local MPJPE | iterations in 3 h |
 |---|---|---|---|---|---|
 | SuperTrack, MLP | 5 / 5 | 0.887 | 0.106 m | 12.5 mm | 31,428 |
-| SuperTrack, RigidFormer | 5 / 5 | 0.839 | 0.196 m | 23.7 mm | 12,424 |
 | SuperMimic, MLP | 5 / 5 | 0.886 | 0.096 m | 20.0 mm | 29,768 |
 
 At 4096 pairs the physics runs 0.31 M robot-steps per second; with their inference paths the MLP runs 8.4 M (27.0x) and
