@@ -5,9 +5,9 @@ buffer and schedule.
 
 | `--algo` | policy update | world model | critic |
 |---|---|---|---|
-| `supertrack` | supervised L1 tracking losses through the world model over the imagined horizon | SuperTrack's acceleration model | none |
-| `supermimic` | the imagined reward backpropagated through the world model (first-order gradients) | SuperMimic's increment model | beyond the horizon |
-| `blinkmimic` | SuperMimic with BlinkMimic's recipe: a preset of the options below | SuperMimic's semi-implicit model | beyond the horizon |
+| [`supertrack`](algorithms/supertrack.md) | supervised L1 tracking losses through the world model over the imagined horizon | SuperTrack's acceleration model | none |
+| [`supermimic`](algorithms/supermimic.md) | the imagined reward backpropagated through the world model (first-order gradients) | SuperMimic's increment model | beyond the horizon |
+| [`blinkmimic`](blinkmimic.md) | SuperMimic with BlinkMimic's recipe: a preset of the options below | SuperMimic's semi-implicit model | beyond the horizon |
 
 See [how the methods relate](blinkmimic.md#2-how-the-methods-relate) for the objectives and semi-implicit world models.
 
@@ -27,12 +27,11 @@ continues from a run's `last.pt`.
 `ndm-train --help` lists all options; without the simulator, `python -m ndm_gym.wmbench.fit --help` lists
 `add_train_args`. Definitions are in `ndm_gym/train.py` (`add_train_args`, `add_speed_args`) and
 `ndm_gym/algos/blinkmimic.py` (`add_blinkmimic_args`). Each help text names the algorithms that use it. Defaults preserve
-the original behavior, checked bit for bit by upstream equivalence and SuperTrack golden tests.
+the original behavior, checked bit for bit by upstream equivalence and SuperTrack golden tests. Each algorithm's own options are on its page:
+[SuperTrack](algorithms/supertrack.md#options), [SuperMimic](algorithms/supermimic.md#options).
 
 | | options |
 |---|---|
-| SuperTrack's objective | `--st_fail_w`, `--st_fail_margin` (failure penalty), `--st_balance_w`, `--st_com`, `--st_quad_w`, `--st_late_w`, `--st_reg`, `--st_imag_noise`, `--st_no_root_terms`, `--st_no_task_regs`, `--st_substeps`, `--st_wm_loss` |
-| SuperMimic's objective | `--reward_std_scale`, `--action_noise`, `--gamma`, `--lam`, `--sm_residual`, `--contact_reward`, `--ref_contact_fix`, `--no_critic`, `--critic_epochs` |
 | imagination, both | `--horizon`, `--imag_start_perturb`, `--imag_fail_starts`, `--bptt_clip_k`, `--bptt_decay`, `--pi_rollout_clip`, `--wm_bptt_fp32` |
 | world model | `--wm_backbone`, `--wm_hidden`, `--wm_act`, `--wm_no_ln`, `--wm_lr`, `--wm_window`, `--wm_batches`, `--wm_batch`, `--wm_sample`, `--wm_fail_windows`, `--wm_input_noise`, `--wm_smooth_w`, `--rf_*` |
 | optimization | `--lr`, `--pi_lr_mult`, `--lr_decay_iters`, `--lr_decay_hours`, `--pi_opt`, `--wm_opt`, `--pi_ema`, `--pi_updates` |

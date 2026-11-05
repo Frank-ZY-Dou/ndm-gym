@@ -4,13 +4,34 @@
   points at that file on GitHub, so the pages keep the links that work in the repository.
 - ``[a] [b]`` outside code is two bracketed texts in these pages, not a reference link (which mkdocstrings' cross-reference
   lookup would try to resolve): the second bracket is escaped.
+
+``on_nav`` makes the sections' overview pages their sections' own pages (navigation.indexes) without renaming them to index.md.
 """
 
 import os
 import re
 
+from mkdocs.structure.pages import Page
+
+OVERVIEWS = {"tasks.md", "tasks/hoi.md", "tasks/muscles.md", "algorithms.md", "world_models.md"}
 LINK = re.compile(r"\]\((\.\./[^)\s#]+)(#[^)\s]*)?\)")
 FENCE = re.compile(r"^\s*(```|~~~)")
+
+
+class _OverviewPage(Page):
+    is_index = True  # what the theme's navigation.indexes reads
+
+
+def on_nav(nav, config, files):
+    def walk(items):
+        for item in items:
+            if item.is_section:
+                if item.children[0].is_page and item.children[0].file.src_uri in OVERVIEWS:
+                    item.children[0].__class__ = _OverviewPage
+                walk(item.children)
+
+    walk(nav.items)
+    return nav
 
 
 def on_page_markdown(markdown, page, config, files):

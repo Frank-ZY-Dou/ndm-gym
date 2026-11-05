@@ -32,6 +32,7 @@ theme:
   name: material
   features:
     - navigation.sections
+    - navigation.indexes
     - navigation.top
     - navigation.footer
     - search.suggest
@@ -85,19 +86,34 @@ plugins:
 
 nav:
   - Home: index.md
-  - Installation: installation.md
-  - Quickstart: quickstart.md
+  - Getting started:
+      - Installation: installation.md
+      - Quickstart: quickstart.md
   - Tasks:
       - tasks.md
-      - "Human-object interaction": hoi_design.md
-      - "HDMI task specification": hdmi_task_spec.md
-      - "MuscleVAE": musclevae_design.md
-  - World models:
-      - world_models.md
-      - RigidFormer: rigidformer_backbone.md
+      - LAFAN1 motion tracking: tasks/lafan1.md
+      - Two G1s: tasks/two_g1s.md
+      - Human-object interaction:
+          - tasks/hoi.md
+          - Design: hoi_design.md
+          - HDMI task specification: hdmi_task_spec.md
+      - Muscle-actuated character:
+          - tasks/muscles.md
+          - Design: musclevae_design.md
   - Algorithms:
       - algorithms.md
+      - SuperTrack: algorithms/supertrack.md
+      - SuperMimic: algorithms/supermimic.md
       - BlinkMimic: blinkmimic.md
+  - World models:
+      - world_models.md
+      - RigidFormer backbone: rigidformer_backbone.md
+  - Results:
+      - LAFAN1: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/results.md
+      - Ablations: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/ablations.md
+      - Two G1s: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_boxing/results.md
+      - Muscles: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/musclevae/results.md
+      - NDMs as simulators: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/ndm_speed/results.md
   - API reference:
       - api/index.md
       - Core: api/core.md
