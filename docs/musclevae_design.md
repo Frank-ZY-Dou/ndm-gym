@@ -1,10 +1,7 @@
 # MuscleVAE in NDM Gym: design
 
-**Scope:** MuscleVAE in `ndm_gym`, on the library's simulator and with its world-model backbones:
-- the muscle-actuated character;
-- its muscle model;
-- SuperTrack and SuperMimic on it (§4);
-- a RigidFormer world model with one token per muscle.
+MuscleVAE's character and muscle model in `ndm_gym`, with SuperTrack and SuperMimic (§4) and a RigidFormer world model
+with one token per muscle.
 
 **Paper:** Y. Feng, X. Xu, L. Liu, *MuscleVAE: Model-Based Controllers of Muscle-Actuated Characters*, SIGGRAPH Asia 2023
 Conference Papers ([doi:10.1145/3610548.3618137](https://doi.org/10.1145/3610548.3618137),
@@ -27,10 +24,9 @@ pinned at 54c001c (2024-03-19).
 
 ## 2. Simulation
 
-Newton (MuJoCo-Warp) directly, without Isaac Lab (`ndm_gym/sim/rigid/muscle_sim.py`). MuJoCo-Warp has spatial
-tendons, but Isaac Lab at our pinned commit refuses an articulation that has them, and they cannot express MuscleVAE's
-blended anchors. So the muscles are not solver objects; their forces are computed in torch, as MuscleVAE's own code
-does, and applied as Newton's per-body wrenches, which leaves Isaac Lab nothing to add.
+`ndm_gym/sim/rigid/muscle_sim.py` uses Newton (MuJoCo-Warp) directly. MuJoCo-Warp has spatial tendons, but they cannot
+express MuscleVAE's blended anchors, and the pinned Isaac Lab commit rejects articulations with them. Muscles are not
+solver objects: torch computes their forces, as MuscleVAE's code does, and applies them as Newton's per-body wrenches.
 
 - **Character:** 23 bodies, 22 joints (14 ball, 8 hinge), 61.4 kg, capsule, box and sphere geoms.
   - Self-collision is off and joint damping is 10, as in theirs.
@@ -55,16 +51,16 @@ does, and applied as Newton's per-body wrenches, which leaves Isaac Lab nothing 
   - MuJoCo's contact and limit settings follow their ODE setup (friction 0.8, a pyramidal cone, no restitution, hard
     constraints corrected by ERP 0.2 per step); the list is in the simulator's docstring.
 - **Rates:** physics 120 Hz, control 20 Hz (6 substeps), as in their `config.yml`. Each substep runs the muscle model,
-  then one solver step, because muscle forces change every substep; a control step's six substeps are one CUDA graph.
+  then the solver; a control step's six substeps form one CUDA graph.
 - **Muscles:** 284 muscles with 1,212 anchors, straight polyline paths, no wrapping.
   - Anchors within 8 cm of a joint are blended between two bodies (weights ∝ 1/√d), and the whole force goes to the
     nearer body, as in their loader.
   - Each substep: anchor positions from the body poses, lengths and velocities, then the Hill model (rigid tendon, no
     pennation) and the muscle-space PD control: target length (1 + a)·l_Tpose, force clipped to the range the 3CC-r
     fatigue model allows. Activation comes from inverting the Hill model.
-  - The force is applied at every anchor along its path directions, summed into one wrench per body, and written to
-    Newton's per-body external wrenches (`State.body_f`).
-  - One vectorized torch module (`ndm_gym/robots/muscles.py`) runs it for all environments on the GPU.
+  - Forces act at each anchor along its path directions, sum into one wrench per body, and enter Newton through
+    `State.body_f`.
+  - `ndm_gym/robots/muscles.py` vectorizes the computation across environments on the GPU.
 - **Parameters:** by default those of the released code, so that their pretrained models run in our port.
   - That includes the muscle velocity computed as Δl/fps, which makes force–velocity ≈ 1 and the damping term about
     14,400× smaller.
@@ -72,8 +68,7 @@ does, and applied as Newton's per-body wrenches, which leaves Isaac Lab nothing 
     (`--muscle_model paper`).
   - Both are listed side by side in the converter's output.
 - **Validation:**
-  - Unit tests check every formula against independent references written from the paper's equations, on random
-    inputs.
+  - Unit tests check every formula on random inputs against independent references from the paper's equations.
   - Their pretrained tracking policy is replayed in our simulator and must track the walk, run and jump references
     (`ndm_gym/policies/musclevae_pretrained.py`, `tools/replay_musclevae.py`).
   - Optionally, one-step forces are compared with their ODE build, run in an isolated environment, since it
@@ -85,20 +80,18 @@ does, and applied as Newton's per-body wrenches, which leaves Isaac Lab nothing 
   observations, and metrics (geodesic joint errors).
 - **`robots/musclevae_char.py`:** the character, its muscles and its PD/fatigue parameters.
 - **A BVH motion source** for their retargeted clips, 100 fps to 20 Hz.
-- **`tasks/muscle_tracking.py`:** the tracking task of §4 (state, reference, reward, termination); new modules
-  throughout (§4), none of the G1's changed.
+- **`tasks/muscle_tracking.py`:** the tracking task of §4 (state, reference, reward, termination).
 
 ## 4. Algorithms: SuperTrack and SuperMimic
 
-The character is trained with SuperTrack and SuperMimic, starting from the configurations selected on LAFAN1 (the table
-below); the configurations selected on the character are in
+Training starts from LAFAN1's selected configurations (table below); character-specific selections are in
 [`benchmarks/musclevae/results.md`](../benchmarks/musclevae/results.md). MuscleVAE's own training (ControlVAE-style: prior,
 posterior, mixture of experts) is not re-implemented. Code: `tasks/muscle_tracking.py`, `worldmodels/muscle.py`,
 `policies/muscle_policy.py`, `algos/muscle_algos.py` and `muscle_guard.py`, `train_muscles.py`,
 `tools/evaluate_muscles.py`.
 
-- **Environment:** MuscleSim with `ball_joints="euler"` and `joint_damping="ode"` (their released policy tracks in
-  it), MuscleVAE's resets, reference switches (every 96 steps and at a clip's end) and termination, the three clips.
+- **Environment:** MuscleSim with `ball_joints="euler"` and `joint_damping="ode"`, MuscleVAE's resets, reference switches
+  (every 96 steps and at a clip's end), termination and three clips.
 - **State:** each body's center of mass and rotation, with the backward-difference velocities of the 50 ms control
   step (MuscleVAE's recorded state); the muscle state is their 15 fatigue values. Positions follow from these
   velocities exactly, so semi-implicit Euler is exact.
@@ -141,12 +134,13 @@ Settings, LAFAN1 to this character (everything not listed keeps `train.py`'s def
 | `--imag_start_perturb` | 0.3 m/s on the root | 0.3 m/s on every body | the G1's root kick moves the whole body with the joints unchanged |
 | action-rate penalty | −0.1 × Σ₂₉ (Δu)² | −0.1 × (29/284) Σ₂₈₄ (Δa / 0.5)² | the × 0.5 rule; 284 muscles scaled to the G1's 29 actuators |
 
-Choices made in this mapping:
-- **Action units:** the × 0.5 rule above (`tasks.muscle_tracking.ACTION_UNIT`).
+Mapping details:
+
+- **Action units:** `tasks.muscle_tracking.ACTION_UNIT` implements the × 0.5 rule above.
 - **Horizon and discount stay in steps:** H = 32 is 1.6 s here (0.64 s on the G1; MuscleVAE's BPTT is 1.2 s), and
   γ = 0.99 discounts over 5 s (2 s on the G1). Matched in time they would be 13 steps and 0.975. Likewise the replay
   holds 50 s per env (20 s on the G1), and the 8-step model windows are 0.4 s (MuscleVAE's own 8 steps).
-- **The action-rate penalty, mapped as above.** The first SuperTrack development run had none and went bang-bang: the
+- **Action-rate penalty:** the first SuperTrack development run had none and went bang-bang: the
   rate rose from 0.6 to 240 in G1 units within 650 policy updates (smooth G1 policies: about 2), as SuperTrack did on
   the G1 without it. The joint-limit penalty is dropped: the Euler hinges enforce the limits.
 - **No world-space root terms:** after a switch the reference's global pose is unrelated to the character's, and
@@ -178,7 +172,7 @@ Choices made in this mapping:
 - **Conditioning:** FiLM on the 15 part fatigue values in every block.
 - **Read-out:** per-body heads for the accelerations or increments of §4's models; the 15 part values' rates or
   increments from each part's muscle tokens, pooled with the part fatigue's f0 weights.
-- **Built:** `worldmodels.muscle.MuscleRigidFormerNet`, `train_muscles --wm_backbone rigidformer` (`--rf_dim`,
+- **Implementation:** `worldmodels.muscle.MuscleRigidFormerNet`, `train_muscles --wm_backbone rigidformer` (`--rf_dim`,
   `--rf_layers`, `--rf_heads`, `--rf_registers`, `--rf_no_tree_bias`, `--rf_no_rope`). Each step, features included,
   is recomputed in the backward pass. Tests check the features against `robots.muscles`, the relation classes, the
   start at zero, the invariance to a turn and shift of the scene, and the gradients.

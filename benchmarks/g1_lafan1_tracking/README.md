@@ -1,7 +1,7 @@
 # Motion tracking on G1 / LAFAN1
 
-A benchmark covering SuperTrack and SuperMimic, with an ablation study, run with NDM Gym: the same simulator, data,
-observations, networks, schedule and evaluation for both algorithms, so that only the algorithm differs.
+A benchmark and ablation study covering SuperTrack and SuperMimic in NDM Gym, with shared simulator, data, observations,
+networks, schedule and evaluation.
 
 | | |
 |---|---|
@@ -12,8 +12,8 @@ observations, networks, schedule and evaluation for both algorithms, so that onl
 
 ## Reproducing
 
-The selected configurations' commands are in the [README](../../README.md#lafan1-motion-tracking), the fastest ones under
-[Training speed](../../README.md#training-speed); each ablation variant's change
-is in [`ablations.md`](ablations.md). The A100 40GB runs were launched with `scripts/run_train.sh` (memory cap, CPU
+Commands: [selected configurations](../../README.md#lafan1-motion-tracking),
+[fastest configurations](../../README.md#training-speed), [ablation changes](ablations.md).
+A100 40GB runs used `scripts/run_train.sh` (memory cap, CPU
 pinning to the GPU's NUMA node, GPU lock, evaluation watcher) and the offline world-model fits with
-`scripts/run_wmbench.sh`. The runs on other GPU types ran `ndm-train`, then `ndm-eval` on every checkpoint.
+`scripts/run_wmbench.sh`. Other GPU types used `ndm-train`, then `ndm-eval` on every checkpoint.

@@ -2,22 +2,10 @@
 
 **Neural Dynamics Modeling Gym**: neural world models for physics-based humanoid control.
 
-NDM Gym trains controllers that learn through a neural world model. Every algorithm shares one pipeline (Isaac Lab 3
-with MuJoCo-Warp, the Unitree G1 with 29 DoF), so a comparison changes only the algorithm. The tasks are LAFAN1 motion
-tracking, two G1s tracking a two-person clip, HDMI's human-object interaction and MuscleVAE's muscle-actuated character;
-on the last two the neural dynamics models also stand in for the simulator.
-
-- **Algorithms:** SuperTrack and SuperMimic, which both train the policy by backpropagation through the world model;
-  BlinkMimic's recipe and systems options (`--algo blinkmimic`, and each change as an option of its own). See
-  [Algorithms](algorithms.md).
-- **World models:** SuperTrack's acceleration model and SuperMimic's increment model, each with an MLP or a RigidFormer
-  backbone. See [World models](world_models.md).
-- **Tasks:** motion tracking on LAFAN1; two G1s on a two-person clip; HDMI's 13 human-object interaction tasks, with
-  contact forces predicted by the world model; MuscleVAE's character with 284 Hill-type muscles and fatigue. See
-  [Tasks](tasks.md).
-- **NDMs as simulators:** throughput and open-loop accuracy against the physics engine.
-- **Evaluation:** tracking errors on every clip, push robustness, held-out clips, side-by-side videos, an offline
-  world-model benchmark.
+- [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`).
+- [World models](world_models.md): acceleration and increment models, MLP and RigidFormer backbones, inference copies.
+- [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks and MuscleVAE's character.
+- [Evaluation](quickstart.md): tracking errors, push robustness, held-out clips, videos and offline world-model fits.
 
 ## Install
 
@@ -30,8 +18,7 @@ git clone --recursive https://github.com/Frank-ZY-Dou/ndm-gym.git && cd ndm-gym
 bash scripts/setup.sh                                                  # everything: Isaac Lab 3, the data
 ```
 
-[Installation](installation.md) says what each gives; [Quickstart](quickstart.md) trains, evaluates and uses the world
-models from Python.
+See [installation options](installation.md) and the [Quickstart](quickstart.md) for training, evaluation and Python usage.
 
 ## Layout
 

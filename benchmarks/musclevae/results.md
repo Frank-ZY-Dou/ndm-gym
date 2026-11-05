@@ -18,7 +18,7 @@ SuperTrack and SuperMimic, with MLP world models, track MuscleVAE's reference cl
 
 ## Results
 
-Each algorithm's selected configuration, seeds 1-3, mean ± std over seeds. The commands are in the
+Selected configurations, seeds 1-3, mean ± std over seeds. Commands:
 [README](../../README.md#muscle-actuated-character).
 
 | | SuperTrack | SuperMimic |
@@ -43,17 +43,17 @@ SuperMimic's seeds 1 and 2 later reach 57.0 and 59.3 mm with 0.11 and 0.43 of th
 ## How the numbers were obtained
 
 - **Budget:** at most 3 h of training per run, on one A100 40GB PCIe, seeds 1-3, a checkpoint every 2,000 iterations.
-- **Stopping:** a run stops once, over its last three checkpoints, both its best MPJPE among the checkpoints with at most
-  0.10 of the episodes ended and its last checkpoint's MPJPE have fallen by less than 1 mm. All six runs above stopped this
-  way before 3 h. The stop is applied from outside as the evaluations come in; `train_muscles` itself runs to `--max_hours`.
+- **Stopping:** stop when, over the last three checkpoints, both the best MPJPE among checkpoints with at most 0.10 of
+  episodes ended and the last checkpoint's MPJPE fall by less than 1 mm. All six runs stopped this way before 3 h.
+  Stopping is external, as evaluations arrive; `train_muscles` itself runs to `--max_hours`.
 - **Evaluation:** `tools/evaluate_muscles.py`, 768 environments started at frames spread evenly over the clips, 512 control
   steps, no resets, no action noise.
-- **Best checkpoint:** every checkpoint is evaluated with seed 0 as it is written. A run's best checkpoint is the one with
-  the lowest root-frame MPJPE among those with at most 0.10 of the episodes ended. It is evaluated again with seed 4, which
-  no run trained with; the tables report that evaluation.
-- **Measures:** root-frame MPJPE is the mean position error of the 23 bodies, each side in its own root's frame, averaged
-  over the episode. Episodes ended is the share of the 768 episodes that MuscleVAE's termination rule ends within the 512
-  steps. Joint error is the mean rotation error of the 22 joints, averaged over the episode.
+- **Best checkpoint:** evaluate every checkpoint with seed 0 as it is written. Select the lowest root-frame MPJPE among
+  checkpoints with at most 0.10 of episodes ended, then reevaluate with seed 4, which no run trained with. Tables report
+  this evaluation.
+- **Measures:** root-frame MPJPE averages position errors of the 23 bodies over the episode, each side in its own root's
+  frame. Episodes ended is the share of 768 episodes that MuscleVAE's termination rule ends within 512 steps. Joint error
+  averages rotation errors of the 22 joints over the episode.
 
 ## Tuning
 

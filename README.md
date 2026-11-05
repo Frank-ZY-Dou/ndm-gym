@@ -13,10 +13,8 @@
 <a href="#-documentation">Documentation</a> · <a href="#-citation">Citation</a>
 </div>
 
-NDM Gym trains controllers that learn through a neural world model. Every algorithm shares one pipeline, so a comparison
-changes only the algorithm. The tasks are LAFAN1 motion tracking, two G1s tracking a two-person clip and HDMI's human-object
-interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF), and MuscleVAE's muscle-actuated character (Newton with
-MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
+NDM Gym trains humanoid controllers by backpropagation through neural world models. Algorithms share a pipeline within
+each task. The neural dynamics models (NDMs) also serve as simulators.
 
 <p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s and a muscle-actuated character" width="100%"/></p>
 <p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Error, SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 12.1 / 14.5 mm over the 6 s shown (MPJPE, root-relative), muscles 24.3 / 49.2 mm over the walk clip (MPJPE, root frame).</i></p>
@@ -26,10 +24,9 @@ MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
 
 - **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands
   ([below](#muscle-actuated-character)).
-- **[2026-11]** [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s training recipe as options (`--algo blinkmimic`),
-  checked against its own code, and its systems options (collection and updates as CUDA graphs, no host synchronization) for
-  LAFAN1, two-G1 and muscle training ([below](#blinkmimics-options)), with the training time to return 0.82 on LAFAN1
-  ([below](#training-speed)). The library also installs with `pip`, without the simulator ([details](docs/installation.md)).
+- **[2026-11]** [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s recipe (`--algo blinkmimic`), validated against its
+  code, and systems options for LAFAN1, two-G1 and muscle training ([details](#blinkmimics-options));
+  [training time to return 0.82 on LAFAN1](#training-speed). Library-only `pip` installation ([details](docs/installation.md)).
 - **[2026-11]** Trained weights on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym): the G1 / LAFAN1 runs behind the [results](#-results).
 - **[2026-11]** HDMI's 13 human-object interaction tasks (HDMI's PPO teacher as the model-free baseline), MuscleVAE's
   muscle-actuated character, NDMs as simulators ([throughput](benchmarks/ndm_speed/results.md)), RigidFormer inference
@@ -41,18 +38,17 @@ MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
 
 ## ✨ Features
 
-- **Algorithms:** SuperTrack and SuperMimic, both learning by backpropagation through a world model; BlinkMimic's recipe and
-  systems options (`--algo blinkmimic`, and each change as an option of its own).
+- **Algorithms:** SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`), with each change available separately.
 - **World models:** acceleration (SuperTrack) and increment (SuperMimic) models, each with an MLP or a
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue.
-- **NDMs as simulators:** throughput and open-loop accuracy against the physics engine, with inference paths as fused
-  Triton kernels ([results](benchmarks/ndm_speed/results.md)).
+- **NDMs as simulators:** throughput and open-loop accuracy against physics, with fused Triton inference kernels
+  ([results](benchmarks/ndm_speed/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
   offline world-model benchmark.
-- **Comparisons:** one pipeline per task, configurations selected in rounds under one rule, confidence intervals on LAFAN1
+- **Benchmarks:** configurations selected in rounds under one rule, confidence intervals on LAFAN1
   ([details](benchmarks/g1_lafan1_tracking/results.md#how-the-numbers-were-obtained)).
 
 | | MLP world model (default) | RigidFormer world model |
@@ -61,10 +57,7 @@ MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
 | **SuperMimic** | `--algo supermimic` | **SuperMimic-RF**: `--algo supermimic --wm_backbone rigidformer` |
 | world-model parameters | 8.75 M (SuperTrack), 8.82 M (SuperMimic) | 0.88 M |
 
-**How the methods relate.** SuperTrack trains the policy by supervised L1 tracking through the world model, with no reward
-and no critic. SuperMimic backpropagates the imagined reward through the world model, with a critic beyond the horizon.
-BlinkMimic (`--algo blinkmimic`) is SuperMimic's objective with InstantTrack's and its own training changes
-([details](docs/blinkmimic.md)).
+See [algorithm objectives](docs/algorithms.md) and [BlinkMimic's changes](docs/blinkmimic.md).
 
 ## 🔧 Installation
 
@@ -171,11 +164,11 @@ python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joi
 
 ## 📊 Results
 
-SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Each task's configurations are selected
-in rounds with the same budget for both algorithms, under one rule; the fastest configurations in rounds of single changes
-([below](#training-speed)). The results use MLP world models, apart from LAFAN1's RigidFormer results. Not compared here:
+SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Configurations are selected in rounds
+with equal budgets and one rule; the [fastest configurations](#training-speed) use rounds of single changes.
+Results use MLP world models except where RigidFormer is specified. Not compared here:
 tracking results on HDMI's human-object interaction tasks, and the RigidFormer's training time. ↑: higher is better; ↓: lower is
-better. Details and commands are under each task below.
+better.
 
 <table>
 <thead>
@@ -215,8 +208,8 @@ better. Details and commands are under each task below.
 <!-- videos:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-All 40 LAFAN1 clips, retargeted to the G1, for training and evaluation. Selected configurations, seeds 1-3, 3 h on one A100.
-Each cell is the mean ± std over seeds; each seed averages three standard evaluations (the push rows use one push test). H100
+Training and evaluation use all 40 LAFAN1 clips retargeted to the G1. Selected configurations, seeds 1-3, 3 h on one A100.
+Cells show mean ± std over seeds; each seed averages three standard evaluations (push rows use one push test). H100
 results and diagnostics are in [`results.md`](benchmarks/g1_lafan1_tracking/results.md); the checkpoints are on
 [Hugging Face](https://huggingface.co/frankzydou/ndm-gym) (`g1_lafan1_tracking/`; non-commercial use, as LAFAN1).
 
@@ -234,7 +227,7 @@ results and diagnostics are in [`results.md`](benchmarks/g1_lafan1_tracking/resu
 | iterations in 3 h | 12,670 | 13,540 |
 <!-- results:end -->
 
-With the RigidFormer world model: the final configurations with every speed option, fresh seeds 7-9.
+RigidFormer: final configurations with every speed option, fresh seeds 7-9.
 
 | | SuperTrack-RF | SuperMimic-RF |
 |---|---|---|
@@ -284,10 +277,8 @@ ndm-train --algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_
 
 ### Training speed
 
-Training time to return 0.82 on LAFAN1, with BlinkMimic's recipe and systems options and each algorithm's fastest configuration,
-MLP world model, seeds 0-5 ([per seed](benchmarks/g1_lafan1_tracking/results.md#training-speed)). Time counts from iteration 50,
-after compilation and graph capture, to the first checkpoint whose four evaluations on all 40 clips average 0.82. A second GPU
-evaluates every checkpoint (one per 100 iterations) while the training runs.
+Time to return 0.82 on LAFAN1 with BlinkMimic's recipe and systems options: each algorithm's fastest configuration, MLP
+world model, seeds 0-5. See [timing rules and per-seed results](benchmarks/g1_lafan1_tracking/results.md#training-speed).
 
 | minutes to return 0.82 | SuperTrack | SuperMimic |
 |---|---|---|
@@ -344,8 +335,8 @@ longer · ➖ level. The rows above those marked A100 40GB PCIe ran on an RTX 30
 ### Two G1s, one two-person clip
 
 Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
-redistributed). One policy controls both. Each algorithm's configuration on the clip comes from two rounds with the same number of
-runs; the table gives the best checkpoint within 1 h of training on an A100 80GB, five evaluations
+redistributed). One policy controls both. Configurations come from two rounds with equal run counts. The table shows five
+evaluations of each best checkpoint within 1 h on an A100 80GB
 ([details](benchmarks/g1_boxing/results.md)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566, SuperTrack and SuperMimic" width="800"/></p>
@@ -373,10 +364,10 @@ the RigidFormer 1.9 M (6.0x).
 
 ### Muscle-actuated character
 
-MuscleVAE's character with 284 Hill-type muscles and fatigue, on its three clips, in our Newton simulator, MLP world model.
-Each algorithm's configuration comes from the same three rounds of 1 h runs, ranked by one rule. The selections then train with
-seeds 1-3 for up to 3 h, each stopped once its error stops falling, and the best checkpoint among those with at most 10% of the
-episodes ended is evaluated again with a seed it did not train with ([details](benchmarks/musclevae/results.md)). SuperTrack's
+MuscleVAE's character with 284 Hill-type muscles and fatigue, three clips, Newton simulator, MLP world model.
+Configurations come from three rounds of 1 h runs, ranked by one rule. Selected configurations train with seeds 1-3 for up to
+3 h, stopping when error stops falling. The best checkpoint with at most 10% of episodes ended is evaluated with a seed it
+did not train with ([details](benchmarks/musclevae/results.md)). SuperTrack's
 reported runs use `--wm_lr 1.5e-3`, the selected 1.6e-3 rounded (36.7 ± 1.0 mm at 1.6e-3). MuscleVAE's files and weights of
 policies trained on them are not redistributed.
 
@@ -405,8 +396,7 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 ### BlinkMimic's options
 
-`--algo blinkmimic` is SuperMimic with BlinkMimic's released recipe (`PRESET[main]`). Each of its changes is an option of its own,
-off by default; those that do not depend on the algorithm also apply to SuperTrack ([details](docs/blinkmimic.md)). On the same
+`--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`); see [options](docs/blinkmimic.md). On the same
 A100 40GB, BlinkMimic's own code reaches return 0.834 at iteration 1,500 (seed 0, its evaluator) at 175 ms per iteration between
 probe sweeps; `--algo blinkmimic` first reaches 0.82 at iterations 1,500 / 1,500 / 1,400 and 0.83 at 1,600 / 1,600 / 1,700 (seeds
 0 / 1 / 2) at 161 ms per iteration.
@@ -423,8 +413,8 @@ random stream differs. Training time per iteration on one A100 40GB, before and 
 | muscles, SuperMimic | 621 | 395 |
 | two G1s, SuperTrack | 418 | 306 |
 
-Before: LAFAN1 and the two G1s already ran their updates as CUDA graphs (`--wm_cudagraphs --pi_cudagraphs`, SuperMimic also
-`--critic_cudagraphs`), so the systems options gain less there; muscle training had no such options.
+Before: LAFAN1 and the two G1s already used CUDA graphs for updates (`--wm_cudagraphs --pi_cudagraphs`, SuperMimic also
+`--critic_cudagraphs`); muscle training had no such options.
 
 ### NDMs as simulators (HDMI's scenes)
 
@@ -442,47 +432,11 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
 
 ### Key findings
 
-1. **Main comparison on LAFAN1** (SuperTrack / SuperMimic): return 0.832 / 0.824, failed clips 0.9 / 1.2 of 40, MPJPE 20.0 /
-   28.4 mm, failed clips under 1 m/s pushes 7.7 / 1.7 and under 2 m/s pushes 24.7 / 9.3.
-2. **Where the differences come from:** with SuperTrack's offsets about the reference pose, SuperMimic's MPJPE is 25.0 mm;
-   without imagination kicks (random root-velocity changes at the starts of imagined rollouts), SuperMimic fails 6.0 / 18.7
-   clips under the pushes. SuperMimic's action noise and kicks change
-   SuperTrack's push failures by -3.3 / -6.7 clips (not significant) and raise its MPJPE by 2.7 mm.
-3. **SuperTrack's additions** to the paper's objective (failure penalty, balance weights, task penalties, world-space root
-   terms) raise return from 0.53 to 0.83 and lower MPJPE from 96 to 20 mm.
-4. **SuperMimic's tuned changes and critic:** without its three tuned changes (reward kernels narrowed ×0.7, action noise 0.3
-   instead of 0.1, imagination kicks), it fails 4.3 / 11.0 more clips under the pushes; without the critic, all 40 clips fail at
-   3 h.
-5. **RigidFormer** (a tenth of the parameters): offline, at a learning rate of 4e-4 picked on the benchmark's test sets, 7-16%
-   lower open-loop error in distribution and 11-21% out of it; at the shared default 2e-4, -4% / -11% (SuperTrack's model) and
-   +8% / +0% (SuperMimic's). Online, SuperTrack-RF / SuperMimic-RF: return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm. Tuned online as the
-   MLP was, it shows no significant difference at equal iterations. In 3 h with the same speed options the MLP runs about 3x
-   more iterations: SuperTrack's return is 0.861 with the MLP; SuperMimic's MLP drops late (0.137 at about 33k iterations).
-   Under dynamics shifts 9 of 10 conditions show no significant difference; sample efficiency shows none either; on held-out clips
-   SuperTrack-RF shows none, and SuperMimic-RF's final configuration a return 0.005 lower [-0.009, -0.000]
-   ([results](benchmarks/g1_lafan1_tracking/results.md)).
-6. **H100:** return 0.82 after 1.25 h (SuperTrack) and 1.48 h (SuperMimic); the paper reports 1.2 h with its own configuration.
-   With action noise 0.3, SuperMimic's evaluations drop after about 20k iterations (return 0.074 at 3 h); with the paper's 0.1
-   they do not (0.854 at 3 h) ([details](benchmarks/g1_lafan1_tracking/results.md#noise-check-supermimic-with-action-noise-01)).
-7. **Training speed** with BlinkMimic's recipe and systems options, MLP world model: each algorithm's fastest configuration
-   reaches return 0.82 in 2.54 ± 0.11 (SuperTrack) and 2.68 ± 0.19 minutes (SuperMimic) on an H100, 4.19 ± 0.16 and 4.38 ± 0.57 on
-   an A100 40GB SXM4, and 4.37 ± 0.35 and 3.98 ± 0.22 on an A100 40GB PCIe (seeds 0-5). The commands, and what changed the time,
-   are under [Training speed](#training-speed).
-8. **Semi-implicit world models:** SuperTrack's acceleration world model (Fussell et al. 2021, §3.4;
-   [`accel.py`](ndm_gym/worldmodels/accel.py)) predicts velocity changes and integrates the positions, and so does
-   [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s; SuperMimic's predicts the position changes directly
-   ([`increment.py`](ndm_gym/worldmodels/increment.py)). With its learned position corrections at zero, a step of BlinkMimic's model
-   equals one of SuperTrack's with 4 substeps ([details](docs/blinkmimic.md#2-how-the-methods-relate)).
-9. **BlinkMimic's recipe as options:** `--algo blinkmimic` first reaches return 0.82 at iterations 1,500 / 1,500 / 1,400 (seeds 0 /
-   1 / 2); BlinkMimic's own code reaches 0.834 at iteration 1,500 (seed 0, its evaluator), on the same A100 40GB
-   ([details](#blinkmimics-options)).
-10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint in 1 h): return 0.895 / 0.906, MPJPE 46 / 52 mm global and 13.7 /
-    15.7 mm root-relative, return 0.88 after 0.20 / 0.05 h of training ([details](benchmarks/g1_boxing/results.md)).
-11. **Muscles** (seeds 1-3, up to 3 h): root-frame MPJPE 36.4 ± 1.9 (SuperTrack) and 63.6 ± 4.1 mm (SuperMimic), episodes ended
-    0.014 and 0.059, joint error 10.9 ± 0.9 and 10.1 ± 0.6 deg. On SuperMimic's selection, BlinkMimic's systems options cut the
-    time per iteration by about 45%. At 4,000 iterations its errors were higher with them in all three seeds, not significantly
-    (p >= 0.19); at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
-    ([details](benchmarks/musclevae/results.md#the-systems-options)).
+- [Ablation study](benchmarks/g1_lafan1_tracking/ablations.md)
+- [H100 and noise checks](benchmarks/g1_lafan1_tracking/results.md#h100-supplement)
+- [RigidFormer checks and tuning](benchmarks/g1_lafan1_tracking/results.md#rigidformer-check-1-dynamics-shifts)
+- [Semi-implicit models](docs/blinkmimic.md#2-how-the-methods-relate)
+- [Muscle systems options](benchmarks/musclevae/results.md#the-systems-options)
 
 ## 🔬 Ablations
 
