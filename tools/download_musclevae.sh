@@ -5,11 +5,10 @@
 # fetched here. Then convert the character, the muscles and the reference motions: python tools/convert_musclevae.py
 set -euo pipefail
 cd "$(dirname "$0")/.."
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY  # direct download: the machine's proxy must not be used
 REPO=https://github.com/wangchek/MuscleVAE_.git
 COMMIT=54c001c913b156c0bba29e593a4a291e02d1f9ce
 OUT=data/musclevae/src
-GIT=(git -c http.proxy= -c advice.detachedHead=false)  # an empty http.proxy disables any proxy set in git's configuration
+GIT=(git -c advice.detachedHead=false)
 
 if [ -e "$OUT" ]; then
   head=$("${GIT[@]}" -C "$OUT" rev-parse HEAD 2>/dev/null || true)

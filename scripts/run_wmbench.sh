@@ -13,8 +13,8 @@ MEM=${MEM:-24G}
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 PY=${PY:-$HOME/ndm_gym/venv/bin/python}
 LOCKS=$HOME/ndm_gym/locks
-# CPU list for a process on GPU $1: $2 when given, else 8 physical cores per GPU and their HT siblings (+64), as on the
-# benchmark machine (2x32 cores)
+# CPU list for a process on GPU $1: $2 when given, else 8 physical cores per GPU and their HT siblings (+64), for a machine
+# with 2x32 cores
 cpus() { if [ -n "${2:-}" ]; then echo "$2"; else echo "$((8 * $1))-$((8 * $1 + 7)),$((8 * $1 + 64))-$((8 * $1 + 71))"; fi; }
 used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$GPU")
 if [ "$used" -gt 1000 ] && [ "${SHARED:-0}" != 1 ]; then

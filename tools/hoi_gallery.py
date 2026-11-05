@@ -1,4 +1,4 @@
-"""The README's gallery of HDMI's 13 human-object interaction tasks: each task's reference clip, rendered by
+"""A gallery of HDMI's 13 human-object interaction tasks: each task's reference clip, rendered by
 tools/render_hoi.py and cut to the window of at most --seconds with the most interaction (steps where a corner of the
 bounds of the object's contact body moves faster than render_hoi.MOVING, or the clip flags contact), as an MP4 and an
 animated WebP preview (GitHub shows it inline; the gallery shows the previews, the MP4s stay local). With --readme, a grid
@@ -10,7 +10,7 @@ libwebp keeps every 8 x 8 block of a frame that is within its quality's toleranc
 quality 60), so shading that changes slowly (a door turning, a soft shadow passing) drifts in stale blocks until the next
 key frame; ffmpeg's encoder inserts none.
 
-``MUJOCO_GL=egl CUDA_VISIBLE_DEVICES=7 MUJOCO_EGL_DEVICE_ID=7 python tools/hoi_gallery.py --out docs/media/hoi --readme README.md``;
+``MUJOCO_GL=egl CUDA_VISIBLE_DEVICES=0 MUJOCO_EGL_DEVICE_ID=0 python tools/hoi_gallery.py --out hoi_gallery``;
 ``--previews_only`` re-encodes the previews from the MP4s in --out, ``--layout_only`` rewrites the grid from its previews.
 """
 

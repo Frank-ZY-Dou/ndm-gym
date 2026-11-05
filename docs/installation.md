@@ -57,8 +57,8 @@ Without the simulator, the modules and commands that need it raise `ndm_gym.sim.
 ```console
 $ ndm-train --algo supertrack
 ndm_gym.sim.SimulatorNotInstalled: ndm-train needs Isaac Lab 3 with Newton and MuJoCo-Warp: run scripts/setup.sh, which
-installs them (pip install ndm_gym installs the library without the simulator). Not installed: isaaclab, isaaclab_newton,
-newton, warp, mujoco_warp
+installs them (a pip install of this repository gives the library without the simulator). Not installed: isaaclab,
+isaaclab_newton, newton, warp, mujoco_warp
 ```
 
 ## Everything

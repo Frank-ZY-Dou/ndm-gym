@@ -4,7 +4,7 @@ humanoid control.
 Layers: ``core`` (math, kinematics, networks) -> ``robots`` -> ``motion`` -> ``sim`` -> ``tasks`` -> ``worldmodels``
 -> ``policies`` -> ``algos`` (SuperTrack, SuperMimic) -> ``train`` / ``evaluate``.
 
-``pip install ndm_gym`` installs the library, which needs PyTorch, NumPy and MuJoCo; the simulator (Isaac Lab 3 with
+A ``pip install`` of this repository installs the library, which needs PyTorch, NumPy and MuJoCo; the simulator (Isaac Lab 3 with
 Newton and MuJoCo-Warp) and the data come from ``scripts/setup.sh``. Without the simulator, the simulator modules and
 the commands that run it raise :class:`ndm_gym.sim.SimulatorNotInstalled`.
 """

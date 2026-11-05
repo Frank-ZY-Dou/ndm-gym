@@ -14,7 +14,7 @@ ndm-train --algo supertrack --wm_backbone rigidformer --max_hours 3 --log_dir lo
 ndm-eval --run_dir logs/st --watch
 ndm-eval --run_dir logs/st --ckpt logs/st/ckpt_012000.pt --push_mag 0 1 2 --out_json push.json
 
-# compare: curves, then side-by-side videos of recorded evaluations (pip install "ndm_gym[render]", ffmpeg)
+# compare: curves, then side-by-side videos of recorded evaluations (pip install "ndm_gym[render] @ git+https://github.com/Frank-ZY-Dou/ndm-gym", ffmpeg)
 python tools/plot.py logs/st logs/sm --labels SuperTrack SuperMimic --out compare.png
 ndm-eval --run_dir logs/st --ckpt <ckpt> --record st.npz      # and the same for sm.npz
 MUJOCO_GL=egl python tools/compare_videos.py st.npz sm.npz --labels SuperTrack SuperMimic --out videos/
@@ -66,7 +66,7 @@ from ndm_gym.robots import g1
 
 kin = g1.kinematics("cpu")                               # or ArticulationKinematics(<mjcf path>, g1.G1_JOINT_NAMES, g1.TRACKED_BODIES, "cpu")
 wm = AccelWorldModel(rigidformer=dict(kin=kin))          # SuperTrack-RF's world model: RF-S, 0.88 M parameters
-wm = IncrementWorldModel(rigidformer=dict(kin=kin, dim=192, layers=4, heads=6))   # SuperMimic-RF's, RF-M
+wm = IncrementWorldModel(rigidformer=dict(kin=kin))      # SuperMimic-RF's world model: RF-S too
 ```
 
 ### From a checkpoint

@@ -151,8 +151,8 @@ to 256 features, which join the other inputs into the decoder.
 **Numerics and memory.** The 3×3 products in targets, increments and errors are computed elementwise, so they keep fp32
 precision when training enables TF32 (A100: rotation error 4.5e-4 for batched products, 9e-8 elementwise). The
 RigidFormer recomputes activations when its parameters are frozen (the policy's BPTT), by default as on LAFAN1
-(`checkpoint="frozen"`): move_suitcase, pi_batch 512, horizon 32, peak memory per policy update on an A100 from 11.68 to
-2.53 GiB (SuperMimic) and from 11.53 to 2.39 GiB (SuperTrack), time from 725 to 836 ms and from 745 to 771 ms.
+(`checkpoint="frozen"`): move_suitcase, pi_batch 512, horizon 32, peak memory per policy update on an A100 from 11.53 to
+2.39 GiB (SuperTrack) and from 11.68 to 2.53 GiB (SuperMimic), time from 745 to 771 ms and from 725 to 836 ms.
 
 **Checks.** The world models' open-loop errors on held-out data, the imagined `HDMIInput` against the simulator's in the
 same state term by term, training curves, and a replay video per task.

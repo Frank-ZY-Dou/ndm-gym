@@ -6,7 +6,6 @@
 # redistributed), each is checked against its SHA-256, and any missing or different file stops the script.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY  # direct download: the machine's proxy must not be used
 COMMIT=e44c2ef184cb55d45afd16b000414c84092ae18e
 RAW=https://raw.githubusercontent.com/lsw9021/MASS/$COMMIT
 OUT=data/mass

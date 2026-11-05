@@ -1,6 +1,6 @@
 # API reference
 
-Generated from the docstrings of the modules that import with the library alone (`pip install ndm_gym`: PyTorch, NumPy,
+Generated from the docstrings of the modules that import with the library alone (the library's `pip install`: PyTorch, NumPy,
 MuJoCo). The layers build on each other: `core` → `robots` → `motion` → `sim` → `tasks` → `worldmodels` → `policies` →
 `algos` → `train` / `evaluate`.
 

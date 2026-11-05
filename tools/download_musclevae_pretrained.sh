@@ -6,10 +6,9 @@
 # (tools/replay_musclevae.py --their_dataset). For validation only: the repository has no license, so none of this is
 # committed or redistributed (data/ is git-ignored). trained.data is a pickled torch checkpoint: ndm_gym opens it with
 # torch.load(weights_only=True) (ndm_gym.policies.musclevae_pretrained); the dataset pickle is never unpickled.
-# Plain HTTPS (curl), direct: the machine's proxy must not be used.
+# Plain HTTPS (curl).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY
 DATASET=0
 for arg in "$@"; do
   case "$arg" in

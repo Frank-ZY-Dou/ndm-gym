@@ -14,7 +14,9 @@ The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) 
 [BlinkMimic](https://github.com/fuyichen0725/blinkmimic) @ `d264658`, which is derived from
 [InstantTrack](https://github.com/Huy-Quang-Dao/instantTrack), both under the MIT License reproduced below. The ported
 files carry BlinkMimic's notice: `ndm_gym/algos/blinkmimic.py`, `ndm_gym/algos/eprobe.py`, `ndm_gym/core/muon.py`,
-`ndm_gym/sim/rigid/reset_stats.py`, `ndm_gym/tasks/contact.py` and `ndm_gym/worldmodels/semi_implicit.py`.
+`ndm_gym/sim/rigid/reset_stats.py`, `ndm_gym/tasks/contact.py` and `ndm_gym/worldmodels/semi_implicit.py`. Adapted parts of
+`ndm_gym/train.py`, `evaluate.py`, `buffer.py`, `algos/common.py`, `core/normalizer.py`, `sim/rigid/isaaclab_mjwarp.py`,
+`tests/test_eprobe.py` and `tests/test_blinkmimic.py` are under the same license.
 
 ## BlinkMimic
 

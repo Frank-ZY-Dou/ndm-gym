@@ -1,4 +1,4 @@
-"""The library without the simulator, as ``pip install ndm_gym`` installs it: every module imports except the simulator
+"""The library without the simulator, as a ``pip install`` of this repository installs it: every module imports except the simulator
 and the modules that import it at the top, which raise ``ndm_gym.sim.SimulatorNotInstalled`` (or name the simulator's
 missing package), as do the commands that run the simulator; the world models run forward and backward on CPU.
 

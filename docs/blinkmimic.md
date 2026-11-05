@@ -53,7 +53,7 @@ before. New: added for BlinkMimic, off by default; the default paths are bit for
 | fused Adam | `--fused_adam` | `--fused_adam` | present |
 | 3 × 3 rotation products fused | `--fused_rot` | `--elementwise_3x3` | present |
 | more of the step compiled | `--compile_more` | `--compile_eager` | present (the collection's reward, the normalizer features, the critic input) |
-| update steps as CUDA graphs | `--cuda_graph` | `--update_graphs` | new, SuperMimic and SuperTrack (the whole updates, optimizer steps and policy average included; below) |
+| update steps as CUDA graphs | `--cuda_graph` | `--update_graphs` | new, SuperTrack and SuperMimic (the whole updates, optimizer steps and policy average included; below) |
 | no host synchronization in the update loop | `--no_sync` | `--no_sync` | new, any algorithm |
 | Muon on the hidden weight matrices of policy and world model | `--pi_opt muon --wm_opt muon` | the same | new, any algorithm (world model: MLP; LAFAN1 and muscle training also the RigidFormer, Muon on its blocks' attention and SwiGLU matrices) |
 | action built on the next reference pose | `--pi_ref_skip` (InstantTrack: `--ref_residual 1.0`) | `--sm_residual` | present |
@@ -66,7 +66,7 @@ before. New: added for BlinkMimic, off by default; the default paths are bit for
 | 3500 iterations, a checkpoint every 100 | `--iterations 3500 --ckpt_every 100` | the same | present |
 | evaluation-guided resets | `--eprobe_share 0.15 --eprobe_start 1000 --eprobe_every 125 --eprobe_decay 0.7` | the same | new, any algorithm (`ndm_gym/algos/eprobe.py`; a probe process, below) |
 | the probe sweep as a CUDA graph, run alongside training | `--eprobe_graph --eprobe_async 20` | the same | new (the sweep in the probe process, the failures applied at BlinkMimic's iteration, below) |
-| collection and resets as CUDA graphs; background checkpoints | `--graph_early --collect_graph --reset_masked --ckpt_light --ckpt_minutes 0` | `--graph_early --collect_graph --reset_masked --ckpt_light` | new, the one-robot LAFAN1 scene (below); `--ckpt_minutes 0` needs no counterpart |
+| collection and resets as CUDA graphs; background checkpoints | `--graph_early --collect_graph --reset_masked --ckpt_light --ckpt_minutes 0` | `--graph_early --collect_graph --reset_masked --ckpt_light` | new, LAFAN1, two robots and muscles (below); `--ckpt_minutes 0` needs no counterpart |
 | InstantTrack only: smaller policy (1024-512-256), goal encoding batched per rollout | `--enc_hidden --dec_hidden`, `--batch_goal_enc` | – | not in BlinkMimic's recipe |
 
 Evaluation-guided resets, ported with a probe process:
@@ -122,10 +122,10 @@ Not ported: `--ckpt_minutes 0`, which needs no counterpart (train.py checkpoints
 With the systems options instead of their CUDA-graph options, the final configurations of the LAFAN1 study run faster
 (ms per iteration on an A100 40GB, iterations 250-450 with `--wm_only_iters 100`, so that the policy updates are timed):
 
-| | SuperTrack, MLP | SuperMimic, MLP | SuperTrack, RigidFormer | SuperMimic, RigidFormer |
-|---|---|---|---|---|
-| `--wm_cudagraphs --pi_cudagraphs` (`--critic_cudagraphs`) | 304.3 | 326.5 | 846.7 | 1005.2 |
-| `--no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light` | 271.7 | 296.1 | 808.2 | 998.7 |
+| | SuperTrack, MLP | SuperMimic, MLP |
+|---|---|---|
+| `--wm_cudagraphs --pi_cudagraphs` (`--critic_cudagraphs`) | 304.3 | 326.5 |
+| `--no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light` | 271.7 | 296.1 |
 
 ## 4. Validation
 
@@ -170,7 +170,8 @@ Time to target on one A100 40GB, every checkpoint (one per 100 iterations) evalu
 
 BlinkMimic's own code on an A100 40GB (seed 0, its evaluator with 4 replicas) reaches 0.834 at iteration 1500, at 175 ms
 per iteration between sweeps, after about 10 min of start-up with cold compile caches; on an RTX 4090, its README reports
-1300 / 1500 / 1200 iterations and 2.89 / 3.28 / 2.64 min to 0.82 at 133 ms per iteration.
+1300 / 1500 / 1200 iterations and 2.89 / 3.28 / 2.64 min to 0.82 at 133 ms per iteration. SuperTrack's and SuperMimic's fastest
+configurations with these options: [README](../README.md#training-speed).
 
 ## 5. The other training loops
 
@@ -191,7 +192,8 @@ options it does not implement; HOI training (`ndm_gym.train_hoi`) takes none of 
 | `--wm_structured`, `--contact_reward` | no (LAFAN1 SuperMimic's model and foot-contact term) | no |
 
 Milliseconds per iteration, synchronized profiles after the world-model-only iterations (collection / model update /
-policy update), A100 40GB unless noted:
+policy update), A100 40GB unless noted; the muscle rows are the starting configurations, before the character's tuning (on
+SuperMimic's selected configuration the options cut the time by about 45%, [results](../benchmarks/musclevae/results.md#the-systems-options)):
 
 | loop | as before | systems options |
 |---|---|---|

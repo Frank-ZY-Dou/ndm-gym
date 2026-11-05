@@ -6,7 +6,6 @@
 # themselves but visual MDL materials. Then convert the clips: python tools/convert_hdmi.py
 set -euo pipefail
 cd "$(dirname "$0")/.."
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY all_proxy ALL_PROXY  # direct download: the machine's proxy must not be used
 COMMIT=32282f6dcf26cae70b814d585ceb12cc38aa1b60
 RAW=https://raw.githubusercontent.com/LeCAR-Lab/HDMI/$COMMIT
 OUT=data/hdmi
