@@ -370,7 +370,7 @@ the RigidFormer 1.9 M (6.0x).
 ### Muscle-actuated character
 
 MuscleVAE's character with 284 Hill-type muscles and fatigue, three clips, Newton simulator, MLP world model.
-Configurations come from three rounds of 1 h runs, ranked by one rule. Selected configurations train with seeds 1-3 for up to
+Configurations come from four rounds of 1 h runs, ranked by one rule. Selected configurations train with seeds 1-3 for up to
 3 h, stopping when error stops falling. The best checkpoint with at most 10% of episodes ended is evaluated with a seed it
 did not train with ([details](benchmarks/musclevae/results.md)). SuperTrack's
 reported runs use `--wm_lr 1.5e-3`, the selected 1.6e-3 rounded (36.7 ± 1.0 mm at 1.6e-3). MuscleVAE's files and weights of
@@ -389,7 +389,8 @@ policies trained on them are not redistributed.
 
 Before the third round, the second round's selections reached 74.2 ± 33.7 mm (SuperTrack; seeds 38.6, 105.4, 78.6) and 68.0 ± 3.5 mm (SuperMimic)
 in the same 3 h runs, with the default updates. The third round, declared after those SuperTrack runs had ended and while SuperMimic's were ending,
-added the systems options for both and selected `--wm_lr 1.6e-3` for SuperTrack ([tuning history](benchmarks/musclevae/results.md#tuning)).
+added the systems options for both and selected `--wm_lr 1.6e-3` for SuperTrack ([tuning history](benchmarks/musclevae/results.md#tuning)). The table
+reports the third round's selections. The fourth round selects `--wm_lr 2.5e-3` for both (at 1 h, 37.2 and 57.0 mm, against 37.6 and 60.5 mm); its 3 h runs are in progress.
 
 ```bash
 MUSCLE_RECIPE="--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 \

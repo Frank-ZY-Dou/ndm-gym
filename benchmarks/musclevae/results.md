@@ -18,7 +18,7 @@ SuperTrack and SuperMimic, with MLP world models, track MuscleVAE's reference cl
 
 ## Results
 
-Selected configurations, seeds 1-3, mean ± std over seeds. Commands:
+Round 3's selections, seeds 1-3, mean ± std over seeds. Commands:
 [README](../../README.md#muscle-actuated-character).
 
 | | SuperTrack | SuperMimic |
@@ -58,7 +58,7 @@ SuperMimic's seeds 1 and 2 later reach 57.0 and 59.3 mm with 0.11 and 0.43 of th
 
 ## Tuning
 
-Both algorithms had the same three rounds, all with seed 0 and a budget of 1 h on an A100 40GB PCIe, ranked by the same rule.
+Both algorithms had the same four rounds, all with seed 0 and a budget of 1 h on an A100 40GB PCIe, ranked by the same rule.
 
 - **Rule:** in each run, the best checkpoint as above (a checkpoint every 1,000 iterations) is evaluated with seed 1. Per
   algorithm the lowest MPJPE is selected; within 2 mm, the lower share of episodes ended. A run with no checkpoint at or
@@ -69,6 +69,8 @@ Both algorithms had the same three rounds, all with seed 0 and a budget of 1 h o
 - **Round 2:** six single changes to round 1's selection.
 - **Round 3:** round 2's selection with BlinkMimic's systems options, alone and with `--wm_lr 1.6e-3`, on LAFAN1 the fastest
   single change for both algorithms; stopped as above.
+- **Round 4:** the same selections at `--wm_lr` 1e-3 and 2.5e-3; stopped as above. Both algorithms select 2.5e-3. Its 3 h runs are in progress, and
+  their results will replace those above.
 
 Root-frame MPJPE (mm) / episodes ended, in bold the run each round selects:
 
@@ -88,6 +90,8 @@ Root-frame MPJPE (mm) / episodes ended, in bold the run each round selects:
 | | `--st_fail_w 3`: 89.0 / 0.004 | `--pi_lr_mult 1`: 100.6 / 0.046 |
 | 3 | round 2's selection: 99.0 / 0.021 | round 2's selection: **60.5 / 0.059** |
 | | with `--wm_lr 1.6e-3`: **37.6 / 0.001** | with `--wm_lr 1.6e-3`: 62.3 / 0.074 |
+| 4 | with `--wm_lr 1e-3`: 42.6 / 0.003 | with `--wm_lr 1e-3`: 69.8 / 0.087 |
+| | with `--wm_lr 2.5e-3`: **37.2 / 0.000** | with `--wm_lr 2.5e-3`: **57.0 / 0.092** |
 
 Each entry is one run. Round 2's selections scored 47.3 mm (SuperTrack) and 66.8 mm (SuperMimic) in round 2 and, with the
 systems options, which also change the random stream, 99.0 and 60.5 mm in round 3.
