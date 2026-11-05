@@ -79,3 +79,6 @@ bash tools/download_musclevae_pretrained.sh
 python tools/replay_musclevae.py --out_dir replay
 MUJOCO_GL=egl python tools/render_musclevae.py walk.mp4 --states replay/states_lafan_walk_0.npz --ref
 ```
+
+The configurations selected for it and their results are in
+[`benchmarks/musclevae/results.md`](../benchmarks/musclevae/results.md).

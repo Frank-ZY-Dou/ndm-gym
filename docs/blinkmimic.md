@@ -210,4 +210,5 @@ synchronization give the default updates' values and parameters bit for bit (mus
 non-finite update is skipped on the device. The collection graphs play the eager or indexed steps' episodes: the same
 episode ends, frame counters and flags, the reset states bit for bit (two robots), the states within the simulator's own
 run-to-run differences across processes. A short run of each trainer with all the systems options captures and replays its
-graphs.
+graphs. On MuscleVAE's character the options' effect on the results was checked with three seeds
+([results](../benchmarks/musclevae/results.md#the-systems-options)).

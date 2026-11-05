@@ -90,9 +90,10 @@ does, and applied as Newton's per-body wrenches, which leaves Isaac Lab nothing 
 
 ## 4. Algorithms: SuperTrack and SuperMimic
 
-The character is trained with SuperTrack and SuperMimic in the configurations
-selected on LAFAN1, without new tuning or ablations. MuscleVAE's own training (ControlVAE-style: prior, posterior,
-mixture of experts) is not re-implemented. Code: `tasks/muscle_tracking.py`, `worldmodels/muscle.py`,
+The character is trained with SuperTrack and SuperMimic, starting from the configurations selected on LAFAN1 (the table
+below); the configurations selected on the character are in
+[`benchmarks/musclevae/results.md`](../benchmarks/musclevae/results.md). MuscleVAE's own training (ControlVAE-style: prior,
+posterior, mixture of experts) is not re-implemented. Code: `tasks/muscle_tracking.py`, `worldmodels/muscle.py`,
 `policies/muscle_policy.py`, `algos/muscle_algos.py` and `muscle_guard.py`, `train_muscles.py`,
 `tools/evaluate_muscles.py`.
 
