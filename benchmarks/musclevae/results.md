@@ -31,12 +31,14 @@ Per seed:
 
 | | seed | MPJPE, root frame (mm) | episodes ended | joint error (deg) | best checkpoint, of the run's iterations |
 |---|---|---|---|---|---|
-| SuperTrack | 1 | 35.58 | 0.0013 | 10.47 | 20,000 of 22,350 |
-| | 2 | 34.98 | 0.0182 | 10.39 | 24,000 of 26,350 |
-| | 3 | 38.54 | 0.0221 | 11.98 | 24,000 of 24,550 |
-| SuperMimic | 1 | 66.10 | 0.0430 | 10.59 | 6,000 of 16,350 |
-| | 2 | 65.84 | 0.0443 | 10.10 | 8,000 of 24,400 |
-| | 3 | 58.81 | 0.0911 | 9.47 | 10,000 of 16,350 |
+| SuperTrack | 1 | 35.58 | 0.0013 | 10.47 | 20,000 of 22,650 |
+| | 2 | 34.98 | 0.0182 | 10.39 | 24,000 of 26,600 |
+| | 3 | 38.54 | 0.0221 | 11.98 | 24,000 of 24,800 |
+| SuperMimic | 1 | 66.10 | 0.0430 | 10.59 | 6,000 of 16,600 |
+| | 2 | 65.84 | 0.0443 | 10.10 | 8,000 of 24,650 |
+| | 3 | 58.81 | 0.0911 | 9.47 | 10,000 of 16,600 |
+
+SuperMimic's seeds 1 and 2 later reach 57.0 and 59.3 mm with 0.11 and 0.43 of the episodes ended, which the rule below excludes.
 
 ## How the numbers were obtained
 
@@ -55,8 +57,7 @@ Per seed:
 
 ## Tuning
 
-Both algorithms had the same tuning: 14 runs each, in three rounds of 6, 6 and 2 runs, all with seed 0 and a budget of 1 h
-on an A100 40GB PCIe, ranked by the same rule.
+Both algorithms had the same three rounds, all with seed 0 and a budget of 1 h on an A100 40GB PCIe, ranked by the same rule.
 
 - **Rule:** in each run, the best checkpoint as above (a checkpoint every 1,000 iterations) is evaluated with seed 1. Per
   algorithm the lowest MPJPE is selected; within 2 mm, the lower share of episodes ended. A run with no checkpoint at or
@@ -65,7 +66,8 @@ on an A100 40GB PCIe, ranked by the same rule.
   BlinkMimic's, the parts muscle training implements: `--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --pi_opt muon --wm_opt muon
   --wm_only_iters 0 --pi_batch 2048 --pi_lr_mult 4 --lr_decay_len 300 --lr_decay_by 1400 --wm_hidden 1024 1024 1024`.
 - **Round 2:** six single changes to round 1's selection.
-- **Round 3:** round 2's selection with BlinkMimic's systems options, alone and with `--wm_lr 1.6e-3`, stopped as above.
+- **Round 3:** round 2's selection with BlinkMimic's systems options, alone and with `--wm_lr 1.6e-3`, on LAFAN1 the fastest
+  single change for both algorithms; stopped as above.
 
 Root-frame MPJPE (mm) / episodes ended, in bold the run each round selects:
 
@@ -89,14 +91,17 @@ Root-frame MPJPE (mm) / episodes ended, in bold the run each round selects:
 Each entry is one run. Round 2's selections scored 47.3 mm (SuperTrack) and 66.8 mm (SuperMimic) in round 2 and, with the
 systems options, which also change the random stream, 99.0 and 60.5 mm in round 3.
 
-Before round 1, each starting configuration trained once for 12 h with seed 0 as a development run. The selections of
-rounds 1 and 2 also trained for up to 3 h, with one and with three seeds per algorithm; the reported runs replace them.
+Before round 1, each starting configuration trained once for 12 h with seed 0 as a development run. Before round 3, the
+selections of rounds 1 and 2 trained for up to 3 h with the default updates. Round 2's, seeds 1-3: SuperTrack 38.6, 105.4 and
+78.6 mm (74.2 ± 33.7), ended 0.022 ± 0.019, joint error 16.1 ± 4.4 deg; SuperMimic 69.2, 64.1 and 70.9 mm (68.0 ± 3.5), ended
+0.079 ± 0.026, joint error 10.0 ± 0.3 deg. Round 1's, seed 1: SuperTrack 79.2 mm, ended 0.096; SuperMimic 116.3 mm, ended
+0.112. Round 3 was declared after SuperTrack's runs had ended, while SuperMimic's were ending.
 
 **SuperTrack's world-model rate.** Published learning rates stay on a grid of 0.5 steps (1.5e-3, 2e-3, 2.5e-3). SuperTrack's
 world-model rate was therefore set to 1.5e-3, the grid value next to the selected 1.6e-3, and its runs repeated with seeds
 1-3: 36.4 ± 1.9 mm, ended 0.014 ± 0.011, joint error 10.9 ± 0.9 deg, against 36.7 ± 1.0 mm, 0.008 ± 0.002 and 11.5 ± 0.8 deg at
 1.6e-3. The rule, fixed before these runs, was to report 1.5e-3 if its mean MPJPE lay within 2 mm of 36.7 mm or below.
-SuperMimic's selection has no such value, so its runs stand.
+SuperMimic's selection keeps the recipe's world-model rate (`--lr 4e-4`), so it had no rerun.
 
 ## The systems options
 
