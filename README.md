@@ -6,11 +6,12 @@
 <a href="https://github.com/isaac-sim/IsaacLab"><img src="https://img.shields.io/badge/Isaac_Lab-3.0-76b900" alt="Isaac Lab 3.0"></a>
 <a href="https://github.com/google-deepmind/mujoco_warp"><img src="https://img.shields.io/badge/MuJoCo_Warp-GPU-0b6fae" alt="MuJoCo Warp"></a>
 <a href="https://huggingface.co/frankzydou/ndm-gym"><img src="https://img.shields.io/badge/Weights-Hugging_Face-ffd21e" alt="Weights on Hugging Face"></a>
+<a href="https://frank-zy-dou.github.io/ndm-gym/"><img src="https://img.shields.io/badge/Docs-online-2f7d32" alt="Documentation"></a>
 
 **Neural Dynamics Modeling Gym**: neural world models for physics-based humanoid control.
 
 <a href="#-results">Results</a> · <a href="#-installation">Installation</a> · <a href="#-getting-started">Getting started</a> ·
-<a href="#-documentation">Documentation</a> · <a href="#-citation">Citation</a>
+<a href="https://frank-zy-dou.github.io/ndm-gym/">Documentation</a> · <a href="#-citation">Citation</a>
 </div>
 
 NDM Gym trains controllers that learn through a neural world model. Every algorithm shares one pipeline, so a comparison
@@ -19,7 +20,7 @@ interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF), and Musc
 MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
 
 <p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s and a muscle-actuated character" width="100%"/></p>
-<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Error, SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 12.1 / 14.5 mm over the 6 s shown (MPJPE, root-relative), muscles 24.3 / 49.2 mm over the walk clip (MPJPE, root frame).</i></p>
+<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Error, SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 13.2 / 14.5 mm over the 6 s shown (MPJPE, root-relative), muscles 24.3 / 49.2 mm over the walk clip (MPJPE, root frame).</i></p>
 <p align="center"><sub>Motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman and MuscleVAE, rendered for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## 🔥 News
@@ -185,9 +186,9 @@ better. Details and commands are under each task below.
 <tr><td rowspan="3"><b>LAFAN1 tracking</b><br><sub>MLP world model, 40 clips</sub></td><td>return ↑, 3 h<br><sub>A100 40GB, seeds 1-3</sub></td><td>0.832 ± 0.009</td><td>0.824 ± 0.013</td></tr>
 <tr><td>MPJPE, root-relative ↓, 3 h</td><td>20.0 ± 0.7 mm</td><td>28.4 ± 0.5 mm</td></tr>
 <tr><td>training to return 0.82 ↓<br><sub>fastest configurations, A100 40GB SXM4, seeds 0-5</sub></td><td>4.19 ± 0.16 min</td><td>4.38 ± 0.57 min</td></tr>
-<tr><td rowspan="3"><b>Two G1s</b><br><sub>a two-person clip, MLP world model<br>A100 80GB, seed 0</sub></td><td>return ↑, best checkpoint in 1 h</td><td>0.895</td><td>0.906</td></tr>
-<tr><td>MPJPE, global / root-relative ↓</td><td>46 / 13.7 mm</td><td>52 / 15.7 mm</td></tr>
-<tr><td>training to return 0.88 ↓</td><td>0.20 h</td><td>0.05 h</td></tr>
+<tr><td rowspan="3"><b>Two G1s</b><br><sub>a two-person clip, MLP world model<br>A100 80GB, seed 0</sub></td><td>return ↑, best checkpoint<br><sub>runs of 0.5 h and 0.3 h</sub></td><td>0.893</td><td>0.905</td></tr>
+<tr><td>MPJPE, global / root-relative ↓</td><td>39 / 14.2 mm</td><td>40 / 16.4 mm</td></tr>
+<tr><td>training to return 0.88 ↓</td><td>0.11 h</td><td>0.10 h</td></tr>
 <tr><td rowspan="3"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>36.4 ± 1.9 mm</td><td>63.6 ± 4.1 mm</td></tr>
 <tr><td>episodes ended ↓</td><td>0.014 ± 0.011</td><td>0.059 ± 0.027</td></tr>
 <tr><td>joint error ↓</td><td>10.9 ± 0.9°</td><td>10.1 ± 0.6°</td></tr>
@@ -345,27 +346,27 @@ longer · ➖ level. The rows above those marked A100 40GB PCIe ran on an RTX 30
 
 Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
 redistributed). One policy controls both. Each algorithm's configuration on the clip comes from two rounds with the same number of
-runs; the table gives the best checkpoint within 1 h of training on an A100 80GB, five evaluations
-([details](benchmarks/g1_boxing/results.md)).
+runs; the table gives the selected run's best checkpoint on an A100 80GB, five evaluations. SuperTrack's selected run trained for
+0.5 h, SuperMimic's for 0.3 h ([details](benchmarks/g1_boxing/results.md)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566, SuperTrack and SuperMimic" width="800"/></p>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right) on InterHuman clip 1566: the best checkpoints in 1 h (iterations 15,000 / 10,000), MLP world model; blue ghosts: the references. Over the clip, MPJPE in the world frame 40.6 / 51.4 mm, root-relative 13.7 / 15.7 mm.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right) on InterHuman clip 1566: the selected runs' best checkpoints (iterations 7,000 / 6,264), MLP world model; blue ghosts: the references. Over the clip, MPJPE in the world frame 37.6 / 40.0 mm, root-relative 14.2 / 16.4 mm.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
 | pair success | 5 / 5 | 5 / 5 |
-| normalized return | 0.895 | 0.906 |
-| MPJPE, global (mm) | 46 | 52 |
-| MPJPE, root-relative (mm) | 13.7 | 15.7 |
-| training to return 0.88 (h) | 0.20 | 0.05 |
-| best checkpoint, of the iterations in 1 h | 15,000 of 20,482 | 10,000 of 21,188 |
+| normalized return | 0.893 | 0.905 |
+| MPJPE, global (mm) | 39 | 40 |
+| MPJPE, root-relative (mm) | 14.2 | 16.4 |
+| training to return 0.88 (h) | 0.11 | 0.10 |
+| best checkpoint, of the run's iterations | 7,000 of 9,396 (0.5 h) | 6,264 of 6,264 (0.3 h) |
 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
 # $RECIPE and $SYSTEMS as under Training speed
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE $SYSTEMS $CLIP --max_hours 1 --ckpt_every 1000 --log_dir logs/box_st
-ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --contact_reward 0.25 \
-          --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --max_hours 1 --ckpt_every 1000 --log_dir logs/box_sm
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --max_hours 0.5 --ckpt_every 1000 --log_dir logs/box_st
+ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
+          --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --max_hours 0.3 --ckpt_every 1000 --log_dir logs/box_sm
 ```
 
 At 4096 pairs the physics runs 0.31 M robot-steps per second; with their inference paths the MLP runs 8.4 M (27.0x) and
@@ -476,8 +477,8 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
 9. **BlinkMimic's recipe as options:** `--algo blinkmimic` first reaches return 0.82 at iterations 1,500 / 1,500 / 1,400 (seeds 0 /
    1 / 2); BlinkMimic's own code reaches 0.834 at iteration 1,500 (seed 0, its evaluator), on the same A100 40GB
    ([details](#blinkmimics-options)).
-10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint in 1 h): return 0.895 / 0.906, MPJPE 46 / 52 mm global and 13.7 /
-    15.7 mm root-relative, return 0.88 after 0.20 / 0.05 h of training ([details](benchmarks/g1_boxing/results.md)).
+10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint of runs of 0.5 / 0.3 h): return 0.893 / 0.905, MPJPE 39 / 40 mm
+    global and 14.2 / 16.4 mm root-relative, return 0.88 after 0.11 / 0.10 h of training ([details](benchmarks/g1_boxing/results.md)).
 11. **Muscles** (seeds 1-3, up to 3 h): root-frame MPJPE 36.4 ± 1.9 (SuperTrack) and 63.6 ± 4.1 mm (SuperMimic), episodes ended
     0.014 and 0.059, joint error 10.9 ± 0.9 and 10.1 ± 0.6 deg. On SuperMimic's selection, BlinkMimic's systems options cut the
     time per iteration by about 45%. At 4,000 iterations its errors were higher with them in all three seeds, not significantly
@@ -521,6 +522,8 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
 <!-- ablations:end -->
 
 ## 📚 Documentation
+
+The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.github.io/ndm-gym/).
 
 | | |
 |---|---|

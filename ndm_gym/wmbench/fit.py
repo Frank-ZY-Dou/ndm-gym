@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument("--out", type=str, required=True, help="csv of the test errors over training")
     parser.add_argument("--init_wm", type=str, default=None, help="start from a fitted world model (its _wm.pt); with --steps 0 only re-score it")
     args = parser.parse_args()
+    if args.wm_lr is not None:
+        parser.error("--wm_lr is the training loop's world-model rate; an offline fit takes --lr")
     if args.clips:  # the recorded transitions index the frames of every clip
         parser.error("--clips is not supported: the datasets were collected on every clip in --motion_dir")
     return args

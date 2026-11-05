@@ -93,7 +93,7 @@ it (a CUDA GPU and `data/`):
 python -m ndm_gym.wmbench.collect --ckpt logs/st/ckpt_006000.pt --out wm_train.pt --seed 0    # simulator
 python -m ndm_gym.wmbench.collect --ckpt logs/st/ckpt_006000.pt --out wm_test.pt --seed 1     # simulator
 python -m ndm_gym.wmbench.fit --algo supertrack --train wm_train.pt --test st=wm_test.pt --out wm_st.csv
-python -m ndm_gym.wmbench.fit --algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --train wm_train.pt --test st=wm_test.pt --out wm_st_rf.csv
+python -m ndm_gym.wmbench.fit --algo supertrack --wm_backbone rigidformer --lr 4e-4 --train wm_train.pt --test st=wm_test.pt --out wm_st_rf.csv
 ```
 
 `fit` takes `ndm-train`'s training options (`ndm_gym.train.add_train_args`) and calls the algorithm's own world-model

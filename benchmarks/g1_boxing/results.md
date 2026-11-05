@@ -27,18 +27,20 @@ which gives the best checkpoint and the time to return 0.88 (the selections: one
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
-| configuration | LAFAN1's selection with `--st_com` and BlinkMimic's recipe | LAFAN1's selection with BlinkMimic's recipe and `--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured` |
-| best checkpoint, of the iterations in 1 h | 15,000 of 20,482 | 10,000 of 21,188 |
+| configuration | LAFAN1's selection with `--st_com`, BlinkMimic's recipe and `--pi_batch 4096` | LAFAN1's selection with BlinkMimic's recipe, `--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured` and `--pi_lr_mult 2` |
+| training time of the selected run | 0.5 h | 0.3 h |
+| best checkpoint, of the run's iterations | 7,000 of 9,396 | 6,264 of 6,264 |
 | pair success | 5 / 5 | 5 / 5 |
-| normalized return | 0.895 | 0.906 |
-| global MPJPE (mm) | 46 | 52 |
-| root-relative MPJPE (mm) | 13.7 | 15.7 |
-| training to return 0.88 (h) | 0.20 (2,000 iterations) | 0.05 (1,000 iterations) |
-| last checkpoint: return, global, root-relative MPJPE (mm) | 0.895, 45, 13.7 | 0.843, 118, 34.6 |
+| normalized return | 0.893 | 0.905 |
+| global MPJPE (mm) | 39 | 40 |
+| root-relative MPJPE (mm) | 14.2 | 16.4 |
+| training to return 0.88 (h) | 0.11 (2,000 iterations) | 0.10 (2,000 iterations) |
+| last checkpoint: return, global, root-relative MPJPE (mm) | 0.892, 57, 14.3 | 0.905, 40, 16.4 |
 
-On the learning curves, SuperTrack holds 0.888-0.895 from 3,000 iterations on. SuperMimic holds 0.901-0.906 from 4,000 to 14,000
-iterations and falls to 0.83 at 1 h. BlinkMimic's recipe is built for short runs (its preset trains 3,500 iterations), so the
-ranking uses each run's best checkpoint, for both algorithms.
+On the learning curves, the selected SuperTrack run holds 0.889-0.894 from 2,000 iterations on, and the selected SuperMimic run
+rises to 0.905 by its end. Round 1's SuperTrack (`--st_com` with the recipe) holds 0.888-0.895 from 3,000 iterations to 1 h; round 1's SuperMimic
+(the recipe) holds 0.901-0.906 from 4,000 to 14,000 iterations and falls to 0.83 at 1 h. BlinkMimic's recipe is built for short runs (its preset trains 3,500
+iterations), so the ranking uses each run's best checkpoint, for both algorithms.
 
 Return, global and root-relative MPJPE (mm) of each run's best checkpoint, in bold each round's selection:
 
@@ -47,12 +49,12 @@ Return, global and root-relative MPJPE (mm) of each run's best checkpoint, in bo
 | start, LAFAN1's selection, 3 h | 0.891, 79, 12.2 | 0.895, 54, 20.0 |
 | 1, 1 h | `--st_com`: 0.887, 69, 14.4 | the recipe: **0.906, 52, 15.7** |
 | | `--st_com` with the recipe: **0.895, 46, 13.7** | the recipe with `--reward_std_scale 0.5`: 0.901, 61, 14.0 |
-| 2, 0.3-0.5 h | `--pi_batch 4096`: 0.893, 39, 14.2 | `--pi_batch 4096`: 0.905, 53, 16.4 |
-| | `--pi_lr_mult 2`: 0.894, 51, 13.6 | `--pi_lr_mult 2`: 0.905, 40, 16.4 |
-| | `--st_balance_w 2`: 0.893, 45, 14.5 | `--action_noise 0.2`: 0.905, 50, 16.4 |
+| 2, 0.3-0.5 h | `--pi_batch 4096` (0.5 h): **0.893, 39, 14.2** | `--pi_batch 4096` (0.5 h): 0.905, 53, 16.4 |
+| | `--pi_lr_mult 2` (0.3 h): 0.894, 51, 13.6 | `--pi_lr_mult 2` (0.3 h): **0.905, 40, 16.4** |
+| | `--st_balance_w 2` (0.3 h): 0.893, 45, 14.5 | `--action_noise 0.2` (0.3 h): 0.905, 50, 16.4 |
 
-Round 1 selects the highest return, or within 0.005 the lower global MPJPE. Round 2 trains its changes for less time and keeps round
-1's selections, since no change raises the return by more than 0.005.
+Both rounds select the highest return, or within 0.005 of it the lowest global MPJPE. Round 2 applies this to its changes against round
+1's selection; its runs train for less time.
 
 ## LAFAN1's selections, 3 h
 
