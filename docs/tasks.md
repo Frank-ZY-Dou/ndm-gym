@@ -1,7 +1,6 @@
 # Tasks
 
-Four tasks share the pipeline. Each downloads its data with a script in `tools/`; none of the motions are
-redistributed.
+Four tasks share the pipeline. Scripts in `tools/` prepare the data; none of the motions are redistributed.
 
 | task | command | data | design |
 |---|---|---|---|
@@ -12,10 +11,10 @@ redistributed.
 
 ## LAFAN1 motion tracking
 
-The Unitree G1 (29 DoF, `ndm_gym/robots/g1.py`) tracks the 40 LAFAN1 clips retargeted to it, in SuperMimic's setup
-(`ndm_gym/tasks/tracking.py`): observations, the analytic reward and terminations shared by the simulator and the world
-models, domain randomization of friction, joint calibration and the torso's center of mass. `--clips` trains on the
-clips of a list file (one name per line), `--motion_dir` reads another directory of retargeted CSVs.
+The Unitree G1 (29 DoF, `ndm_gym/robots/g1.py`) tracks 40 retargeted LAFAN1 clips using SuperMimic's setup
+(`ndm_gym/tasks/tracking.py`). The simulator and world models share observations, analytic reward and terminations.
+Domain randomization covers friction, joint calibration and the torso's center of mass. `--clips` selects clips from
+a file (one name per line); `--motion_dir` reads another directory of retargeted CSVs.
 
 ```bash
 bash tools/download_data.sh    # LAFAN1 G1 retargets (CC BY-NC-ND 4.0) and the G1 description, checked against tools/download_data.sha256
@@ -25,8 +24,8 @@ ndm-eval --run_dir logs/st --watch
 
 ## Two G1s
 
-One policy controls two G1s in one scene tracking a two-person clip of InterHuman, both people retargeted to the G1;
-the robots collide with each other. InterHuman (CC BY-NC-SA 4.0) is not redistributed: `tools/convert_interhuman.py`
+One policy controls two G1s tracking a retargeted two-person InterHuman clip in one scene, with robot-robot contacts.
+InterHuman (CC BY-NC-SA 4.0) is not redistributed: `tools/convert_interhuman.py`
 retargets a clip with HoloMotion's HoloRetarget, in an environment of its own (its docstring has the command).
 
 ```bash
@@ -35,8 +34,8 @@ ndm-train --algo supertrack --motions interhuman --paired --motion_dir interhuma
 
 ## Human-object interaction
 
-HDMI's 13 tasks, as HDMI defines them (observations, rewards, terminations, randomization; `ndm_gym/tasks/hdmi.py`,
-`ndm_gym/tasks/hdmi_tasks.py`), in HDMI's scenes with HDMI's G1 variant on Isaac Lab 3 and MuJoCo-Warp
+HDMI's 13 tasks retain its observations, rewards, terminations and randomization (`ndm_gym/tasks/hdmi.py`,
+`ndm_gym/tasks/hdmi_tasks.py`), scenes and G1 variant on Isaac Lab 3 and MuJoCo-Warp
 (`ndm_gym/sim/rigid/hdmi_sim.py`). The world models also predict the contact forces. HDMI's PPO teacher is the
 model-free baseline (`ndm_gym.train_ppo_hoi`).
 
@@ -52,7 +51,7 @@ python -m ndm_gym.train_ppo_hoi --task move_suitcase --log_dir logs/hoi_ppo
 python -m ndm_gym.evaluate_hoi --run_dir logs/hoi_st --watch
 ```
 
-The world model as a simulator: transitions, an offline fit with its open-loop errors, throughput against physics.
+Collect transitions, fit offline, measure open-loop errors and benchmark throughput against physics:
 
 ```bash
 python -m ndm_gym.wmbench.collect_hoi --task move_suitcase --seed 0 --out hoi_s0.pt
@@ -80,5 +79,5 @@ python tools/replay_musclevae.py --out_dir replay
 MUJOCO_GL=egl python tools/render_musclevae.py walk.mp4 --states replay/states_lafan_walk_0.npz --ref
 ```
 
-The configurations selected for it and their results are in
+Selected configurations and results:
 [`benchmarks/musclevae/results.md`](../benchmarks/musclevae/results.md).

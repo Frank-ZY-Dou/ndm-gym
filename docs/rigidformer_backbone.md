@@ -2,13 +2,12 @@
 
 ## 1. What it is
 
-A Transformer backbone for SuperTrack's acceleration world model (`AccelWorldModel`) and SuperMimic's increment world
-model (`IncrementWorldModel`), in `ndm_gym/worldmodels/rigidformer.py`. It replaces the MLP and its input features; the
-targets, output normalizer and integration are unchanged. The backbone follows the structure of RigidFormer [1] and is
-reimplemented here for articulated bodies: one token per rigid body instead of one per free object, analytic forward
-kinematics instead of a point-cloud encoder, 3-D rotary attention on the body positions, pre-norm blocks with RMS and QK
-normalization, gated attention and SwiGLU, register tokens and FiLM conditioning. The read-out in reduced coordinates
-(root and joints) keeps the joint constraints exact, the articulated counterpart of RigidFormer's Kabsch projection.
+`ndm_gym/worldmodels/rigidformer.py` replaces the MLP and input features in SuperTrack's acceleration world model
+(`AccelWorldModel`) and SuperMimic's increment world model (`IncrementWorldModel`). Targets, output normalizer,
+integration and losses stay unchanged. The backbone follows the structure of RigidFormer [1] and is reimplemented here
+for articulated bodies: body tokens replace free-object tokens, and analytic forward kinematics replaces the point-cloud
+encoder. The reduced-coordinate read-out (root and
+joints) enforces joint constraints, the articulated counterpart of RigidFormer's Kabsch projection.
 
 ## 2. Inputs and tokens
 
@@ -66,18 +65,18 @@ y    = [root head(z_pelvis) | joint head(z_b) in G1 joint order]                
 
 ## 4. Use in SuperTrack-RF and SuperMimic-RF
 
-`--wm_backbone rigidformer` selects the backbone (default `mlp`). Both algorithms use the same trunk and features; only
-the heads differ, as only the last layer differs between the two MLPs.
+`--wm_backbone rigidformer` selects the backbone (default `mlp`). Both algorithms share the trunk and features; only
+their heads differ.
 
 | run | flags | heads: root + per joint | outputs |
 |---|---|---|---|
 | SuperTrack-RF | `--algo supertrack --wm_backbone rigidformer` | 6 + 1: root linear and angular acceleration; joint acceleration | 35 |
 | SuperMimic-RF | `--algo supermimic --wm_backbone rigidformer` | 12 + 2: root Δp, Δθ, Δv, Δω; joint Δq, Δq̇ | 70 |
 
-Size flags, with the defaults of `ndm_gym/train.py`: `--rf_dim 128` (token width), `--rf_layers 3` (blocks),
-`--rf_heads 4`, `--rf_registers 2`, and the switches `--rf_no_tree_bias` and `--rf_no_rope` (off); the other constructor
-arguments keep their defaults. Against policy-gradient spikes in the BPTT through the frozen world model (off by
-default): `--rf_rope_detach` (no gradient through the rotary positions; the positions still reach the token features),
+Defaults in `ndm_gym/train.py`: `--rf_dim 128` (token width), `--rf_layers 3` (blocks), `--rf_heads 4`,
+`--rf_registers 2`; `--rf_no_tree_bias` and `--rf_no_rope` are off. Other constructor arguments keep their defaults.
+Options for policy-gradient spikes during BPTT through the frozen world model (off by default): `--rf_rope_detach`
+(no gradient through rotary positions, which still enter the token features),
 and for either backbone `--bptt_clip_k k` (each rollout's state gradient after every imagined step capped at k times the
 batch median), `--wm_bptt_fp32` (no bf16 autocast in the world model during the BPTT), `--pi_rollout_clip k` (each
 rollout's part of the policy gradient over the horizon at most k times the median over the rollouts, sized by the
@@ -85,10 +84,13 @@ gradient that reaches the policy's output) and `--bptt_decay lam` (the gradient 
 `tools/grad_stats.py` measures their effect on a checkpoint at learning rate 0; with `--anatomy` it also takes every
 update's gradient apart by imagined step and by rollout (`ndm_gym/algos/rollout_grads.py`) and evaluates robust
 aggregations of the rollouts on the same batches. The MLP's flags `--wm_hidden`, `--wm_act` and `--wm_no_ln` must stay at
-their defaults; `rigidformer_kwargs` raises an error instead of ignoring them. Targets, output normalizers, integration
-and losses are those of the MLP world models. The world-model fit compiles one step instead of the whole k-step rollout,
-which as one graph takes about 10 min to compile (one step: about 2 min). Benchmark settings and results:
+their defaults; `rigidformer_kwargs` rejects other values. Fitting compiles one step rather than the whole k-step rollout,
+which takes about 10 min to compile as one graph (one step: about 2 min). Benchmark settings and results:
 [README](../README.md).
+
+Offline, RigidFormer has 7-16% lower open-loop error than the MLP in distribution and 11-21% out of it at a learning rate
+of 4e-4 picked on the benchmark's test sets. At the shared default 2e-4, changes are -4% / -11% (SuperTrack's model) and +8% / +0%
+(SuperMimic's). See the [offline ablation study](../benchmarks/g1_lafan1_tracking/ablations.md#summary).
 
 ## 5. Sizes
 
@@ -138,7 +140,7 @@ As in training, (a) compiles the MLP's whole rollout and RigidFormer's single st
 trunk (`checkpoint="frozen"`); without recomputation, RF-XS and RF-S run out of the 40 GB. With `checkpoint="always"`,
 RF-S takes 170 ms and 1.6 GB in (a). Without the tree bias, RoPE or registers, RF-S takes 158, 149 and 140 ms in (a).
 
-Speed options (`add_speed_args`, off by default; with all of them off the code path is the one above):
+Speed options (`add_speed_args`, off by default):
 
 - `--rf_fused_train`: each block's forward and backward passes as fused Triton kernels (`ndm_gym/kernels/rf_train.py`).
   The forward pass is one kernel, which also keeps the residual after the attention; the backward pass is two kernels
@@ -184,14 +186,13 @@ previous ones):
 Peak memory of SuperTrack-RF: 17.1 GB by default, 12.0 GB with `--rf_fused_train`, 26.2 GB with `--rf_bptt_keep_blocks`
 as well (SuperMimic-RF: 16.1, 11.6, 25.6 GB).
 
-The anchor RoPE in RigidFormer's v1 configuration (`--rf_anchors 4 --rf_rope_center`) with every option of the last
-column, measured in one session next to the same runs without it: SuperTrack-RF 0.775 against 0.772 iterations per
+Anchor RoPE in RigidFormer's v1 configuration (`--rf_anchors 4 --rf_rope_center`), with every option in the last column,
+measured alongside runs without it: SuperTrack-RF 0.775 against 0.772 iterations per
 second, SuperMimic-RF 0.741 against 0.742; GPU time per iteration 1210 against 1207 ms and 1236 against 1233 ms; the same
 peak memory.
 
-`--compile_eager` and `--rf_fit_keep_ops`, measured in that session next to the same runs without them; each column adds
-its option to the previous ones, starting from every option of the table above (for RigidFormer measured again, hence
-0.772 and 0.742 rather than 0.787 and 0.755) or, for the MLP, every option that applies to it:
+`--compile_eager` and `--rf_fit_keep_ops`, measured in the same session. Columns add options cumulatively, starting from
+all applicable options above. RigidFormer was remeasured: 0.772 and 0.742 rather than 0.787 and 0.755.
 
 | | options above | + `--compile_eager` | + `--rf_fit_keep_ops` |
 |---|---|---|---|
@@ -244,8 +245,8 @@ values than the model under bf16 autocast (the bf16 copy: twice its mean and fou
 
 ## 7. Validation
 
-`python -m pytest tests/test_rigidformer_backbone.py` runs 30 test cases on CPU (`-m "not slow"` skips the two slow
-ones); like the other tests, they need the G1 assets and the LAFAN1 motions in `data/`. They check:
+`python -m pytest tests/test_rigidformer_backbone.py` runs 30 CPU tests (`-m "not slow"` skips the two slow ones).
+They need G1 assets and LAFAN1 motions in `data/` and check:
 
 - features: forward kinematics and offset scale, shapes, pelvis token, absolute heights, each body's own joint, PD error
   (simulator's PD target minus q), torque ratio in [-1, 1], global context, invariance to yaw and horizontal translation;

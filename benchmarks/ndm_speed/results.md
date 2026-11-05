@@ -1,9 +1,9 @@
 # Neural dynamics models as simulators: HDMI's human-object interaction scenes
 
-One H100 80GB running nothing else. Env-steps per second with 20 ms control steps (physics runs HDMI's four 5 ms
-substeps in Isaac Lab 3 with Newton/MuJoCo-Warp, its best case: one call per control step, no task terms), the median of
-three repeats of 200 steps after 20 warm-up steps. The physics scenes start at the clip's first frame, without contacts
-between props. Scripts: `run_speed.sh`, `run_speed_rf.sh` (throughput), `run_fits.sh`, `run_score_rf.sh` (accuracy).
+One otherwise idle H100 80GB. Env-steps per second use 20 ms control steps: HDMI's four 5 ms physics substeps in one
+Isaac Lab 3 / Newton/MuJoCo-Warp call, without task terms. Values are medians of three repeats of 200 steps after 20
+warm-up steps. Scenes start at the clip's first frame, without contacts between props. Scripts: `run_speed.sh`,
+`run_speed_rf.sh` (throughput), `run_fits.sh`, `run_score_rf.sh` (accuracy).
 
 ## Physics, all 13 tasks (N = 4096)
 
@@ -25,9 +25,9 @@ between props. Scripts: `run_speed.sh`, `run_speed_rf.sh` (throughput), `run_fit
 
 ## NDM against physics on three tasks
 
-RF: RigidFormer RF-S, (a) as trained, (b) bf16 inference copy with the step as Triton kernels, (c) blocks as fused
-Triton kernels. MLP: its bf16 inference copy (accuracy not scored). M = million env-steps per second; in parentheses,
-the ratio to physics. Physics runs out of memory beyond N = 16384.
+RF: RigidFormer RF-S, (a) as trained, (b) bf16 inference copy with Triton step kernels, (c) fused Triton blocks.
+MLP: bf16 inference copy (accuracy not scored). M = million env-steps per second; parentheses show the ratio to physics.
+Physics runs out of memory beyond N = 16384.
 
 **move_suitcase**
 
@@ -73,15 +73,14 @@ bf16 model over all metrics (keypoints, joints, object, contact forces). "fp32 v
 | truman | 8 | 18.88 | 18.90 | 18.90 | 18.89 | 18.88 | 0.15% | 0.32% | 0.38% | 0.11% |
 | truman | 32 | 92.49 | 92.48 | 92.50 | 92.70 | 92.34 | 0.49% | 0.18% | 0.55% | 0.34% |
 
-Every path stays within 1.5% of the eager bf16 model on every metric (path (b), open_door-feet, 32 steps); compiled
-kernels alone (path (a), the same network) differ by up to 0.32%.
+Largest differences from eager bf16: 1.5% for path (b) on open_door-feet at 32 steps; 0.32% for compiled kernels alone
+(path (a), the same network).
 
 ## Accuracy of the NDMs on the 13 tasks
 
-Each NDM fit offline for 20000 updates on 4096 environments x 400 steps (seed 0), scored on a held-out collection
-(seed 1); the data policy is the reference's joints plus noise. One fit per model, so differences of a few percent are
-within fit-to-fit noise (about ±5% on LAFAN1's offline benchmark). topple_wood_board_and_cross's data were collected
-without contacts between its props.
+Each NDM uses 20000 offline updates on 4096 environments x 400 steps (seed 0), scored on held-out data (seed 1).
+The collection policy follows reference joints plus noise. One fit per model; differences of a few percent are within
+fit-to-fit noise (about ±5% on LAFAN1's offline benchmark). topple_wood_board_and_cross's data exclude contacts between props.
 
 Keypoint error (mm) after 8 / 32 open-loop steps:
 
@@ -119,7 +118,7 @@ Object error after 32 steps: position (mm), or hinge angle (mrad) for doors and 
 | traverse_door | 31.0 mrad | 29.9 mrad | 15.1 mrad | 17.5 mrad |
 | truman | 5.2 | 3.0 | 2.5 | 2.1 |
 
-RigidFormer against the MLP in the same parameterization, as the ratio of the errors (median over tasks):
+RigidFormer / MLP error ratios with the same parameterization (median over tasks):
 
 | | keypoints, 8 steps | keypoints, 32 steps | object, 32 steps | hand-object force, 8 steps | feet force, 8 steps |
 |---|---|---|---|---|---|

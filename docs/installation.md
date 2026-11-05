@@ -1,6 +1,6 @@
 # Installation
 
-Two ways: the library alone with pip, or everything (the simulator and the data) with one script.
+Install the library with pip, or include the simulator and data with the setup script.
 
 | | `pip install` | `scripts/setup.sh` |
 |---|---|---|
@@ -18,15 +18,15 @@ Python 3.12 or newer:
 pip install "ndm_gym @ git+https://github.com/Frank-ZY-Dou/ndm-gym"
 ```
 
-It installs PyTorch (2.9 or newer), NumPy and MuJoCo, which reads the robots' MJCF for the kinematics. On Linux, pip
-takes PyTorch's CUDA build from PyPI; for a CPU-only install, install PyTorch from its CPU index first:
+This installs PyTorch (2.9 or newer), NumPy and MuJoCo for MJCF kinematics. On Linux, pip uses PyTorch's CUDA build from
+PyPI. For a CPU-only install, install PyTorch from its CPU index first:
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install "ndm_gym @ git+https://github.com/Frank-ZY-Dou/ndm-gym"
 ```
 
-From a clone, `pip install -e .` installs it editable, with the repository's `data/`:
+From a clone, `pip install -e .` enables editable installation with the repository's `data/`:
 
 ```bash
 git clone --recursive https://github.com/Frank-ZY-Dou/ndm-gym.git && cd ndm-gym
@@ -34,9 +34,9 @@ pip install -e ".[test]"
 bash tools/download_data.sh --no-usd    # the G1 description (BSD-3-Clause) and the LAFAN1 motions (CC BY-NC-ND 4.0)
 ```
 
-`--no-usd` skips the USD conversion, which needs Isaac Lab; only the simulator reads the USD. The G1's kinematics,
-and with them the RigidFormer and the motion library, read `data/g1_description/g1_29dof.xml`; an install without a
-clone has no `data/` and builds the kinematics from a path instead (`ArticulationKinematics`, see
+`--no-usd` skips USD conversion, which needs Isaac Lab and is used only by the simulator. G1 kinematics, RigidFormer
+and the motion library read `data/g1_description/g1_29dof.xml`. Without a clone, supply a path to
+`ArticulationKinematics` instead of using `data/` (see
 [Quickstart](quickstart.md#the-rigidformer)).
 
 Optional dependencies:
@@ -49,8 +49,8 @@ Optional dependencies:
 | `ndm_gym[docs]` | MkDocs Material, mkdocstrings | this site: `mkdocs serve` |
 | `ndm_gym[dev]` | test, docs, ruff, pre-commit | development |
 
-The fused GPU kernels (`ndm_gym.kernels`, the world models' inference copies) need a CUDA GPU and Triton, which
-PyTorch's CUDA builds for Linux include.
+Fused GPU kernels (`ndm_gym.kernels`, the world models' inference copies) need a CUDA GPU and Triton, included in
+PyTorch's CUDA builds for Linux.
 
 Without the simulator, the modules and commands that need it raise `ndm_gym.sim.SimulatorNotInstalled`:
 
@@ -80,8 +80,7 @@ source ~/ndm_gym/venv/bin/activate    # ndm-train and ndm-eval on PATH
    and converts the G1 to MJCF and USD (`tools/download_data.sh`);
 4. installs `ndm_gym` editable, with the test extras.
 
-It stops at the first failing step and can be run again. The data of the other tasks are downloaded by their own
-scripts ([Tasks](tasks.md)).
+The script stops at the first failure and can be rerun. See [Tasks](tasks.md) for other data downloads.
 
 ## Checks
 

@@ -516,7 +516,7 @@ README_STUDY = [
     ("sm_noise01", "", "SuperMimic", "simulator action noise 0.3 instead of 0.1", -1),
     ("sm_nokick", "", "SuperMimic", "imagination kicks", -1),
     ("sm_nocritic", "", "SuperMimic", "the critic", -1),
-    ("sm_r1", "", "SuperMimic", "the tuned changes together (against round 1)", -1),
+    ("sm_r1", "", "SuperMimic", "the tuned changes together (against the configuration without them)", -1),
     ("sm_residual", "", "SuperMimic", "offsets about the reference pose (SuperTrack's actions)", 1),
 ]
 # RigidFormer's policy rows, after its tuning (the study's rows before it stay in table D): the tuned configurations

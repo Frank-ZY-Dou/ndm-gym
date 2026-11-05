@@ -4,10 +4,9 @@
 
 [BlinkMimic](https://github.com/fuyichen0725/blinkmimic) (F. Chen, 2026; MIT) trains SuperMimic's objective with the
 training changes of [InstantTrack](https://github.com/Huy-Quang-Dao/instantTrack) (Huy-Quang-Dao, 2026; MIT) and its own.
-Both derive from supermimic_vibed, as NDM Gym does. Here `--algo blinkmimic` is SuperMimic with BlinkMimic's released
-recipe (`PRESET[main]` of `scripts/presets.sh` @ `d264658`) in this library's options (`ndm_gym/algos/blinkmimic.py`,
-`PRESET`). It is not a separate algorithm: every change is an option of its own, off by default, and the
-algorithm-independent ones also apply to SuperTrack.
+Both derive from supermimic_vibed, as NDM Gym does. `--algo blinkmimic` applies its released recipe
+(`PRESET[main]` of `scripts/presets.sh` @ `d264658`) through `ndm_gym/algos/blinkmimic.py`'s `PRESET`.
+Each change is a separate option, off by default; algorithm-independent options also apply to SuperTrack.
 
 ```bash
 ndm-train --algo blinkmimic --log_dir logs/blm                                    # the recipe: 3500 iterations
@@ -15,12 +14,10 @@ ndm-train --algo blinkmimic --iterations 1000000 --max_hours 3 --log_dir logs/bl
 ndm-train --algo supertrack --pi_ema 0.995 --pi_opt muon --wm_mirror 0.5 ...        # single options with any algorithm
 ```
 
-The run's `args.json` records `algo: supermimic` and `preset: blinkmimic`; `evaluate.py` deploys the policy average
-(`--pi_ema`), which checkpoints hold as `pi`.
+`args.json` records `algo: supermimic` and `preset: blinkmimic`. `evaluate.py` deploys the policy average (`--pi_ema`),
+stored in checkpoints as `pi`.
 
 ## 2. How the methods relate
-
-All of them learn the policy through one learned world model of the simulator.
 
 - **SuperTrack** (Fussell et al. 2021): supervised. The policy minimizes L1 tracking losses through the world model; no
   reward, no critic.
@@ -28,19 +25,19 @@ All of them learn the policy through one learned world model of the simulator.
   beyond the horizon; first-order gradients.
 - **BlinkMimic**: SuperMimic's objective with InstantTrack's and its own training changes (section 3).
 
-**BlinkMimic's semi-implicit world model is the idea of SuperTrack's acceleration world model.** BlinkMimic's model
-(`--wm_structured`, `ndm_gym/worldmodels/semi_implicit.py`) predicts velocity increments and integrates the positions from
-the old and new velocities, dt ((1 − c) v + c v′) with c = (n + 1) / (2n) = 0.625 for the simulator's n = 4 substeps, plus a
-learned position correction. SuperTrack's model (Fussell et al. 2021, §3.4; `ndm_gym/worldmodels/accel.py`) predicts
-accelerations, that is velocity increments per dt, and integrates the positions by semi-implicit Euler; with
-`--st_substeps 4` it uses the same c. With zero corrections, a step of BlinkMimic's model equals a step of SuperTrack's
+SuperTrack's model (Fussell et al. 2021, §3.4; `ndm_gym/worldmodels/accel.py`) predicts accelerations (velocity increments
+per dt) and integrates positions by semi-implicit Euler. BlinkMimic's model (`--wm_structured`,
+`ndm_gym/worldmodels/semi_implicit.py`) predicts velocity increments and integrates positions from the old and new
+velocities, dt ((1 − c) v + c v′) with c = (n + 1) / (2n) = 0.625 for the simulator's n = 4 substeps, plus a learned position
+correction. SuperTrack uses the same c with `--st_substeps 4`. With zero corrections, a step of BlinkMimic's model equals
+a step of SuperTrack's
 (`tests/test_blinkmimic.py::test_semi_implicit_integration_is_supertracks`). SuperMimic's model
 (`ndm_gym/worldmodels/increment.py`) predicts the position increments directly and does not integrate velocities.
 
 ## 3. BlinkMimic's changes as options
 
-The rows of BlinkMimic's table "What BlinkMimic changes" and of InstantTrack's change tables. Present: the option existed
-before. New: added for BlinkMimic, off by default; the default paths are bit for bit unchanged
+Options from BlinkMimic's "What BlinkMimic changes" and InstantTrack's change tables. Present: already supported.
+New: added for BlinkMimic; defaults remain bit for bit unchanged
 (`tests/test_algo_equivalence.py`, `tests/test_supertrack_golden.py`).
 
 | change | BlinkMimic / InstantTrack | here | status |
@@ -69,29 +66,28 @@ before. New: added for BlinkMimic, off by default; the default paths are bit for
 | collection and resets as CUDA graphs; background checkpoints | `--graph_early --collect_graph --reset_masked --ckpt_light --ckpt_minutes 0` | `--graph_early --collect_graph --reset_masked --ckpt_light` | new, LAFAN1, two robots and muscles (below); `--ckpt_minutes 0` needs no counterpart |
 | InstantTrack only: smaller policy (1024-512-256), goal encoding batched per rollout | `--enc_hidden --dec_hidden`, `--batch_goal_enc` | – | not in BlinkMimic's recipe |
 
-Evaluation-guided resets, ported with a probe process:
+Evaluation-guided resets use a probe process:
 
-- **What BlinkMimic does.** From iteration 1000, every 125 iterations, it sweeps the deployed policy (the average,
-  deterministic) over all clips in a second, evaluation-mode simulator of its training process: one world per 300
-  frames of each clip, started a random lead (200-450 frames, one per sweep) earlier on the reference and run to the
-  tile's end. The first failures (termination or a non-finite action) add to per-bin counts that decay by 0.7 per sweep;
-  each bin weighs the counts of itself and the 10 bins after it in its clip, and 15% of the resets follow these weights.
+- **BlinkMimic.** From iteration 1000, every 125 iterations, it sweeps the deterministic average policy over all clips
+  in a second evaluation-mode simulator in the training process. Each world covers 300 frames, starts a random lead
+  (200-450 frames, one per sweep) earlier on the reference and runs to the tile's end. First failures (termination or a
+  non-finite action) add to per-bin counts that decay by 0.7 per sweep. Each bin weighs its own count and the next 10
+  bins in its clip; 15% of resets follow these weights.
   With `--eprobe_graph --eprobe_async 20` the sweep is one captured step replayed on a side CUDA stream, 20 steps per
   training iteration, and its failures apply once its last step has run.
-- **Here.** Isaac Lab 3 holds one `SimulationContext` per process (a second one raises), and the worlds of a scene step
-  together, so probe worlds in the training scene would step with every collection step and could not take 20 steps per
-  iteration without the training worlds. The probe simulator therefore runs in a worker process on the same GPU
+- **NDM Gym.** Isaac Lab 3 permits one `SimulationContext` per process (a second raises), and all worlds in a scene step
+  together. Probe worlds cannot take 20 steps per iteration independently of training worlds, so the probe runs in a
+  worker process on the same GPU
   (`python -m ndm_gym.algos.eprobe --worker`, started by the trainer): a `TrackingSim` in evaluation mode as
   `ndm_gym.evaluate` builds it, one world per tile (1489 for LAFAN1's 40 clips). At a sweep's start the trainer draws the
-  lead (as BlinkMimic, from torch's default generator) and sends a copy of the average; the worker sweeps (one captured
-  step replayed, as `evaluate --graph`, with `--eprobe_graph`); the trainer applies the failures at the iteration where
-  BlinkMimic does, `ceil(steps / 20)` iterations after the start (steps = lead + tile; the first sweep three fewer, its
-  graph warm-up), waiting there if the worker is not done, as BlinkMimic waits for its side stream. The counts, the window
-  and the focus's share of the reset distribution are BlinkMimic's (`tests/test_eprobe.py` compares them with its code).
-- **Residual differences.** The sweep runs in another process instead of on a side stream of the same process: the two
-  share the GPU by time slicing rather than concurrent streams, which changes the wall-clock cost only. Checkpoints keep
-  the counts, the focus and its share; a sweep in flight is not kept, as in BlinkMimic. A worker whose trainer is gone
-  exits.
+  lead from torch's default generator, as BlinkMimic does, and sends a copy of the average. With `--eprobe_graph`, the
+  worker replays one captured step, as `evaluate --graph` does. The trainer applies failures at BlinkMimic's iteration:
+  `ceil(steps / 20)` iterations after the start (steps = lead + tile; the first sweep three fewer, its graph warm-up).
+  It waits for the worker if needed, as BlinkMimic waits for its side stream. `tests/test_eprobe.py` checks the counts,
+  window and focus's share against BlinkMimic's code.
+- **Differences.** Processes share the GPU by time slicing rather than concurrent streams, changing only wall-clock
+  cost. Checkpoints keep counts, focus and its share, but omit in-flight sweeps, as in BlinkMimic. The worker exits when
+  its trainer is gone.
 - **Cost, measured** (`--algo blinkmimic`, seed 0, one A100 40GB, development run): 161 ms per iteration without sweeps
   (iterations 500-1000), 229 ms with them (1000-1500, four sweeps); a sweep of the 1489 probe worlds takes 12.8-14.5 s
   (604-690 steps of one CUDA graph, about 21 ms each) and adds about 8 s of training wall-clock. The sweeps at 1000-1375
@@ -100,11 +96,11 @@ Evaluation-guided resets, ported with a probe process:
   With both processes clients of one CUDA MPS server, the sweeps cost as much (about +60 ms per iteration in 1000-1500,
   with and without, on a loaded GPU).
 
-The systems options (wall-clock only: the same computations up to rounding and random streams), in train.py's shared loop:
+Systems options in train.py's shared loop preserve computations up to rounding and random streams:
 
-- `--no_sync`: no host synchronization in the loop. A non-finite policy gradient skips the optimizer step on the device
-  (the log's `nonfinite` column counts them); the normalizers test their count limit on the device; starts are drawn from
-  twice as many candidates, the valid ones kept by a stable sort (the default's selection when enough are valid).
+- `--no_sync`: removes host synchronization. Non-finite policy gradients skip the optimizer step on the device
+  (logged in `nonfinite`). Normalizers test their count limit on the device. Starts use twice as many candidates, keeping
+  valid ones by stable sort (the default's selection when enough are valid).
 - `--update_graphs` (`--cuda_graph`): the world-model update and the policy update, with the optimizer steps (capturable
   fused Adam, Muon with tensor learning rates) and the policy average's step, as CUDA graphs, captured once the replay
   buffer is full (`--graph_early`: at once, the buffer's head and fill level on the device). The survival products are a
@@ -117,10 +113,10 @@ The systems options (wall-clock only: the same computations up to rounding and r
   and `last.pt` at the end. With `--last_every_min M`, `last.pt` also every M minutes of training, at the next periodic
   checkpoint, so that `--resume` can continue a run stopped before its end.
 
-Not ported: `--ckpt_minutes 0`, which needs no counterpart (train.py checkpoints by time only at `--ckpt_hours`).
+`--ckpt_minutes 0` needs no counterpart: train.py checkpoints by time only at `--ckpt_hours`.
 
-With the systems options instead of their CUDA-graph options, the final configurations of the LAFAN1 study run faster
-(ms per iteration on an A100 40GB, iterations 250-450 with `--wm_only_iters 100`, so that the policy updates are timed):
+LAFAN1 final configurations with the original CUDA-graph options and the systems options, in ms per iteration on an
+A100 40GB (iterations 250-450, `--wm_only_iters 100`, including policy updates):
 
 | | SuperTrack, MLP | SuperMimic, MLP |
 |---|---|---|
@@ -129,36 +125,31 @@ With the systems options instead of their CUDA-graph options, the final configur
 
 ## 4. Validation
 
-`tests/test_systems.py`: the graphable updates give the default updates' parameters bit for bit (with the default's
-cumprod as the same loop of products, which equals cumprod up to rounding); a non-finite policy step is skipped on the
-device; with `--update_graphs` each optimizer has its own device learning rate, so that `--wm_lr` and `--pi_lr_mult` give
-the rates they give without it (also in muscle training: `tests/test_muscle_systems.py`); the device-side freeze test,
-replay head, weighted bin statistics and gated Muon step; in the simulator, the masked training step, eagerly and as a CUDA
-graph, equals the indexed one bit for bit, and a run with all the systems options captures and replays its graphs.
-`tests/test_eprobe.py`: the probe worlds' tiles and sweep frames, the failure counts, their decay and window against
-BlinkMimic's own code, the focus's share of the reset distribution (and share 0 leaving it bit for bit), the deterministic
-probe policy, the options' checks, and the iteration at which each sweep's failures apply.
-`tests/test_blinkmimic.py`: the preset is BlinkMimic's `PRESET[main]` flag by flag, and command-line options override it;
-unsupported combinations are refused; Muon takes exactly the hidden matrices; the policy average and its checkpoints;
-the defaults give the unchanged updates bit for bit; the mirror is an involution, the G1's default pose and action scales
-are symmetric, and the forward kinematics of a mirrored state are the mirrored bodies; the semi-implicit model's targets
-integrate back to the next state, and its step equals SuperTrack's with 4 substeps; the contact term; the reset
-statistics; the policy's learning-rate schedule; every option of the recipe together trains.
-`tests/test_wm_muon_rf.py`: `--wm_opt muon` with the RigidFormer world model (LAFAN1 training): Muon takes exactly the
-blocks' weight matrices as stored (q/k/v and the attention gate one matrix, the SwiGLU's value and gate one matrix), Adam
-every other parameter, with and without merged tokens; one update trains both; the MLP's split and `--wm_opt adam` are
-unchanged; on the GPU the update with `--update_graphs` and `--rf_fused_train`, captured as a CUDA graph, gives the eager
-update bit for bit.
-`tests/test_muscle_wm_muon_rf.py`: the same option in muscle training: train_muscles takes it with either token set; the
-muscle RigidFormer's split is LAFAN1's rule on the same blocks (the muscle encoder, embeddings and read-out on Adam); one
-update trains both parts; the update without host synchronization is the default one bit for bit and skips a non-finite
-one; a checkpoint restores the optimizer's state, with `--update_graphs` into the device learning rates; on the GPU a
-short run with the fused RigidFormer and the systems options captures and replays its updates.
+- `tests/test_systems.py`: graphable updates match default parameters bit for bit when both use the product loop
+  (equivalent to cumprod up to rounding). Checks device-side skipping of non-finite policy steps, separate optimizer
+  learning rates under `--update_graphs` (`--wm_lr`, `--pi_lr_mult`; also `tests/test_muscle_systems.py`), freeze tests,
+  replay head, weighted bin statistics and gated Muon. Masked simulator steps, eager and graphed, play the indexed steps' episodes
+  (reset states bit for bit, states and rewards within the simulator's run-to-run differences); a run with all systems options captures and replays its graphs.
+- `tests/test_eprobe.py`: probe tiles and sweep frames; failure counts, decay and window against BlinkMimic's code;
+  focus share (share 0 preserves the reset distribution bit for bit); deterministic probe policy; option checks;
+  iteration at which each sweep's failures apply.
+- `tests/test_blinkmimic.py`: flag-for-flag match to `PRESET[main]`, command-line overrides, rejected combinations,
+  Muon's hidden-matrix selection, policy average and checkpoints, and bitwise preservation of default updates. Checks
+  mirror involution, symmetric G1 pose and action scales, and mirrored forward kinematics. Semi-implicit targets
+  integrate to the next state; the step equals SuperTrack's with 4 substeps. Also checks contact terms, reset statistics,
+  learning-rate schedule and training with the full recipe.
+- `tests/test_wm_muon_rf.py`: `--wm_opt muon` assigns RigidFormer's stored block matrices to Muon (q/k/v and attention
+  gate in one matrix; SwiGLU value and gate in one matrix), all other parameters to Adam, with and without merged tokens.
+  One update trains both; the MLP split and `--wm_opt adam` stay unchanged. On GPU, `--update_graphs` with
+  `--rf_fused_train` matches the eager update bit for bit.
+- `tests/test_muscle_wm_muon_rf.py`: train_muscles accepts the same option with either token set and applies the same
+  block split (muscle encoder, embeddings and read-out on Adam). One update trains both parts. Updates without host
+  synchronization match defaults bit for bit and skip non-finite steps. Checkpoints restore optimizer state, including
+  device learning rates with `--update_graphs`. A short GPU run with fused RigidFormer and systems options captures and
+  replays updates.
 
-On an A100 40GB, `--algo blinkmimic` trains at 161 ms per iteration between the probe sweeps and 229 ms over the sweep
-periods (iterations 1000-1500); with warm compile caches the first 50 iterations, with compilation and graph capture,
-take 20 s. Training uses 12.5 GiB of GPU memory, the probe worker 2.2 GiB. A run resumed from its `last.pt` continues where
-it stopped.
+On an A100 40GB with warm compile caches, `--algo blinkmimic` takes 20 s for the first 50 iterations, including compilation
+and graph capture. Training uses 12.5 GiB of GPU memory, the probe worker 2.2 GiB. Resuming from `last.pt` continues the run.
 
 Time to target on one A100 40GB, every checkpoint (one per 100 iterations) evaluated four times on all 40 clips
 (`evaluate --group 18 --repeats 4 --graph`), minutes of training wall-clock as BlinkMimic counts them:
@@ -175,9 +166,8 @@ configurations with these options: [README](../README.md#training-speed).
 
 ## 5. The other training loops
 
-The systems options and the recipe's options that apply are also options of muscle training (`ndm_gym.train_muscles`) and
-the two-robot scene (`ndm_gym.train --paired`), off by default; the default paths are unchanged. Each trainer refuses the
-options it does not implement; HOI training (`ndm_gym.train_hoi`) takes none of them.
+Muscle training (`ndm_gym.train_muscles`) and the two-robot scene (`ndm_gym.train --paired`) support the options below,
+off by default. Each trainer rejects unsupported options; HOI training (`ndm_gym.train_hoi`) takes none of them.
 
 | option | muscles | two robots |
 |---|---|---|
@@ -189,7 +179,7 @@ options it does not implement; HOI training (`ndm_gym.train_hoi`) takes none of 
 | `--fail_reset`, `--bin_fix` | no: MuscleSim draws its resets inside its reset graph | no |
 | `--wm_mirror` | no: no mirror map of the 284 muscles | allowed |
 | `--eprobe_*` | no | no |
-| `--wm_structured`, `--contact_reward` | no (LAFAN1 SuperMimic's model and foot-contact term) | no |
+| `--wm_structured`, `--contact_reward` | no (LAFAN1 SuperMimic's model and foot-contact term) | allowed |
 
 Milliseconds per iteration, synchronized profiles after the world-model-only iterations (collection / model update /
 policy update), A100 40GB unless noted; the muscle rows are the starting configurations, before the character's tuning (on
@@ -207,10 +197,9 @@ SuperMimic-MLP's model update, not captured before, varies between profiles (654
 Unprofiled, the muscle runs train at 3.04 (SuperTrack-MLP) and 2.62 (SuperMimic-MLP) iterations per second with the systems
 options, 2.51 and 1.87 without.
 
-Validation: `tests/test_muscle_systems.py`, `tests/test_paired_systems.py`. The updates written without host
-synchronization give the default updates' values and parameters bit for bit (muscle SuperTrack and SuperMimic); a
-non-finite update is skipped on the device. The collection graphs play the eager or indexed steps' episodes: the same
-episode ends, frame counters and flags, the reset states bit for bit (two robots), the states within the simulator's own
-run-to-run differences across processes. A short run of each trainer with all the systems options captures and replays its
-graphs. On MuscleVAE's character the options' effect on the results was checked with three seeds
+`tests/test_muscle_systems.py` and `tests/test_paired_systems.py` check bitwise equivalence of updates without host
+synchronization (muscle SuperTrack and SuperMimic) and device-side skipping of non-finite updates. Collection graphs match
+eager or indexed episode ends, frame counters and flags; two-robot reset states match bit for bit. States stay within the
+simulator's run-to-run differences across processes. Each trainer captures and replays all systems graphs in a short run.
+The options' effect on MuscleVAE results was checked with three seeds
 ([results](../benchmarks/musclevae/results.md#the-systems-options)).

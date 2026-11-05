@@ -1,15 +1,15 @@
 # Two G1s boxing: results
 
-One two-person clip, InterHuman 1566 (11 s at 50 Hz, both people retargeted to the G1 in their common world frame),
-tracked by two G1s in one simulation with robot-robot contacts on. All runs train on one A100-SXM4-80GB. A checkpoint is
-evaluated five times from the clip's first frame, both robots at once. A pair succeeds when neither robot terminates; returns
-and errors are means over the two robots. Global MPJPE is in the world frame; root-relative MPJPE takes each body relative to its
-robot's root.
+Two G1s track InterHuman 1566 (11 s at 50 Hz) in one simulation with robot-robot contacts. All runs train on one
+A100-SXM4-80GB. Each checkpoint is evaluated five times from the clip's first frame, both robots at once. Success means
+neither robot terminates; returns and errors average both robots. Global MPJPE uses the world frame; root-relative MPJPE
+measures each body relative to its robot's root.
 
 Setup:
+
 - Data: [InterHuman](https://github.com/tr3e/InterGen) (CC BY-NC-SA 4.0, not redistributed), clip 1566: two people
   boxing (punches, dodges, feints, counters). Both people are retargeted to the 29-DoF G1 with HoloMotion's HoloRetarget
-  (`tools/convert_interhuman.py`; it needs a licensed SMPL model), their horizontal positions scaled once by 0.810, each
+  (`tools/convert_interhuman.py`; it needs a licensed SMPL model), in their common world frame, horizontal positions scaled once by 0.810, each
   robot raised once so that its lowest foot point is on the floor.
 - Scene (`--motions interhuman --paired`): two G1s per environment, each tracking its side with the LAFAN1 task; a pair
   resets and ends together; each robot's world model sees only its own state. 4096 robots in 2048 environments.
@@ -21,9 +21,9 @@ Setup:
 
 ## Selected on the clip
 
-Each algorithm's configuration on this clip comes from two rounds with the same number of runs, starting from LAFAN1's
-selection and ranked by five evaluations of each run's best checkpoint. Every checkpoint is evaluated once on the learning curve,
-which gives the best checkpoint and the time to return 0.88 (the selections: one checkpoint per 1,000 iterations).
+Two rounds with equal run counts start from LAFAN1's selections. Five evaluations of each run's best checkpoint determine
+the ranking. Learning curves use one evaluation per checkpoint to select that checkpoint and measure time to return 0.88
+(the selections: one checkpoint per 1,000 iterations).
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
@@ -37,12 +37,11 @@ which gives the best checkpoint and the time to return 0.88 (the selections: one
 | training to return 0.88 (h) | 0.11 (2,000 iterations) | 0.10 (2,000 iterations) |
 | last checkpoint: return, global, root-relative MPJPE (mm) | 0.892, 57, 14.3 | 0.905, 40, 16.4 |
 
-On the learning curves, the selected SuperTrack run holds 0.889-0.894 from 2,000 iterations on, and the selected SuperMimic run
-rises to 0.905 by its end. Round 1's SuperTrack (`--st_com` with the recipe) holds 0.888-0.895 from 3,000 iterations to 1 h; round 1's SuperMimic
-(the recipe) holds 0.901-0.906 from 4,000 to 14,000 iterations and falls to 0.83 at 1 h. BlinkMimic's recipe is built for short runs (its preset trains 3,500
-iterations), so the ranking uses each run's best checkpoint, for both algorithms.
+On the learning curves, the selected SuperTrack run holds 0.889-0.894 from 2,000 iterations on; the selected SuperMimic run reaches
+0.905 at its end. Round 1's SuperTrack holds 0.888-0.895 from 3,000 iterations to 1 h; round 1's SuperMimic holds 0.901-0.906 from 4,000
+to 14,000 iterations and falls to 0.83 at 1 h. Ranking uses each run's best checkpoint because BlinkMimic's preset trains for 3,500 iterations.
 
-Return, global and root-relative MPJPE (mm) of each run's best checkpoint, in bold each round's selection:
+Best-checkpoint return, global and root-relative MPJPE (mm); selections in bold:
 
 | round | SuperTrack | SuperMimic |
 |---|---|---|
@@ -53,12 +52,12 @@ Return, global and root-relative MPJPE (mm) of each run's best checkpoint, in bo
 | | `--pi_lr_mult 2` (0.3 h): 0.894, 51, 13.6 | `--pi_lr_mult 2` (0.3 h): **0.905, 40, 16.4** |
 | | `--st_balance_w 2` (0.3 h): 0.893, 45, 14.5 | `--action_noise 0.2` (0.3 h): 0.905, 50, 16.4 |
 
-Both rounds select the highest return, or within 0.005 of it the lowest global MPJPE. Round 2 applies this to its changes against round
-1's selection; its runs train for less time.
+Both rounds select the highest return, or within 0.005 of it the lowest global MPJPE. Round 2 compares its shorter runs with round 1's
+selection.
 
 ## LAFAN1's selections, 3 h
 
-Each trains for 3 h; its last checkpoint is evaluated five times.
+Last checkpoints, evaluated five times:
 
 | configuration | iterations in 3 h | it/s (world model only, then) | pair success | normalized return | global MPJPE (m) | root-relative MPJPE (mm) |
 |---|---|---|---|---|---|---|
@@ -71,8 +70,8 @@ it trained on.
 
 ## Speed
 
-Simulation throughput of the two-robot scene, robot-steps per second (a pair-step is two), one A100-SXM4-80GB that ran
-nothing else (driver 565.57.01); 200 timed steps after 20 warm-up steps, the median of three repeats. Physics: Isaac Lab 3
+Robot-steps per second (a pair-step is two), one otherwise idle A100-SXM4-80GB (driver 565.57.01); median of three repeats
+of 200 timed steps after 20 warm-up steps. Physics: Isaac Lab 3
 with Newton/MuJoCo-Warp, the four 5 ms substeps in one call, robot-robot contacts on, no task terms. The world models
 step each robot on its own predictions (`torch.compile`, bf16).
 
@@ -82,9 +81,8 @@ step each robot on its own predictions (`torch.compile`, bf16).
 | 1024 (2048) | 204,963 | 4,044,639 (19.7x) | 1,040,959 (5.1x) |
 | 4096 (8192) | 312,231 | 7,208,713 (23.1x) | 1,345,609 (4.3x) |
 
-The world models' inference paths, measured as the table on the same GPU: the
-RigidFormer as an fp32 copy with the step's features and integration as Triton kernels and the whole network as one
-kernel, the MLP as a bf16 copy with the fused step, with SuperTrack's trained checkpoints.
+Inference paths, measured the same way on the same GPU with SuperTrack's checkpoints: RigidFormer uses an fp32 copy,
+Triton kernels for features and integration, and one kernel for the network. The MLP uses a bf16 copy with the fused step.
 
 | pairs (robots) | physics | RigidFormer, as trained | RigidFormer, inference path | MLP, as trained | MLP, inference path |
 |---|---|---|---|---|---|

@@ -1,8 +1,8 @@
 # World models
 
-A world model predicts the next state from the state, the action and the simulator's context,
-s<sub>t+1</sub> = f(s<sub>t</sub>, a<sub>t</sub>, ξ), and is differentiable: SuperTrack and SuperMimic train the policy
-by backpropagation through it. Every world model has the same interface (`ndm_gym.worldmodels`):
+A world model predicts the next state from the current state, action and simulator context:
+s<sub>t+1</sub> = f(s<sub>t</sub>, a<sub>t</sub>, ξ). SuperTrack and SuperMimic train policies by backpropagation through
+this differentiable model. All models share an interface (`ndm_gym.worldmodels`):
 
 | | |
 |---|---|
@@ -29,30 +29,29 @@ With zero position corrections, a step of BlinkMimic's model equals one of Super
 
 ## Backbones
 
-Either network takes the same targets, normalizers, integration and losses.
+Both backbones use the same targets, normalizers, integration and losses.
 
 - **MLP** (default): 3 × 2048 with LayerNorm and SiLU (`--wm_hidden`, `--wm_act`, `--wm_no_ln`), on heading- and
   position-invariant state features; 8.75 M parameters in SuperTrack's model, 8.82 M in SuperMimic's.
 - **RigidFormer** (`--wm_backbone rigidformer`, sizes `--rf_dim`, `--rf_layers`, `--rf_heads`, `--rf_registers`): a
   Transformer with one token per G1 body, 3-D rotary attention on the body positions, a kinematic-tree attention bias,
   FiLM conditioning on the context and a read-out in reduced coordinates; 0.88 M parameters at the default size.
-  It needs the G1's kinematics (`ndm_gym.robots.g1.kinematics`). See [RigidFormer backbone](rigidformer_backbone.md).
+  Requires G1 kinematics (`ndm_gym.robots.g1.kinematics`); see [RigidFormer backbone](rigidformer_backbone.md).
 
 Both output layers start at zero, so a new world model predicts the output normalizer's mean.
 
 ## Fitting
 
-The algorithms fit their world model on k-step windows of the replay buffer (`--wm_window`), rolled out from the
-window's first state (`ndm_gym.algos.common.Algo.wm_update`), each with its own loss: SuperTrack's L1 errors of the
-bodies' world-space positions, velocities, rotations and angular velocities, SuperMimic's normalized frame-local state
-error. The offline
-benchmark `ndm_gym.wmbench.fit` calls the same update on collected datasets ([Quickstart](quickstart.md#the-offline-world-model-benchmark)).
+`ndm_gym.algos.common.Algo.wm_update` fits k-step replay windows (`--wm_window`), rolling out from each window's first
+state. SuperTrack uses L1 errors of body positions, velocities, rotations and angular velocities in world space;
+SuperMimic uses normalized frame-local state error. The offline benchmark `ndm_gym.wmbench.fit` uses the same update
+([Quickstart](quickstart.md#the-offline-world-model-benchmark)).
 
 ## Inference copies
 
-`ndm_gym.worldmodels.g1_infer.inference_copy(wm, dtype, attention, fused)` makes a forward-only copy for simulation
-throughput: bf16 parameters, the RigidFormer's token attention kernel, and with `fused` the features and the integration
-as Triton kernels (CUDA). Each copy is compared with its model before use and refused on a mismatch.
+`ndm_gym.worldmodels.g1_infer.inference_copy(wm, dtype, attention, fused)` makes a forward-only simulation copy with
+bf16 parameters and RigidFormer's token attention kernel. `fused` adds Triton kernels for features and integration
+(CUDA). Each copy is checked against its model and rejected on a mismatch.
 
 ## The other tasks' world models
 

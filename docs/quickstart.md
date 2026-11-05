@@ -20,16 +20,13 @@ ndm-eval --run_dir logs/st --ckpt <ckpt> --record st.npz      # and the same for
 MUJOCO_GL=egl python tools/compare_videos.py st.npz sm.npz --labels SuperTrack SuperMimic --out videos/
 ```
 
-`ndm-train --help` lists every option. The other tasks have their own commands ([Tasks](tasks.md)):
+`ndm-train --help` lists all options. Other [tasks](tasks.md) use:
 `python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack`, `python -m ndm_gym.train_muscles --algo supertrack`.
 
 ## World models in Python
 
-No simulator needed: `pip install` is enough. A state of the G1 is the tuple `S = (p, R, v, w, q, qd)` (pelvis position,
-rotation matrix, world linear and angular velocity, joint positions and velocities, in the joint order of
-`ndm_gym.robots.g1.G1_JOINT_NAMES`); an action is the normalized joint setpoint; `xi` is the simulator's context
-(friction, joint calibration offsets, torso center-of-mass offset). A world model's `step` predicts the state one
-control step (20 ms) later and is differentiable:
+The library's `pip install` is enough. See [World models](world_models.md) for the state, action and context layouts;
+joints follow `ndm_gym.robots.g1.G1_JOINT_NAMES`. The differentiable `step` predicts the state one control step (20 ms) later:
 
 ```python
 import torch
@@ -50,11 +47,10 @@ S1 = wm.step(S, a, normalize_xi(xi))     # the next state, same layout
 S1[0].square().sum().backward()          # into a.grad, through the world model
 ```
 
-A new world model's output layer is zero, so these gradients are zero until it is fit (or loaded, below).
+A new model's output layer is zero, so these gradients are zero until it is fit or loaded.
 `wm.inputs(S, a, xi_n)` (`xi_n = normalize_xi(xi)`) and `wm.targets(S, S1)` give the network's raw inputs and
-regression targets, from which the
-normalizers `wm.in_norm` and `wm.out_norm` are fit (`update`). The algorithms fit a world model on k-step windows of
-their replay buffer (`ndm_gym.algos.common.Algo.wm_update`); [World models](world_models.md) describes each one.
+regression targets for fitting the normalizers `wm.in_norm` and `wm.out_norm` (`update`). Algorithms fit k-step replay
+windows through `ndm_gym.algos.common.Algo.wm_update`.
 
 ### The RigidFormer
 
@@ -71,7 +67,7 @@ wm = IncrementWorldModel(rigidformer=dict(kin=kin))      # SuperMimic-RF's world
 
 ### From a checkpoint
 
-A checkpoint stores its run's arguments; `world_model_from_args` builds the world model they describe:
+`world_model_from_args` builds a model from a checkpoint's saved arguments:
 
 ```python
 from ndm_gym.algos import world_model_from_args
@@ -86,8 +82,8 @@ wm.load_state_dict(ck["wm"])
 
 ## The offline world-model benchmark
 
-Transitions collected once with a frozen policy (in the simulator), then world models fit and scored on them without
-it (a CUDA GPU and `data/`):
+Collect transitions with a frozen policy in the simulator, then fit and score world models without it (a CUDA GPU and
+`data/`):
 
 ```bash
 python -m ndm_gym.wmbench.collect --ckpt logs/st/ckpt_006000.pt --out wm_train.pt --seed 0    # simulator
@@ -96,5 +92,4 @@ python -m ndm_gym.wmbench.fit --algo supertrack --train wm_train.pt --test st=wm
 python -m ndm_gym.wmbench.fit --algo supertrack --wm_backbone rigidformer --lr 4e-4 --train wm_train.pt --test st=wm_test.pt --out wm_st_rf.csv
 ```
 
-`fit` takes `ndm-train`'s training options (`ndm_gym.train.add_train_args`) and calls the algorithm's own world-model
-update, so a variant is fit as online training fits it.
+`fit` uses `ndm-train`'s options (`ndm_gym.train.add_train_args`) and world-model update.

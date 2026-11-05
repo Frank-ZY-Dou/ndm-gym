@@ -2,7 +2,7 @@
 # (mkdocs build --strict, after pip install -r docs/requirements.txt); preview: `mkdocs serve`. Published on GitHub
 # Pages by .github/workflows/docs.yml.
 site_name: NDM Gym
-site_description: "Neural Dynamics Modeling Gym: neural world models for physics-based humanoid control"
+site_description: "Neural world models for physics-based humanoid control"
 site_url: https://frank-zy-dou.github.io/ndm-gym/
 repo_url: https://github.com/Frank-ZY-Dou/ndm-gym
 repo_name: Frank-ZY-Dou/ndm-gym
@@ -89,12 +89,12 @@ nav:
   - Quickstart: quickstart.md
   - Tasks:
       - tasks.md
-      - "Human-object interaction: design": hoi_design.md
-      - "HDMI's task as implemented": hdmi_task_spec.md
-      - "MuscleVAE: design": musclevae_design.md
+      - "Human-object interaction": hoi_design.md
+      - "HDMI task specification": hdmi_task_spec.md
+      - "MuscleVAE": musclevae_design.md
   - World models:
       - world_models.md
-      - RigidFormer backbone: rigidformer_backbone.md
+      - RigidFormer: rigidformer_backbone.md
   - Algorithms:
       - algorithms.md
       - BlinkMimic: blinkmimic.md
