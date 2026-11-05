@@ -16,7 +16,8 @@ import argparse
 import os
 
 import torch
-from isaaclab.app import add_launcher_args, launch_simulation
+
+from ndm_gym.sim.launcher import add_launcher_args, launch_simulation
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # field -> how the other rows predict it: ("next", f): field f one row later; ("prev", f): field f one row earlier;

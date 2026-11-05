@@ -4,24 +4,48 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ndm_gym"
-version = "0.1.1"
+dynamic = ["version"]  # ndm_gym.__version__
 description = "NDM Gym (Neural Dynamics Modeling Gym): neural world models for physics-based humanoid control"
+readme = "README.md"
 authors = [{ name = "NDM Gym Contributors" }]
-requires-python = ">=3.12,<3.13"
+requires-python = ">=3.12"
 license = "MIT"
-# Runtime dependencies come from the Isaac Lab 3 environment (see scripts/setup.sh); nothing is pinned here.
-dependencies = []
+keywords = ["world models", "neural dynamics models", "humanoid control", "motion tracking", "pytorch"]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# The library: world models, policies, algorithms, kinematics (MuJoCo reads the robots' MJCF). The simulator (Isaac Lab 3
+# with Newton and MuJoCo-Warp) and the data come from scripts/setup.sh. torch >= 2.9 for torch.optim.Muon (--*_opt muon).
+dependencies = ["torch>=2.9", "numpy>=1.26", "mujoco>=3.3"]
+
+[project.optional-dependencies]
+# the simulator's packages that pip can install, at the versions of Isaac Lab's lock; Isaac Lab 3 itself is not on PyPI:
+# scripts/setup.sh installs it with all of these (and the CUDA 12 builds of torch and warp)
+sim = [
+    "mujoco==3.15.0",
+    "mujoco-warp==3.15.0",
+    "warp-lang==1.17.0",
+    "newton @ git+https://github.com/newton-physics/newton.git@71eeba16a717d4dcf0b9dd7056a7b6f863054dc3",
+]
+render = ["pillow>=10", "matplotlib>=3.8"]  # tools/render*.py, plot.py, compare_videos.py (and ffmpeg)
+docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings-python>=1.16"]
+test = ["pytest>=8", "pillow>=10", "pyyaml>=6"]
+dev = ["ndm_gym[test,docs]", "ruff==0.6.9", "pre-commit"]
 
 [project.urls]
 Repository = "https://github.com/Frank-ZY-Dou/ndm-gym"
+Issues = "https://github.com/Frank-ZY-Dou/ndm-gym/issues"
 
 [project.scripts]
 ndm-train = "ndm_gym.train:main"
 ndm-eval = "ndm_gym.evaluate:main"
 
-[project.optional-dependencies]
-test = ["pytest"]
-dev = ["pytest", "ruff==0.6.9", "pre-commit"]
+[tool.setuptools.dynamic]
+version = { attr = "ndm_gym.__version__" }
 
 [tool.setuptools.packages.find]
 include = ["ndm_gym*"]
@@ -38,3 +62,6 @@ extend-exclude = ["third_party"]
 [tool.ruff.lint.per-file-ignores]
 # standalone scripts: sys.path or environment set-up before imports, compact one-liners
 "tools/*" = ["E402", "E701", "E702"]
+# the simulator modules check that the simulator is installed before importing it (ndm_gym.sim.require_simulator)
+"ndm_gym/sim/rigid/isaaclab_mjwarp.py" = ["E402"]
+"ndm_gym/sim/rigid/hdmi_sim.py" = ["E402"]

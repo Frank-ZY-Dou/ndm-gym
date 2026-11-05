@@ -181,6 +181,8 @@ def inference_copy(wm: nn.Module, dtype: torch.dtype | None = torch.bfloat16, at
     device first (``check_copy``)."""
     if not isinstance(wm, (AccelWorldModel, IncrementWorldModel)):
         raise TypeError(f"expected an AccelWorldModel or IncrementWorldModel, got {type(wm).__name__}")
+    if fused and getattr(wm, "structured", False):
+        raise ValueError("the fused integration takes plain increments, not the semi-implicit world model's outputs (--wm_structured)")
     rf = isinstance(wm.net, RigidFormerNet)
     if type(wm.net) not in (RigidFormerNet, nn.Sequential):
         raise TypeError(f"the world model's network must be as trained (a RigidFormerNet or the MLP), got {type(wm.net).__name__}")

@@ -87,6 +87,36 @@ class SkippedUpdates:
         return n, longest
 
 
+class DeviceSkippedUpdates:
+    """``SkippedUpdates`` on the device (train_muscles --no_sync): each call takes a 0-dim bool tensor and updates the counts
+    in place (a CUDA graph's replays update them); ``take`` reads them (one synchronization, at log rows)."""
+
+    def __init__(self, device):
+        z = lambda: torch.zeros((), dtype=torch.long, device=device)  # noqa: E731
+        self.n_t, self.run_t, self.longest_t = z(), z(), z()
+
+    def __call__(self, skipped: torch.Tensor):
+        s = skipped.long()
+        self.n_t.add_(s)
+        self.run_t.copy_((self.run_t + 1) * s)
+        self.longest_t.copy_(torch.maximum(self.longest_t, self.run_t))
+
+    @property
+    def n(self) -> int:
+        return int(self.n_t)
+
+    @property
+    def run(self) -> int:
+        return int(self.run_t)
+
+    def take(self) -> tuple[int, int]:
+        """The window's number and longest run, then a new window."""
+        n, longest = torch.stack((self.n_t, self.longest_t)).tolist()
+        self.n_t.zero_()
+        self.longest_t.copy_(self.run_t)
+        return n, longest
+
+
 def nonfinite_tensors(modules: dict[str, nn.Module | None], tensors: dict[str, torch.Tensor] | None = None) -> list[str]:
     """Names of the floating-point parameters and buffers of ``modules`` (and of ``tensors``) that hold a non-finite
     value; one host synchronization."""

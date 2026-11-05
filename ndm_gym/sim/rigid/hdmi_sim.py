@@ -31,6 +31,10 @@ iteration limit. Collision filter pairs keep each prop out of contact with the o
 
 from __future__ import annotations
 
+from .. import require_simulator
+
+require_simulator(__name__)  # a clear error, before the imports below, where the simulator is not installed
+
 import json
 import os
 import re

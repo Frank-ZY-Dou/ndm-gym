@@ -677,7 +677,7 @@ def test_train_hoi_refuses_the_options_it_does_not_implement():
                    "wm_only_iters", "lr_decay_iters", "lr_decay_hours", "ckpt_every", "max_hours", "ckpt_hours", "log_every", "log_dir", "seed",
                    "resume", "amp", "st_late_w", "pi_rollout_clip", "wm_input_noise", "wm_smooth_w", "wm_smooth_eps", "wm_smooth_dirs"}  # fmt: skip
     refused = set(train_hoi.UNSUPPORTED) | {"clips"}
-    assert len(train_hoi.UNSUPPORTED) == 34 and not implemented & refused and implemented | refused == set(actions)
+    assert len(train_hoi.UNSUPPORTED) == 35 and not implemented & refused and implemented | refused == set(actions)
     base = ["--algo", "supertrack", "--task", "move_suitcase"]
     assert not train_hoi.parse_args(base).st_contact_force and train_hoi.parse_args(base + ["--st_contact_force"]).st_contact_force
     for extra in (["--st_contact_force"], ["--st_obj_w", "3"], ["--st_obj_imag_noise", "0.1"], ["--st_vel_terms"], ["--st_task_penalties"],

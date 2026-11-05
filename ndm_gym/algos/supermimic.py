@@ -13,10 +13,13 @@ from ..buffer import ReplayBuffer
 from ..policies.critic import Critic
 from ..robots.g1 import G1_JOINT_NAMES, NUM_J, action_scale
 from ..state import INV_DIM, normalize_xi, unflatten_state
+from ..tasks.contact import foot_bodies, reference_contact
 from ..tasks.tracking import CRITIC_EXTRA
 from ..worldmodels.increment import IncrementWorldModel
 from ..worldmodels.rigidformer import rigidformer_kwargs
-from .common import Algo, cap_rollout_grads, clip_rollout_policy_grads, decay_rollout_grads, reference_setpoints, set_requires_grad, update_in_place
+from ..worldmodels.semi_implicit import SemiImplicitIncrementWorldModel
+from .common import (Algo, cap_rollout_grads, clip_rollout_policy_grads, decay_rollout_grads, reference_setpoints, set_requires_grad, survival,
+                     update_in_place, zero_nonfinite_grads)
 
 PROFILE = bool(int(os.environ.get("SM_PROFILE", "0")))
 
@@ -33,7 +36,7 @@ class SuperMimic(Algo):
                 raise ValueError("--critic_cudagraphs needs the critic (no --no_critic)")
             self.opt_v = torch.optim.Adam(self.critic.parameters(), lr=torch.tensor(args.lr, device=dev), capturable=True, **self.adam_kw)
         else:
-            self.opt_v = torch.optim.Adam(self.critic.parameters(), lr=args.lr, **self.adam_kw)
+            self.opt_v = torch.optim.Adam(self.critic.parameters(), **self.optimizer_kw(args.lr))  # --update_graphs: capturable
         self.critic_graph = None  # with --critic_cudagraphs: the static inputs, then the captured step
         # optional, for ablations of the action parameterization: offsets about the reference pose of the next frame
         # (SuperTrack's) instead of setpoints about the default pose
@@ -44,6 +47,12 @@ class SuperMimic(Algo):
         # per-component floors on the error normalization (pos, rot, lin vel, ang vel, q, qd increments)
         self.err_floor = torch.cat((torch.full((3,), 3e-3), torch.full((3,), 5e-3), torch.full((3,), 2e-2), torch.full((3,), 5e-2),
                                     torch.full((29,), 3e-3), torch.full((29,), 5e-2))).to(dev)  # fmt: skip
+        # optional (--contact_reward w, InstantTrack; --ref_contact_fix, BlinkMimic): a foot-contact term in the imagined
+        # reward only (tasks/contact.py); the simulator's reward, which the evaluation uses, is unchanged
+        self.contact_w = getattr(args, "contact_reward", 0.0)
+        if self.contact_w > 0:
+            self.feet = foot_bodies()
+            self.ref_contact = reference_contact(motion, self.feet, calibrated=args.ref_contact_fix)
         self.wm_err = torch.compile(self._wm_err, **self.wm_compile)
         self.imag_step = torch.compile(self._imag_step, **self.pi_compile)
         self.reward_term = torch.compile(self._reward_term, **self.pi_compile)
@@ -53,7 +62,8 @@ class SuperMimic(Algo):
 
     @staticmethod
     def world_model_cls(a):
-        return IncrementWorldModel(hidden=a["wm_hidden"], act=a["wm_act"], layer_norm=not a["wm_no_ln"], rigidformer=rigidformer_kwargs(a))
+        cls = SemiImplicitIncrementWorldModel if a.get("wm_structured", False) else IncrementWorldModel  # --wm_structured (BlinkMimic)
+        return cls(hidden=a["wm_hidden"], act=a["wm_act"], layer_norm=not a["wm_no_ln"], rigidformer=rigidformer_kwargs(a))
 
     @classmethod
     def is_residual(cls, a):
@@ -75,7 +85,8 @@ class SuperMimic(Algo):
 
     # ------------------------------------------------------------------ world model (Eq. 1, state term)
     def _wm_err(self, S_hat, s1, mask):
-        std = torch.maximum(self.wm.out_norm.std(), self.err_floor)
+        norm = self.wm.inc_norm if getattr(self.wm, "structured", False) else self.wm.out_norm  # --wm_structured: the increments' scale
+        std = torch.maximum(norm.std(), self.err_floor)
         e = (self.wm.state_error(S_hat, unflatten_state(s1)) / std) ** 2  # (B, k, D)
         e = e.mean(-1)
         return (e * mask).sum() / s1.shape[0], e[:, -1], (e * mask).sum(1)
@@ -102,7 +113,8 @@ class SuperMimic(Algo):
         return S1, a, o_hist, f1, self.motion.goal(f1, self.K)
 
     def _reward_term(self, S, f, a, a_prev):
-        return self.mdp.reward(S, f, a, a_prev), self.mdp.soft_termination(S, f)
+        contact = (self.contact_w, self.feet, self.ref_contact) if self.contact_w > 0 else None
+        return self.mdp.reward(S, f, a, a_prev, contact=contact), self.mdp.soft_termination(S, f)
 
     def _critic_input(self, S, f, xi_n, g):
         return torch.cat((self.mdp.critic_features(S, f, xi_n), g), -1)
@@ -209,6 +221,92 @@ class SuperMimic(Algo):
         if PROFILE:
             torch.cuda.synchronize()
             print(f"[prof] imagine fwd {1e3*(tq1-tq0):.0f} ms | bwd {1e3*(tq2-tq1):.0f} ms | critic {1e3*(time.time()-tq2):.0f} ms", flush=True)
+        return loss.detach(), v_loss.detach(), (r_sum / HZ / 0.1).mean(), gn.detach(), c.mean().detach()
+
+    def policy_update_graphable(self, buffer: ReplayBuffer):
+        """``policy_update`` for --update_graphs (BlinkMimic's --cuda_graph): the same update without host synchronization,
+        so that all of it (start sampling, imagination, objective, backward, clipping, the optimizer step skipped on the
+        device for a non-finite gradient, the policy average's step, the critic's targets and minibatch steps) can be
+        captured in one CUDA graph. The survival products are a loop of multiplications (cumprod's backward tests for zeros
+        on the host). Returns (policy loss, value loss, imagined reward, gradient norm, imagined survival)."""
+        args, dev, HZ, K = self.args, self.dev, self.HZ, self.K
+        s, h = self.sample_valid_starts_nosync(buffer, args.pi_batch)
+        S = unflatten_state(s["s"])
+        xi, f, a_prev = s["xi"], s["f"], s["a_prev"]
+        xi_n = normalize_xi(xi)
+        o_hist = self.start_obs_history(h)
+        S = self.perturb_start(S)
+        set_requires_grad(self.wm, False)
+        set_requires_grad(self.critic, False)
+        if args.wm_bptt_fp32:
+            self.wm.amp = False
+        B = args.pi_batch
+        g0 = self.motion.goal(f, K)
+        g = g0
+        S0 = S
+        Ss, As, Aps, Fs, Gs = [], [], [], [], []
+        for t in range(HZ):
+            Aps.append(a_prev)
+            S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g)
+            Ss.append(S), As.append(a_prev), Fs.append(f), Gs.append(g)
+        flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
+        S_all = tuple(flat([St[i] for St in Ss]) for i in range(6))
+        f_all = flat(Fs)
+        r, d = self.reward_term(S_all, f_all, flat(As), flat(Aps))
+        r, d = r.view(HZ, B), d.view(HZ, B)
+        alive = survival(d)  # c_{t+1}: cumprod(1 - d, 0) as a loop
+        c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
+        disc = args.gamma ** torch.arange(HZ, device=dev, dtype=torch.float32).unsqueeze(-1)
+        J = (disc * c_t * r).sum(0)
+        c = alive[-1]
+        r_sum = (c_t * r).detach().sum(0)
+        rews, dones = r.detach(), d.detach()
+        if not args.no_critic:
+            critic_input = self.critic_input_c if self.compile_eager else self._critic_input
+            J = J + (args.gamma**HZ) * c * self.critic(critic_input(S, f, xi_n, g))
+        loss = -J.mean()
+        self.opt_pi.zero_grad(set_to_none=True)
+        loss.backward()
+        gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
+        nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
+        finite = torch.isfinite(gn)
+        self.nonfinite.add_((~finite).long())
+        zero_nonfinite_grads(self.pi.parameters(), finite)
+        self.optimizer_step(self.opt_pi, finite)
+        if self.pi_avg is not None:  # n_averaged lives on the host: the first update copies the policy (eagerly, before capture)
+            self.ema_update() if int(self.pi_avg.n_averaged) > 0 else self.pi_avg.update_parameters(self.pi)
+        set_requires_grad(self.wm, True)
+        set_requires_grad(self.critic, True)
+        self.wm.amp = True
+        v_loss = torch.zeros((), device=dev)
+        if not args.no_critic:
+            with torch.no_grad():
+                S_c = tuple(torch.cat((S0[i].unsqueeze(0), torch.stack([St[i].detach() for St in Ss])), 0).flatten(0, 1) for i in range(6))
+                f_c = torch.cat((s["f"].unsqueeze(0), torch.stack(Fs)), 0).flatten()
+                g_c = torch.cat((g0.unsqueeze(0), torch.stack(Gs)), 0).flatten(0, 1)
+                xi_c = xi_n.unsqueeze(0).expand(HZ + 1, -1, -1).flatten(0, 1)
+                X = self.critic_input_c(S_c, f_c, xi_c, g_c).view(HZ + 1, B, -1)
+            self.critic.norm.update(X)  # --no_sync: in place
+            with torch.no_grad():
+                V = self.critic(X)
+                R = V[-1]
+                targets = []
+                for t in range(HZ - 1, -1, -1):
+                    R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
+                    targets.append(R)
+                targets = torch.stack(targets[::-1])  # (H, B)
+            Xf, Yf = X[:-1].reshape(-1, X.shape[-1]), targets.reshape(-1)
+            n = Xf.shape[0]
+            mb = n // args.critic_minibatches
+            for _ in range(args.critic_epochs):
+                perm = torch.randperm(n, device=dev)
+                for i in range(args.critic_minibatches):
+                    idx = perm[i * mb : (i + 1) * mb]
+                    v_loss = ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
+                    self.opt_v.zero_grad(set_to_none=True)
+                    v_loss.backward()
+                    nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
+                    self.opt_v.step()
         return loss.detach(), v_loss.detach(), (r_sum / HZ / 0.1).mean(), gn.detach(), c.mean().detach()
 
     def _critic_steps_graph(self, Xf, Yf, mb):

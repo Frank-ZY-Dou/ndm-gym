@@ -29,3 +29,12 @@ class TrackingPolicy(nn.Module):
         z = torch.tanh(run_mlp(self.enc, self.goal_norm(goal)))
         o = self.obs_norm(obs_hist).flatten(-2)
         return run_mlp(self.dec, torch.cat((z, o), -1))
+
+    def encode(self, goal: torch.Tensor) -> torch.Tensor:
+        """The latent z of ``forward``'s goal (its first half; SuperTrack's --pi_encode_once)."""
+        return torch.tanh(run_mlp(self.enc, self.goal_norm(goal)))
+
+    def decode(self, z: torch.Tensor, obs_hist: torch.Tensor) -> torch.Tensor:
+        """``forward``'s action from the goal's latent z (its second half)."""
+        o = self.obs_norm(obs_hist).flatten(-2)
+        return run_mlp(self.dec, torch.cat((z, o), -1))

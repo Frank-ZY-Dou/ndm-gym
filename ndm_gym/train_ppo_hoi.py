@@ -40,7 +40,7 @@ import json
 import os
 import time
 
-from isaaclab.app import add_launcher_args, launch_simulation
+from ndm_gym.sim.launcher import add_launcher_args, launch_simulation
 
 # Inductor options for HDMITask's step, the same computations in fewer kernels: a stack of up to 32 tensors (yaw_mat
 # stacks 9) as one pointwise kernel instead of one kernel per tensor, independent kernels launched together

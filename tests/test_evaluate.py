@@ -1,7 +1,8 @@
 """ndm_gym.evaluate's CUDA-graph loop (--graph, _loop_graph) against the eager functions: at every step the observation,
 action, reward and tracking metrics of the step are those the eager functions give for the state the step read, and the
 accumulated return, step counts and errors are their sums. Runs in a process of this file (``--worker``) on the
-synthetic clips of tests/data/supertrack_golden.pt; marked slow, needs a GPU and Isaac Lab."""
+synthetic clips of tests/data/supertrack_golden.pt; marked slow, needs a GPU and Isaac Lab. Also the watcher's mean over
+--repeats and its --shard split."""
 
 import argparse
 import importlib.util
@@ -103,6 +104,30 @@ def test_graph_loop_matches_the_eager_functions(tmp_path):
     assert all(worst[k] == 0 for k in EXACT_KEYS), worst
     assert all(v <= 1e-5 for k, v in worst.items() if k not in EXACT_KEYS), worst
     assert all(v <= 1e-4 for v in res["sums"].values()), res["sums"]
+
+
+@pytest.mark.skipif(importlib.util.find_spec("isaaclab") is None, reason="ndm_gym.evaluate imports Isaac Lab's launcher")
+def test_mean_of_repeats():
+    """--watch --repeats: a checkpoint's eval.csv row holds the means over its evaluations and the clips failed in any."""
+    from ndm_gym.evaluate import METRICS, mean_of_repeats
+
+    reps = [{"norm_return": 0.8, "norm_return_framew": 0.7, "n_failed": 1, "failed": ["b"], **{k: 1.0 for k in METRICS}},
+            {"norm_return": 0.9, "norm_return_framew": 0.8, "n_failed": 2, "failed": ["b", "a"], **{k: 3.0 for k in METRICS}}]  # fmt: skip
+    m = mean_of_repeats(reps)
+    assert m["norm_return"] == pytest.approx(0.85) and m["norm_return_framew"] == pytest.approx(0.75)
+    assert m["n_failed"] == 1.5 and m["failed"] == ["a", "b"] and m["repeats"] is reps and all(m[k] == 2.0 for k in METRICS)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("isaaclab") is None, reason="ndm_gym.evaluate imports Isaac Lab's launcher")
+def test_shards_partition_the_checkpoints():
+    """--shard I/N: the N shards of a run's checkpoints are disjoint and cover them all."""
+    from ndm_gym.evaluate import in_shard
+
+    paths = [f"/run/ckpt_{it:06d}.pt" for it in range(100, 6100, 100)]
+    for n in (1, 2, 3):
+        parts = [[p for p in paths if in_shard(p, (i, n, 100))] for i in range(n)]
+        assert sorted(sum(parts, [])) == paths and all(len(x) >= len(paths) // n for x in parts)
+    assert [p[-9:-3] for p in paths if in_shard(p, (1, 2, 100))][:3] == ["000100", "000300", "000500"]
 
 
 if __name__ == "__main__":

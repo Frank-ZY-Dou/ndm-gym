@@ -37,6 +37,26 @@ class ReplayBuffer:
         self.ptr, self.size = 0, 0
         # priority of the window starting at each (row, env), for error-prioritized world-model fitting
         self.prio = torch.ones(T, N, device=device) if priorities else None
+        # train.py --update_graphs (BlinkMimic's --cuda_graph): a device copy of the write head, so that sampling captured in
+        # a CUDA graph follows it; --graph_early: of the fill level too, sampling bounds follow it (uniform floats scaled by
+        # the fill level instead of randint with a host bound: the same distribution, another random stream)
+        self.ptr_t = self.size_t = None
+
+    def use_device_ptr(self, device_size: bool = False):
+        if self.prio is not None:
+            raise ValueError("device-side sampling bounds and window priorities cannot be combined")
+        self.ptr_t = torch.full((), self.ptr, dtype=torch.long, device=self.device)
+        if device_size:
+            self.size_t = torch.full((), self.size, dtype=torch.long, device=self.device)
+
+    def _randint(self, n, B: int) -> torch.Tensor:
+        """B uniform integers in [0, n): n a host int (torch.randint), or with --graph_early a device tensor."""
+        if self.size_t is None:
+            return torch.randint(0, n, (B,), device=self.device)
+        return torch.minimum((torch.rand(B, device=self.device) * n).long(), n - 1)
+
+    def _size(self):
+        return self.size if self.size_t is None else self.size_t
 
     def add(self, tr: dict):
         for k in self.fields:
@@ -45,14 +65,32 @@ class ReplayBuffer:
             self.prio[self.ptr] = self.prio.max()  # new data is sampled at least as often as the hardest seen so far
         self.ptr = (self.ptr + 1) % self.T
         self.size = min(self.size + 1, self.T)
+        if self.ptr_t is not None:
+            self.ptr_t.fill_(self.ptr)
+        if self.size_t is not None:
+            self.size_t.fill_(self.size)
+
+    def add_device(self, tr: dict):
+        """``add`` at the device-side write head (train.py --collect_graph: capturable): advances ``ptr_t`` and ``size_t``
+        on the device; ``advance_host`` advances the host's ``ptr`` and ``size`` after each replay."""
+        row = self.ptr_t.view(1)
+        for k in self.fields:
+            self.data[k].index_copy_(0, row, tr[k].unsqueeze(0).to(self.data[k].dtype))
+        self.ptr_t.copy_((self.ptr_t + 1) % self.T)
+        self.size_t.copy_(torch.clamp(self.size_t + 1, max=self.T))
+
+    def advance_host(self):
+        self.ptr = (self.ptr + 1) % self.T
+        self.size = min(self.size + 1, self.T)
 
     def _row(self, age: torch.Tensor) -> torch.Tensor:
         """Map age-ordered time index (0 = oldest) to the storage row."""
-        return (self.ptr - self.size + age) % self.T
+        ptr = self.ptr if self.ptr_t is None else self.ptr_t
+        return (ptr - self._size() + age) % self.T
 
     def sample_windows(self, B: int, k: int):
         """k-step windows; returns dict of (B, k, ...) tensors and a validity mask (B, k)."""
-        t0 = torch.randint(0, self.size - k + 1, (B,), device=self.device)
+        t0 = self._randint(self._size() - k + 1, B)
         env = torch.randint(0, self.N, (B,), device=self.device)
         ages = t0.unsqueeze(-1) + torch.arange(k, device=self.device)
         rows = self._row(ages)
@@ -90,7 +128,7 @@ class ReplayBuffer:
 
     def sample_start_points(self, B: int):
         """B start points drawn uniformly: their age (0 = oldest) and env."""
-        age = torch.randint(0, self.size, (B,), device=self.device)
+        age = self._randint(self._size(), B)
         env = torch.randint(0, self.N, (B,), device=self.device)
         return age, env
 

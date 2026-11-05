@@ -30,7 +30,7 @@ LOG_COLUMNS = ("iteration", "wall_h", "wm_loss", "pi_loss", "v_loss", "imag_r", 
 # ndm_gym.train's arguments that HOI training does not implement (LAFAN1's tricks, data, losses and samplers; rf_fused_rope:
 # HOIRigidFormerNet always uses the fused rotation; the G1 RigidFormer's anchor RoPE); each is refused unless at its
 # default. tests/test_hoi_training.py checks that every argument is either implemented or here.
-UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance_w", "imag_start_perturb", "bptt_clip_k", "wm_bptt_fp32",
+UNSUPPORTED = ("pi_updates", "st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance_w", "imag_start_perturb", "bptt_clip_k", "wm_bptt_fp32",
                "imag_fail_starts", "imag_fail_window", "sm_residual", "st_com", "st_quad_w", "st_fail_margin", "goal_frames", "hist",
                "rf_no_tree_bias", "rf_no_rope", "rf_rope_detach", "wm_sample", "wm_prio_alpha", "wm_fail_windows", "wm_fail_window", "st_wm_loss",
                "reward_std_scale", "no_critic", "motion_dir", "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center",

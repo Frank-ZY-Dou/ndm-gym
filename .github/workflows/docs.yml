@@ -1,0 +1,41 @@
+# The documentation site (mkdocs.yml, docs/) on GitHub Pages: built and published on every push to main. To enable it:
+# Settings > Pages > Build and deployment > Source: "GitHub Actions"; Settings > Secrets and variables > Actions >
+# Variables: DOCS_PAGES = true. The site is then https://frank-zy-dou.github.io/ndm-gym/. Without the variable, this
+# workflow's jobs are skipped (ci.yml builds the site on every push as a check).
+name: docs
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    if: github.repository == 'Frank-ZY-Dou/ndm-gym' && vars.DOCS_PAGES == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r docs/requirements.txt
+      - run: mkdocs build --strict
+        env:
+          NO_MKDOCS_2_WARNING: "1"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

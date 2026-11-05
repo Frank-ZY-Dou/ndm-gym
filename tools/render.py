@@ -6,6 +6,7 @@ fine grid, multisample anti-aliasing, a smoothly following camera and a small ND
 Usage: MUJOCO_GL=egl python tools/render.py traj.npz out.mp4 --clips dance1_subject1 jumps1_subject1 --seconds 12
 ``--pair``: a two-robot evaluation (evaluate --paired --record): both robots of each named two-person clip in one view
 (red and blue hands), each with its reference as a ghost at the reference's own place, seen from the side of the pair.
+``--no_labels``: frames without the labels (title, clip and time, terminated), the NDM Gym mark only.
 """
 
 import argparse
@@ -132,14 +133,15 @@ def render_pairs(a, d, renderer, model, data, cam, fonts, ff):
             over = Image.new("RGBA", img.size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(over)
             m = round(12 * s)
-            parts = [(a.title, bold, INK)] + ([(a.subtitle, regular, MUTED)] if a.subtitle else [])
-            if a.title or a.subtitle:
-                _pill(draw, (m, m), parts)
-            f0 = int(d["f"][t if fell[0] is None else fell[0], cols[0]])
-            _pill(draw, (a.width - m, m), [(f"{pair}   {(f0 - int(d['clip_start'][cols[0]])) * 0.02:4.1f} s", small, MUTED)], anchor="ra")
-            for k, who in enumerate(("red", "blue")):
-                if fell[k] is not None:
-                    _pill(draw, (m, a.height - m - round(34 * s) * (k + 1) - k * m), [(f"{who} terminated", bold, RED)])
+            if not a.no_labels:
+                parts = [(a.title, bold, INK)] + ([(a.subtitle, regular, MUTED)] if a.subtitle else [])
+                if a.title or a.subtitle:
+                    _pill(draw, (m, m), parts)
+                f0 = int(d["f"][t if fell[0] is None else fell[0], cols[0]])
+                _pill(draw, (a.width - m, m), [(f"{pair}   {(f0 - int(d['clip_start'][cols[0]])) * 0.02:4.1f} s", small, MUTED)], anchor="ra")
+                for k, who in enumerate(("red", "blue")):
+                    if fell[k] is not None:
+                        _pill(draw, (m, a.height - m - round(34 * s) * (k + 1) - k * m), [(f"{who} terminated", bold, RED)])
             draw_mark(draw, a.width, a.height, bold)
             img = Image.alpha_composite(img, over).convert("RGB")
             ff.stdin.write(np.asarray(img).tobytes())
@@ -217,7 +219,10 @@ def main():
     ap.add_argument("--global_ghost", action="store_true", help="draw the reference at its global xy instead of anchored to the robot")
     ap.add_argument("--pair", action="store_true", help="a two-robot evaluation: --clips names two-person clips (default: every one)")
     ap.add_argument("--distance", type=float, default=None, help="camera distance in m (default: 3.6 with --pair, else 3.0)")
+    ap.add_argument("--no_labels", action="store_true", help="no labels (title, clip and time, terminated): only the NDM Gym mark")
     a = ap.parse_args()
+    if a.no_labels and (a.title or a.subtitle):
+        ap.error("--no_labels draws no --title or --subtitle")
     check_egl_device()
 
     d = dict(np.load(a.traj))
@@ -271,13 +276,14 @@ def main():
             over = Image.new("RGBA", img.size, (0, 0, 0, 0))
             draw = ImageDraw.Draw(over)
             m = round(12 * s)
-            parts = [(a.title, bold, INK)] + ([(a.subtitle, regular, MUTED)] if a.subtitle else [])
-            if a.title or a.subtitle:
-                _pill(draw, (m, m), parts)
-            clock = f"{clip}   {(f - int(d['clip_start'][c])) * 0.02:4.1f} s"
-            _pill(draw, (a.width - m, m), [(clock, small, MUTED)], anchor="ra")
-            if fell_at is not None:
-                _pill(draw, (m, a.height - m - round(34 * s)), [("terminated", bold, RED)])
+            if not a.no_labels:
+                parts = [(a.title, bold, INK)] + ([(a.subtitle, regular, MUTED)] if a.subtitle else [])
+                if a.title or a.subtitle:
+                    _pill(draw, (m, m), parts)
+                clock = f"{clip}   {(f - int(d['clip_start'][c])) * 0.02:4.1f} s"
+                _pill(draw, (a.width - m, m), [(clock, small, MUTED)], anchor="ra")
+                if fell_at is not None:
+                    _pill(draw, (m, a.height - m - round(34 * s)), [("terminated", bold, RED)])
             draw_mark(draw, a.width, a.height, bold)
             img = Image.alpha_composite(img, over).convert("RGB")
             ff.stdin.write(np.asarray(img).tobytes())

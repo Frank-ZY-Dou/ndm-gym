@@ -15,6 +15,9 @@ BIN_FRAMES = 50  # 1 s bins for return-based reset sampling
 
 
 class MotionLib:
+    goal_table: torch.Tensor | None = None  # train.py --goal_table: every frame's goal (cache_goals), of goal_table_K frames
+    goal_table_K = 0
+
     def __init__(self, clips: list[Clip], kin: ArticulationKinematics, device: str):
         self.device = device
         self.names = [c.name for c in clips]
@@ -157,6 +160,18 @@ class MotionLib:
             e = min(s + BIN_FRAMES, int(self.clip_end[c]) + 1)
             self.frame_bin[s:e] = b
 
+    def cache_goals(self, K: int, chunk: int = 65536):
+        """train.py --goal_table: ``goal(f, K)`` of every frame computed once, eagerly and in chunks of frames; ``goal`` with
+        this K then reads the table's rows. They are the eager computation's values (a frame's goal does not depend on the
+        others of its batch); callers compiled with torch.compile (the imagination steps) computed them up to float rounding.
+        73 K floats per frame: 1.2 GB for LAFAN1's 441,140 frames at K = 10."""
+        if self.goal_table is not None:
+            raise ValueError("the goals are cached already")
+        frames = torch.arange(self.num_frames, device=self.device)
+        with torch.no_grad():
+            table = torch.cat([self.goal(frames[s : s + chunk], K) for s in range(0, self.num_frames, chunk)])
+        self.goal_table, self.goal_table_K = table, K
+
     def future_frames(self, f: torch.Tensor, K: int) -> torch.Tensor:
         """Frames f+1..f+K clamped to the clip's last frame, shape (B, K)."""
         end = self.clip_end[self.clip_id[f]]
@@ -164,7 +179,12 @@ class MotionLib:
         return torch.minimum(fut, end.unsqueeze(-1))
 
     def goal(self, f: torch.Tensor, K: int) -> torch.Tensor:
-        """K future reference frames, holding the final pose with zero velocity beyond the clip."""
+        """K future reference frames, holding the final pose with zero velocity beyond the clip (after ``cache_goals``, the
+        table's rows)."""
+        if self.goal_table is not None:
+            if K != self.goal_table_K:
+                raise ValueError(f"goals of {K} frames requested; the goal table (cache_goals) holds {self.goal_table_K}")
+            return self.goal_table[f]
         fut = self.future_frames(f, K)  # (B,K)
         requested = f.unsqueeze(-1) + torch.arange(1, K + 1, device=f.device)
         recorded = (requested <= self.clip_end[self.clip_id[f]].unsqueeze(-1)).unsqueeze(-1)

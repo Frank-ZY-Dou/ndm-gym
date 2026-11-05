@@ -57,15 +57,16 @@ def synthetic_reference(F: int = 60, seed: int = 0):
 
 
 def small_muscle_agent(algo: str, ref, B: int = 8, horizon: int = 3, **opts):
-    """A CPU learner with a small world model and its compiled functions eager; ``opts``: further training arguments."""
+    """A CPU learner with a small world model and its compiled functions eager; ``opts``: further training arguments, or
+    other values of these (e.g. the RigidFormer's)."""
     from types import SimpleNamespace
 
     from ndm_gym.algos.muscle_algos import MUSCLE_ALGOS
 
-    args = SimpleNamespace(wm_hidden=[32], wm_act="silu", wm_no_ln=False, wm_backbone="mlp", lr=1e-3, pi_batch=B, horizon=horizon, action_noise=0.1,
-                           imag_start_perturb=0.0, wm_batch=16, wm_window=4, st_imag_noise=0.0, st_balance_w=1.0, st_reg=0.0, st_fail_w=0.0,
-                           reward_std_scale=1.0, gamma=0.99, lam=0.95, critic_epochs=1, critic_minibatches=1, **opts)  # fmt: skip
-    agent = MUSCLE_ALGOS[algo](args, ref, "cpu")
+    defaults = dict(wm_hidden=[32], wm_act="silu", wm_no_ln=False, wm_backbone="mlp", lr=1e-3, pi_batch=B, horizon=horizon, action_noise=0.1,
+                    imag_start_perturb=0.0, wm_batch=16, wm_window=4, st_imag_noise=0.0, st_balance_w=1.0, st_reg=0.0, st_fail_w=0.0,
+                    reward_std_scale=1.0, gamma=0.99, lam=0.95, critic_epochs=1, critic_minibatches=1)  # fmt: skip
+    agent = MUSCLE_ALGOS[algo](SimpleNamespace(**(defaults | opts)), ref, "cpu")
     agent.wm_window, agent.imag_step, agent.wm_smoothness = agent._wm_window, agent._imag_step, agent._wm_smoothness
     agent.pi_norm_update, agent.wm_norm_update = agent._pi_norm_update, agent._wm_norm_update
     if algo == "supermimic":

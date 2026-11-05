@@ -1,0 +1,111 @@
+# The documentation site: guides in docs/, the API reference from the docstrings (mkdocstrings). Build: `make docs`
+# (mkdocs build --strict, after pip install -r docs/requirements.txt); preview: `mkdocs serve`. Published on GitHub
+# Pages by .github/workflows/docs.yml.
+site_name: NDM Gym
+site_description: "Neural Dynamics Modeling Gym: neural world models for physics-based humanoid control"
+site_url: https://frank-zy-dou.github.io/ndm-gym/
+repo_url: https://github.com/Frank-ZY-Dou/ndm-gym
+repo_name: Frank-ZY-Dou/ndm-gym
+edit_uri: ""
+copyright: Copyright &copy; 2026 NDM Gym Contributors &middot; MIT License
+
+docs_dir: docs
+# not pages of the site: the README's media, the docs' build files
+exclude_docs: |
+  media/
+  requirements.txt
+  hooks.py
+  __pycache__/
+
+hooks:
+  - docs/hooks.py
+
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - toc.follow
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            docstring_options:
+              warn_unknown_params: false
+              warn_missing_types: false
+            show_source: false
+            show_root_heading: true
+            show_root_full_path: true
+            show_symbol_type_heading: true
+            heading_level: 2
+            members_order: source
+            filters: ["!^_"]
+            merge_init_into_class: true
+            separate_signature: true
+            show_signature_annotations: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Tasks:
+      - tasks.md
+      - "Human-object interaction: design": hoi_design.md
+      - "HDMI's task as implemented": hdmi_task_spec.md
+      - "MuscleVAE: design": musclevae_design.md
+  - World models:
+      - world_models.md
+      - RigidFormer backbone: rigidformer_backbone.md
+  - Algorithms:
+      - algorithms.md
+      - BlinkMimic: blinkmimic.md
+  - API reference:
+      - api/index.md
+      - Core: api/core.md
+      - Robots and state: api/robots.md
+      - Motion: api/motion.md
+      - Tasks: api/tasks.md
+      - World models: api/worldmodels.md
+      - Policies: api/policies.md
+      - Algorithms: api/algos.md
+      - World-model benchmark: api/wmbench.md
+      - Simulator: api/sim.md

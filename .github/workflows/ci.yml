@@ -1,5 +1,7 @@
-# Lint and byte-compile on every push and pull request. The tests need Isaac Lab, MuJoCo-Warp, a GPU for the
-# simulator tests and the LAFAN1 motions (not redistributed), so they run locally: `make test-fast`.
+# On every push and pull request: lint and byte-compile; the library without the simulator (the wheel installed on
+# PyTorch's CPU build, imported outside the source tree, tests/test_packaging.py); the documentation site's build. The
+# other tests need Isaac Lab, MuJoCo-Warp, a GPU for the simulator tests and the LAFAN1 motions (not redistributed), so
+# they run locally: `make test-fast`.
 name: ci
 on: [push, pull_request]
 jobs:
@@ -13,3 +15,36 @@ jobs:
       - run: pip install ruff==0.6.9
       - run: ruff check .
       - run: python -m compileall -q ndm_gym tools tests benchmarks
+
+  library:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install build && python -m build --wheel --outdir dist .
+      - run: pip install "$(ls dist/ndm_gym-*.whl)[test]"
+      - name: import the installed wheel without the simulator
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -c "import ndm_gym, ndm_gym.algos, ndm_gym.worldmodels.rigidformer, ndm_gym.wmbench.fit; print(ndm_gym.__file__)"
+          if ndm-train --algo supertrack 2> err.txt; then exit 1; fi
+          grep "SimulatorNotInstalled: ndm-train needs Isaac Lab 3" err.txt
+      - run: python -m pytest tests/test_packaging.py -v
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r docs/requirements.txt
+      - run: mkdocs build --strict
+        env:
+          NO_MKDOCS_2_WARNING: "1"

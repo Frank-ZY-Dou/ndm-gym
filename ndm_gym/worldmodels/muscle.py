@@ -262,6 +262,15 @@ class MuscleRigidFormerNet(nn.Module):
     def make_input_norm(self):
         return self._norm_cls(self.in_dim, self.pos_index.clone())
 
+    def hidden_matrices(self) -> list[nn.Parameter]:
+        """Muon's parameters with ``--wm_opt muon`` (``core.muon.MuonAdam``), as the G1 RigidFormer's: every block's weight
+        matrices as stored (``rigidformer.block_matrices``). Adam keeps the rest: the token embeddings and the context
+        network, the per-token and register embeddings, with "body" the muscle encoder and its maps to the token and
+        read-out widths, the relation bias, the norms, the biases, FiLM, and the read-out's SwiGLU fusion and heads."""
+        from .rigidformer import block_matrices
+
+        return block_matrices(self.blocks)
+
     def inputs(self, S, F, a) -> torch.Tensor:
         p, R, v, w = S
         mm = self.muscles(p.device, p.dtype)

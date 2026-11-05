@@ -9,11 +9,13 @@ import torch.nn as nn
 
 from ..buffer import ReplayBuffer
 from ..core.kinematics import ArticulationKinematics
+from ..core.muon import MuonAdam
 from ..core.nets import run_mlp
 from ..motion.library import MotionLib
 from ..policies.tracking_policy import TrackingPolicy
 from ..state import normalize_xi, unflatten_state
 from ..tasks.tracking import MDP, OBS_DIM
+from .blinkmimic import Mirror, policy_average
 
 
 def lr_at(t: float, lr: float, decay: float) -> float:
@@ -41,6 +43,71 @@ def reference_setpoints(motion: MotionLib, default_q: torch.Tensor, alpha: torch
 def set_requires_grad(m: nn.Module, flag: bool):
     for p in m.parameters():
         p.requires_grad_(flag)
+
+
+def adam_kwargs(lr: float, dev, update_graphs: bool, adam_kw: dict) -> dict:
+    """Adam's keyword arguments: with --update_graphs the capturable fused kernel and a device learning rate, a new tensor
+    at each call. Each optimizer takes its own call: optimizers built with one tensor would share their learning rate, which
+    set_lr writes in place (--wm_lr would set the policy's too)."""
+    if update_graphs:
+        return {"lr": torch.tensor(float(lr), device=dev), "fused": True, "capturable": True}
+    return {"lr": lr, **adam_kw}
+
+
+def wm_optimizer(wm: nn.Module, args, opt_kw: dict, capturable: bool, adam_kw: dict):
+    """The world model's optimizer (LAFAN1 and muscle training): Adam with ``opt_kw`` (``adam_kwargs``, a call of its own) on
+    all its parameters, or with --wm_opt muon MuonAdam (Adam's betas 0.9, 0.999; ``capturable``: --update_graphs;
+    ``adam_kw``: --fused_adam): Muon on the hidden matrices of the MLP, or on those of the RigidFormer (its network's
+    ``hidden_matrices``, the blocks' weight matrices: RigidFormerNet, the muscle character's MuscleRigidFormerNet), Adam on
+    the rest."""
+    if getattr(args, "wm_opt", "adam") != "muon":
+        return torch.optim.Adam(wm.parameters(), **opt_kw)
+    if isinstance(wm.net, nn.Sequential):
+        return MuonAdam(wm, [wm.net], lr=args.lr, betas=(0.9, 0.999), capturable=capturable, **adam_kw)
+    if not hasattr(wm.net, "hidden_matrices"):
+        raise ValueError("--wm_opt muon: the MLP and RigidFormer world models only")
+    return MuonAdam(wm, None, lr=args.lr, betas=(0.9, 0.999), capturable=capturable, matrices=wm.net.hidden_matrices(), **adam_kw)
+
+
+def gated_step(opt, ok: torch.Tensor):
+    """--no_sync: ``opt``'s step where the 0-dim bool ``ok`` holds, skipped on the device elsewhere (parameters and all
+    optimizer state unchanged): the fused Adam's found_inf, MuonAdam's gate. The gradients must be finite."""
+    if isinstance(opt, MuonAdam):
+        return opt.step(ok=ok)
+    if not opt.defaults.get("fused"):
+        raise ValueError("--no_sync skips non-finite steps with the fused Adam (--fused_adam)")
+    opt.found_inf = (~ok).float()  # the fused kernel skips the step and undoes its step count
+    try:
+        opt.step()
+    finally:
+        opt.found_inf = None
+
+
+@torch.no_grad()
+def zero_nonfinite_grads(params, finite: torch.Tensor):
+    """--no_sync: every gradient of ``params`` set to zero where the 0-dim bool ``finite`` is false (a gated step needs
+    finite gradients), without a host read."""
+    for p in params:
+        if p.grad is not None:
+            p.grad.copy_(torch.where(finite, p.grad, 0.0))
+
+
+@torch.no_grad()
+def ema_step(pi_avg, pi: nn.Module, decay: float):
+    """The policy average's step (``AveragedModel.update_parameters``, the same lerp) without its host-side test of the
+    first call; the training loop advances the host-side counter n_averaged (--update_graphs)."""
+    avg = list(pi_avg.module.parameters()) + list(pi_avg.module.buffers())
+    live = [t.detach() for t in list(pi.parameters()) + list(pi.buffers())]
+    torch._foreach_lerp_(avg, live, 1 - decay)
+
+
+def survival(d: torch.Tensor) -> torch.Tensor:
+    """cumprod(1 - d, 0) as a loop of products (the graphable updates': cumprod's backward tests for zeros on the host)."""
+    acc, cs = torch.ones_like(d[0]), []
+    for t in range(d.shape[0]):
+        acc = acc * (1 - d[t])
+        cs.append(acc)
+    return torch.stack(cs)
 
 
 class _CapRowGrad(torch.autograd.Function):
@@ -185,8 +252,27 @@ class Algo:
         self.pi = TrackingPolicy(OBS_DIM, 73 * self.K, hist=self.Hh).to(dev)
         # optional (train.py --fused_adam): Adam's fused kernel, not bitwise equal to the default implementation
         self.adam_kw = {"fused": True} if getattr(args, "fused_adam", False) else {}
-        self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=args.lr, **self.adam_kw)
-        self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=args.lr, betas=(0.9, 0.95), **self.adam_kw)
+        # optional (train.py --update_graphs, BlinkMimic): whole updates as CUDA graphs, so the optimizers are capturable,
+        # their learning rates 0-dim device tensors (set_lr fills them), one per optimizer (optimizer_kw at each)
+        self.update_graphs = getattr(args, "update_graphs", False)
+        self.no_sync = getattr(args, "no_sync", False)
+        # optional (--wm_opt muon, --pi_opt muon; InstantTrack, BlinkMimic): Muon on the MLPs' hidden weight matrices (the
+        # RigidFormer world model's: its blocks' matrices, RigidFormerNet.hidden_matrices; wm_optimizer)
+        self.opt_wm = wm_optimizer(self.wm, args, self.optimizer_kw(args.lr), self.update_graphs, self.adam_kw)
+        if getattr(args, "pi_opt", "adam") == "muon":
+            self.opt_pi = MuonAdam(self.pi, [self.pi.enc, self.pi.dec], lr=args.lr, betas=(0.9, 0.95), capturable=self.update_graphs, **self.adam_kw)
+        else:
+            self.opt_pi = torch.optim.Adam(self.pi.parameters(), betas=(0.9, 0.95), **self.optimizer_kw(args.lr))
+        # --no_sync: policy updates skipped for a non-finite gradient, counted on the device (the log's nonfinite column)
+        self.nonfinite = torch.zeros((), dtype=torch.long, device=dev)
+        # optional (--pi_ema d; InstantTrack, BlinkMimic): an exponential moving average of the policy, updated after every
+        # policy update (update_pi_avg); checkpoints store it as "pi", the policy evaluate.py deploys, and the trained one as
+        # "pi_live"
+        self.pi_avg = policy_average(self.pi, args.pi_ema) if getattr(args, "pi_ema", 0.0) > 0 else None
+        # optional (--wm_mirror p; BlinkMimic): a share p of every world-model batch replaced by its left-right mirror image
+        self.mirror = Mirror(dev) if getattr(args, "wm_mirror", 0.0) > 0 else None
+        if getattr(args, "wm_structured", False) and not getattr(self.wm, "structured", False):
+            raise ValueError("--wm_structured: SuperMimic's MLP world model only")
         # optional (train.py --wm_cudagraphs, --pi_cudagraphs): the world-model update's and the policy update's compiled
         # functions replayed as CUDA graphs
         self.wm_graphs = getattr(args, "wm_cudagraphs", False)
@@ -214,6 +300,18 @@ class Algo:
         self.norm_inputs = torch.compile(self.wm.inputs) if self.compile_eager else self.wm.inputs
         self.fail_starts = 0
 
+    def optimizer_kw(self, lr: float) -> dict:
+        """Adam's keyword arguments (``adam_kwargs``; one call per optimizer: with --update_graphs its own learning rate)."""
+        return adam_kwargs(lr, self.dev, self.update_graphs, self.adam_kw)
+
+    def optimizer_step(self, opt, ok: torch.Tensor):
+        """--no_sync: ``opt``'s step gated on the device (``gated_step``)."""
+        return gated_step(opt, ok)
+
+    def ema_update(self):
+        """The policy average's step without a host read (``ema_step``)."""
+        ema_step(self.pi_avg, self.pi, self.args.pi_ema)
+
     # ------------------------------------------------------------------ interface
     @staticmethod
     def world_model_cls(a: dict) -> nn.Module:
@@ -226,6 +324,10 @@ class Algo:
     def setpoint(self, a: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
         """Normalized joint setpoint for policy output ``a`` at reference frame ``f`` (target frame f + 1)."""
         raise NotImplementedError
+
+    def log_lr(self, lr: float) -> float:
+        """The learning rate train.py's log reports: its schedule's ``lr``."""
+        return lr
 
     def wm_loss(self, S_hat, w: dict) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """(loss, k-step error for logging, per-window error for prioritized sampling) of the predicted windows
@@ -241,12 +343,23 @@ class Algo:
         return (self.opt_wm, self.opt_pi)
 
     def state_dict(self) -> dict:
-        return {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "opt_wm": self.opt_wm.state_dict(),
-                "opt_pi": self.opt_pi.state_dict()}  # fmt: skip
+        sd = {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "opt_wm": self.opt_wm.state_dict(),
+              "opt_pi": self.opt_pi.state_dict()}  # fmt: skip
+        if self.pi_avg is not None:  # --pi_ema: "pi" is the average
+            sd.update(pi=self.pi_avg.module.state_dict(), pi_live=self.pi.state_dict(), pi_avg=self.pi_avg.state_dict())
+        return sd
 
     def load_state_dict(self, ck: dict):
-        self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"])
+        self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"] if self.pi_avg is None else ck["pi_live"])
+        if self.pi_avg is not None:
+            self.pi_avg.load_state_dict(ck["pi_avg"])
         self.opt_wm.load_state_dict(ck["opt_wm"]), self.opt_pi.load_state_dict(ck["opt_pi"])
+
+    @torch.no_grad()
+    def update_pi_avg(self):
+        """--pi_ema: one step of the policy's moving average, after a policy update (a no-op without it)."""
+        if self.pi_avg is not None:
+            self.pi_avg.update_parameters(self.pi)
 
     # ------------------------------------------------------------------ world model
     def _wm_rollout(self, s, a, xi):
@@ -277,6 +390,8 @@ class Algo:
         context xi)."""
         self._update_norm(self.wm.in_norm, self.norm_inputs(S0, a, normalize_xi(xi)))
         self._update_norm(self.wm.out_norm, self.wm.targets(S0, S1))
+        if getattr(self.wm, "structured", False):  # --wm_structured: the plain increments' scale normalizes the fit's loss
+            self._update_norm(self.wm.inc_norm, self.wm.increments(S0, S1))
 
     @torch.no_grad()
     def update_pi_norms(self, o, g):
@@ -297,6 +412,24 @@ class Algo:
         St = unflatten_state(s1[:, -1][m])
         return (self.kin.forward(*Sh)[0] - self.kin.forward(*St)[0]).norm(dim=-1).mean(), (Sh[4] - St[4]).abs().mean()
 
+    def wm_update_graphable(self, buffer: ReplayBuffer):
+        """``wm_update`` for --update_graphs: no host synchronization, so the whole update (sampling, mirror, rollout, loss,
+        backward, clipping, optimizer step) can be captured in a CUDA graph. Returns (loss per step, k-step error)."""
+        args = self.args
+        w = buffer.sample_windows(args.wm_batch, args.wm_window)
+        if self.mirror is not None:
+            w = self.mirror.windows(w, int(args.wm_batch * args.wm_mirror))
+        S_hat = self.wm_rollout(w["s"], w["a"], w["xi"])
+        loss, e8, _ = self.wm_loss(S_hat, w)
+        objective = loss
+        if self.smooth_w > 0:
+            objective = loss + self.smooth_w * self.wm_smoothness(w["s"][:, 0], w["a"][:, 0], w["xi"][:, 0])
+        self.opt_wm.zero_grad(set_to_none=True)
+        objective.backward()
+        nn.utils.clip_grad_norm_(self.wm.parameters(), 1.0)
+        self.opt_wm.step()
+        return loss.detach() / args.wm_window, e8
+
     def wm_update(self, buffer: ReplayBuffer, probe: bool = False):
         """One world-model step on a batch of replay windows. Optional (``--wm_fail_windows p``): a fraction p of the
         windows ends in the last ``--wm_fail_window`` steps before the replay's terminations, while it holds any."""
@@ -316,6 +449,8 @@ class Algo:
             w = buffer.sample_windows(n_rest, args.wm_window)
         if wf is not None:
             w = {key: torch.cat((w[key], wf[key])) for key in w}
+        if self.mirror is not None:
+            w = self.mirror.windows(w, int(args.wm_batch * args.wm_mirror))
         if self.wm_graphs:
             torch.compiler.cudagraph_mark_step_begin()  # the previous update's graph outputs are no longer used
         S_hat = self.wm_rollout(w["s"], w["a"], w["xi"])
@@ -376,6 +511,15 @@ class Algo:
             return starts[0], hists[0]
         cat = lambda ds: {k: torch.cat([d[k] for d in ds]) for k in ds[0]}  # noqa: E731
         return cat(starts), cat(hists)
+
+    def sample_valid_starts_nosync(self, buffer: ReplayBuffer, B: int):
+        """``sample_valid_starts`` without reading the valid count on the host (--no_sync; BlinkMimic): 2B candidates,
+        stable-sorted valid first (only starts within H frames of a clip's end are invalid, under 1%), the first B kept."""
+        age, env = buffer.sample_start_points(2 * B)
+        f = buffer.at("f", age, env)
+        ok = f + self.HZ <= self.motion.clip_end[self.motion.clip_id[f]]
+        idx = torch.sort((~ok).to(torch.uint8), stable=True).indices[:B]
+        return buffer.starts_at(age[idx], env[idx], self.Hh)
 
     def perturb_start(self, S):
         """Optional imagination trick: Gaussian horizontal root-velocity kicks on the start states (m/s), so the

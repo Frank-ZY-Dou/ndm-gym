@@ -14,6 +14,7 @@ from ..core.kinematics import ArticulationKinematics
 from ..core.rotations import mat_to_6d, rot_angle_sq, yaw_mat
 from ..motion.library import MotionLib
 from ..state import CONTROL_DT, XI_DIM, invariant_features
+from .contact import contact_term
 
 OBS_DIM = 29 + 29 + 3 + 3 + 29 + 6
 
@@ -77,8 +78,9 @@ class MDP:
         return o + (2 * torch.rand_like(o) - 1) * self.obs_noise
 
     # ---------------- reward / termination ----------------
-    def reward(self, S, f, a, a_prev, terms: bool = False):
-        """Per-step reward (already multiplied by dt) comparing S with reference frame f."""
+    def reward(self, S, f, a, a_prev, terms: bool = False, contact: tuple | None = None):
+        """Per-step reward (already multiplied by dt) comparing S with reference frame f. ``contact`` (weight, feet,
+        reference contact per frame; SuperMimic's ``--contact_reward``) adds that training-only term (tasks.contact)."""
         c, m = self.cfg, self.motion
         p, R, v, w, q, qd = S
         bp, bR, bv, bw = self.kin.forward(p, R, v, w, q, qd)
@@ -105,6 +107,9 @@ class MDP:
         r_rate = ((a - a_prev) ** 2).sum(-1)
         r_lim = (torch.relu(q - self.soft_hi) + torch.relu(self.soft_lo - q)).sum(-1)
         r = (r_track + c.w_action_rate * r_rate + c.w_joint_limit * r_lim) * CONTROL_DT
+        if contact is not None:
+            w_c, feet, c_ref = contact
+            r = r + w_c * contact_term(bp[..., feet, :], bv[..., feet, :], c_ref[f]) * CONTROL_DT
         if terms:
             return r, {
                 "track": r_track * CONTROL_DT,

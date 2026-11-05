@@ -9,6 +9,8 @@ Install as in the [README](README.md), then `pip install -e ".[dev]"` and `pre-c
 - `make lint`: ruff, also run by CI on every push.
 - `make test-fast` before every commit; `make test` (about 40 min on CPU) before merging changes to `ndm_gym/core`,
   `ndm_gym/worldmodels` or `ndm_gym/algos`.
+- `make docs`: the documentation site (`mkdocs.yml`; the guides in `docs/`, the API reference from the docstrings), also
+  built by CI.
 
 ## Conventions
 
@@ -17,6 +19,9 @@ Install as in the [README](README.md), then `pip install -e ".[dev]"` and `pre-c
 - An optional change to an algorithm goes behind a flag whose default keeps the current behavior. The equivalence
   tests against `third_party/supermimic` and the SuperTrack golden tests keep passing unchanged.
 - Every new component comes with a test in `tests/`.
+- The library imports without the simulator (`pip install ndm_gym`): a command takes Isaac Lab's launcher from
+  `ndm_gym.sim.launcher`, and a module that is not a simulator imports the simulator inside the functions that use it
+  (`tests/test_packaging.py`).
 - A study lives in `benchmarks/<study>/` with its results; its rules and selection criteria are fixed before the runs.
 - Logs, checkpoints, recordings and videos stay out of the repository; the LAFAN1 motions (CC BY-NC-ND 4.0) are not
   redistributed.

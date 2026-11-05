@@ -17,8 +17,11 @@ FPS = 30.0
 
 
 def load_dir(path: str) -> list[Clip]:
+    files = sorted(glob.glob(os.path.join(path, "*.csv")))
+    if not files:
+        raise FileNotFoundError(f"no LAFAN1 clips (*.csv) in {path}: tools/download_data.sh writes them to data/lafan1_g1")
     clips = []
-    for f in sorted(glob.glob(os.path.join(path, "*.csv"))):
+    for f in files:
         raw = torch.tensor(np.loadtxt(f, delimiter=","), dtype=torch.float32)
         p, q_xyzw, j = raw[:, :3], raw[:, 3:7], raw[:, 7:36]
         quat = torch.cat((q_xyzw[:, 3:4], q_xyzw[:, :3]), -1)

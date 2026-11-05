@@ -39,7 +39,8 @@ import subprocess
 import time
 
 import torch
-from isaaclab.app import add_launcher_args, launch_simulation
+
+from ndm_gym.sim.launcher import add_launcher_args, launch_simulation
 
 
 def parse_args():

@@ -31,7 +31,9 @@ LAFAN1 value.
   GAE(lambda) targets.
 
 Both algorithms take LAFAN1's --wm_input_noise and --wm_smooth_w for the world model's fit and --pi_rollout_clip for the
-policy's gradient (algos.common).
+policy's gradient (algos.common), and BlinkMimic's options: the policy average (--pi_ema), Muon (--pi_opt, --wm_opt; --wm_opt also with the RigidFormer, on its blocks' matrices as in LAFAN1 training),
+the updates written without host synchronization (--no_sync: ``wm_update_graphable``, ``policy_update_graphable``), which
+--update_graphs captures as CUDA graphs.
 
 MV = MuscleVAECore/Model/musclevae.py of wangchek/MuscleVAE_ @ 54c001c (no license: nothing is copied from it).
 """
@@ -42,13 +44,17 @@ import torch
 import torch.nn as nn
 
 from ..core.kinematics import mat_mat, mat_vec
+from ..core.muon import MuonAdam
 from ..core.rotations import mat_to_6d, so3_log, yaw_mat
 from ..policies.critic import Critic
 from ..policies.muscle_policy import GOAL_DIM, OBS_DIM, MusclePolicy, goal_table, policy_observation
 from ..robots.musclevae_char import NUM_MUSCLES
 from ..tasks import muscle_tracking as mt
 from ..worldmodels.muscle import MuscleWorldModel, increments, rigidformer_kwargs
-from .common import check_smoothness_args, clip_rollout_policy_grads, set_requires_grad, smoothness_penalty
+from .blinkmimic import policy_average
+from .common import (adam_kwargs, check_smoothness_args, clip_rollout_policy_grads, ema_step, gated_step, set_requires_grad, smoothness_penalty,
+                     survival, wm_optimizer, zero_nonfinite_grads)
+from .hoi_guard import DeviceSkippedUpdates
 from .muscle_guard import SkippedUpdates, masked_update
 from .supertrack import LOCAL_TERMS, WM_TERMS, LossBalancer
 
@@ -101,11 +107,27 @@ class MuscleAgent:
                                    rigidformer=rigidformer_kwargs(args)).to(dev)  # fmt: skip
         self.pi = MusclePolicy().to(dev)
         self.goal = goal_table(ref)  # (F, 371)
-        self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=args.lr)
-        self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=args.lr, betas=(0.9, 0.95))
+        # optional: Adam's fused kernel (--fused_adam); with --update_graphs the
+        # capturable one and device learning rates, one per optimizer (adam_kwargs at each); Muon on the MLPs' hidden matrices
+        # (--wm_opt, --pi_opt), and with --wm_opt on the RigidFormer's block matrices, as LAFAN1 training's
+        # (algos.common.wm_optimizer)
+        self.adam_kw = {"fused": True} if getattr(args, "fused_adam", False) else {}
+        self.update_graphs, self.no_sync = getattr(args, "update_graphs", False), getattr(args, "no_sync", False)
+        opt_kw = lambda: adam_kwargs(args.lr, dev, self.update_graphs, self.adam_kw)  # noqa: E731
+        self.opt_wm = wm_optimizer(self.wm, args, opt_kw(), self.update_graphs, self.adam_kw)
+        if getattr(args, "pi_opt", "adam") == "muon":
+            self.opt_pi = MuonAdam(self.pi, [self.pi.enc, self.pi.dec], lr=args.lr, betas=(0.9, 0.95), capturable=self.update_graphs, **self.adam_kw)
+        else:
+            self.opt_pi = torch.optim.Adam(self.pi.parameters(), betas=(0.9, 0.95), **opt_kw())
+        # optional (--pi_ema d): an exponential moving average of the policy; checkpoints store it as "pi" and the trained one
+        # as "pi_live"
+        self.pi_avg = policy_average(self.pi, args.pi_ema) if getattr(args, "pi_ema", 0.0) > 0 else None
         self.B, self.H = args.pi_batch, args.horizon
         self.action_noise = ACTION_UNIT * args.action_noise  # the collection's, on a
-        self.wm_skips, self.pi_skips = SkippedUpdates(), SkippedUpdates()
+        # updates skipped for a non-finite gradient; --no_sync: counted on the device, as are the policy updates whose 2B
+        # candidate starts held fewer than B valid ones (``starts_nosync``)
+        self.wm_skips, self.pi_skips = (DeviceSkippedUpdates(dev), DeviceSkippedUpdates(dev)) if self.no_sync else (SkippedUpdates(), SkippedUpdates())
+        self.short_starts = torch.zeros((), dtype=torch.long, device=dev)
         # optional, as on LAFAN1 (algos.common): the model's fit with noise on its normalized inputs (--wm_input_noise) and a
         # finite-difference Jacobian penalty (--wm_smooth_w); each rollout's part of the policy gradient at most k times the
         # median (--pi_rollout_clip)
@@ -130,11 +152,28 @@ class MuscleAgent:
 
     def state_dict(self) -> dict:
         """Everything a resumed run continues from: the networks with their normalizers and the optimizers' states."""
-        return {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "opt_wm": self.opt_wm.state_dict(), "opt_pi": self.opt_pi.state_dict()}
+        sd = {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "opt_wm": self.opt_wm.state_dict(), "opt_pi": self.opt_pi.state_dict()}
+        if self.pi_avg is not None:  # --pi_ema: "pi" is the average
+            sd.update(pi=self.pi_avg.module.state_dict(), pi_live=self.pi.state_dict(), pi_avg=self.pi_avg.state_dict())
+        return sd
 
     def load_state_dict(self, ck: dict):
-        self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"])
+        self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"] if self.pi_avg is None else ck["pi_live"])
+        if self.pi_avg is not None:
+            self.pi_avg.load_state_dict(ck["pi_avg"])
         self.opt_wm.load_state_dict(ck["opt_wm"]), self.opt_pi.load_state_dict(ck["opt_pi"])
+
+    @torch.no_grad()
+    def update_pi_avg(self):
+        """--pi_ema: one step of the policy's moving average, after a policy update (a no-op without it)."""
+        if self.pi_avg is not None:
+            self.pi_avg.update_parameters(self.pi)
+
+    def average_graphable(self):
+        """--pi_ema in the graphable policy updates: the average's step without a host read (algos.common.ema_step); its first
+        step, which copies the policy, runs eagerly before any capture."""
+        if self.pi_avg is not None:
+            ema_step(self.pi_avg, self.pi, self.args.pi_ema) if int(self.pi_avg.n_averaged) > 0 else self.pi_avg.update_parameters(self.pi)
 
     def act(self, obs: torch.Tensor, f: torch.Tensor, tap: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
         """The action (muscle targets a) of a step that tracks reference frame ``f``, and the policy's output; ``tap``
@@ -207,6 +246,23 @@ class MuscleAgent:
         self.opt_wm.step()
         return loss.detach() / a.wm_window
 
+    def wm_update_graphable(self, buffer) -> tuple:
+        """``wm_update`` for --no_sync and --update_graphs: no host synchronization, the optimizer step skipped on the device
+        for a non-finite gradient (counted in ``wm_skips``). Returns the loss per window step and whether the update
+        stepped (0-dim bool). SuperTrack's model loss balancer is calibrated by the first, eager update."""
+        a = self.args
+        w = buffer.sample_windows(a.wm_batch, a.wm_window)
+        loss = self._wm_objective(self.wm_window(w))
+        objective = loss if self.smooth_w == 0 else loss + self.smooth_w * self.wm_smoothness(w)
+        self.opt_wm.zero_grad(set_to_none=True)
+        objective.backward()
+        gn = nn.utils.clip_grad_norm_(self.wm.parameters(), 1.0)
+        ok = torch.isfinite(gn)
+        self.wm_skips(~ok)
+        zero_nonfinite_grads(self.wm.parameters(), ok)
+        gated_step(self.opt_wm, ok)
+        return loss.detach() / a.wm_window, ok
+
     # ------------------------------------------------------------------ imagination
     @torch.no_grad()
     def starts(self, buffer) -> dict:
@@ -223,7 +279,25 @@ class MuscleAgent:
             ok = ((t + H <= self.ref.clip_last[t]) & ~D["bad"][row, env]).nonzero(as_tuple=False).squeeze(-1)[: B - n]
             ages.append(age[ok]), envs.append(env[ok])
             n += len(ok)
-        age, env = torch.cat(ages), torch.cat(envs)
+        return self._starts_at(buffer, torch.cat(ages), torch.cat(envs))
+
+    @torch.no_grad()
+    def starts_nosync(self, buffer) -> dict:
+        """``starts`` without reading the valid count on the host (--no_sync): 2B candidates (the
+        default's first draw), stable-sorted valid first, the first B kept: the default's starts whenever that draw holds B
+        valid ones; a draw with fewer is counted in ``short_starts``, which train_muscles checks at every log row."""
+        D, B, H = buffer.data, self.B, self.H
+        age, env = buffer.sample_start_points(2 * B)
+        row = buffer._row(age)
+        t = D["t"][row, env]
+        ok = (t + H <= self.ref.clip_last[t]) & ~D["bad"][row, env]
+        idx = torch.sort((~ok).to(torch.uint8), stable=True).indices[:B]
+        self.short_starts.add_((ok.sum() < B).long())
+        return self._starts_at(buffer, age[idx], env[idx])
+
+    def _starts_at(self, buffer, age: torch.Tensor, env: torch.Tensor) -> dict:
+        """The starts at replay ages ``age`` (0 = oldest) of ``env`` (``starts``)."""
+        D, B, dev = buffer.data, self.B, self.dev
         row = buffer._row(age)
         p, R, v, w = mt.unflatten_bodies(D["s"][row, env])
         if self.args.imag_start_perturb != 0:
@@ -300,6 +374,21 @@ class MuscleAgent:
             self.opt_pi.step()
         return gn, ok
 
+    def _finish_graphable(self, loss: torch.Tensor, extra: tuple = ()) -> tuple[torch.Tensor, torch.Tensor]:
+        """``_finish`` without host synchronization (the graphable updates): the step skipped on the device where the
+        gradient or any of ``extra`` is not finite (counted), then the policy average's step. Returns the gradient norm
+        and whether the update stepped (0-dim bool)."""
+        self.opt_pi.zero_grad(set_to_none=True)
+        loss.backward()
+        gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
+        nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
+        ok = torch.stack([torch.isfinite(gn)] + [torch.isfinite(x).all() for x in extra]).all()
+        self.pi_skips(~ok)
+        zero_nonfinite_grads(self.pi.parameters(), ok)
+        gated_step(self.opt_pi, ok)
+        self.average_graphable()
+        return gn, ok
+
 
 class MuscleSuperTrack(MuscleAgent):
     """SuperTrack on the muscle character (module docstring)."""
@@ -348,12 +437,10 @@ class MuscleSuperTrack(MuscleAgent):
         E = torch.stack([(x - r[f]).abs().flatten(1).sum(-1) for x, r in zip(local_terms(S1), self.ref_local)], -1)
         return E, out, rate
 
-    def policy_update(self, buffer) -> dict:
+    def _loss(self, steps: list, survive) -> tuple:
+        """The policy loss of the imagined steps and their survival products ``survive(d)`` (cumprod(1 - d, 0)) of the
+        termination probabilities d (H, B). The first call calibrates the loss balancer (eagerly, before any capture)."""
         a = self.args
-        st = self.starts(buffer)
-        set_requires_grad(self.wm, False)
-        taps = [] if self.pi_rollout_clip > 0 else None
-        steps, _ = self.imagine(st, taps)
         E, A = torch.stack([s[4][0] for s in steps]), torch.stack([s[4][1] for s in steps])  # (H, B, 6), (H, B, 284)
         if self.late is not None:  # --st_late_w, before the calibration (LAFAN1's)
             E = E * self.late[:, None, None]
@@ -362,9 +449,22 @@ class MuscleSuperTrack(MuscleAgent):
             self.bal_pi.calibrate(terms.detach(), self.n_el * self.H)
         rate = torch.stack([s[4][2] for s in steps])  # (H, B)
         loss = (self.bal_pi.w * self.term_mult * terms).sum() + a.st_reg * ((A**2).mean() + A.abs().mean()) + self.w_rate * rate.mean()
-        alive = torch.cumprod(1 - torch.stack([s[3] for s in steps]), 0)
+        alive = survive(torch.stack([s[3] for s in steps]))
         if a.st_fail_w != 0:  # the failure penalty: each imagined step after a termination costs st_fail_w steps' worth of loss
             loss = loss + a.st_fail_w * (self.n_track / self.H) * (1 - alive).sum(0).mean()
+        return loss, alive
+
+    @property
+    def graph_keys(self) -> tuple:
+        """policy_update_graphable's outputs before ok."""
+        return ("pi_loss", "pi_gradnorm", "imag_survival") + (("replay_frac",) if self.replay else ())
+
+    def policy_update(self, buffer) -> dict:
+        st = self.starts(buffer)
+        set_requires_grad(self.wm, False)
+        taps = [] if self.pi_rollout_clip > 0 else None
+        steps, _ = self.imagine(st, taps)
+        loss, alive = self._loss(steps, lambda d: torch.cumprod(1 - d, 0))
         gn, ok = self._finish(loss, taps=taps)
         set_requires_grad(self.wm, True)
         if not ok:
@@ -373,6 +473,21 @@ class MuscleSuperTrack(MuscleAgent):
         if self.replay:  # --st_ref_replay: the fraction of imagined steps after which a rollout was replaced
             out["replay_frac"] = torch.stack([s[4][-1] for s in steps]).float().mean()
         return out
+
+    def policy_update_graphable(self, buffer) -> tuple:
+        """``policy_update`` for --no_sync and --update_graphs: the starts selected
+        on the device, the survival products a loop of products, the step gated on the device, the policy average's step.
+        Returns the default update's values (``graph_keys``) and whether it stepped (0-dim bool)."""
+        st = self.starts_nosync(buffer)
+        set_requires_grad(self.wm, False)
+        steps, _ = self.imagine(st)
+        loss, alive = self._loss(steps, survival)
+        gn, ok = self._finish_graphable(loss)
+        set_requires_grad(self.wm, True)
+        out = (loss.detach(), gn.detach(), alive[-1].detach().mean())
+        if self.replay:
+            out += (torch.stack([s[4][-1] for s in steps]).float().mean(),)
+        return out + (ok,)
 
 
 class MuscleSuperMimic(MuscleAgent):
@@ -385,7 +500,7 @@ class MuscleSuperMimic(MuscleAgent):
         self.reward_cfg = mt.MuscleRewardCfg().scaled(args.reward_std_scale)
         self.err_floor = torch.tensor(ERR_FLOOR, device=dev)
         self.critic = Critic(CRITIC_DIM).to(dev)
-        self.opt_v = torch.optim.Adam(self.critic.parameters(), lr=args.lr)
+        self.opt_v = torch.optim.Adam(self.critic.parameters(), **adam_kwargs(args.lr, dev, self.update_graphs, self.adam_kw))
         self.critic_input_c = torch.compile(self.critic_input)
 
     @property
@@ -417,30 +532,64 @@ class MuscleSuperMimic(MuscleAgent):
         e_body = mat_vec(H.transpose(-1, -2), ref_p - S[0]).flatten(-2)
         return torch.cat((policy_observation(S, F), self.goal[f + 1], e_body, (count / mt.ERR_LENGTH).unsqueeze(-1)), -1)
 
-    def policy_update(self, buffer) -> dict:
+    def _actor_loss(self, steps: list, f_end: torch.Tensor, r: torch.Tensor, alive: torch.Tensor) -> torch.Tensor:
+        """Minus the mean imagined return: the rewards ``r`` (H, B) discounted and weighted by the survival products
+        ``alive`` (H, B), the critic's value at the horizon."""
         a, dev, B, H = self.args, self.dev, self.B, self.H
+        c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
+        disc = a.gamma ** torch.arange(H, device=dev, dtype=torch.float32).unsqueeze(-1)
+        S_H, F_H, count_H = steps[-1][0], steps[-1][1], steps[-1][2]
+        J = (disc * c_t * r).sum(0) + (a.gamma**H) * alive[-1] * self.critic(self.critic_input(S_H, F_H, f_end - 1, count_H))
+        return -J.mean()
+
+    graph_keys = ("pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival")  # policy_update_graphable's outputs before ok
+
+    def policy_update(self, buffer) -> dict:
         st = self.starts(buffer)
         set_requires_grad(self.wm, False), set_requires_grad(self.critic, False)
         taps = [] if self.pi_rollout_clip > 0 else None
         steps, f_end = self.imagine(st, taps)
         r, d = torch.stack([s[4] for s in steps]), torch.stack([s[3] for s in steps])  # (H, B)
         alive = torch.cumprod(1 - d, 0)
-        c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
-        disc = a.gamma ** torch.arange(H, device=dev, dtype=torch.float32).unsqueeze(-1)
-        S_H, F_H, count_H = steps[-1][0], steps[-1][1], steps[-1][2]
-        J = (disc * c_t * r).sum(0) + (a.gamma**H) * alive[-1] * self.critic(self.critic_input(S_H, F_H, f_end - 1, count_H))
-        loss = -J.mean()
+        loss = self._actor_loss(steps, f_end, r, alive)
         gn, ok = self._finish(loss, (r, d), taps)
         set_requires_grad(self.wm, True), set_requires_grad(self.critic, True)
         if not ok:
             return {"skipped": True}
-        # critic: GAE(lambda) targets over the imagined transitions, as SuperMimic's on LAFAN1
+        v_loss = self._critic_update(st, steps, r, d)
+        return {"pi_loss": loss.detach(), "v_loss": v_loss.detach(), "imag_r": (r.detach().mean() / mt.MAX_STEP_REWARD), "pi_gradnorm": gn.detach(),
+                "imag_survival": alive[-1].detach().mean(), "skipped": False}  # fmt: skip
+
+    def policy_update_graphable(self, buffer) -> tuple:
+        """``policy_update`` for --no_sync and --update_graphs: the starts selected
+        on the device, the survival products a loop of products, the actor's and the critic's steps (and the critic
+        normalizer's update) skipped on the device where the gradient or the imagined rollout is not finite, the policy
+        average's step. Returns the default update's values (``graph_keys``) and whether it stepped (0-dim bool)."""
+        st = self.starts_nosync(buffer)
+        set_requires_grad(self.wm, False), set_requires_grad(self.critic, False)
+        steps, f_end = self.imagine(st)
+        r, d = torch.stack([s[4] for s in steps]), torch.stack([s[3] for s in steps])  # (H, B)
+        alive = survival(d)
+        loss = self._actor_loss(steps, f_end, r, alive)
+        gn, ok = self._finish_graphable(loss, (r, d))
+        set_requires_grad(self.wm, True), set_requires_grad(self.critic, True)
+        v_loss = self._critic_update(st, steps, r, d, ok)
+        return loss.detach(), v_loss.detach(), r.detach().mean() / mt.MAX_STEP_REWARD, gn.detach(), alive[-1].detach().mean(), ok
+
+    def _critic_update(self, st: dict, steps: list, r: torch.Tensor, d: torch.Tensor, ok: torch.Tensor | None = None) -> torch.Tensor:
+        """The critic's GAE(lambda) targets over the imagined transitions and its minibatch steps, as SuperMimic's on
+        LAFAN1; ``ok`` (the graphable update): a 0-dim bool, the normalizer's update and the steps skipped on the device
+        where it is false. Returns the last minibatch's loss."""
+        a, dev, H = self.args, self.dev, self.H
         with torch.no_grad():
             f0 = st["t"] - 1
             Xs = [self.critic_input_c(st["S"], st["F"], f0, st["count"])]
             Xs += [self.critic_input_c(s[0], s[1], f0 + k + 1, s[2]) for k, s in enumerate(steps)]
             X = torch.stack([x.detach() for x in Xs])  # (H + 1, B, D)
-            self.critic.norm.update(X)
+            if ok is None:
+                self.critic.norm.update(X)
+            else:
+                self.critic.norm.update(X, gate=ok)
             V = self.critic(X)
             R, targets = V[-1], []
             rews, dones = r.detach(), d.detach()
@@ -459,9 +608,12 @@ class MuscleSuperMimic(MuscleAgent):
                 self.opt_v.zero_grad(set_to_none=True)
                 v_loss.backward()
                 nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
-                self.opt_v.step()
-        return {"pi_loss": loss.detach(), "v_loss": v_loss.detach(), "imag_r": (r.detach().mean() / mt.MAX_STEP_REWARD), "pi_gradnorm": gn.detach(),
-                "imag_survival": alive[-1].detach().mean(), "skipped": False}  # fmt: skip
+                if ok is None:
+                    self.opt_v.step()
+                else:
+                    zero_nonfinite_grads(self.critic.parameters(), ok)
+                    gated_step(self.opt_v, ok)
+        return v_loss
 
 
 MUSCLE_ALGOS = {"supertrack": MuscleSuperTrack, "supermimic": MuscleSuperMimic}

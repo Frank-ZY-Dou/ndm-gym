@@ -4,6 +4,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 build_*.log
+/build/
+/dist/
+# the documentation site (make docs)
+/site/
 # third-party data (downloaded by tools/download_data.sh) and generated assets
 /data/
 # training runs: checkpoints, logs

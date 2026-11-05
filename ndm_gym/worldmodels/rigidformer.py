@@ -263,6 +263,14 @@ class Block(nn.Module):
         return x + self.w3(u * F.silu(z))
 
 
+def block_matrices(blocks: nn.ModuleList) -> list[nn.Parameter]:
+    """Muon's parameters of a RigidFormer's ``blocks`` (``Block``) with ``--wm_opt muon`` (``core.muon.MuonAdam``; the
+    ``hidden_matrices`` of RigidFormerNet and of the muscle character's MuscleRigidFormerNet): every block's weight
+    matrices as stored, the q/k/v/gate projection (4 dim x dim, one matrix), the attention's output projection, the
+    SwiGLU's value and gate projection (2 hidden x dim, one matrix) and its output projection."""
+    return [m.weight for blk in blocks for m in (blk.qkvg, blk.proj, blk.w12, blk.w3)]
+
+
 class TokenInputNorm(RunningNorm):
     """RunningNorm of the flat token features whose forward also passes the body positions through, unnormalized up to
     the fixed POS_SCALE, for the rotary attention: x (N, D) -> (N, D + 3B). ``update`` and the state dict are
@@ -441,6 +449,12 @@ class RigidFormerNet(nn.Module):
 
     def make_input_norm(self) -> TokenInputNorm:
         return TokenInputNorm(self.in_dim, self.pos_index.clone())
+
+    def hidden_matrices(self) -> list[nn.Parameter]:
+        """Muon's parameters with ``--wm_opt muon`` (``core.muon.MuonAdam``): every block's weight matrices as stored
+        (``block_matrices``). Adam keeps the rest: the token embedding and the context network, the body, register and
+        read-out embeddings, the tree bias, the norms, the biases, FiLM, and the read-out's SwiGLU fusion and heads."""
+        return block_matrices(self.blocks)
 
     def inputs(self, S, a, xi_n, f=None):
         """Flat raw features (N, in_dim) of states S, normalized setpoints a (N, J) and normalized sim context xi_n.

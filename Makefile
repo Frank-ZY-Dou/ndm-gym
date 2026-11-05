@@ -1,6 +1,6 @@
 PY ?= python
 
-.PHONY: test test-fast lint fix
+.PHONY: test test-fast lint fix docs
 
 test:  ## all tests (on CPU about 2 min; the simulator's tests need a GPU and Isaac Lab)
 	$(PY) -m pytest tests
@@ -13,3 +13,6 @@ lint:  ## ruff, as in CI
 
 fix:  ## ruff's safe fixes
 	ruff check --fix .
+
+docs:  ## the documentation site into site/, as in CI (pip install -r docs/requirements.txt; preview: mkdocs serve)
+	mkdocs build --strict

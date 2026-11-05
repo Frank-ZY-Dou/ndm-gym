@@ -18,7 +18,7 @@ import os
 import time
 from dataclasses import dataclass
 
-from isaaclab.app import add_launcher_args, launch_simulation
+from ndm_gym.sim.launcher import add_launcher_args, launch_simulation
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 METRICS = ("mpjpe_g", "mpjpe_l", "e_q", "e_root_pos", "e_root_ori", "e_body_vel", "e_body_angvel", "r_track", "action_rate", "joint_limit")
@@ -222,6 +222,106 @@ def evaluate(env, kin, motion, mdp, ck: dict, record: str | None = None, push: P
     return res
 
 
+def evaluate_group(env, kin, motion, mdp, cks: list[dict], repeats: int, graph: bool = False) -> list[list[dict]]:
+    """``evaluate`` of the checkpoints ``cks``, each ``repeats`` times, at once (--group): the simulator holds
+    C * len(cks) * repeats worlds, world (m * repeats + r) * C + c playing clip c under checkpoint m. The evaluation is
+    latency-bound at C worlds, so a group costs about one evaluation's wall-clock. The checkpoints share their policies'
+    layout and inputs. Returns each checkpoint's ``repeats`` results, as evaluate's (one-robot scene, no pushes)."""
+    import torch
+
+    import ndm_gym.core.nets as nets
+    from ndm_gym.algos import ALGOS
+    from ndm_gym.algos.common import reference_setpoints
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.state import unflatten_state
+    from ndm_gym.tasks.tracking import MAX_STEP_REWARD, OBS_DIM
+
+    dev, C, M = env.device, len(motion.names), len(cks)
+    N, rows = env.N, C * repeats
+    if N != C * M * repeats or getattr(env, "instance_clip", None) is not None:
+        raise ValueError(f"evaluate_group: a one-robot scene of {C * M * repeats} worlds, not {N}")
+    a_ = cks[0]["args"]
+    K, Hh, residual = a_["goal_frames"], a_["hist"], ALGOS[a_["algo"]].is_residual(a_)
+    for ck in cks:
+        b = ck["args"]
+        if (b["goal_frames"], b["hist"], b["amp"], ALGOS[b["algo"]].is_residual(b)) != (K, Hh, a_["amp"], residual):
+            raise ValueError("evaluate_group: the checkpoints' policies differ in their inputs, precision or residual setpoints")
+    ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
+    nets.AMP_DTYPE = torch.bfloat16 if a_["amp"] == "bf16" else None
+    pis = []
+    for ck in cks:
+        pi = TrackingPolicy(OBS_DIM, 73 * K, hist=Hh).to(dev)
+        pi.load_state_dict(ck["pi"])
+        pis.append(pi.eval())
+
+    def policy(hist, goal):  # each checkpoint's policy on its block of worlds
+        return torch.cat([p(hist[m * rows : (m + 1) * rows], goal[m * rows : (m + 1) * rows]) for m, p in enumerate(pis)])
+
+    ids = torch.arange(N, device=dev)
+    clip_of = ids % C
+    clip_len, clip_end = motion.clip_len[clip_of], motion.clip_end[clip_of]
+    env.done_eval[:] = False
+    env.failed_eval[:] = False
+    env.reset(ids, motion.clip_start[clip_of])
+    ret, steps = torch.zeros(N, device=dev), torch.zeros(N, device=dev)
+    err = {k: torch.zeros(N, device=dev) for k in METRICS}
+    hist = None
+    with torch.no_grad():
+        if graph:  # the whole evaluation, step by step in a CUDA graph; the eager loop below then has nothing left to do
+            _loop_graph(env, kin, motion, mdp, policy, K, Hh, residual, ref_u, clip_end, ret, steps, err, None, None, ids)
+        while not bool(env.done_eval.all()):
+            S = env.state()
+            o = mdp.obs(S, env.a_prev, env.xi, env.f)
+            hist = o.unsqueeze(1).repeat(1, Hh, 1) if hist is None else torch.cat((hist[:, 1:], o.unsqueeze(1)), 1)
+            a = policy(hist, motion.goal(env.f, K))
+            if residual:
+                a = a + ref_u[env.f + 1]
+            alive = ~env.done_eval.clone()
+            out = env.step(a, S)
+            ret += torch.where(alive, out["r"], 0.0)
+            steps += alive.float()
+            m = track_metrics(kin, motion, unflatten_state(out["s1"]), out["f"] + 1)
+            m["r_track"] = out["terms"]["track"] / MAX_STEP_REWARD
+            m["action_rate"], m["joint_limit"] = out["terms"]["action_rate"], out["terms"]["joint_limit"]
+            for k, v in m.items():
+                err[k] += torch.where(alive, v, 0.0)
+            env.f = torch.minimum(env.f, clip_end - 1)
+    norm = ret / ((clip_len - 1).float() * MAX_STEP_REWARD)
+    err = {k: v / steps for k, v in err.items()}
+    out = []
+    for m in range(M):
+        reps = []
+        for r in range(repeats):
+            sl = slice((m * repeats + r) * C, (m * repeats + r + 1) * C)
+            failed = env.failed_eval[sl]
+            reps.append({
+                "norm_return": norm[sl].mean().item(),
+                "norm_return_framew": (ret[sl].sum() / ((clip_len[sl] - 1).sum() * MAX_STEP_REWARD)).item(),
+                "n_failed": int(failed.sum().item()),
+                "failed": [motion.names[i] for i in failed.nonzero().flatten().tolist()],
+                **{k: v[sl].mean().item() for k, v in err.items()},
+                "per_clip": {motion.names[i]: round(norm[sl][i].item(), 4) for i in range(C)},
+                "per_clip_err": {motion.names[i]: {k: round(v[sl][i].item(), 5) for k, v in err.items()} for i in range(C)},
+            })  # fmt: skip
+        out.append(reps)
+    return out
+
+
+def mean_of_repeats(reps: list[dict]) -> dict:
+    """A checkpoint's result over ``--repeats`` evaluations (the simulation is not bit-reproducible, so borderline clips can
+    flip): the means of the returns, failed counts and errors; ``failed`` lists the clips failed in any of them, ``repeats``
+    holds the evaluations."""
+    out = {k: sum(r[k] for r in reps) / len(reps) for k in ("norm_return", "norm_return_framew", "n_failed", *METRICS)}
+    return {**out, "failed": sorted({c for r in reps for c in r["failed"]}), "repeats": reps}
+
+
+def in_shard(path: str, shard: tuple[int, int, int]) -> bool:
+    """--shard I/N: whether checkpoint ``path`` (ckpt_<iteration>.pt) is I modulo N in the run's checkpoint order (iteration
+    over the run's --ckpt_every); shard is (I, N, ckpt_every)."""
+    i, n, every = shard
+    return (int(os.path.basename(path)[5:11]) // every) % n == i
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run_dir", type=str, required=True)
@@ -238,11 +338,18 @@ def parse_args():
     parser.add_argument("--push_seed", type=int, default=0, help="seed of the push directions (same pushes for every policy)")
     parser.add_argument("--out_json", type=str, default=None, help="--ckpt mode: also write the full result here")
     parser.add_argument("--repeats", type=int, default=1,
-                        help="--ckpt mode: evaluate every setting this many times (simulation is not bit-reproducible across runs)")  # fmt: skip
+                        help="evaluate every setting (--ckpt) or checkpoint (eval.csv: their means) this many times (simulation is not "
+                             "bit-reproducible across runs)")  # fmt: skip
     parser.add_argument("--friction", type=float, default=None,
                         help="--ckpt mode dynamics shift: friction of the feet and the ground instead of 1.0 (training draws 0.3-1.2)")  # fmt: skip
     parser.add_argument("--payload", type=float, default=0.0, help="--ckpt mode dynamics shift: extra torso mass in kg (training: none)")
     parser.add_argument("--graph", action="store_true", help="each step as one CUDA graph (the same values, fewer launches; not with --record)")
+    parser.add_argument("--group", type=int, default=1,
+                        help="--watch and all-checkpoint modes: evaluate up to this many checkpoints (each --repeats times) at once in "
+                             "one simulator, the same wall-clock as one (evaluate_group)")  # fmt: skip
+    parser.add_argument("--shard", type=str, default=None,
+                        help="--watch and all-checkpoint modes: I/N, only the checkpoints whose index (iteration over the run's "
+                             "--ckpt_every) is I modulo N, so that N evaluators on N GPUs share one run's eval.csv")  # fmt: skip
     add_launcher_args(parser)
     return parser.parse_args()
 
@@ -265,14 +372,23 @@ def main():
     mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev))
     C = len(motion.names)
     assert args.push_mag is None or (args.ckpt and not args.record), "--push_mag needs --ckpt and no --record"
-    assert args.repeats == 1 or (args.ckpt and not args.record), "--repeats needs --ckpt and no --record"
+    assert args.repeats == 1 or not args.record, "--repeats: not with --record"
     assert (args.friction is None and not args.payload) or (args.ckpt and not args.record), "--friction / --payload need --ckpt and no --record"
     assert not args.paired or (args.motions == "interhuman" and args.push_mag is None and not args.graph), \
         "--paired: two-person clips, no pushes, no --graph"  # fmt: skip
+    assert args.group == 1 or not (args.ckpt or args.paired or args.record), "--group: the --watch or all-checkpoint modes, one robot"
+    shard = None
+    if args.shard is not None:
+        assert not (args.ckpt or args.record), "--shard: the --watch or all-checkpoint modes"
+        i, n = (int(x) for x in args.shard.split("/"))
+        assert 0 <= i < n, f"--shard I/N needs 0 <= I < N, got {args.shard}"
+        every = json.load(open(os.path.join(args.run_dir, "args.json")))["ckpt_every"]
+        shard = (i, n, every)
 
     sim_cfg = make_sim(dev, args, paired=args.paired)
     with launch_simulation(sim_cfg, args):
-        env = (PairedTrackingSim if args.paired else TrackingSim)(sim_cfg, C, motion, mdp, eval_mode=True, eval_friction=args.friction,
+        n_worlds = C * args.group * args.repeats if args.group > 1 else C
+        env = (PairedTrackingSim if args.paired else TrackingSim)(sim_cfg, n_worlds, motion, mdp, eval_mode=True, eval_friction=args.friction,
                                                                   eval_payload=args.payload)  # fmt: skip
         if args.ckpt:
             ck = torch.load(args.ckpt, map_location=dev)
@@ -292,27 +408,46 @@ def main():
         done = set()
         if os.path.exists(out_csv):
             done = {int(ln.split(",")[0]) for ln in open(out_csv).read().strip().splitlines()[1:]}
-        else:
+        elif shard is None:
             open(out_csv, "w").write("iteration,train_wall_h,saved_at,eval_at,norm_return,norm_return_framew,n_failed," + ",".join(METRICS) + ",failed\n")
+        else:  # the first of the shards to start writes the header; rows are appended whole by each
+            try:
+                with open(out_csv, "x") as f:
+                    f.write("iteration,train_wall_h,saved_at,eval_at,norm_return,norm_return_framew,n_failed," + ",".join(METRICS) + ",failed\n")
+            except FileExistsError:
+                pass
         while True:
             ckpts = sorted(glob.glob(os.path.join(args.run_dir, "ckpt_*.pt")))
             todo = [c for c in ckpts if int(os.path.basename(c)[5:11]) not in done]
             todo = [c for c in todo if (int(os.path.basename(c)[5:11]) // 2000) % args.every == 0]
-            for c in todo:
-                it = int(os.path.basename(c)[5:11])
-                ck = torch.load(c, map_location=dev)
+            if shard is not None:
+                todo = [c for c in todo if in_shard(c, shard)]
+            groups = [todo[i : i + args.group] for i in range(0, len(todo), args.group)] if args.group > 1 else [[c] for c in todo]
+            for paths in groups:
+                cks = [torch.load(c, map_location=dev) for c in paths]
                 t0 = time.time()
-                res = evaluate(env, kin, motion, mdp, ck, graph=args.graph)
-                line = (f"{it},{ck['wall_time'] / 3600:.4f},{ck['saved_at']},{time.strftime('%Y-%m-%d %H:%M:%S')},{res['norm_return']:.4f},"
-                        f"{res['norm_return_framew']:.4f},{res['n_failed']}," + ",".join(f"{res[k]:.5f}" for k in METRICS) + f",{'|'.join(res['failed'])}\n")  # fmt: skip
-                open(out_csv, "a").write(line)
-                json.dump(res, open(c.replace(".pt", "_eval.json"), "w"), indent=1)
-                print(f"[eval] it {it} ({ck['wall_time'] / 3600:.2f} h): norm return {res['norm_return']:.4f}, failed {res['n_failed']}/{C}, "
-                      f"mpjpe_g {1e3 * res['mpjpe_g']:.1f} mm, mpjpe_l {1e3 * res['mpjpe_l']:.1f} mm ({time.time() - t0:.0f}s)", flush=True)  # fmt: skip
-                done.add(it)
+                if args.group > 1:  # a partial group is filled with copies of its last checkpoint, whose results are dropped
+                    reps = evaluate_group(env, kin, motion, mdp, cks + cks[-1:] * (args.group - len(cks)), args.repeats, graph=args.graph)
+                else:
+                    reps = [[evaluate(env, kin, motion, mdp, cks[0], graph=args.graph) for _ in range(args.repeats)]]
+                for c, ck, rs in zip(paths, cks, reps):
+                    _watch_row(out_csv, c, ck, rs[0] if args.repeats == 1 else mean_of_repeats(rs), C, t0)
+                    done.add(int(os.path.basename(c)[5:11]))
             if not args.watch:
                 break
-            time.sleep(60)
+            if shard is None or not todo:  # a shard scans again at once after a pass with work
+                time.sleep(60)
+
+
+def _watch_row(out_csv: str, c: str, ck: dict, res: dict, C: int, t0: float):
+    """The watcher's eval.csv row, JSON file and log line of checkpoint ``c``."""
+    it = int(os.path.basename(c)[5:11])
+    line = (f"{it},{ck['wall_time'] / 3600:.4f},{ck['saved_at']},{time.strftime('%Y-%m-%d %H:%M:%S')},{res['norm_return']:.4f},"
+            f"{res['norm_return_framew']:.4f},{res['n_failed']}," + ",".join(f"{res[k]:.5f}" for k in METRICS) + f",{'|'.join(res['failed'])}\n")  # fmt: skip
+    open(out_csv, "a").write(line)
+    json.dump(res, open(c.replace(".pt", "_eval.json"), "w"), indent=1)
+    print(f"[eval] it {it} ({ck['wall_time'] / 3600:.2f} h): norm return {res['norm_return']:.4f}, failed {res['n_failed']}/{C}, "
+          f"mpjpe_g {1e3 * res['mpjpe_g']:.1f} mm, mpjpe_l {1e3 * res['mpjpe_l']:.1f} mm ({time.time() - t0:.0f}s)", flush=True)  # fmt: skip
 
 
 if __name__ == "__main__":

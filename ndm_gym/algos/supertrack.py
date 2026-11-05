@@ -24,7 +24,8 @@ from ..state import CONTROL_DT, normalize_xi, unflatten_state
 from ..tasks.tracking import MAX_STEP_REWARD
 from ..worldmodels.accel import AccelWorldModel
 from ..worldmodels.rigidformer import rigidformer_kwargs
-from .common import Algo, cap_rollout_grads, clip_rollout_policy_grads, decay_rollout_grads, reference_setpoints, set_requires_grad
+from .common import (Algo, cap_rollout_grads, clip_rollout_policy_grads, decay_rollout_grads, reference_setpoints, set_requires_grad, survival,
+                     zero_nonfinite_grads)
 
 WM_TERMS = ("pos", "vel", "rot", "ang")
 LOCAL_TERMS = ("lpos", "lvel", "lrot", "lang", "hei", "up")
@@ -156,6 +157,14 @@ class SuperTrack(Algo):
         self.st_wm_terms = torch.compile(self._st_wm_terms, **self.wm_compile)
         self.st_imag_step = torch.compile(self._st_imag_step, **self.pi_compile)
         self.st_track = torch.compile(self._st_track, **self.pi_compile)
+        # optional (train.py --pi_encode_once): an imagined step's goal depends on its reference frame only, so the policy's
+        # goal encoder runs once over every step's goal and the steps run its decoder
+        self.encode_once = getattr(args, "pi_encode_once", False)
+        if self.encode_once:
+            if self.pi_rollout_clip > 0:
+                raise ValueError("--pi_encode_once: not with --pi_rollout_clip (its rerun of the policy reads every step's goal)")
+            self.encode_goals = torch.compile(self._encode_goals, **self.pi_compile)
+            self.st_imag_step_z = torch.compile(self._st_imag_step_z, **self.pi_compile)
         if self.pi_graphs:
             self.mark_static_tensors()
 
@@ -205,6 +214,25 @@ class SuperTrack(Algo):
         o_hist = torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1)
         return S1, a, o_hist, f1, self.motion.goal(f1, self.K)
 
+    def _encode_goals(self, f):
+        """--pi_encode_once: the policy's goal latents (H, B, z) of the imagined steps from the start frames f (B,), step t's
+        goal that of frame f + t, as ``_st_imag_step`` passes them on."""
+        frames = f.unsqueeze(0) + torch.arange(self.HZ, device=f.device).unsqueeze(-1)
+        return self.pi.encode(self.motion.goal(frames.flatten(), self.K)).view(self.HZ, f.shape[0], -1)
+
+    def _st_imag_step_z(self, S, o_hist, f, xi, xi_n, z):
+        """``_st_imag_step`` from the step's goal latent ``z`` (--pi_encode_once): the policy's decoder, no next goal."""
+        a = self.pi.decode(z, o_hist)
+        f1 = f + 1
+        u = a + self.args.st_imag_noise * torch.randn_like(a) + self.ref_u[f1]  # PD offset about the reference pose
+        S1 = self.wm.step(S, u, xi_n)
+        if self.args.bptt_clip_k > 0:
+            S1 = cap_rollout_grads(S1, self.args.bptt_clip_k)
+        if self.bptt_decay != 1.0:
+            S1 = decay_rollout_grads(S1, self.bptt_decay)
+        o1 = self.mdp.add_noise(self.mdp.obs(S1, u, xi, f1))
+        return S1, a, torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1), f1
+
     def _st_track(self, S_all, f_all):
         """Per-term L1 errors (and squared errors with --st_quad_w): sum over the imagined window, mean over rollouts,
         plus the number of elements of every term."""
@@ -236,12 +264,15 @@ class SuperTrack(Algo):
         set_requires_grad(self.wm, False)
         if args.wm_bptt_fp32:
             self.wm.amp = False
-        g = self.motion.goal(f, self.K)
+        g = None if self.encode_once else self.motion.goal(f, self.K)
+        Zs = self.encode_goals(f).unbind(0) if self.encode_once else None  # --pi_encode_once
         Ss, As, Fs, taps = [], [], [], []
         for t in range(self.HZ):
             if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
                 taps.append((o_hist, g, torch.zeros(args.pi_batch, NUM_J, device=self.dev, requires_grad=True)))
                 S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g, taps[-1][2])
+            elif Zs is not None:
+                S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
             else:
                 S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
             Ss.append(S), As.append(a), Fs.append(f)
@@ -280,6 +311,66 @@ class SuperTrack(Algo):
         nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
         if torch.isfinite(gn):
             self.opt_pi.step()
+        set_requires_grad(self.wm, True)
+        self.wm.amp = True
+        return loss.detach(), nan, nan, gn.detach(), surv
+
+    def policy_update_graphable(self, buffer: ReplayBuffer):
+        """``policy_update`` for --update_graphs: the same update without host synchronization, so that all of it (start
+        sampling, imagination, losses, backward, clipping, the optimizer step skipped on the device for a non-finite gradient,
+        the policy average's step) can be captured in one CUDA graph. The loss balancer is calibrated by the first, eager
+        update; the survival products of --st_fail_w are a loop (cumprod's backward tests for zeros on the host)."""
+        args, mdp = self.args, self.mdp
+        s, h = self.sample_valid_starts_nosync(buffer, args.pi_batch)
+        S = unflatten_state(s["s"])
+        xi, f = s["xi"], s["f"]
+        xi_n = normalize_xi(xi)
+        o_hist = self.start_obs_history(h)
+        S = self.perturb_start(S)
+        set_requires_grad(self.wm, False)
+        if args.wm_bptt_fp32:
+            self.wm.amp = False
+        g = None if self.encode_once else self.motion.goal(f, self.K)
+        Zs = self.encode_goals(f).unbind(0) if self.encode_once else None  # --pi_encode_once
+        Ss, As, Fs = [], [], []
+        for t in range(self.HZ):
+            if Zs is not None:
+                S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
+            else:
+                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
+            Ss.append(S), As.append(a), Fs.append(f)
+        flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
+        S_all, f_all = tuple(flat([St[i] for St in Ss]) for i in range(6)), flat(Fs)
+        terms, sq_terms, n_el = self.st_track(S_all, f_all)
+        if not self.bal_pi.calibrated:  # the first update only, eagerly (the graph is captured once it is calibrated)
+            self.bal_pi.calibrate(terms.detach(), n_el * self.HZ)
+        A = torch.stack(As)
+        loss = (self.bal_pi.w * self.term_mult * terms).sum() + args.st_reg * ((A**2).mean() + A.abs().mean())
+        nan = torch.full((), float("nan"), device=self.dev)
+        surv = nan
+        if args.st_fail_w != 0:
+            d = mdp.soft_termination(S_all, f_all, margin=args.st_fail_margin).view(self.HZ, -1)
+            alive = survival(d)  # cumprod(1 - d, 0) as a loop
+            loss = loss + args.st_fail_w * (self.n_track / self.HZ) * (1 - alive).sum(0).mean()
+            surv = alive[-1].detach().mean()
+        if sq_terms is not None:
+            loss = loss + args.st_quad_w * (self.bal_pi.w * self.term_mult * sq_terms / self.bal_pi.scale).sum()
+        if not args.st_no_task_regs:
+            U = A + self.ref_u[torch.stack(Fs)]
+            rate = ((U - torch.cat((s["a_prev"].unsqueeze(0), U[:-1]), 0)) ** 2).sum(-1).mean()
+            q = torch.stack([St[4] for St in Ss])
+            limit = (torch.relu(q - mdp.soft_hi) + torch.relu(mdp.soft_lo - q)).sum(-1).mean()
+            loss = loss + self.w_rate * rate + self.w_limit * limit
+        self.opt_pi.zero_grad(set_to_none=True)
+        loss.backward()
+        gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
+        nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
+        finite = torch.isfinite(gn)
+        self.nonfinite.add_((~finite).long())
+        zero_nonfinite_grads(self.pi.parameters(), finite)
+        self.optimizer_step(self.opt_pi, finite)
+        if self.pi_avg is not None:  # n_averaged lives on the host: the first update copies the policy (eagerly, before capture)
+            self.ema_update() if int(self.pi_avg.n_averaged) > 0 else self.pi_avg.update_parameters(self.pi)
         set_requires_grad(self.wm, True)
         self.wm.amp = True
         return loss.detach(), nan, nan, gn.detach(), surv

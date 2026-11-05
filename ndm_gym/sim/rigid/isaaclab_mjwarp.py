@@ -7,6 +7,9 @@ reference-motion states drawn by return-based bin sampling (paper Appendix D.1).
 
 from __future__ import annotations
 
+from .. import require_simulator
+
+require_simulator(__name__)  # a clear error, before the imports below, where the simulator is not installed
 
 import torch
 import warp as wp
@@ -26,6 +29,7 @@ from ...robots.g1 import DEFAULT_JOINT_POS, G1_JOINT_NAMES, USD_PATH, action_sca
 from ...robots.objects import ObjectSpec
 from ...state import CONTROL_DT
 from ...tasks.tracking import MDP
+from .reset_stats import bin_ema, bin_ema_w, mix_failures, mix_focus, previous_bins
 
 
 def flatten_states(*states) -> list[torch.Tensor]:
@@ -104,12 +108,68 @@ def after_replay(sim, scene, dt: float, n: int):
         mgr._sim_time += dt
 
 
+class GraphedStep:
+    """A step function ``fn`` of the scene (no host synchronization, its state in fixed tensors) stepped as one CUDA
+    graph, as evaluate --graph steps: the first call eager, the second on the capture stream, the third captured, later
+    calls replayed. ``resets``: ``fn`` resets environments by mask writes (TrackingSim.reset_masked), so the captured
+    sim.step runs Isaac Lab's forward(): at every replay, the solver reset and forward kinematics of the environments the
+    previous replay reset, as an eager step after a reset runs them. Returns ``fn``'s outputs (after the first two calls,
+    graph memory that every replay rewrites). ``dt``, ``substeps``: the step's (sim.step, scene.update(dt)) pairs, whose
+    Python side a replay skips."""
+
+    def __init__(self, env, fn, resets: bool, name: str, dt: float = CONTROL_DT, substeps: int = 1):
+        self.env, self.fn, self.resets, self.name, self.dt, self.substeps = env, fn, resets, name, dt, substeps
+        self.calls, self.graph, self.out, self.record = 0, None, None, None
+
+    def __call__(self):
+        import time
+
+        env = self.env
+        self.calls += 1
+        env.robot.data.root_link_vel_w  # recomputed if stale, as state() decides
+        if self.calls == 1:
+            return self.fn()
+        if self.calls == 2:
+            return on_capture_stream(env.sim, self.fn)
+        before_replay(env.sim)
+        first = self.graph is None
+        if first:
+            if self.resets:  # forward() runs on this flag (Isaac Lab sets it for writes captured in a graph: here after the step)
+                env.sim.backend_manager.transforms_may_change_on_graph_replay = True
+            t0 = time.time()
+            self.graph, self.out, self.record = capture_step(env.sim, self.fn)
+            print(f"captured {self.name} in {time.time() - t0:.1f} s", flush=True)
+        self.graph.replay()
+        if not first:
+            after_replay(env.sim, env.scene, self.dt, self.substeps)
+        return self.out
+
+
 def lazy_now(data, name: str):
     """Isaac Lab asset data's lazily derived quantity ``name`` (e.g. root_link_vel_w) recomputed now, by the property's
     own code. Inside a capture Isaac Lab refuses the property, since a replay skips its timestamp check; marked stale
     first, its kernel is recorded and every replay recomputes it."""
     getattr(data, "_" + name).timestamp = -1.0
     return getattr(type(data), name).fget.__wrapped__(data)
+
+
+def write_root_link_velocity_mask(robot, root_velocity: torch.Tensor, env_mask):
+    """Isaac Lab's ``write_root_link_velocity_to_sim_mask`` (the same kernel and invalidation) with the root link velocity's
+    own buffer as the output instead of the property, which Isaac Lab refuses inside a CUDA graph capture (its timestamp
+    guard): capturable (TrackingSim.reset_masked)."""
+    from isaaclab_newton.assets import kernels as shared_kernels
+
+    d = robot.data
+    if d._root_link_vel_w.data is None:
+        raise RuntimeError("the root link velocity's buffer is not allocated yet: read robot.data.root_link_vel_w once first")
+    wp.launch(
+        shared_kernels.set_root_link_velocity_to_sim_mask,
+        dim=root_velocity.shape[0],
+        inputs=[root_velocity, d._sim_bind_body_com_pos_b, d.root_link_pose_w, env_mask, d._num_bodies],
+        outputs=[d._root_link_vel_w.data, d.root_com_vel_w, d.body_com_acc_w],
+        device=robot.device,
+    )
+    d._reset_velocity(env_mask=env_mask, from_com=False)
 
 
 def _actuators() -> dict[str, ImplicitActuatorCfg]:
@@ -198,7 +258,8 @@ class TrackingSim:
 
     def __init__(self, sim_cfg, num_envs: int, motion: MotionLib, mdp: MDP, gamma: float = 0.99, eval_mode: bool = False,
                  max_episode_steps: int = 500, reset_noise: bool = True, eval_friction: float | None = None, eval_payload: float = 0.0,
-                 obj: ObjectSpec | None = None):
+                 obj: ObjectSpec | None = None, fail_reset: float = 0.0, bin_fix: bool = False):
+        """``fail_reset``, ``bin_fix``: train.py's options of those names (reset_stats)."""
         if motion.has_object != (obj is not None) or (obj is not None and obj.name != motion.obj_name):
             raise ValueError(f"the scene's object ({obj.name if obj else None}) must be the motion library's ({motion.obj_name})")
         if obj is not None and not getattr(mdp, "uses_object", False):
@@ -260,9 +321,20 @@ class TrackingSim:
         self.G_max = mdp.max_step_reward / (1 - gamma)
         self.bin_G = torch.full((motion.num_bins,), 0.0, device=dev)
         self.bin_w_avg = torch.full((motion.num_bins,), 1.0 / motion.num_bins, device=dev)
+        # optional (InstantTrack, BlinkMimic): a share of the resets one bin before recent failure points, from each bin's
+        # termination rate (--fail_reset); a step's episodes of one bin averaged in the bin statistics (--bin_fix)
+        if not 0 <= fail_reset < 1 or (eval_mode and (fail_reset or bin_fix)):
+            raise ValueError(f"fail_reset {fail_reset} must be in [0, 1); fail_reset and bin_fix change training resets only")
+        self.fail_reset, self.bin_fix = fail_reset, bin_fix
+        if fail_reset > 0:
+            self.bin_fail = torch.zeros(motion.num_bins, device=dev)
+            self.bin_prev = previous_bins(motion)
+        # --eprobe_share (algos/eprobe.py): a reset distribution mixed in (set_focus); use_static_focus keeps it in fixed tensors
+        self.focus_q, self.focus_share, self.focus_static, self.focus_share_t = None, 0.0, False, None
         self.done_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.failed_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.reward_fn = mdp.reward  # the step's reward without an object; train.py --compile_eager sets its compiled version
+        self._mask_buf = self._mask_wp = None  # reset_masked's environment mask, a fixed buffer and its Warp view
         self.reset(torch.arange(self.N, device=dev))
 
     # ------------------------------------------------------------------ friction
@@ -291,6 +363,11 @@ class TrackingSim:
         R = quat_to_mat(torch.cat((quat[:, 3:4], quat[:, :3]), -1))
         return (p, R, vel[:, :3], vel[:, 3:6], d.joint_pos.torch.clone(), d.joint_vel.torch.clone())
 
+    def capture_state(self):
+        """``state`` inside train.py's collection graph (GraphedCollector): the root velocity's buffer, made current before
+        each replay (GraphedStep)."""
+        return self.state(self.robot.data._root_link_vel_w.data)
+
     def object_state(self):
         """The object's state ``So = (p, R, v, w)``, positions relative to the environment origin."""
         d = self.object.data
@@ -300,11 +377,22 @@ class TrackingSim:
         return pose[:, :3] - self.scene.env_origins, quat_to_mat(torch.cat((quat[:, 3:4], quat[:, :3]), -1)), vel[:, :3], vel[:, 3:6]
 
     # ------------------------------------------------------------------ reset
-    def sample_frames(self, n: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def sample_frames(self, n: int, gate: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+        """``gate`` (reset_masked): a 0-dim bool; the running average bin_w_avg advances only where it holds (the eager
+        reset samples only when an episode ended)."""
         m = self.motion
         soft = torch.softmax(-25.0 * self.bin_G / self.G_max, 0)
-        self.bin_w_avg.mul_(0.999).add_(0.001 * soft)
+        if gate is None:
+            self.bin_w_avg.mul_(0.999).add_(0.001 * soft)
+        else:
+            self.bin_w_avg.copy_(torch.where(gate, self.bin_w_avg * 0.999 + 0.001 * soft, self.bin_w_avg))
         probs = 0.5 / m.num_bins + 0.4 * soft + 0.1 * self.bin_w_avg / self.bin_w_avg.sum()
+        if self.fail_reset > 0:
+            probs = mix_failures(probs, self.bin_fail, self.bin_prev, self.fail_reset)
+        if self.focus_static:  # a captured reset reads the fixed tensors (share 0 leaves probs as they are)
+            probs = mix_focus(probs, self.focus_q, self.focus_share_t)
+        elif self.focus_q is not None and self.focus_share > 0:
+            probs = mix_focus(probs, self.focus_q, self.focus_share)
         bins = torch.multinomial(probs, n, replacement=True)
         start = m.bin_start[bins]
         last = m.clip_end[m.bin_clip[bins]]
@@ -313,6 +401,23 @@ class TrackingSim:
         # a clip of 50 k + 1 frames has a last bin of one frame, its last: a start there would step past the clip, so it
         # starts one frame earlier (no LAFAN1 clip has such a length, so their resets are unchanged)
         return torch.minimum(f, last - 1), bins
+
+    def set_focus(self, q: torch.Tensor, share: float):
+        """--eprobe_share (algos/eprobe.py): this share of the training resets drawn from the distribution ``q`` over bins
+        (after use_static_focus: written into its fixed tensors, without a host read)."""
+        if self.eval_mode:
+            raise ValueError("set_focus changes training resets only")
+        if self.focus_static:
+            self.focus_q.copy_(q), self.focus_share_t.fill_(share)
+        else:
+            self.focus_q, self.focus_share = q, share
+
+    def use_static_focus(self):
+        """Keep the focus in fixed device tensors that set_focus updates in place (share 0 until the first focus), so that a
+        reset captured in a CUDA graph follows it (BlinkMimic's use_static_focus)."""
+        q = torch.full((self.motion.num_bins,), 1.0 / self.motion.num_bins, device=self.device) if self.focus_q is None else self.focus_q.clone()
+        share = torch.full((), self.focus_share, device=self.device)
+        self.focus_q, self.focus_share_t, self.focus_static = q, share, True
 
     def reset(self, env_ids: torch.Tensor, frames: torch.Tensor | None = None):
         if len(env_ids) == 0:
@@ -367,6 +472,58 @@ class TrackingSim:
         if not self.eval_mode:
             self.xi[env_ids, 1:30] = torch.empty(n, 29, device=dev).uniform_(-0.01, 0.01)
         self.scene.reset(env_ids)
+
+    def reset_masked(self, mask: torch.Tensor, frames: torch.Tensor | None = None):
+        """``reset`` of the environments where ``mask`` holds, as fixed-size masked writes of all of them (Isaac Lab's mask
+        writes, no host-side ids), so that it can be captured in a CUDA graph (train.py --reset_masked). The other
+        environments are left unchanged; the reset ones get the values reset() would give them for the same frames and
+        random draws (draws are made for all environments, so the random stream differs). ``frames`` (N,): the frames to
+        reset to (a test's), sampled otherwise. The robot's scene reset is not needed: its implicit actuators keep no state
+        and no external wrench is applied."""
+        if self.eval_mode or self.object is not None:
+            raise ValueError("reset_masked is the training reset without an object")
+        N, dev, m = self.N, self.device, self.motion
+        if self._mask_buf is None:
+            self._mask_buf = torch.zeros(N, dtype=torch.bool, device=dev)
+            self._mask_wp = wp.from_torch(self._mask_buf, dtype=wp.bool)
+        self._mask_buf.copy_(mask)
+        if frames is None:
+            frames, bins = self.sample_frames(N, gate=mask.any())
+        else:
+            bins = m.frame_bin[frames]
+        p, R, v, w, q, qd = (x.clone() for x in m.ref_state(frames))
+        if self.reset_noise:  # reset()'s draws, for every environment
+            p = p + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.05, 0.05), torch.empty(N, device=dev).uniform_(-0.05, 0.05),
+                 torch.empty(N, device=dev).uniform_(-0.01, 0.01)), -1)  # fmt: skip
+            rv = torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.1, 0.1), torch.empty(N, device=dev).uniform_(-0.1, 0.1),
+                 torch.empty(N, device=dev).uniform_(-0.2, 0.2)), -1)  # fmt: skip
+            R = so3_exp(rv) @ R
+            v = v + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.5, 0.5), torch.empty(N, device=dev).uniform_(-0.5, 0.5),
+                 torch.empty(N, device=dev).uniform_(-0.2, 0.2)), -1)  # fmt: skip
+            w = w + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.52, 0.52), torch.empty(N, device=dev).uniform_(-0.52, 0.52),
+                 torch.empty(N, device=dev).uniform_(-0.78, 0.78)), -1)  # fmt: skip
+            q = q + torch.empty_like(q).uniform_(-0.1, 0.1)
+        q = torch.clamp(q, self.mdp.kin.q_lo, self.mdp.kin.q_hi)
+        quat = mat_to_quat(R)
+        pose = torch.cat((p + self.scene.env_origins, quat[:, 1:4], quat[:, 0:1]), -1)
+        mk = self._mask_wp
+        self.robot.write_root_link_pose_to_sim_mask(root_pose=pose, env_mask=mk)
+        write_root_link_velocity_mask(self.robot, torch.cat((v, w), -1), mk)
+        self.robot.write_joint_position_to_sim_mask(position=q, env_mask=mk)
+        self.robot.write_joint_velocity_to_sim_mask(velocity=qd, env_mask=mk)
+        self.robot.set_joint_position_target_mask(target=q, env_mask=mk)
+        self.f.copy_(torch.where(mask, frames, self.f))
+        self.ep_step.masked_fill_(mask, 0)
+        self.a_prev.masked_fill_(mask.unsqueeze(-1), 0.0)
+        self.start_bin.copy_(torch.where(mask, bins, self.start_bin))
+        self.ep_disc_ret.masked_fill_(mask, 0.0)
+        self.ep_ret.masked_fill_(mask, 0.0)
+        offsets = torch.empty(N, 29, device=dev).uniform_(-0.01, 0.01)
+        self.xi[:, 1:30] = torch.where(mask.unsqueeze(-1), offsets, self.xi[:, 1:30])
 
     def refresh(self):
         """Propagate written states so that ``state()`` is consistent after a reset."""
@@ -434,12 +591,116 @@ class TrackingSim:
             boot = torch.where(term[ids], 0.0, (self.gamma**T) * (self.ep_ret[ids] / T) / (1 - self.gamma))
             G = self.ep_disc_ret[ids] + boot
             b = self.start_bin[ids]
-            self.bin_G.index_put_((b,), 0.8 * self.bin_G[b] + 0.2 * G)
+            if self.bin_fix:
+                self.bin_G.copy_(bin_ema(self.bin_G, b, G, 0.8))
+            else:
+                self.bin_G.index_put_((b,), 0.8 * self.bin_G[b] + 0.2 * G)
+            if self.fail_reset > 0:  # the termination rate of the bin each episode ended in; bins no episode ends in fade out
+                fb = self.motion.frame_bin[f[ids]]
+                self.bin_fail.mul_(0.999)
+                if self.bin_fix:
+                    self.bin_fail.copy_(bin_ema(self.bin_fail, fb, term[ids].float(), 0.9))
+                else:
+                    self.bin_fail.index_put_((fb,), 0.9 * self.bin_fail[fb] + 0.1 * term[ids].float())
             out["ep_len"] = T
             out["ep_ret_norm"] = self.ep_ret[ids] / (T * self.mdp.max_step_reward)
             self.reset(ids)
         return out
 
+
+    # ------------------------------------------------------------------ the training step as a CUDA graph (train.py --collect_graph)
+    def step_core(self, a: torch.Tensor, S: tuple) -> dict:
+        """TrackingSim's training step up to the episode ends, with the caller's state ``S``: f, ep_step and a_prev are
+        updated in place and the state after the step recomputes the root velocity by Isaac Lab's own code (lazy_now), so the
+        step has no host synchronization and can run in a CUDA graph (train.py --collect_graph). The same values as step's."""
+        if self.eval_mode or self.object is not None:
+            raise ValueError("step_core is the training step without an object")
+        f, xi, a_prev, ep_step = self.f.clone(), self.xi.clone(), self.a_prev.clone(), self.ep_step.clone()
+        target = self.default_q + xi[:, 1:30] + self.alpha * a
+        self.robot.set_joint_position_target_index(target=target)
+        self.scene.write_data_to_sim()
+        self.sim.step(render=False)
+        self.scene.update(CONTROL_DT)
+        S1 = self.state(lazy_now(self.robot.data, "root_link_vel_w"))
+        f1 = f + 1
+        r, terms = self.reward_fn(S1, f1, a, a_prev, terms=True)
+        term = self.mdp.termination(S1, f1)
+        clip_end = self.motion.clip_end[self.motion.clip_id[f]]
+        timeout = (f1 >= clip_end) | (ep_step + 1 >= self.max_episode_steps)
+        done = term | timeout
+        flat = flatten_states(S, S1)
+        out = {
+            "s": flat[0], "a": a.clone(), "a_prev": a_prev, "f": f, "s1": flat[1], "r": r,
+            "term": term, "done": done, "ep_step": ep_step, "xi": xi, "terms": terms,
+        }  # fmt: skip
+        self.ep_disc_ret += (self.gamma ** ep_step.float()) * r
+        self.ep_ret += r
+        self.f.copy_(f1)
+        self.ep_step.copy_(ep_step + 1)
+        self.a_prev.copy_(a)
+        return out
+
+
+    def step_tail(self, out: dict) -> dict:
+        """The episode ends of a training step (bin statistics, resets with host-side ids), as step() does them."""
+        done, term, f = out["done"], out["term"], out["f"]
+        ids = done.nonzero(as_tuple=False).squeeze(-1)
+        if len(ids) > 0:
+            T = self.ep_step[ids].float()
+            boot = torch.where(term[ids], 0.0, (self.gamma**T) * (self.ep_ret[ids] / T) / (1 - self.gamma))
+            G = self.ep_disc_ret[ids] + boot
+            b = self.start_bin[ids]
+            if self.bin_fix:
+                self.bin_G.copy_(bin_ema(self.bin_G, b, G, 0.8))
+            else:
+                self.bin_G.index_put_((b,), 0.8 * self.bin_G[b] + 0.2 * G)
+            if self.fail_reset > 0:
+                fb = self.motion.frame_bin[f[ids]]
+                self.bin_fail.mul_(0.999)
+                if self.bin_fix:
+                    self.bin_fail.copy_(bin_ema(self.bin_fail, fb, term[ids].float(), 0.9))
+                else:
+                    self.bin_fail.index_put_((fb,), 0.9 * self.bin_fail[fb] + 0.1 * term[ids].float())
+            out["ep_len"] = T
+            out["ep_ret_norm"] = self.ep_ret[ids] / (T * self.mdp.max_step_reward)
+            self.reset(ids)
+        return out
+
+
+    def step_tail_masked(self, out: dict) -> dict:
+        """step_tail without host-side ids (capturable; train.py --reset_masked): the bin statistics of the ended
+        episodes and reset_masked. With --bin_fix the averaging is weighted by done; without it the ended episodes' values
+        are written by index into the statistics extended by one discarded slot that the other environments write to (one
+        arbitrary episode per bin kept, as step_tail's index_put_). Instead of per-episode tensors, ``out`` gets n_done and
+        the sums ep_len_sum and ep_ret_norm_sum over the ended episodes."""
+        done, term, f = out["done"], out["term"], out["f"]
+        dw = done.float()
+        T = self.ep_step.float()
+        boot = torch.where(term, 0.0, (self.gamma**T) * (self.ep_ret / T) / (1 - self.gamma))
+        G = self.ep_disc_ret + boot
+        nb = self.motion.num_bins
+
+        def put(stat, bins, value):  # stat[bins[done]] = value[done], fixed size: the others go to the slot nb
+            ext = torch.cat((stat, stat.new_zeros(1)))
+            ext.index_put_((torch.where(done, bins, nb),), value)
+            return ext[:nb]
+
+        if self.bin_fix:
+            self.bin_G.copy_(bin_ema_w(self.bin_G, self.start_bin, G, dw, 0.8))
+        else:
+            self.bin_G.copy_(put(self.bin_G, self.start_bin, 0.8 * self.bin_G[self.start_bin] + 0.2 * G))
+        if self.fail_reset > 0:
+            fb = self.motion.frame_bin[f]
+            bf = torch.where(done.any(), self.bin_fail * 0.999, self.bin_fail)
+            if self.bin_fix:
+                self.bin_fail.copy_(bin_ema_w(bf, fb, term.float(), dw, 0.9))
+            else:
+                self.bin_fail.copy_(put(bf, fb, 0.9 * bf[fb] + 0.1 * term.float()))
+        out["n_done"] = dw.sum()
+        out["ep_len_sum"] = (T * dw).sum()
+        out["ep_ret_norm_sum"] = (self.ep_ret / (T * self.mdp.max_step_reward) * dw).sum()
+        self.reset_masked(done)
+        return out
 
 def motion_pairs(motion: MotionLib) -> torch.Tensor:
     """(2, pairs) clip ids of each two-person clip's sides (``meta`` "pair" and "side", ``motion.sources.interhuman``),
@@ -552,6 +813,8 @@ class PairedTrackingSim(TrackingSim):
         self.done_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.failed_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.reward_fn = mdp.reward
+        self._mask_buf = self._mask_wp = None  # reset_masked's env mask (P,), a fixed buffer and its Warp view
+        self.fail_reset, self.bin_fix = 0.0, False  # refused for the two-robot scene (algos.blinkmimic.check_args); TrackingSim.step_tail reads them
         self.reset(torch.arange(self.N, device=dev))
 
     @property
@@ -572,10 +835,11 @@ class PairedTrackingSim(TrackingSim):
         self.sim.backend_manager.add_model_change(ModelFlags.SHAPE_PROPERTIES)
 
     # ------------------------------------------------------------------ state
-    def _robot_state(self, r):
+    def _robot_state(self, r, vel=None):
+        """``vel``: the root link velocity to read instead of Isaac Lab's property (capture_state)."""
         d = r.data
         pose = d.root_link_pose_w.torch
-        vel = d.root_link_vel_w.torch.clone()
+        vel = (d.root_link_vel_w if vel is None else vel).torch.clone()
         p = pose[:, :3] - self.scene.env_origins
         quat = pose[:, 3:7]  # xyzw
         R = quat_to_mat(torch.cat((quat[:, 3:4], quat[:, :3]), -1))
@@ -587,17 +851,27 @@ class PairedTrackingSim(TrackingSim):
             raise ValueError("the two-robot scene reads its own root velocities (no CUDA-graph steps)")
         return tuple(torch.cat(x) for x in zip(self._robot_state(self.robot), self._robot_state(self.robot_b)))
 
+    def capture_state(self):
+        """``state`` inside train.py's collection graph (GraphedCollector): both robots' root velocities recomputed by Isaac
+        Lab's own code (lazy_now), which its property refuses inside a capture; the same values."""
+        S = (self._robot_state(r, lazy_now(r.data, "root_link_vel_w")) for r in (self.robot, self.robot_b))
+        return tuple(torch.cat(x) for x in zip(*S))
+
     def object_state(self):
         raise ValueError("the two-robot scene has no object")
 
     # ------------------------------------------------------------------ reset
-    def sample_frames(self, n: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def sample_frames(self, n: int, gate: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """n pairs' start frames and bins: (first sides' frames, second sides' frames, their bins, their bins);
-        TrackingSim's sampling over the first sides' bins, a bin's return the mean of its two sides'."""
+        TrackingSim's sampling over the first sides' bins, a bin's return the mean of its two sides'. ``gate``
+        (reset_masked): a 0-dim bool; the running average bin_w_avg advances only where it holds."""
         m = self.motion
         G = 0.5 * (self.bin_G[self.pbin_a] + self.bin_G[self.pbin_b])
         soft = torch.softmax(-25.0 * G / self.G_max, 0)
-        self.bin_w_avg.mul_(0.999).add_(0.001 * soft)
+        if gate is None:
+            self.bin_w_avg.mul_(0.999).add_(0.001 * soft)
+        else:
+            self.bin_w_avg.copy_(torch.where(gate, self.bin_w_avg * 0.999 + 0.001 * soft, self.bin_w_avg))
         nb = len(self.pbin_a)
         probs = 0.5 / nb + 0.4 * soft + 0.1 * self.bin_w_avg / self.bin_w_avg.sum()
         k = torch.multinomial(probs, n, replacement=True)
@@ -664,7 +938,116 @@ class PairedTrackingSim(TrackingSim):
             self.xi[env_ids, 1:30] = torch.empty(n, 29, device=dev).uniform_(-0.01, 0.01)
         self.scene.reset(torch.unique(env_ids % P))
 
+    def reset_masked(self, mask: torch.Tensor, frames: torch.Tensor | None = None):
+        """``reset`` of the instances where ``mask`` (2P,) holds, whose two halves are equal (an env's robots reset
+        together, as the training step ends their episodes), as fixed-size masked writes of all envs (Isaac Lab's mask
+        writes, no host-side ids), so that it can be captured in a CUDA graph (train.py --reset_masked); the other envs are
+        left unchanged. The reset ones get the values reset() gives for the same frames and random draws, which are made
+        for all envs in reset's order (another random stream). ``frames`` (2P,): the start frames (a test's), sampled
+        otherwise. The robots' scene reset is not needed: their implicit actuators keep no state and no external wrench is
+        applied."""
+        if self.eval_mode:
+            raise ValueError("reset_masked is the training reset")
+        dev, P, N, m = self.device, self.P, self.N, self.motion
+        if self._mask_buf is None:
+            self._mask_buf = torch.zeros(P, dtype=torch.bool, device=dev)
+            self._mask_wp = wp.from_torch(self._mask_buf, dtype=wp.bool)
+        self._mask_buf.copy_(mask[:P])
+        if frames is None:
+            fa, fb, ba, bb = self.sample_frames(P, gate=mask.any())
+            frames, bins = torch.cat((fa, fb)), torch.cat((ba, bb))
+        else:
+            bins = m.frame_bin[frames]
+        p, R, v, w, q, qd = (x.clone() for x in m.ref_state(frames))
+        if self.reset_noise:  # reset()'s draws, for every instance
+            p = p + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.05, 0.05), torch.empty(N, device=dev).uniform_(-0.05, 0.05),
+                 torch.empty(N, device=dev).uniform_(-0.01, 0.01)), -1)  # fmt: skip
+            rv = torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.1, 0.1), torch.empty(N, device=dev).uniform_(-0.1, 0.1),
+                 torch.empty(N, device=dev).uniform_(-0.2, 0.2)), -1)  # fmt: skip
+            R = so3_exp(rv) @ R
+            v = v + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.5, 0.5), torch.empty(N, device=dev).uniform_(-0.5, 0.5),
+                 torch.empty(N, device=dev).uniform_(-0.2, 0.2)), -1)  # fmt: skip
+            w = w + torch.stack(
+                (torch.empty(N, device=dev).uniform_(-0.52, 0.52), torch.empty(N, device=dev).uniform_(-0.52, 0.52),
+                 torch.empty(N, device=dev).uniform_(-0.78, 0.78)), -1)  # fmt: skip
+            q = q + torch.empty_like(q).uniform_(-0.1, 0.1)
+        q = torch.clamp(q, self.mdp.kin.q_lo, self.mdp.kin.q_hi)
+        quat = mat_to_quat(R)
+        mk = self._mask_wp
+        for r, sl in ((self.robot, slice(0, P)), (self.robot_b, slice(P, N))):
+            pose = torch.cat((p[sl] + self.scene.env_origins, quat[sl, 1:4], quat[sl, 0:1]), -1)
+            r.write_root_link_pose_to_sim_mask(root_pose=pose, env_mask=mk)
+            write_root_link_velocity_mask(r, torch.cat((v[sl], w[sl]), -1), mk)
+            r.write_joint_position_to_sim_mask(position=q[sl], env_mask=mk)
+            r.write_joint_velocity_to_sim_mask(velocity=qd[sl], env_mask=mk)
+            r.set_joint_position_target_mask(target=q[sl], env_mask=mk)
+        self.f.copy_(torch.where(mask, frames, self.f))
+        self.ep_step.masked_fill_(mask, 0)
+        self.a_prev.masked_fill_(mask.unsqueeze(-1), 0.0)
+        self.start_bin.copy_(torch.where(mask, bins, self.start_bin))
+        self.ep_disc_ret.masked_fill_(mask, 0.0)
+        self.ep_ret.masked_fill_(mask, 0.0)
+        offsets = torch.empty(N, 29, device=dev).uniform_(-0.01, 0.01)
+        self.xi[:, 1:30] = torch.where(mask.unsqueeze(-1), offsets, self.xi[:, 1:30])
+
     # ------------------------------------------------------------------ step
+    def step_core(self, a: torch.Tensor, S: tuple) -> dict:
+        """The training step up to the episode ends, with the caller's state ``S`` (TrackingSim.step_core for the two-robot
+        scene): f, ep_step and a_prev updated in place, the state after the step read by capture_state, so the step has no
+        host synchronization and can run in a CUDA graph (train.py --collect_graph). The same values as step's."""
+        if self.eval_mode:
+            raise ValueError("step_core is the training step")
+        P = self.P
+        f, xi, a_prev, ep_step = self.f.clone(), self.xi.clone(), self.a_prev.clone(), self.ep_step.clone()
+        target = self.default_q + xi[:, 1:30] + self.alpha * a
+        self.robot.set_joint_position_target_index(target=target[:P])
+        self.robot_b.set_joint_position_target_index(target=target[P:])
+        self.scene.write_data_to_sim()
+        self.sim.step(render=False)
+        self.scene.update(CONTROL_DT)
+        S1 = self.capture_state()
+        f1 = f + 1
+        r, terms = self.reward_fn(S1, f1, a, a_prev, terms=True)
+        term = self.mdp.termination(S1, f1)
+        clip_end = self.motion.clip_end[self.motion.clip_id[f]]
+        timeout = (f1 >= clip_end) | (ep_step + 1 >= self.max_episode_steps)
+        own = term | timeout
+        done = (own[:P] | own[P:]).repeat(2)
+        flat = flatten_states(S, S1)
+        out = {
+            "s": flat[0], "a": a.clone(), "a_prev": a_prev, "f": f, "s1": flat[1], "r": r,
+            "term": term, "done": done, "ep_step": ep_step, "xi": xi, "terms": terms,
+        }  # fmt: skip
+        self.ep_disc_ret += (self.gamma ** ep_step.float()) * r
+        self.ep_ret += r
+        self.f.copy_(f1)
+        self.ep_step.copy_(ep_step + 1)
+        self.a_prev.copy_(a)
+        return out
+
+    def step_tail_masked(self, out: dict) -> dict:
+        """The episode ends of a training step without host-side ids (capturable; train.py --reset_masked): each robot's bin
+        return written by index into the statistics extended by one discarded slot that the other instances write to (one
+        arbitrary episode per bin kept, as step's index_put_), and reset_masked. ``out`` gets n_done and the sums
+        ep_len_sum and ep_ret_norm_sum over the ended episodes (TrackingSim.step_tail_masked's)."""
+        done, term = out["done"], out["term"]
+        dw = done.float()
+        T = self.ep_step.float()
+        boot = torch.where(term, 0.0, (self.gamma**T) * (self.ep_ret / T) / (1 - self.gamma))
+        G = self.ep_disc_ret + boot
+        nb = self.motion.num_bins
+        ext = torch.cat((self.bin_G, self.bin_G.new_zeros(1)))
+        ext.index_put_((torch.where(done, self.start_bin, nb),), 0.8 * self.bin_G[self.start_bin] + 0.2 * G)
+        self.bin_G.copy_(ext[:nb])
+        out["n_done"] = dw.sum()
+        out["ep_len_sum"] = (T * dw).sum()
+        out["ep_ret_norm_sum"] = (self.ep_ret / (T * self.mdp.max_step_reward) * dw).sum()
+        self.reset_masked(done)
+        return out
+
     def step(self, a: torch.Tensor, S: tuple | None = None, inplace: bool = False) -> dict:
         """One control step of both robots with setpoints ``a`` (2P, 29), the first robots' rows first. In training an
         env's episode ends for both robots when either terminates or times out (``done``; ``term`` stays each robot's)."""
