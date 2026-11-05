@@ -13,8 +13,8 @@ SuperTrack and SuperMimic, with MLP world models, track MuscleVAE's reference cl
   termination.
 - **Training:** `ndm_gym.train_muscles`, 4096 environments, 32 imagined steps.
 - **Data:** MuscleVAE's repository has no license and LAFAN1 is CC BY-NC-ND 4.0, so `tools/download_musclevae.sh` and
-  `tools/convert_musclevae.py` download and convert them locally. Neither they nor renders or weights of policies trained on
-  them are in this repository.
+  `tools/convert_musclevae.py` download and convert them locally. Neither they nor weights of policies trained on them are in
+  this repository; the README's animations are renders for non-commercial illustration.
 
 ## Results
 

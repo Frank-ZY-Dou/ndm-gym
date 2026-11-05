@@ -18,24 +18,9 @@ changes only the algorithm. The tasks are LAFAN1 motion tracking, two G1s tracki
 interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF), and MuscleVAE's muscle-actuated character (Newton with
 MuJoCo-Warp). The neural dynamics models (NDMs) also stand in for the simulator.
 
-<!-- videos:begin -->
-<table>
-<tr>
-<td><img src="docs/media/final/dance1_subject2.webp" alt="dance1_subject2"/></td>
-<td><img src="docs/media/final/fightAndSports1_subject1.webp" alt="fightAndSports1_subject1"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/final/jumps1_subject1.webp" alt="jumps1_subject1"/></td>
-<td><img src="docs/media/final/sprint1_subject2.webp" alt="sprint1_subject2"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/final/fallAndGetUp2_subject2.webp" alt="fallAndGetUp2_subject2"/></td>
-<td><img src="docs/media/final/fight1_subject2.webp" alt="fight1_subject2"/></td>
-</tr>
-</table>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right): the selected configurations, seed 2, 3 h checkpoints on an A100. One clip per motion category that both completed, its 10 s with the most motion. Blue ghost: the reference.</i></p>
-<!-- videos:end -->
-<p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s and a muscle-actuated character" width="100%"/></p>
+<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Error, SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 12.1 / 14.5 mm over the 6 s shown (MPJPE, root-relative), muscles 24.3 / 49.2 mm over the walk clip (MPJPE, root frame).</i></p>
+<p align="center"><sub>Motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman and MuscleVAE, rendered for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## 🔥 News
 
@@ -200,6 +185,25 @@ is better; ↓: lower is better. Details and commands are under each task below.
 
 ### LAFAN1 motion tracking
 
+<!-- videos:begin -->
+<table>
+<tr>
+<td><img src="docs/media/final/dance1_subject2.webp" alt="dance1_subject2"/></td>
+<td><img src="docs/media/final/fightAndSports1_subject1.webp" alt="fightAndSports1_subject1"/></td>
+</tr>
+<tr>
+<td><img src="docs/media/final/jumps1_subject1.webp" alt="jumps1_subject1"/></td>
+<td><img src="docs/media/final/sprint1_subject2.webp" alt="sprint1_subject2"/></td>
+</tr>
+<tr>
+<td><img src="docs/media/final/fallAndGetUp2_subject2.webp" alt="fallAndGetUp2_subject2"/></td>
+<td><img src="docs/media/final/fight1_subject2.webp" alt="fight1_subject2"/></td>
+</tr>
+</table>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right): the selected configurations, seed 2, 3 h checkpoints on an A100. One clip per motion category that both completed, its 10 s with the most motion. Blue ghost: the reference.</i></p>
+<!-- videos:end -->
+<p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
 All 40 LAFAN1 clips, retargeted to the G1, for training and evaluation. Selected configurations, seeds 1-3, 3 h on one A100.
 Each cell is the mean ± std over seeds; each seed averages three standard evaluations (the push rows use one push test). H100
 results and diagnostics are in [`results.md`](benchmarks/g1_lafan1_tracking/results.md); the checkpoints are on
@@ -290,10 +294,14 @@ the RigidFormer 1.9 M (6.0x).
 ### Muscle-actuated character
 
 MuscleVAE's character with 284 Hill-type muscles and fatigue, on its three clips, in our Newton simulator, MLP world model.
-Both algorithms had the same tuning: 14 runs each, in three rounds of 1 h runs. The selections then train with seeds 1-3 for
+Each algorithm's configuration is selected in rounds of 1 h runs under one rule. The selections then train with seeds 1-3 for
 up to 3 h, each stopped once its error stops falling, and the best checkpoint among those with at most 10% of the episodes
-ended is evaluated again with a seed it did not train with ([details](benchmarks/musclevae/results.md)). MuscleVAE's files,
-and renders and weights of policies trained on them, are not redistributed.
+ended is evaluated again with a seed it did not train with ([details](benchmarks/musclevae/results.md)). MuscleVAE's files
+and weights of policies trained on them are not redistributed.
+
+<p align="center"><img src="docs/media/musclevae/policies/walk.webp" alt="walk, SuperTrack and SuperMimic" width="800"/><br>
+<img src="docs/media/musclevae/policies/run.webp" alt="run, SuperTrack and SuperMimic" width="800"/></p>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right) on MuscleVAE's walk and run: each algorithm's best seed of its 3 h runs (SuperTrack seed 2, iteration 24,000; SuperMimic seed 3, iteration 10,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: walk 24.3 / 49.2 mm, run 45.6 / 72.5 mm.</i></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
