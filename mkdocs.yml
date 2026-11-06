@@ -86,6 +86,7 @@ plugins:
 
 nav:
   - Home: index.md
+  - In-hand reorientation: reorientation.md
   - Getting started:
       - Installation: installation.md
       - Quickstart: quickstart.md

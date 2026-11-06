@@ -166,6 +166,12 @@ python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joi
 
 </details>
 
+## Experimental in-hand reorientation
+
+An [Allegro Hand reference task](docs/reorientation.md) provides a serial MuJoCo backend,
+tensor objectives, and reproducible untrained-control diagnostics. It runs on macOS or Linux;
+world-model training and batched GPU simulation are not yet integrated.
+
 ## 📊 Results
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Configurations are selected in rounds
