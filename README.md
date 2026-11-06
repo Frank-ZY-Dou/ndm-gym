@@ -185,9 +185,10 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td rowspan="3"><b>Two G1s</b><br><sub>a two-person clip, MLP world model<br>A100 80GB, seed 0</sub></td><td>return ↑, best checkpoint<br><sub>runs of 0.5 h and 0.3 h</sub></td><td>0.893</td><td>0.905</td></tr>
 <tr><td>MPJPE, global / root-relative ↓</td><td>39 / 14.2 mm</td><td>40 / 16.4 mm</td></tr>
 <tr><td>training to return 0.88 ↓</td><td>0.11 h</td><td>0.10 h</td></tr>
-<tr><td rowspan="3"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>36.4 ± 1.9 mm</td><td>63.6 ± 4.1 mm</td></tr>
-<tr><td>episodes ended ↓</td><td>0.014 ± 0.011</td><td>0.059 ± 0.027</td></tr>
-<tr><td>joint error ↓</td><td>10.9 ± 0.9°</td><td>10.1 ± 0.6°</td></tr>
+<tr><td rowspan="4"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>38.1 ± 1.0 mm</td><td>65.6 ± 8.1 mm</td></tr>
+<tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
+<tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
+<tr><td>joint error ↓</td><td>10.6 ± 1.1°</td><td>9.7 ± 0.4°</td></tr>
 </tbody>
 </table>
 
@@ -372,34 +373,35 @@ the RigidFormer 1.9 M (6.0x).
 MuscleVAE's character with 284 Hill-type muscles and fatigue, three clips, Newton simulator, MLP world model.
 Configurations come from four rounds of 1 h runs, ranked by one rule. Selected configurations train with seeds 1-3 for up to
 3 h, stopping when error stops falling. The best checkpoint with at most 10% of episodes ended is evaluated with a seed it
-did not train with ([details](benchmarks/musclevae/results.md)). SuperTrack's
-reported runs use `--wm_lr 1.5e-3`, the selected 1.6e-3 rounded (36.7 ± 1.0 mm at 1.6e-3). MuscleVAE's files and weights of
-policies trained on them are not redistributed.
+did not train with ([details](benchmarks/musclevae/results.md)). MuscleVAE's files and weights of policies trained on them
+are not redistributed.
 
 <p align="center"><img src="docs/media/musclevae/policies/walk.webp" alt="walk, SuperTrack and SuperMimic" width="800"/><br>
 <img src="docs/media/musclevae/policies/run.webp" alt="run, SuperTrack and SuperMimic" width="800"/></p>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right) on MuscleVAE's walk and run: each algorithm's best seed of its 3 h runs (SuperTrack seed 2, iteration 24,000; SuperMimic seed 3, iteration 10,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: walk 24.3 / 49.2 mm, run 45.6 / 72.5 mm.</i></p>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right) on MuscleVAE's walk and run: each algorithm's best seed of its 3 h runs (SuperTrack seed 1, iteration 26,000; SuperMimic seed 3, iteration 8,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: walk 24.9 / 50.1 mm, run 46.6 / 64.1 mm.</i></p>
 <p align="center"><sub>Renders of MuscleVAE's walk and run clips (LAFAN1 motions, © 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
-| MPJPE, root frame (mm) | 36.4 ± 1.9 | 63.6 ± 4.1 |
-| episodes ended (share) | 0.014 ± 0.011 | 0.059 ± 0.027 |
-| joint error (deg) | 10.9 ± 0.9 | 10.1 ± 0.6 |
+| MPJPE, root frame (mm) | 38.1 ± 1.0 | 65.6 ± 8.1 |
+| MPJPE, heading frame (mm) | 38.5 ± 1.1 | 45.7 ± 2.5 |
+| episodes ended (share) | 0.011 ± 0.005 | 0.053 ± 0.014 |
+| joint error (deg) | 10.6 ± 1.1 | 9.7 ± 0.4 |
 
 Before the third round, the second round's selections reached 74.2 ± 33.7 mm (SuperTrack; seeds 38.6, 105.4, 78.6) and 68.0 ± 3.5 mm (SuperMimic)
 in the same 3 h runs, with the default updates. The third round, declared after those SuperTrack runs had ended and while SuperMimic's were ending,
-added the systems options for both and selected `--wm_lr 1.6e-3` for SuperTrack ([tuning history](benchmarks/musclevae/results.md#tuning)). The table
-reports the third round's selections. The fourth round selects `--wm_lr 2.5e-3` for both (at 1 h, 37.2 and 57.0 mm, against 37.6 and 60.5 mm); its 3 h runs are in progress.
+added the systems options for both and selected `--wm_lr 1.6e-3` for SuperTrack ([tuning history](benchmarks/musclevae/results.md#tuning)). The fourth round selects
+`--wm_lr 2.5e-3` for both (at 1 h, 37.2 and 57.0 mm, against 37.6 and 60.5 mm), and the table reports its 3 h runs; at 3 h the third round's selections reached 36.4 ± 1.9 and
+63.6 ± 4.1 mm. SuperMimic's best checkpoints come early (iterations 6,000-8,000): later ones reach 56-68 mm with 13-46% of episodes ended, which the rule excludes.
 
 ```bash
 MUSCLE_RECIPE="--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 \
                --lr_decay_by 1400 --wm_hidden 1024 1024 1024"   # BlinkMimic's recipe, the parts muscle training implements
 MUSCLE_SYS="--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"   # the same computations up to rounding, another random stream
 python -m ndm_gym.train_muscles --algo supertrack --st_fail_w 5 --st_balance_w 4 $MUSCLE_RECIPE $MUSCLE_SYS --wm_batches 8 --pi_lr_mult 4 \
-       --wm_lr 1.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_st_s1    # seeds 1-3
+       --wm_lr 2.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_st_s1    # seeds 1-3
 python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 $MUSCLE_RECIPE \
-       $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 2 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_s1
+       $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_s1
 ```
 
 ### BlinkMimic's options
@@ -476,10 +478,10 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
    ([details](#blinkmimics-options)).
 10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint of runs of 0.5 / 0.3 h): return 0.893 / 0.905, MPJPE 39 / 40 mm
     global and 14.2 / 16.4 mm root-relative, return 0.88 after 0.11 / 0.10 h of training ([details](benchmarks/g1_boxing/results.md)).
-11. **Muscles** (seeds 1-3, up to 3 h): root-frame MPJPE 36.4 ± 1.9 (SuperTrack) and 63.6 ± 4.1 mm (SuperMimic), episodes ended
-    0.014 and 0.059, joint error 10.9 ± 0.9 and 10.1 ± 0.6 deg. On SuperMimic's selection, BlinkMimic's systems options cut the
-    time per iteration by about 45%. At 4,000 iterations its errors were higher with them in all three seeds, not significantly
-    (p >= 0.19); at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
+11. **Muscles** (seeds 1-3, up to 3 h): MPJPE 38.1 ± 1.0 (SuperTrack) and 65.6 ± 8.1 mm (SuperMimic) in the root frame, 38.5 ± 1.1 and
+    45.7 ± 2.5 mm in the heading frame; episodes ended 0.011 and 0.053, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg. On SuperMimic's selection
+    at `--wm_lr 4e-4`, BlinkMimic's systems options cut the time per iteration by about 45%. At 4,000 iterations its errors were higher with
+    them in all three seeds, not significantly (p >= 0.19); at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
     ([details](benchmarks/musclevae/results.md#the-systems-options)).
 
 ## 🔬 Ablations

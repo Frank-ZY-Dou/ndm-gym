@@ -18,27 +18,28 @@ SuperTrack and SuperMimic, with MLP world models, track MuscleVAE's reference cl
 
 ## Results
 
-Round 3's selections, seeds 1-3, mean ± std over seeds. Commands:
+Round 4's selections, seeds 1-3, mean ± std over seeds. Commands:
 [README](../../README.md#muscle-actuated-character).
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
-| MPJPE, root frame (mm) | 36.4 ± 1.9 | 63.6 ± 4.1 |
-| episodes ended (share) | 0.014 ± 0.011 | 0.059 ± 0.027 |
-| joint error (deg) | 10.9 ± 0.9 | 10.1 ± 0.6 |
+| MPJPE, root frame (mm) | 38.1 ± 1.0 | 65.6 ± 8.1 |
+| MPJPE, heading frame (mm) | 38.5 ± 1.1 | 45.7 ± 2.5 |
+| episodes ended (share) | 0.011 ± 0.005 | 0.053 ± 0.014 |
+| joint error (deg) | 10.6 ± 1.1 | 9.7 ± 0.4 |
 
 Per seed:
 
-| | seed | MPJPE, root frame (mm) | episodes ended | joint error (deg) | best checkpoint, of the run's iterations |
-|---|---|---|---|---|---|
-| SuperTrack | 1 | 35.58 | 0.0013 | 10.47 | 20,000 of 22,650 |
-| | 2 | 34.98 | 0.0182 | 10.39 | 24,000 of 26,600 |
-| | 3 | 38.54 | 0.0221 | 11.98 | 24,000 of 24,800 |
-| SuperMimic | 1 | 66.10 | 0.0430 | 10.59 | 6,000 of 16,600 |
-| | 2 | 65.84 | 0.0443 | 10.10 | 8,000 of 24,650 |
-| | 3 | 58.81 | 0.0911 | 9.47 | 10,000 of 16,600 |
+| | seed | MPJPE, root frame (mm) | MPJPE, heading frame (mm) | episodes ended | joint error (deg) | best checkpoint, of the run's iterations |
+|---|---|---|---|---|---|---|
+| SuperTrack | 1 | 37.19 | 37.46 | 0.0052 | 10.16 | 26,000 of 28,400 |
+| | 2 | 39.13 | 39.69 | 0.0117 | 11.91 | 22,000 of 24,400 |
+| | 3 | 38.04 | 38.46 | 0.0156 | 9.83 | 30,000 of 32,500 |
+| SuperMimic | 1 | 68.71 | 46.75 | 0.0690 | 9.58 | 6,000 of 18,400 |
+| | 2 | 71.75 | 47.61 | 0.0417 | 10.22 | 6,000 of 16,450 |
+| | 3 | 56.48 | 42.86 | 0.0495 | 9.37 | 8,000 of 14,450 |
 
-SuperMimic's seeds 1 and 2 later reach 57.0 and 59.3 mm with 0.11 and 0.43 of the episodes ended, which the rule below excludes.
+SuperMimic's later checkpoints reach 55.8-67.6 mm in the root frame with 0.13-0.46 of the episodes ended, which the rule below excludes.
 
 ## How the numbers were obtained
 
@@ -52,9 +53,9 @@ SuperMimic's seeds 1 and 2 later reach 57.0 and 59.3 mm with 0.11 and 0.43 of th
   checkpoints with at most 0.10 of episodes ended, then reevaluate with seed 4, which no run trained with. Tables report
   this evaluation.
 - **Measures:** root-frame MPJPE averages position errors of the 23 bodies over the episode, each side in its own root's
-  frame. Episodes ended is the share of 768 episodes that MuscleVAE's termination rule ends within 512 steps. Joint error
+  frame, so a root's tilt moves every body; heading-frame MPJPE removes only each root's position and yaw. Selection uses the root frame. Episodes ended is the share of 768 episodes that MuscleVAE's termination rule ends within 512 steps. Joint error
   averages rotation errors of the 22 joints over the episode. Neither objective scores drift in the world on this character: world-frame MPJPE over
-  the same evaluations is 2.17 ± 0.12 m (SuperTrack) and 2.22 ± 0.08 m (SuperMimic).
+  the same evaluations is 2.24 ± 0.05 m (SuperTrack) and 2.31 ± 0.06 m (SuperMimic).
 
 ## Tuning
 
@@ -69,8 +70,7 @@ Both algorithms had the same four rounds, all with seed 0 and a budget of 1 h on
 - **Round 2:** six single changes to round 1's selection.
 - **Round 3:** round 2's selection with BlinkMimic's systems options, alone and with `--wm_lr 1.6e-3`, on LAFAN1 the fastest
   single change for both algorithms; stopped as above.
-- **Round 4:** the same selections at `--wm_lr` 1e-3 and 2.5e-3; stopped as above. Both algorithms select 2.5e-3. Its 3 h runs are in progress, and
-  their results will replace those above.
+- **Round 4:** the same selections at `--wm_lr` 1e-3 and 2.5e-3; stopped as above. Both algorithms select 2.5e-3, the runs reported above.
 
 Root-frame MPJPE (mm) / episodes ended, in bold the run each round selects:
 
@@ -104,15 +104,13 @@ error 10.0 ± 0.3 deg.
 
 **Round 3 was declared after those three SuperTrack runs had ended, while SuperMimic's three were ending.**
 
-**SuperTrack's world-model rate.** Published learning rates stay on a grid of 0.5 steps (1.5e-3, 2e-3, 2.5e-3). SuperTrack's
-world-model rate was therefore set to 1.5e-3, the grid value next to the selected 1.6e-3, and its runs repeated with seeds
-1-3: 36.4 ± 1.9 mm, ended 0.014 ± 0.011, joint error 10.9 ± 0.9 deg, against 36.7 ± 1.0 mm, 0.008 ± 0.002 and 11.5 ± 0.8 deg at
-1.6e-3. The rule, fixed before these runs, was to report 1.5e-3 if its mean MPJPE lay within 2 mm of 36.7 mm or below.
-SuperMimic's selection keeps the recipe's world-model rate (`--lr 4e-4`), so it had no rerun.
+**Round 3's selections at 3 h.** Up to 3 h, seeds 1-3, evaluated as above: SuperTrack at `--wm_lr` 1.6e-3 36.7 ± 1.0 mm, ended 0.008 ± 0.002, joint error 11.5 ± 0.8 deg; at 1.5e-3, the next value
+on the grid of published rates, 36.4 ± 1.9 mm, 0.014 ± 0.011, 10.9 ± 0.9 deg; SuperMimic at the recipe's 4e-4 63.6 ± 4.1 mm, 0.059 ± 0.027, 10.1 ± 0.6 deg. Round 4 selects by the same 1 h rule,
+so its selections are the ones reported; at 3 h their means are about 2 mm above these.
 
 ## The systems options
 
-Round 3 and the reported runs use BlinkMimic's systems options (`--no_sync --fused_adam --update_graphs --graph_early
+Rounds 3 and 4 and the reported runs use BlinkMimic's systems options (`--no_sync --fused_adam --update_graphs --graph_early
 --collect_graph --reset_masked --ckpt_light`; [details](../../docs/blinkmimic.md)). On a CPU in eager mode, with fused Adam on both sides, their code gives the default updates bit for bit on the same random numbers
 (`tests/test_muscle_systems.py`). The runs without them use the non-fused Adam, and the random stream differs. Their effect on the results
 was checked on SuperMimic's round-2 selection, with and without them, seeds 1-3, 4,000 iterations, one A100 40GB PCIe per
