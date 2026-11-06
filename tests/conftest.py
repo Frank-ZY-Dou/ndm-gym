@@ -19,6 +19,8 @@ DEV = "cpu"
 def upstream():
     """The upstream ``supermimic`` package (@ ee0608f), imported from third_party."""
     assert os.path.isdir(os.path.join(UPSTREAM, "supermimic")), f"missing pristine upstream checkout at {UPSTREAM}"
+    mjcf = os.path.join(UPSTREAM, "data", "g1_description", "g1_29dof.xml")
+    assert os.path.isfile(mjcf), f"missing {mjcf}: upstream keeps data/ out of git; link this repository's (ln -s ../../data {UPSTREAM}/data)"
     sys.path.insert(0, UPSTREAM)
     mods = {n: importlib.import_module(f"supermimic.{n}") for n in ("kinematics", "motion", "mdp", "networks", "buffer", "robot", "rotations")}
     sys.path.remove(UPSTREAM)

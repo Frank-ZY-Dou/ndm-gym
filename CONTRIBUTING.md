@@ -17,7 +17,8 @@ Install as in the [README](README.md), then `pip install -e ".[dev]"` and `pre-c
 - Components sit behind the interfaces in `ndm_gym/algos/common.py` (`Algo`: `world_model_cls`, `setpoint`, `wm_loss`,
   `policy_update`) and `ndm_gym/worldmodels/`; a new algorithm is registered in `ndm_gym/algos/__init__.py`.
 - An optional change to an algorithm goes behind a flag whose default keeps the current behavior. The equivalence
-  tests against `third_party/supermimic` and the SuperTrack golden tests keep passing unchanged.
+  tests against `third_party/supermimic` (its `data/` is not in git: `ln -s ../../data third_party/supermimic/data`) and the SuperTrack golden
+  tests keep passing unchanged.
 - Every new component comes with a test in `tests/`.
 - The library imports without the simulator, as a `pip install` of the repository gives it: a command takes Isaac Lab's launcher from
   `ndm_gym.sim.launcher`, and a module that is not a simulator imports the simulator inside the functions that use it
