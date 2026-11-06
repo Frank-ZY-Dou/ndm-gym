@@ -24,8 +24,8 @@ MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp). The neural dyna
 
 ## 🔥 News
 
-- **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands
-  ([below](#muscle-actuated-character)).
+- **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands, with MLP and RigidFormer
+  world models ([below](#muscle-actuated-character)).
 - **[2026-11]** [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s recipe (`--algo blinkmimic`), validated against its
   code, and systems options for LAFAN1, two-G1 and muscle training ([details](#blinkmimics-options));
   [training time to return 0.82 on LAFAN1](#training-speed). Library-only `pip` installation ([details](docs/installation.md)).
@@ -170,8 +170,8 @@ python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joi
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Configurations are selected in rounds
 with equal budgets and one rule; the [fastest configurations](#training-speed) use rounds of single changes.
-Tracking and training-speed results use MLP world models, apart from LAFAN1's RigidFormer tracking results. Not compared here: tracking on
-HDMI's human-object interaction tasks, tracking with the RigidFormer on the two G1s and the muscles, and the RigidFormer's time to a target
+Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1 and the muscles. Not compared here: tracking on
+HDMI's human-object interaction tasks, tracking with the RigidFormer on the two G1s, and the RigidFormer's time to a target
 return. Return is the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
 <table>
@@ -404,6 +404,30 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
        $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_s1
 ```
 
+RigidFormer: a token per body, width 128, 2 blocks, 4 heads, from nine rounds of 1 h runs ranked by the same rule; seeds 1-3, up to 3 h
+([details and tuning history](benchmarks/musclevae/results.md#rigidformer-world-model)).
+
+| | SuperTrack-RF | SuperMimic-RF |
+|---|---|---|
+| MPJPE, root frame (mm) | 34.9 ± 0.7 | 60.2 ± 2.0 |
+| MPJPE, heading frame (mm) | 35.1 ± 0.7 | 38.5 ± 3.4 |
+| episodes ended (share) | 0.000 ± 0.001 | 0.009 ± 0.014 |
+| joint error (deg) | 10.1 ± 0.3 | 8.7 ± 0.4 |
+
+These tables do not compare the world models at equal effort: the RigidFormer had nine rounds of tuning, the MLP four. The RigidFormer's six runs all reached
+the 3 h limit, at 9,105-12,033 iterations, five of them with their last checkpoint as the best; the MLP's six stopped by the rule before 3 h, at 14,450-32,500
+iterations. SuperMimic-RF's root-frame and heading-frame MPJPE differ by 21.7 mm, SuperTrack-RF's by 0.2 mm; selection uses the root frame.
+
+```bash
+MUSCLE_RF="--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 --wm_backbone rigidformer \
+           --rf_muscle_tokens body --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 9 --rf_fused_train --rf_fused_features"   # the recipe, the RigidFormer in place of its --wm_hidden
+# $MUSCLE_SYS as above; Muon on the world model (--wm_opt muon) is SuperTrack-RF's selection, SuperMimic-RF's keeps Adam
+python -m ndm_gym.train_muscles --algo supertrack --st_fail_w 5 --st_balance_w 4 $MUSCLE_RF --wm_opt muon $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 4 \
+       --wm_lr 5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_st_rf_s1    # seeds 1-3
+python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 $MUSCLE_RF \
+       $MUSCLE_SYS --wm_batches 8 --pi_lr_mult 2 --wm_lr 5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_rf_s1
+```
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`); see [options](docs/blinkmimic.md). On the same
@@ -478,7 +502,7 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
    ([details](#blinkmimics-options)).
 10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint of runs of 0.5 / 0.3 h): return 0.893 / 0.905, MPJPE 39 / 40 mm
     global and 14.2 / 16.4 mm root-relative, return 0.88 after 0.11 / 0.10 h of training ([details](benchmarks/g1_boxing/results.md)).
-11. **Muscles** (seeds 1-3, up to 3 h): MPJPE 38.1 ± 1.0 (SuperTrack) and 65.6 ± 8.1 mm (SuperMimic) in the root frame, 38.5 ± 1.1 and
+11. **Muscles**, MLP world model (seeds 1-3, up to 3 h): MPJPE 38.1 ± 1.0 (SuperTrack) and 65.6 ± 8.1 mm (SuperMimic) in the root frame, 38.5 ± 1.1 and
     45.7 ± 2.5 mm in the heading frame; episodes ended 0.011 and 0.053, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg. On SuperMimic's selection
     at `--wm_lr 4e-4`, BlinkMimic's systems options cut the time per iteration by about 45%. At 4,000 iterations its errors were higher with
     them in all three seeds, not significantly (p >= 0.19); at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
