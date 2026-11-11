@@ -5,3 +5,5 @@ The Unitree G1's specification and the state layout shared by simulators, world 
 ::: ndm_gym.robots.g1
 
 ::: ndm_gym.state
+
+::: ndm_gym.robots.xhand

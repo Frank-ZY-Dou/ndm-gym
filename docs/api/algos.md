@@ -9,3 +9,5 @@
 ::: ndm_gym.algos.supermimic
 
 ::: ndm_gym.algos.blinkmimic
+
+::: ndm_gym.algos.hand_algos

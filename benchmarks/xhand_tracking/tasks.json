@@ -1,0 +1,11 @@
+{
+  "dataset_repository": "retarget/retarget_full",
+  "revision": "b6050b02146fc412d3db8cd539634dc71a117474",
+  "robot": "xhand",
+  "hand": "right",
+  "tasks": [
+    {"id": "apple", "dataset": "hrdexdb_24f", "task": "apple-0", "trial": 0},
+    {"id": "oakink_a01002", "dataset": "oakink_lifted", "task": "oakink_0000_right_A01002_00", "trial": 0},
+    {"id": "can", "dataset": "dexycb_lifted", "task": "dexycb_01_right_002_master_chef_can_20200709_141754_00", "trial": 0}
+  ]
+}

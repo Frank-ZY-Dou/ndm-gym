@@ -32,6 +32,7 @@ sim = [
     "warp-lang==1.17.0",
     "newton @ git+https://github.com/newton-physics/newton.git@71eeba16a717d4dcf0b9dd7056a7b6f863054dc3",
 ]
+hand = ["mujoco==3.15.0", "mujoco-warp==3.15.0", "warp-lang==1.17.0"]
 render = ["pillow>=10", "matplotlib>=3.8"]  # tools/render*.py, plot.py, compare_videos.py (and ffmpeg)
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings-python>=1.16"]
 test = ["pytest>=8", "pillow>=10", "pyyaml>=6"]
@@ -66,3 +67,4 @@ extend-exclude = ["third_party"]
 # the simulator modules check that the simulator is installed before importing it (ndm_gym.sim.require_simulator)
 "ndm_gym/sim/rigid/isaaclab_mjwarp.py" = ["E402"]
 "ndm_gym/sim/rigid/hdmi_sim.py" = ["E402"]
+"ndm_gym/sim/rigid/hand_sim.py" = ["E402"]

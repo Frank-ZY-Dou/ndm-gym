@@ -15,3 +15,5 @@
 ::: ndm_gym.worldmodels.hoi
 
 ::: ndm_gym.worldmodels.muscle
+
+::: ndm_gym.worldmodels.hand

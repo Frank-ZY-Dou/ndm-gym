@@ -24,6 +24,7 @@ MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp). The neural dyna
 
 ## 🔥 News
 
+- **[2026-11]** Hand-object tracking: a XHand tracks kinematic retargets of human grasps with SuperMimic ([below](#hand-object-tracking)).
 - **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands, with MLP and RigidFormer
   world models ([below](#muscle-actuated-character)).
 - **[2026-11]** [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s recipe (`--algo blinkmimic`), validated against its
@@ -45,7 +46,7 @@ MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp). The neural dyna
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
-  fatigue.
+  fatigue; a floating XHand tracking human hand-object demonstrations.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics, with fused Triton inference kernels
   ([results](benchmarks/ndm_speed/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
@@ -166,6 +167,25 @@ python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joi
 
 </details>
 
+<details>
+<summary><b>Hand-object tracking</b></summary>
+
+```bash
+pip install -e '.[hand]'                               # MuJoCo-Warp
+python tools/download_hand_clips.py                    # benchmark clips into data/spider
+
+# one clip example: train, evaluate beside the reference targets, render the rollout over the reference
+CLIP=data/spider/processed/hrdexdb_24f/xhand/right/apple-0/0
+python -m ndm_gym.train_hand --clip $CLIP --log_dir logs/apple
+python -m ndm_gym.evaluate_hand --ckpt logs/apple/last.pt --out logs/apple/evaluation
+python tools/render_hand.py --clip $CLIP --rollout logs/apple/evaluation/rollout.npz --out apple.mp4
+
+# a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json)
+benchmarks/xhand_tracking/run.sh apple 0
+```
+
+</details>
+
 ## 📊 Results
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Configurations are selected in rounds
@@ -189,6 +209,8 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
 <tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
 <tr><td>joint error ↓</td><td>10.6 ± 1.1°</td><td>9.7 ± 0.4°</td></tr>
+<tr><td rowspan="2"><b>Hand-object tracking</b><br><sub>XHand, three clips, MLP world model<br>A40 and A100, seeds 0-2</sub></td><td>success ↑, 256 perturbed starts</td><td>not implemented</td><td>100 %</td></tr>
+<tr><td>object position ↓</td><td>not implemented</td><td>3.0-3.7 mm</td></tr>
 </tbody>
 </table>
 
@@ -428,6 +450,31 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
        $MUSCLE_SYS --wm_batches 8 --pi_lr_mult 2 --wm_lr 5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_rf_s1
 ```
 
+### Hand-object tracking
+
+An XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp, with SuperMimic and an MLP world model. The reference is [SPIDER](https://github.com/facebookresearch/spider)'s kinematic retarget of the captured hand and the object's pose. Each run trains 20,000 iterations in 2048 worlds (about 1 h 35 min on one A40) and its last checkpoint is rolled out over the whole clip from 256 perturbed starts ([details](benchmarks/xhand_tracking/results.md)).
+
+<p align="center"><img src="docs/media/hand/apple.webp" alt="apple, the reference as the targets and SuperMimic" width="800"/><br>
+<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle, the reference as the targets and SuperMimic" width="800"/><br>
+<img src="docs/media/hand/can.webp" alt="can, the reference as the targets and SuperMimic" width="800"/></p>
+<p align="center"><i>The reference's joint positions as the position targets (left) and SuperMimic's policy (right, seed 0) in the simulator, the kinematic reference in blue, on the apple, the spray bottle and the can, at half speed.</i></p>
+<p align="center"><sub>Renders of SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and the XHand's model, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
+| | apple | spray bottle | can |
+|---|---|---|---|
+| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
+| success ↑ | 100 ± 0 % | 100 ± 0 % | 100 ± 0 % |
+| object position ↓, reference targets | 19.9 mm | 198.4 mm | 106.7 mm |
+| object position ↓, SuperMimic | 3.4 ± 0.1 mm | 3.0 ± 0.5 mm | 3.7 ± 0.5 mm |
+| fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.8 mm |
+| fingertips ↓, SuperMimic | 6.3 ± 0.2 mm | 6.9 ± 0.2 mm | 7.3 ± 0.3 mm |
+
+Reference targets: the same rollouts with the reference's joint positions as the position targets.
+
+```bash
+python -m ndm_gym.train_hand --clip $CLIP --seed 0 --log_dir logs/xhand_tracking/apple/seed_0    # the defaults; seeds 0-2
+```
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`); see [options](docs/blinkmimic.md). On the same
@@ -555,6 +602,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/g1_boxing/`](benchmarks/g1_boxing/) | two G1s tracking a two-person clip: tracking and speed |
 | [`benchmarks/musclevae/results.md`](benchmarks/musclevae/results.md) | the muscle-actuated character: setup, tuning and results |
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
+| [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/hoi_design.md`](docs/hoi_design.md), [`docs/hdmi_task_spec.md`](docs/hdmi_task_spec.md) | human-object interaction: design, and HDMI's task as implemented, with references into HDMI's code |
@@ -566,16 +614,16 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`) |
-| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); Isaac Lab's launcher |
-| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py` |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`; inference copies (`g1_infer.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); XHand (`xhand.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`) |
+| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); a hand and an object on MuJoCo-Warp (`rigid/hand_sim.py`); Isaac Lab's launcher |
+| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py` |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`; inference copies (`g1_infer.py`) |
 | `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
-| `ndm_gym/policies/` | tracking policy and critic; HOI and muscle policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `hoi_algos.py`, `muscle_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/policies/` | tracking policy and critic; HOI, muscle and hand policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`) |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py` |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
 | `benchmarks/` | studies run with the library: results, ablations, speed |
 | `docs/` | guides, the API reference and the design documents (`mkdocs.yml`) |

@@ -100,6 +100,7 @@ nav:
       - Muscle-actuated character:
           - tasks/muscles.md
           - Design: musclevae_design.md
+      - Hand-object tracking: tasks/hand.md
   - Algorithms:
       - algorithms.md
       - SuperTrack: algorithms/supertrack.md

@@ -6,3 +6,5 @@ world models.
 ::: ndm_gym.tasks.tracking
 
 ::: ndm_gym.tasks.contact
+
+::: ndm_gym.tasks.hand_tracking

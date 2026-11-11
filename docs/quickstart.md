@@ -21,7 +21,8 @@ MUJOCO_GL=egl python tools/compare_videos.py st.npz sm.npz --labels SuperTrack S
 ```
 
 `ndm-train --help` lists all options. Other [tasks](tasks.md) use:
-`python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack`, `python -m ndm_gym.train_muscles --algo supertrack`.
+`python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack`, `python -m ndm_gym.train_muscles --algo supertrack`,
+`python -m ndm_gym.train_hand --clip <clip>`.
 
 ## World models in Python
 
