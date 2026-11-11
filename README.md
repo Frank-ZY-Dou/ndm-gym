@@ -468,7 +468,10 @@ A floating XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp. The 
 Each run trains 20,000 iterations in 2,048 worlds on one A100 40GB, and its last checkpoint plays 256 rollouts of the
 whole clip from perturbed starts. SuperTrack runs with `--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`,
 SuperMimic with its defaults; each was chosen from its own tuning runs by the same rule
-([results](benchmarks/xhand_tracking/results.md), [task](docs/tasks/hand.md)).
+([results](benchmarks/xhand_tracking/results.md), [task](docs/tasks/hand.md)). On one A100 40GB a run trains at 11.6-12.0 (SuperTrack) and 9.4-9.7 iterations/s (SuperMimic) and reaches a
+success of 0.99 with the object within 10 mm in 0.9-8.4 (one run on the can ends at 0.988) and 2.7-8.3 minutes; with
+HOI's optimizer options (Muon, the policy average, the learning-rate ramp; SuperMimic with HDMI's settings at γ 0.99),
+in 0.9-3.2 and 1.0-1.7 minutes ([training time](benchmarks/xhand_tracking/results.md#training-time)).
 
 | | apple | spray bottle | can |
 |---|---|---|---|
@@ -569,6 +572,11 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
     at `--wm_lr 4e-4`, BlinkMimic's systems options cut the time per iteration by about 45%. At 4,000 iterations its errors were higher with
     them in all three seeds, not significantly (p >= 0.19); at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
     ([details](benchmarks/musclevae/results.md#the-systems-options)).
+12. **Hand-object tracking** on the XHand (seeds 0-2, 20,000 iterations on an A100 40GB): at a success of 99.9-100 % on
+    the apple, the spray bottle and the can, the object's error is 2.4 / 1.6 / 2.3 mm (SuperTrack) and 3.5 / 2.9 / 3.2 mm
+    (SuperMimic), the fingertips' 4.8 / 5.8 / 6.4 and 6.8 / 6.6 / 6.6 mm. A success of 0.99 with the object within 10 mm
+    takes 0.9-3.2 and 1.0-1.7 min of training with HOI's optimizer options
+    ([details](benchmarks/xhand_tracking/results.md)).
 
 ## 🔬 Ablations
 
