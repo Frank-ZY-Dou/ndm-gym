@@ -47,6 +47,7 @@ Options of both algorithms: [Algorithms](../algorithms.md#options). HOI training
 | Two G1s | [README](../../README.md#two-g1s-one-two-person-clip) |
 | Human-object interaction | [commands](../tasks/hoi.md) |
 | Muscle-actuated character | [README](../../README.md#muscle-actuated-character) |
+| Hand-object tracking | `--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights` ([README](../../README.md#hand-object-tracking)) |
 
 ## Paper
 

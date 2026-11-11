@@ -11,3 +11,5 @@
 ::: ndm_gym.algos.blinkmimic
 
 ::: ndm_gym.algos.hand_algos
+
+::: ndm_gym.algos.hand_fast

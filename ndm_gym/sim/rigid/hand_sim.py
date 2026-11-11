@@ -6,6 +6,11 @@ CONTROL_DT, replayed as one CUDA graph, then advances every world's reference fr
 first frame, the hand's joints and the object's horizontal position perturbed, and end at a termination
 (tasks.hand_tracking) or at the reference's last frame; ended worlds are reset in the same step. With ``stagger``, the
 first episodes end early, at random frames.
+
+``step_nosync`` (train_hand --no_sync, --collect_graph; algos.hand_fast) is ``step`` without host synchronization: the
+caller runs it on Warp's stream (``torch_stream``), where torch's writes, the physics and torch's reads follow each other,
+or inside a capture with the physics as kernels (``physics``); the ended worlds are reset by mask (``reset_masked``) and
+the frame counter is advanced in place, so that a CUDA graph reads the tensors it captured.
 """
 
 from __future__ import annotations
@@ -76,6 +81,57 @@ class HandSim:
         self.warmstart[mask] = 0
         self.f[mask] = 0
         self.last[mask] = self.ref.frames - 1
+
+    @torch.no_grad()
+    def reset_masked(self, mask: torch.Tensor):
+        """``reset`` of the worlds of ``mask`` without a host read (train_hand --reset_masked): the same writes at fixed
+        shapes, the random draws made for every world (another random stream than ``reset``'s, which draws for the worlds
+        it resets)."""
+        N, o, m = self.N, self.object_qpos, mask.unsqueeze(-1)
+        q = self.ref.q[0] + self.joint_noise * torch.randn(N, NUM_J, device=self.device)
+        q = torch.clamp(q, self.task.kin.q_lo, self.task.kin.q_hi)
+        p = self.ref.p[0].repeat(N, 1)
+        p[:, :2] += self.object_noise * (2 * torch.rand(N, 2, device=self.device) - 1)
+        self.qpos[:, self.qpos_idx] = torch.where(m, q, self.qpos[:, self.qpos_idx])
+        self.qpos[:, o : o + 3] = torch.where(m, p, self.qpos[:, o : o + 3])
+        self.qpos[:, o + 3 : o + 7] = torch.where(m, mat_to_quat(self.ref.R[0]), self.qpos[:, o + 3 : o + 7])
+        self.ctrl[:, self.ctrl_idx] = torch.where(m, q, self.ctrl[:, self.ctrl_idx])
+        self.qvel.masked_fill_(m, 0.0)
+        self.warmstart.masked_fill_(m, 0.0)
+        self.f.masked_fill_(mask, 0)
+        self.last.masked_fill_(mask, self.ref.frames - 1)
+
+    def torch_stream(self) -> torch.cuda.Stream:
+        """Warp's stream of the device as a torch stream: torch's work on it is ordered with the physics graph's."""
+        return torch.cuda.ExternalStream(wp.get_stream(self.device).cuda_stream, device=self.device)
+
+    def physics(self):
+        """A control step's physics as kernels, for a capture that holds the whole collection step (train_hand
+        --collect_graph); ``step`` and ``step_nosync`` replay them as the graph captured at the start."""
+        with wp.ScopedDevice(self.device):
+            for _ in range(self.substeps):
+                mjw.step(self.model, self.data)
+
+    @torch.no_grad()
+    def step_nosync(self, u: torch.Tensor, physics=None, fk=None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """``step`` without host synchronization (the module's docstring): on Warp's stream, or with ``physics`` (the
+        kernels) inside a capture. The ended worlds are reset by mask. ``fk``: the forward kinematics of the termination
+        (train_hand --compile_eager's compiled ones; None: the task's)."""
+        s = self.state()
+        self.ctrl[:, self.ctrl_idx] = u
+        if physics is None:
+            wp.capture_launch(self.graph)
+        else:
+            physics()
+        self.f.copy_(self.ref.next_frame(self.f))
+        s1 = self.state()
+        bad = ~torch.isfinite(s1).all(-1)
+        s1 = torch.where(bad.unsqueeze(-1), s, s1)
+        S1 = unflatten_state(s1)
+        term = bad | self.task.termination(S1, (self.task.kin.forward if fk is None else fk)(S1[0]), self.f)
+        done = term | (self.f >= self.last)
+        self.reset_masked(done)
+        return s1, term, done
 
     @torch.no_grad()
     def state(self) -> torch.Tensor:

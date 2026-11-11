@@ -24,7 +24,8 @@ MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp). The neural dyna
 
 ## 🔥 News
 
-- **[2026-11]** Hand-object tracking: a XHand tracks kinematic retargets of human grasps with SuperMimic ([below](#hand-object-tracking)).
+- **[2026-11]** Hand-object tracking on the XHand: human grasp-and-lift clips with SuperTrack and SuperMimic
+  ([below](#hand-object-tracking)); the task and SuperMimic on it contributed by [Dechen Gao](https://github.com/gaodechen).
 - **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands, with MLP and RigidFormer
   world models ([below](#muscle-actuated-character)).
 - **[2026-11]** [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s recipe (`--algo blinkmimic`), validated against its
@@ -174,14 +175,17 @@ python -m ndm_gym.wmbench.speed_muscles --mode physics --ball_joints euler --joi
 pip install -e '.[hand]'                               # MuJoCo-Warp
 python tools/download_hand_clips.py                    # benchmark clips into data/spider
 
-# one clip example: train, evaluate beside the reference targets, render the rollout over the reference
+# one clip: train (SuperTrack, then SuperMimic), evaluate beside the reference targets, render the rollout over the reference
 CLIP=data/spider/processed/hrdexdb_24f/xhand/right/apple-0/0
-python -m ndm_gym.train_hand --clip $CLIP --log_dir logs/apple
-python -m ndm_gym.evaluate_hand --ckpt logs/apple/last.pt --out logs/apple/evaluation
-python tools/render_hand.py --clip $CLIP --rollout logs/apple/evaluation/rollout.npz --out apple.mp4
+python -m ndm_gym.train_hand --clip $CLIP --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights \
+       --log_dir logs/apple_st
+python -m ndm_gym.train_hand --clip $CLIP --log_dir logs/apple_sm
+python -m ndm_gym.evaluate_hand --ckpt logs/apple_st/last.pt --out logs/apple_st/evaluation
+python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/rollout.npz --out apple_st.mp4
 
-# a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json)
-benchmarks/xhand_tracking/run.sh apple 0
+# a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json): SuperTrack, then SuperMimic's defaults
+benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_st --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights
+benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
 ```
 
 </details>
@@ -209,8 +213,9 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
 <tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
 <tr><td>joint error ↓</td><td>10.6 ± 1.1°</td><td>9.7 ± 0.4°</td></tr>
-<tr><td rowspan="2"><b>Hand-object tracking</b><br><sub>XHand, three clips, MLP world model<br>A40 and A100, seeds 0-2</sub></td><td>success ↑, 256 perturbed starts</td><td>not implemented</td><td>100 %</td></tr>
-<tr><td>object position ↓</td><td>not implemented</td><td>3.0-3.7 mm</td></tr>
+<tr><td rowspan="3"><b>Hand-object tracking</b><br><sub>XHand: apple / spray bottle / can, MLP world model<br>A100 40GB, seeds 0-2</sub></td><td>success ↑, 256 perturbed starts</td><td>100.0 / 100.0 / 99.9 %</td><td>100.0 / 100.0 / 100.0 %</td></tr>
+<tr><td>object position ↓</td><td>2.4 ± 0.0 / 1.6 ± 0.1 / 2.3 ± 0.3 mm</td><td>3.5 ± 0.1 / 2.9 ± 0.4 / 3.2 ± 0.1 mm</td></tr>
+<tr><td>fingertips ↓</td><td>4.8 ± 0.1 / 5.8 ± 0.1 / 6.4 ± 0.2 mm</td><td>6.8 ± 1.7 / 6.6 ± 0.7 / 6.6 ± 0.6 mm</td></tr>
 </tbody>
 </table>
 
@@ -452,27 +457,37 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 ### Hand-object tracking
 
-An XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp, with SuperMimic and an MLP world model. The reference is [SPIDER](https://github.com/facebookresearch/spider)'s kinematic retarget of the captured hand and the object's pose. Each run trains 20,000 iterations in 2048 worlds (about 1 h 35 min on one A40) and its last checkpoint is rolled out over the whole clip from 256 perturbed starts ([details](benchmarks/xhand_tracking/results.md)).
+<p align="center"><img src="docs/media/hand/apple.webp" alt="apple, SuperTrack and SuperMimic" width="800"/><br>
+<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle, SuperTrack and SuperMimic" width="800"/><br>
+<img src="docs/media/hand/can.webp" alt="can, SuperTrack and SuperMimic" width="800"/></p>
+<p align="center"><i>SuperTrack (left) and SuperMimic (right) on the apple, the spray bottle and the can: the last checkpoints of seed 0 from the unperturbed start, the kinematic reference drawn over them in blue, at half speed. Object error over the clip 1.2 / 2.4, 1.1 / 2.3 and 2.0 / 3.1 mm.</i></p>
+<p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and the XHand's model, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-<p align="center"><img src="docs/media/hand/apple.webp" alt="apple, the reference as the targets and SuperMimic" width="800"/><br>
-<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle, the reference as the targets and SuperMimic" width="800"/><br>
-<img src="docs/media/hand/can.webp" alt="can, the reference as the targets and SuperMimic" width="800"/></p>
-<p align="center"><i>The reference's joint positions as the position targets (left) and SuperMimic's policy (right, seed 0) in the simulator, the kinematic reference in blue, on the apple, the spray bottle and the can, at half speed.</i></p>
-<p align="center"><sub>Renders of SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and the XHand's model, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+A floating XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp. The reference is
+[SPIDER](https://github.com/facebookresearch/spider)'s kinematic retarget of the captured hand and of the object's pose.
+Each run trains 20,000 iterations in 2,048 worlds on one A100 40GB, and its last checkpoint plays 256 rollouts of the
+whole clip from perturbed starts. SuperTrack runs with `--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`,
+SuperMimic with its defaults; each was chosen from its own tuning runs by the same rule
+([results](benchmarks/xhand_tracking/results.md), [task](docs/tasks/hand.md)).
 
 | | apple | spray bottle | can |
 |---|---|---|---|
 | seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| success ↑ | 100 ± 0 % | 100 ± 0 % | 100 ± 0 % |
-| object position ↓, reference targets | 19.9 mm | 198.4 mm | 106.7 mm |
-| object position ↓, SuperMimic | 3.4 ± 0.1 mm | 3.0 ± 0.5 mm | 3.7 ± 0.5 mm |
-| fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.8 mm |
-| fingertips ↓, SuperMimic | 6.3 ± 0.2 mm | 6.9 ± 0.2 mm | 7.3 ± 0.3 mm |
+| success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 99.9 / 100.0 % |
+| object position ↓, reference targets | 20.0 mm | 198.3 mm | 113.3 mm |
+| object position ↓, SuperTrack | 2.4 ± 0.0 mm | 1.6 ± 0.1 mm | 2.3 ± 0.3 mm |
+| object position ↓, SuperMimic | 3.5 ± 0.1 mm | 2.9 ± 0.4 mm | 3.2 ± 0.1 mm |
+| fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.6 mm |
+| fingertips ↓, SuperTrack | 4.8 ± 0.1 mm | 5.8 ± 0.1 mm | 6.4 ± 0.2 mm |
+| fingertips ↓, SuperMimic | 6.8 ± 1.7 mm | 6.6 ± 0.7 mm | 6.6 ± 0.6 mm |
 
 Reference targets: the same rollouts with the reference's joint positions as the position targets.
 
 ```bash
-python -m ndm_gym.train_hand --clip $CLIP --seed 0 --log_dir logs/xhand_tracking/apple/seed_0    # the defaults; seeds 0-2
+HAND_SYSTEMS="--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
+python -m ndm_gym.train_hand --clip $CLIP --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights \
+       $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_st_s0      # seeds 0-2
+python -m ndm_gym.train_hand --clip $CLIP $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_sm_s0   # seeds 0-2
 ```
 
 ### BlinkMimic's options
