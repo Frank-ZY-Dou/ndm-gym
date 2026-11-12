@@ -15,12 +15,13 @@
 </div>
 
 NDM Gym trains humanoid controllers through neural world models. Algorithms share one pipeline within each task: LAFAN1 motion
-tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF) and
-MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp). The neural dynamics models (NDMs) also serve as simulators.
+tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF),
+MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand (MuJoCo-Warp). The neural
+dynamics models (NDMs) also serve as simulators.
 
-<p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s and a muscle-actuated character" width="100%"/></p>
-<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Mean per-joint position error (MPJPE), SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 13.2 / 14.5 mm over the 6 s shown (root-relative), muscles 24.3 / 49.2 mm over the walk clip (root frame). Returns, push failures and training times are under <a href="#-results">Results</a>.</i></p>
-<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s, a muscle-actuated character and hand-object tracking" width="100%"/></p>
+<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Mean per-joint position error (MPJPE), SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 13.2 / 14.5 mm over the 6 s shown (root-relative), muscles 24.3 / 49.2 mm over the walk clip (root frame); the object's position error on the apple, 1.2 / 2.4 mm over its clip (shown at half speed, its last frame held). Returns, push failures and training times are under <a href="#-results">Results</a>.</i></p>
+<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), and of SPIDER's retarget of an HRDexDB grasp, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## 🔥 News
 
