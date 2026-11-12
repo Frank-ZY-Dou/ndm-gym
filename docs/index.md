@@ -1,8 +1,8 @@
 # NDM Gym
 
-**Neural Dynamics Modeling Gym**: neural world models for physics-based humanoid control.
+**Neural Dynamics Modeling Gym**: neural world models for controlling physical agents.
 
-NDM Gym trains humanoid controllers through neural world models. Algorithms share one pipeline within each task: LAFAN1 motion
+NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1 motion
 tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF) and
 MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking (MuJoCo-Warp). The neural dynamics models (NDMs) also serve as simulators.
 

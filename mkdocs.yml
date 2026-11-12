@@ -2,7 +2,7 @@
 # (mkdocs build --strict, after pip install -r docs/requirements.txt); preview: `mkdocs serve`. Published on GitHub
 # Pages by .github/workflows/docs.yml.
 site_name: NDM Gym
-site_description: "Neural world models for physics-based humanoid control"
+site_description: "Neural world models for controlling physical agents"
 site_url: https://frank-zy-dou.github.io/ndm-gym/
 repo_url: https://github.com/Frank-ZY-Dou/ndm-gym
 repo_name: Frank-ZY-Dou/ndm-gym
