@@ -1,8 +1,8 @@
 # SuperMimic
 
 `--algo supermimic`. The policy maximizes the imagined tracking return through the world model, with a soft survival weight and a critic beyond the horizon (first-order
-gradients). A re-implementation on this pipeline, not the authors' code, equivalence-tested against an unofficial reproduction, as no official code is released
-([`supermimic.py`](../../ndm_gym/algos/supermimic.py)).
+gradients). A re-implementation on this pipeline, not the authors' code: it was equivalence-tested against an unofficial reproduction before the authors
+released their [official code](https://github.com/HybridRobotics/supermimic) ([`supermimic.py`](../../ndm_gym/algos/supermimic.py)).
 
 ## Policy update
 

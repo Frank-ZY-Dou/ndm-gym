@@ -19,8 +19,8 @@ tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac L
 MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand (MuJoCo-Warp). The neural
 dynamics models (NDMs) also serve as simulators.
 
-<p align="center"><img src="docs/media/teaser.webp" alt="SuperTrack and SuperMimic on LAFAN1 motion tracking, two G1s, a muscle-actuated character and hand-object tracking" width="100%"/></p>
-<p align="center"><i>SuperTrack (top) and SuperMimic (bottom) with each task's selected configuration, the same motion and window in both rows. Mean per-joint position error (MPJPE), SuperTrack / SuperMimic: LAFAN1 15.3 / 26.6 mm and two G1s 13.2 / 14.5 mm over the 6 s shown (root-relative), muscles 24.3 / 49.2 mm over the walk clip (root frame); the object's position error on the apple, 1.2 / 2.4 mm over its clip (shown at half speed, its last frame held). Returns, push failures and training times are under <a href="#-results">Results</a>.</i></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip" width="100%"/></p>
+<p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held).</i></p>
 <p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), and of SPIDER's retarget of an HRDexDB grasp, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## 🔥 News
@@ -39,11 +39,13 @@ dynamics models (NDMs) also serve as simulators.
 - **[2026-11]** RigidFormer's final configurations and training speed options: SuperTrack-RF and SuperMimic-RF on fresh seeds ([results](#-results)).
 - **[2026-10]** A benchmark covering SuperTrack and SuperMimic on G1 / LAFAN1: [results](#-results) and [ablations](benchmarks/g1_lafan1_tracking/ablations.md).
 - **[2026-10]** [RigidFormer](https://frank-zy-dou.github.io/projects/RigidFormer/) world-model backbone (`--wm_backbone rigidformer`).
-- **[2026-10]** First release, equivalence-tested against an unofficial SuperMimic reproduction (no official code is released).
+- **[2026-10]** First release, equivalence-tested against an unofficial SuperMimic reproduction. SuperMimic's authors have since released
+  their code: [HybridRobotics/supermimic](https://github.com/HybridRobotics/supermimic).
 
 ## ✨ Features
 
-- **Algorithms:** SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`), with each change available separately.
+- **Algorithms:** SuperTrack, SuperMimic ([official code](https://github.com/HybridRobotics/supermimic)) and BlinkMimic's recipe (`--algo blinkmimic`), with each change
+  available separately.
 - **World models:** acceleration (SuperTrack) and increment (SuperMimic) models, each with an MLP or a
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
@@ -195,7 +197,9 @@ benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation. Configurations are selected in rounds
 with equal budgets and one rule; the [fastest configurations](#training-speed) use rounds of single changes.
-Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1 and the muscles. Not compared here: tracking on
+SuperMimic here is this library's re-implementation, written before its [official code](https://github.com/HybridRobotics/supermimic) was released, so its
+numbers may differ from the authors' code.
+Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1 and the muscles. Not reported here: tracking on
 HDMI's human-object interaction tasks, tracking with the RigidFormer on the two G1s, and the RigidFormer's time to a target
 return. Return is the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
@@ -237,7 +241,7 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <td><img src="docs/media/final/fight1_subject2.webp" alt="fight1_subject2"/></td>
 </tr>
 </table>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right): the selected configurations, seed 2, 3 h checkpoints on an A100. One clip per motion category that both completed, its 10 s with the most motion. Blue ghost: the reference.</i></p>
+<p align="center"><i>SuperTrack's selected configuration, seed 2, 3 h checkpoint on an A100. One clip per motion category, its 10 s with the most motion. Blue ghost: the reference.</i></p>
 <!-- videos:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
@@ -290,7 +294,7 @@ RigidFormer: final configurations with every speed option, fresh seeds 7-9.
 <td><img src="docs/media/rf/fight1_subject2.webp" alt="fight1_subject2"/></td>
 </tr>
 </table>
-<p align="center"><i>SuperTrack-RF (left) and SuperMimic-RF (right): the final configurations with every speed option, seed 8, 3 h checkpoints (12,677 / 10,694 iterations) on an A100. Same clips and windows.</i></p>
+<p align="center"><i>SuperTrack-RF, the final configuration with every speed option, seed 8, 3 h checkpoint (12,677 iterations) on an A100. Same clips and windows.</i></p>
 <!-- videos_rf:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
@@ -373,8 +377,8 @@ redistributed). One policy controls both. Configurations come from two rounds wi
 evaluations of each selected run's best checkpoint on an A100 80GB; SuperTrack's run trained 0.5 h, SuperMimic's 0.3 h
 ([details](benchmarks/g1_boxing/results.md)).
 
-<p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566, SuperTrack and SuperMimic" width="800"/></p>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right) on InterHuman clip 1566: the selected runs' best checkpoints (iterations 7,000 / 6,264), MLP world model; blue ghosts: the references. In this recorded evaluation, MPJPE in the world frame 37.6 / 40.0 mm, root-relative 14.2 / 16.4 mm (the table: the mean of five others).</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
+<p align="center"><i>SuperTrack's selected run on InterHuman clip 1566: its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative (the table: the mean of five others).</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
@@ -404,9 +408,9 @@ Configurations come from four rounds of 1 h runs, ranked by one rule. Selected c
 did not train with ([details](benchmarks/musclevae/results.md)). MuscleVAE's files and weights of policies trained on them
 are not redistributed.
 
-<p align="center"><img src="docs/media/musclevae/policies/walk.webp" alt="walk, SuperTrack and SuperMimic" width="800"/><br>
-<img src="docs/media/musclevae/policies/run.webp" alt="run, SuperTrack and SuperMimic" width="800"/></p>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right) on MuscleVAE's walk and run: each algorithm's best seed of its 3 h runs (SuperTrack seed 1, iteration 26,000; SuperMimic seed 3, iteration 8,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: walk 24.9 / 50.1 mm, run 46.6 / 64.1 mm.</i></p>
+<p align="center"><img src="docs/media/musclevae/policies/walk.webp" alt="walk" width="800"/><br>
+<img src="docs/media/musclevae/policies/run.webp" alt="run" width="800"/></p>
+<p align="center"><i>SuperTrack on MuscleVAE's walk and run: its best seed of the 3 h runs (seed 1, iteration 26,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: 24.9 mm (walk) and 46.6 mm (run).</i></p>
 <p align="center"><sub>Renders of MuscleVAE's walk and run clips (LAFAN1 motions, © 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
@@ -458,10 +462,10 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 ### Hand-object tracking
 
-<p align="center"><img src="docs/media/hand/apple.webp" alt="apple, SuperTrack and SuperMimic" width="800"/><br>
-<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle, SuperTrack and SuperMimic" width="800"/><br>
-<img src="docs/media/hand/can.webp" alt="can, SuperTrack and SuperMimic" width="800"/></p>
-<p align="center"><i>SuperTrack (left) and SuperMimic (right) on the apple, the spray bottle and the can: the last checkpoints of seed 0 from the unperturbed start, the kinematic reference drawn over them in blue, at half speed. Object error over the clip 1.2 / 2.4, 1.1 / 2.3 and 2.0 / 3.1 mm.</i></p>
+<p align="center"><img src="docs/media/hand/apple.webp" alt="apple" width="800"/><br>
+<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle" width="800"/><br>
+<img src="docs/media/hand/can.webp" alt="can" width="800"/></p>
+<p align="center"><i>SuperTrack on the apple, the spray bottle and the can: the last checkpoints of seed 0 from the unperturbed start, at half speed, with the kinematic reference drawn over them in blue. Object error over the clip: 1.2, 1.1 and 2.0 mm.</i></p>
 <p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and the XHand's model, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 A floating XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp. The reference is
@@ -534,7 +538,7 @@ keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76
 
 ### Key findings
 
-1. **Main comparison on LAFAN1** (SuperTrack / SuperMimic): return 0.832 / 0.824, failed clips 0.9 / 1.2 of 40, MPJPE 20.0 /
+1. **LAFAN1** (SuperTrack / SuperMimic): return 0.832 / 0.824, failed clips 0.9 / 1.2 of 40, MPJPE 20.0 /
    28.4 mm, failed clips under 1 m/s pushes 7.7 / 1.7 and under 2 m/s pushes 24.7 / 9.3.
 2. **Where the differences come from:** with SuperTrack's offsets about the reference pose, SuperMimic's MPJPE is 25.0 mm;
    without imagination kicks (random root-velocity changes at the starts of imagined rollouts), SuperMimic fails 6.0 / 18.7
@@ -668,7 +672,8 @@ Implemented:
 - **SuperTrack:** L. Fussell, K. Bergamin, D. Holden. *SuperTrack: Motion Tracking for Physically Simulated Characters
   using Supervised Learning.* ACM Transactions on Graphics 40(6), 2021. [DOI](https://doi.org/10.1145/3478513.3480527)
 - **SuperMimic:** Q. Liao, Y. Shao, J. Long, K. Zakka, R. Horowitz, P. Abbeel, K. Sreenath. *SuperMimic: Scaling
-  Humanoid Whole-Body Control with One Differentiable World Model.* CoRL 2026. [arXiv:2610.28480](https://arxiv.org/abs/2610.28480)
+  Humanoid Whole-Body Control with One Differentiable World Model.* CoRL 2026. [arXiv:2610.28480](https://arxiv.org/abs/2610.28480) ·
+  [code](https://github.com/HybridRobotics/supermimic) · [project page](https://supermimic.github.io)
 - **BlinkMimic** (code, no paper): F. Chen. *BlinkMimic: Whole-Body Motion Tracking for the Unitree G1 in Minutes on One
   GPU.* 2026. [code](https://github.com/fuyichen0725/blinkmimic) · built on InstantTrack
   ([code](https://github.com/Huy-Quang-Dao/instantTrack))
@@ -711,7 +716,8 @@ Simulation:
 ## 📜 License and Acknowledgments
 
 MIT ([`LICENSE`](LICENSE)). The code started from [zita-ch/supermimic_vibed](https://github.com/zita-ch/supermimic_vibed)
-@ `ee0608f` (MIT, Chong Zhang), an unofficial SuperMimic reproduction (no official code is released). BlinkMimic's options
+@ `ee0608f` (MIT, Chong Zhang), an unofficial SuperMimic reproduction written before
+[SuperMimic's official code](https://github.com/HybridRobotics/supermimic) (Apache-2.0) was released. BlinkMimic's options
 are ported from [BlinkMimic](https://github.com/fuyichen0725/blinkmimic) (MIT, Fuyi Chen), derived from
 [InstantTrack](https://github.com/Huy-Quang-Dao/instantTrack) (MIT, Huy-Quang-Dao); their notices are in the ported files
 and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md). Isaac Lab

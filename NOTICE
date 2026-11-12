@@ -12,11 +12,11 @@ docs/media/musclevae holds renders of policies tracking the walk and run clips o
 CC BY-NC-ND 4.0) retargeted to its skeleton, drawn with the bone meshes of MASS (https://github.com/lsw9021/MASS;
 Apache-2.0). They are for non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
-docs/media/hand holds renders of two policies side by side, SuperTrack's and SuperMimic's, tracking SPIDER's kinematic
-retargets (https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk
-and DexYCB, with the retargets drawn over them, those datasets' object meshes and the XHand's model. They are for
-non-commercial illustration only and are not covered by the MIT license in LICENSE.
+docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
+(https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk and DexYCB,
+with the retargets drawn over it, those datasets' object meshes and the XHand's model. They are for non-commercial
+illustration only and are not covered by the MIT license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders side by side: its LAFAN1 tracking column under the first paragraph's terms,
+docs/media/teaser.webp puts 6 s of such renders in a row: its LAFAN1 tracking column under the first paragraph's terms,
 its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's and its Hand-object
 column under the fourth's. No part of it is covered by the MIT license in LICENSE.
