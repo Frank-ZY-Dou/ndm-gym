@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 
 from ndm_gym.train import add_train_args
@@ -84,6 +85,13 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--st_ref_replay", type=float, default=0.0,
                         help="supertrack: DiffMimic's demonstration replay in the imagined window: a rollout whose bodies are on average "
                         "more than this many metres from the reference (re-anchored to its root) continues from its state (0: off)")  # fmt: skip
+    from ndm_gym import configs
+
+    configs.add_config_arg(parser)
+    try:  # --config: a named configuration's options first
+        argv = configs.expand(sys.argv[1:] if argv is None else list(argv), "train_muscles")
+    except ValueError as e:
+        parser.error(str(e))
     args = parser.parse_args(argv)
     for name in UNSUPPORTED + SPEED_UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):

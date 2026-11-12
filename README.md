@@ -23,8 +23,45 @@ dynamics models (NDMs) also serve as simulators.
 <p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held).</i></p>
 <p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), and of SPIDER's retarget of an HRDexDB grasp, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
+## ⚡ Speed
+
+<p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
+<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds. HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+
+## 🧭 Recommended settings
+
+Each task's best settings, as measured here, are named configurations. `ndm-train --config NAME` runs one (`train_hand`
+and `train_muscles` take `--config` too); options given beside it take precedence, and `--config list` prints the names
+with what each measured. Both methods are on offer for every task.
+
+| Task | Goal | SuperTrack | SuperMimic |
+|---|---|---|---|
+| **LAFAN1**, MLP world model | most accurate | `lafan1-supertrack-accurate`: return 0.861, MPJPE 14.5 mm (3 h with the speed options, A100 40GB) | `lafan1-supermimic-accurate`: 0.824, 28.4 mm (3 h, without them) |
+| | fastest | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4), 2.54 min (H100) | `lafan1-supermimic-fast`: 4.38 and 2.68 min |
+| **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
+| **Two G1s** (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893, MPJPE 39 / 14.2 mm | `two-g1-supermimic`: 0.905, 40 / 16.4 mm |
+| **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
+| | fastest | `hand-supertrack-fast`: success 0.99 in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
+| **Muscles** (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
+
+What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
+
+- **SuperTrack.** On LAFAN1, the failure penalty with the balance weights, the task penalties and the world-space root terms
+  raise the return from 0.53 to 0.83 and lower MPJPE from 96 to 20 mm. A failure-penalty weight of 1 instead of 5, a
+  world-model learning rate of 2e-3, a policy batch of 2048 and the goal table each shortened the time to return 0.82.
+- **SuperMimic.** Narrower reward kernels (x0.7) lower MPJPE; simulator action noise 0.3 and imagination kicks reduce the
+  clips failed under pushes; without the critic all 40 clips fail. A world-model learning rate of 1.5e-3, a foot-contact
+  reward of 0.15, the goal table and one policy update of half the batch each shortened the time to return 0.82.
+- **Both.** BlinkMimic's recipe (Muon, the policy average, the learning-rate ramp) and the systems options (CUDA-graphed
+  collection and updates, the default updates bit for bit) cut the training time; offline, world models without LayerNorm
+  have 16-17 % lower open-loop error.
+
 ## 🔥 News
 
+- **[2026-11]** The G1 world models against differentiable simulators (NablaEngine, MuJoCo Warp with the adjoint of its pull
+  request #1535, MJX): the MLP world model's forward step 3.5-116x and its rollout gradient 2.4-183x faster at 1,024-16,384
+  worlds on an A100 40GB ([details](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models)).
+  Named configurations of each task's best settings for SuperTrack and SuperMimic (`--config`; [Recommended settings](#-recommended-settings)).
 - **[2026-11]** Hand-object tracking on the XHand: human grasp-and-lift clips with SuperTrack and SuperMimic
   ([below](#hand-object-tracking)); the task and SuperMimic on it contributed by [Dechen Gao](https://github.com/gaodechen).
 - **[2026-11]** MuscleVAE's muscle-actuated character: SuperTrack and SuperMimic results and commands, with MLP and RigidFormer
@@ -301,15 +338,16 @@ RigidFormer: final configurations with every speed option, fresh seeds 7-9.
 </details>
 
 ```bash
-# selected configurations, MLP world model
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --max_hours 3
+SPEED="--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"   # the speed options of both world models
+RF_SPEED="--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"   # the RigidFormer's own
+# selected configurations, MLP world model (SuperTrack's with the speed options, about 35,700 iterations; SuperMimic's without them,
+# since with them its return falls late, to 0.137 at about 33,000 iterations)
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 $SPEED --max_hours 3
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 --max_hours 3
 # RigidFormer world model, with every speed option (they leave the algorithms unchanged)
-SPEED="--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager \
-       --rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
-ndm-train --algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 $SPEED --max_hours 3
+ndm-train --algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 $SPEED $RF_SPEED --max_hours 3
 ndm-train --algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.4 \
-          --wm_batches 7 $SPEED --critic_cudagraphs --max_hours 3
+          --wm_batches 7 $SPEED --critic_cudagraphs $RF_SPEED --max_hours 3
 ```
 
 ### Training speed
@@ -330,12 +368,13 @@ RECIPE="--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon --
 RESETS="--fail_reset 0.3 --bin_fix --eprobe_share 0.15 --eprobe_graph --eprobe_async 20 --eprobe_start 1000 --eprobe_every 125 \
         --eprobe_decay 0.7"   # its failure-focused and evaluation-guided resets
 SYSTEMS="--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_sync --update_graphs --graph_early --collect_graph \
-         --reset_masked --ckpt_light"   # the same computations up to rounding, another random stream
+         --reset_masked --ckpt_light"   # --fused_adam and --elementwise_3x3 change results, --combo_kernels and --compile_eager by rounding
+TIMED="--iterations 6000 --ckpt_every 100"   # the timed runs' length and checkpoints, each evaluated while training (ndm-eval --watch)
 ndm-train --algo supertrack --st_fail_w 1 --st_balance_w 2 $RECIPE --st_quad_w 0.5 --wm_lr 2e-3 --goal_table --pi_encode_once \
-          $RESETS $SYSTEMS --iterations 6000 --ckpt_every 100 --log_dir logs/st_fast
+          $RESETS $SYSTEMS $TIMED --log_dir logs/st_fast
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 $RECIPE --pi_ema 0.99 \
           --pi_batch 1024 --pi_lr_mult 2 --pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix \
-          --sm_residual --wm_structured $RESETS $SYSTEMS --iterations 6000 --ckpt_every 100 --log_dir logs/sm_fast
+          --sm_residual --wm_structured $RESETS $SYSTEMS $TIMED --log_dir logs/sm_fast
 ndm-eval --run_dir logs/st_fast --watch --group 18 --repeats 4 --graph   # on a second GPU; the same for logs/sm_fast
 ```
 
@@ -429,11 +468,12 @@ added the systems options for both and selected `--wm_lr 1.6e-3` for SuperTrack 
 ```bash
 MUSCLE_RECIPE="--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 \
                --lr_decay_by 1400 --wm_hidden 1024 1024 1024"   # BlinkMimic's recipe, the parts muscle training implements
-MUSCLE_SYS="--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"   # the same computations up to rounding, another random stream
+MUSCLE_SYS="--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"   # --fused_adam changes results
 python -m ndm_gym.train_muscles --algo supertrack --st_fail_w 5 --st_balance_w 4 $MUSCLE_RECIPE $MUSCLE_SYS --wm_batches 8 --pi_lr_mult 4 \
-       --wm_lr 2.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_st_s1    # seeds 1-3
+       --wm_lr 2.5e-3 --iterations 1000000 --last_every_min 10 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_st_s1    # seeds 1-3
 python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 $MUSCLE_RECIPE \
-       $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --max_hours 3 --ckpt_every 2000 --seed 1 --log_dir logs/mus_sm_s1
+       $MUSCLE_SYS --wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --iterations 1000000 --last_every_min 10 --max_hours 3 --ckpt_every 2000 \
+       --seed 1 --log_dir logs/mus_sm_s1
 ```
 
 RigidFormer: a token per body, width 128, 2 blocks, 4 heads, from nine rounds of 1 h runs ranked by the same rule; seeds 1-3, up to 3 h

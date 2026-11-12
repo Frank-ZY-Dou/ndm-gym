@@ -1,4 +1,4 @@
-# Neural dynamics models as simulators: HDMI's human-object interaction scenes
+# Neural dynamics models as simulators: HDMI's scenes, and the G1 against differentiable simulators
 
 One otherwise idle H100 80GB. Env-steps per second use 20 ms control steps: HDMI's four 5 ms physics substeps in one
 Isaac Lab 3 / Newton/MuJoCo-Warp call, without task terms. Values are medians of three repeats of 200 steps after 20
@@ -124,3 +124,72 @@ RigidFormer / MLP error ratios with the same parameterization (median over tasks
 |---|---|---|---|---|---|
 | accel | 0.90 (13 of 13) | 0.90 (12 of 13) | 0.76 (13 of 13) | 0.74 (13 of 13) | 0.90 (13 of 13) |
 | increment | 0.86 (13 of 13) | 0.93 (8 of 13) | 0.81 (13 of 13) | 0.74 (13 of 13) | 0.90 (13 of 13) |
+
+## Differentiable simulators and the G1 world models
+
+One otherwise idle A100-SXM4-40GB (driver 565.57.01), 2026-11-12. The G1 with primitive colliders (the mjlab model
+NablaEngine bundles); a control step is 20 ms of four 5 ms substeps with PD position targets; float32. The simulators start
+from standing states with smooth random targets near the default pose. Forward: control steps per second over 200 steps
+(four segments of 50, each from the standing states), the median of three repeats after a warm-up, compilation excluded.
+Gradient: the forward and reverse-mode gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms per
+control step and peak GPU memory. The world model is SuperTrack's MLP from the LAFAN1 study, `rfd_st_mlp_s7` (last
+checkpoint): its step from the clip's frame-0 reference states, as trained (bf16, compiled) and on its fastest inference
+path, and the gradient through the model as trained, the call one CUDA graph. Scripts: [`diffsim/`](diffsim/README.md) for
+the simulators, `ndm_gym.wmbench.speed_pair` for the world model (`--grad_horizon 32`: the gradient).
+
+Forward, control steps per second (all worlds):
+
+| | N = 1,024 | N = 4,096 | N = 16,384 |
+|---|---|---|---|
+| NablaEngine, as published (10 iterations) | 0.95 M | 1.16 M | 1.28 M |
+| NablaEngine, tuned (5) | 0.98 M | 1.17 M | 1.29 M |
+| MuJoCo Warp + PR 1535, as published (10, line search 20) | 0.16 M | 0.30 M | 0.38 M |
+| MuJoCo Warp + PR 1535, tuned (5, 8) | 0.16 M | 0.31 M | 0.39 M |
+| MJX, as published (every contact pair padded) | 0.016 M | 0.018 M | 0.019 M |
+| MJX, tuned (capacities calibrated on MuJoCo C) | 0.046 M | 0.074 M | 0.079 M |
+| MLP world model, as trained | 3.00 M | 5.74 M | 7.70 M |
+| MLP, fastest path | 3.40 M | 7.22 M | 9.18 M |
+
+Gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms per control step (peak GPU memory):
+
+| | N = 1,024 | N = 4,096 | N = 16,384 |
+|---|---|---|---|
+| NablaEngine, as published | 1.64 (0.8 GiB) | 5.48 (3.1 GiB) | 20.06 (12.5 GiB) |
+| NablaEngine, tuned | 2.02 (0.8 GiB) | 5.44 (3.1 GiB) | 19.92 (12.5 GiB) |
+| MuJoCo Warp + PR 1535, as published | 25.32 (0.5 GiB) | 56.35 (2.0 GiB) | 184.59 (8.0 GiB) |
+| MuJoCo Warp + PR 1535, tuned | 22.76 (0.5 GiB) | 50.84 (1.8 GiB) | 168.23 (7.3 GiB) |
+| MJX, as published | out of memory | out of memory | out of memory |
+| MJX, tuned, its solver as a fixed scan of 5 iterations | 113.45 (3.5 GiB) | 290.45 (13.1 GiB) | out of memory on the 40 GB card |
+| MLP world model | 0.69 (1.0 GiB) | 1.59 (2.3 GiB) | 4.84 (7.3 GiB) |
+
+Ratios at equal N (forward: the MLP's fastest path; gradient: as trained), against each simulator's faster setting:
+
+| | N = 1,024 | N = 4,096 | N = 16,384 |
+|---|---|---|---|
+| MLP forward / NablaEngine | 3.5x | 6.2x | 7.1x |
+| MLP forward / MuJoCo Warp | 20.9x | 23.2x | 23.4x |
+| MLP gradient / NablaEngine | 2.37x | 3.42x | 4.11x |
+| MLP gradient / MuJoCo Warp | 32.9x | 32.0x | 34.7x |
+| MLP forward / MJX | 74x | 98x | 116x |
+| MLP gradient / MJX | 164x | 183x | - |
+
+- The two simulators simulate the same thing: the 32-step loss agrees to five digits at every N (3.34579 / 3.34578,
+  3.33408 / 3.33408, 3.34197 / 3.34197). No world fell or overflowed a capacity. MuJoCo Warp reached its line-search cap in
+  some substep in every world, in both settings. With 5 Newton iterations, 80-83% of MuJoCo Warp's worlds and 10% of
+  NablaEngine's world-steps reached the iteration cap (with 10: none, and 0.001-0.002%).
+- Tuning: NablaEngine's published setting already runs a control step as one compiled call, and 5 iterations change its
+  times by 3% at most (its gradient at 1,024 worlds is 23% slower). MuJoCo Warp's tuned setting is 4% faster forward and
+  10-11% faster in the gradient.
+- The simulators are exact and the world models are not: on the LAFAN1 study's offline benchmark the body-position error
+  after 32 open-loop steps on the SuperTrack policy's held-out set is 59.2 mm for the MLP
+  ([ablations](../g1_lafan1_tracking/ablations.md)).
+- NablaEngine's own timing kit on the same GPU (its scripts unmodified; `diffsim/run_paper_bench.sh`), 4,096 worlds, ms per control
+  step: NablaEngine forward 3.17, forward with its tape plus the adjoint 4.90; MuJoCo Warp 3.17.0 forward 12.8; with pull
+  request 1535 forward 13.7 and adjoint 39.3; MJX forward 372.8 (no reverse mode natively); Genesis 1.4.5 forward 27.6
+  (performance mode); MuJoCo C on 16 CPU threads 74.1.
+- MJX (mujoco-mjx 3.17.0, jax 0.12.0.1): stock MJX differentiates its solver only with one iteration
+  ([issue #2259](https://github.com/google-deepmind/mujoco/issues/2259)); with one, the rollout's loss is not finite on this
+  model (40.47, 103.45 and 381.41 ms per control step), so the gradient row replaces the solver's outer loop by a fixed scan
+  of its 5 iterations, which gives its forward loss (3.34473 and 3.33268 at 1,024 and 4,096 worlds, against its forward
+  3.34477 and 3.33267; NablaEngine and MuJoCo Warp read 3.34579 and 3.33408). Its as-published setting pads every contact pair and
+  runs out of memory in reverse mode at every N; the tuned one sizes the capacities from MuJoCo C on 256 worlds.

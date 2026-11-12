@@ -220,6 +220,7 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
 
 
 def parse_args():
+    from ndm_gym import configs
     from ndm_gym.algos.blinkmimic import NOT_PORTED, add_blinkmimic_args, check_args, expand_preset
 
     parser = argparse.ArgumentParser()
@@ -227,8 +228,9 @@ def parse_args():
     add_speed_args(parser)
     add_blinkmimic_args(parser)
     add_launcher_args(parser)
-    try:
-        args = parser.parse_args(expand_preset(sys.argv[1:]))  # --algo blinkmimic: SuperMimic with BlinkMimic's recipe
+    configs.add_config_arg(parser)
+    try:  # --config: a named configuration's options first; --algo blinkmimic: SuperMimic with BlinkMimic's recipe
+        args = parser.parse_args(expand_preset(configs.expand(sys.argv[1:], "train")))
         check_args(args)
     except ValueError as e:
         parser.error(str(e))

@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import time
 
 from ndm_gym.train import add_train_args
@@ -63,6 +64,13 @@ def parse_args(argv: list[str] | None = None):
         if action.dest == "algo":
             action.required = False
     parser.set_defaults(**HAND_DEFAULTS)
+    from ndm_gym import configs
+
+    configs.add_config_arg(parser)
+    try:  # --config: a named configuration's options first
+        argv = configs.expand(sys.argv[1:] if argv is None else list(argv), "train_hand")
+    except ValueError as e:
+        parser.error(str(e))
     args = parser.parse_args(argv)
     if args.algo not in ("supertrack", "supermimic"):
         parser.error("hand training implements --algo supertrack and --algo supermimic")

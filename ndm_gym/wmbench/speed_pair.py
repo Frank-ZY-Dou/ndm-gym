@@ -22,6 +22,14 @@ Modes:
            the model as trained (eager, bf16 autocast; and in fp32) K steps open loop from the clip's reference states at
            frames spread over it, with the reference's setpoints, and records the largest differences.
 --single runs one G1 per env (the one-robot tracking scene, N robots) instead of the pair (2 N robots).
+--mode ndm --grad_horizon H times, instead of the step, what a first-order learner pays through the G1 world models: one
+call is an H-step rollout of the model as trained from the start states with the reference's setpoints, its loss
+1/N sum_robots sum_t [0.5 |q(t) - q_default|^2 + 0.5 * 0.01 (|v(t)|^2 + |w(t)|^2 + |qd(t)|^2)] and the reverse-mode
+gradient of that loss with respect to the H setpoint vectors of every robot (``rollout_gradient``; the measure and the
+loss of the differentiable simulators' benchmark, benchmarks/ndm_speed/diffsim/common.py). --compile none runs it
+eagerly, default with the step compiled, reduce-overhead (the default) with the step compiled and the whole call replayed
+as one CUDA graph, as training's --update_graphs does. The row's steps are the calls' control steps (--steps calls of H)
+and its ms per step the forward and backward time per control step.
 physics drives the PD targets with the default pose plus noise, as speed_hoi.py. Each mode times --steps control steps
 after --warmup, synchronizing the GPU around the timed loop, --repeats times; the median is reported. Development numbers
 only on a shared GPU.
@@ -62,6 +70,9 @@ def parse_args():
     p.add_argument("--rf_kernels", type=str, default="none", choices=["none", "blocks", "whole"],
                    help="ndm, RigidFormer: its blocks or whole network as fused Triton kernels, in the model as trained or --inference_copy amp")
     p.add_argument("--check_steps", type=int, default=0, help="ndm: open-loop steps of the accuracy check against the model as trained (0: none)")
+    p.add_argument("--grad_horizon", type=int, default=0,
+                   help="ndm, the G1 world models as trained: time rollouts of this many steps with the reverse-mode gradient of their loss "
+                   "with respect to every step's setpoints instead of the step (0: the step); --steps and --warmup then count rollouts")
     p.add_argument("--single", action="store_true", help="one G1 per env (the one-robot scene) instead of the pair; not with --mode env")
     p.add_argument("--amp", type=str, default="bf16", choices=["none", "bf16"])
     p.add_argument("--action_noise", type=float, default=0.2, help="env: noise on the reference setpoints (action units)")
@@ -74,6 +85,11 @@ def parse_args():
         p.error("--wm_ckpt builds the world model from the checkpoint's arguments: leave --wm_args out")
     if args.mode != "ndm" and (args.inference_copy != "none" or args.fused or args.rf_kernels != "none" or args.check_steps or args.wm_ckpt):
         p.error("--inference_copy, --fused, --rf_kernels, --check_steps and --wm_ckpt configure --mode ndm")
+    if args.grad_horizon < 0:
+        p.error("--grad_horizon: a number of steps (0: the step is timed)")
+    if args.grad_horizon and (args.mode != "ndm" or args.inference_copy != "none" or args.fused or args.rf_kernels != "none" or args.check_steps):
+        p.error("--grad_horizon differentiates the G1 world models as trained (--mode ndm): not with --inference_copy, --fused, --rf_kernels or "
+                "--check_steps")
     return args
 
 
@@ -152,6 +168,25 @@ def check_rollouts(base, step, S, actions, xi_n, graphs: bool) -> str:
     ratio = max(dp[k] / max(d16[k], 1e-9) for k in keys)
     fmt = lambda d: " ".join(f"{k} {d[k]:.2e}" for k in keys)  # noqa: E731
     return f"check {len(actions)} steps vs as trained: {fmt(dp)}; as trained bf16 vs fp32: {fmt(d16)}; largest ratio {ratio:.2f}"
+
+
+W_V = 0.01  # the velocity term's weight in the rollout loss, as the differentiable simulators' benchmark has it
+
+
+def rollout_gradient(step, S, actions, xi_n, q_ref):
+    """An open-loop rollout of ``step`` from the states S with the setpoints ``actions`` (H, n, J; a leaf that requires
+    gradients) and the reverse-mode gradient of its loss with respect to them. The loss is the differentiable simulators'
+    (benchmarks/ndm_speed/diffsim/common.py): 1/n sum_robots sum_t [0.5 |q(t) - q_ref|^2 + 0.5 W_V |velocities(t)|^2]
+    over the H states after the start, the velocities being the root's linear and angular velocity and the joint rates.
+    Returns the loss and the gradient (H, n, J)."""
+    loss = actions.new_zeros(())
+    for a in actions:
+        S = step(S, a, xi_n)
+        _, _, v, w, q, qd = S
+        speed2 = (v * v).sum(-1) + (w * w).sum(-1) + (qd * qd).sum(-1)
+        loss = loss + (0.5 * ((q - q_ref) ** 2).sum(-1) + 0.5 * W_V * speed2).mean()
+    (grad,) = torch.autograd.grad(loss, actions)
+    return loss.detach(), grad
 
 
 def timed(fn, warmup: int, steps: int) -> float:
@@ -255,8 +290,12 @@ def main():
             xi_n = normalize_xi(env.xi)[idx].contiguous()
             ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
             a = ref_u[env.f[idx] + 1].contiguous()
-            model, step, path = inference_model(wm, args)
             graphs = args.compile == "reduce-overhead"
+            if args.grad_horizon:  # the model as trained: its step compiled, the whole call one CUDA graph (--compile)
+                step = wm.step if args.compile == "none" else torch.compile(wm.step)
+                path = f"compile {args.compile}" + (" (the step compiled, the call one CUDA graph)" if graphs else "")
+            else:
+                model, step, path = inference_model(wm, args)
             state = {"S": S}
 
             @torch.no_grad()
@@ -267,6 +306,23 @@ def main():
                 state["S"] = tuple(t.clone() for t in S1) if graphs else S1
 
             extra = f"{ta.wm_backbone} ({n_par / 1e6:.2f} M parameters) {path} | {source}"
+            if args.grad_horizon:  # rollouts with their gradient instead of steps: the setpoints of the clip's next frames
+                from ndm_gym.algos.blinkmimic import Graphed
+
+                H = args.grad_horizon
+                if int(motion.clip_len[pc].min()) <= H + 1:
+                    raise ValueError(f"--grad_horizon {H}: the clip has {int(motion.clip_len[pc].min())} frames")
+                if graphs and args.warmup < 4:  # the graph's eager calls and its capture are not the replayed call
+                    raise ValueError(f"--warmup {args.warmup}: the CUDA graph is captured in the first four calls, which must not be timed")
+                acts = torch.stack([ref_u[env.f[idx] + 1 + k] for k in range(H)]).contiguous().requires_grad_(True)
+                q_ref = mdp.default_q.to(dev)
+                call = lambda: rollout_gradient(step, S, acts, xi_n, q_ref)  # noqa: E731
+                fn = Graphed(call, lambda: True, f"the {H}-step rollout and its gradient") if graphs else call
+                loss, grad = fn()  # also the first of the graph's eager calls
+                if not bool(torch.isfinite(grad).all()):
+                    raise RuntimeError(f"--grad_horizon {H}: the gradient is not finite")
+                extra += (f" | gradient of a {H}-step rollout's loss with respect to its setpoints, {args.steps} rollouts per run, loss "
+                          f"{float(loss):.4f}, mean |gradient| {float(grad.abs().mean()):.3e}")  # fmt: skip
             if args.check_steps:  # the clip's reference states at frames spread over it (both sides at the same offset)
                 K, P = args.check_steps, env.P
                 L = int(motion.clip_len[pc[0]])
@@ -283,15 +339,16 @@ def main():
         runs = sorted(timed(fn, args.warmup if r == 0 else 0, args.steps) for r in range(args.repeats))
         sec = runs[len(runs) // 2]
         extra += " | runs " + " ".join(f"{r:.4f}" for r in runs)
-        robots_rate = per_env * N * args.steps / sec
+        steps = args.steps * max(args.grad_horizon, 1)  # control steps of a timed run
+        robots_rate = per_env * N * steps / sec
         mem = torch.cuda.max_memory_allocated() / 2**30
         uuid = "GPU-" + str(torch.cuda.get_device_properties(0).uuid)
         driver = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader", "-i", uuid], capture_output=True, text=True,
                                 check=True).stdout.strip()  # fmt: skip
         # --single: mode "<mode>_single", and the per-env column holds env-steps, one robot each
-        mode = args.mode + ("_single" if args.single else "")
-        row = (f"{os.path.basename(args.pair)},{mode},{N},{per_env * N},{args.steps},{sec:.4f},{robots_rate:.1f},{robots_rate / per_env:.1f},"
-               f"{1e3 * sec / args.steps:.3f},{args.amp},{torch.cuda.get_device_name()},{driver},{mem:.2f},{extra}")  # fmt: skip
+        mode = args.mode + ("_single" if args.single else "") + (f"_grad{args.grad_horizon}" if args.grad_horizon else "")
+        row = (f"{os.path.basename(args.pair)},{mode},{N},{per_env * N},{steps},{sec:.4f},{robots_rate:.1f},{robots_rate / per_env:.1f},"
+               f"{1e3 * sec / steps:.3f},{args.amp},{torch.cuda.get_device_name()},{driver},{mem:.2f},{extra}")  # fmt: skip
         new = not os.path.exists(args.out)
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "a") as f:
@@ -299,7 +356,7 @@ def main():
                 f.write("pair,mode,envs,robots,steps,seconds,robot_steps_per_s,pair_steps_per_s,ms_per_step,amp,gpu,driver,peak_mem_gb,detail\n")
             f.write(row + "\n")
         print(f"[speed_pair] {mode} {N} envs: {robots_rate:,.0f} robot-steps/s ({robots_rate / per_env:,.0f} env-steps/s), "
-              f"{1e3 * sec / args.steps:.2f} ms per step ({extra})", flush=True)
+              f"{1e3 * sec / steps:.2f} ms per step ({extra})", flush=True)
 
 
 if __name__ == "__main__":

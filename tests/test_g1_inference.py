@@ -317,6 +317,60 @@ def test_speed_pair_paths():
     assert m is not rf and path == "compile none inference copy amp attention sdpa"
 
 
+@needs_isaaclab
+def test_speed_pair_rollout_gradient():
+    """speed_pair.py's --grad_horizon: ``rollout_gradient`` on a step whose rollout is known in closed form (the loss and its
+    gradient with respect to every step's setpoints), then on the world models as trained (the MLP and the RigidFormer on
+    the CPU: a finite gradient of the setpoints' shape that reaches the first step's)."""
+    from ndm_gym.robots.g1 import NUM_J
+    from ndm_gym.wmbench.speed_pair import W_V, rollout_gradient
+
+    H, n = 4, 5
+    S, _, xi_n = _states(n, seed=3, dev="cpu")
+    S = tuple(t.double() for t in S)
+    g = torch.Generator().manual_seed(1)
+    acts = (0.1 * torch.randn(H, n, NUM_J, generator=g, dtype=torch.float64)).requires_grad_(True)
+    q_ref = 0.2 * torch.randn(NUM_J, generator=g, dtype=torch.float64)
+    add = lambda S, a, xi: (S[0], S[1], S[2], S[3], S[4] + a, S[5])  # noqa: E731  the setpoint moves the joints, the rest stays
+    loss, grad = rollout_gradient(add, S, acts, xi_n, q_ref)
+    q = S[4] + acts.detach().cumsum(0)  # the joints after each step
+    speed2 = (S[2] ** 2).sum(-1) + (S[3] ** 2).sum(-1) + (S[5] ** 2).sum(-1)
+    want = (0.5 * ((q - q_ref) ** 2).sum(-1) + 0.5 * W_V * speed2).mean(-1).sum()
+    assert torch.allclose(loss, want, rtol=1e-12, atol=0.0)
+    want_grad = (q - q_ref).flip(0).cumsum(0).flip(0) / n  # step k's setpoint moves the joints of every later step
+    assert grad.shape == acts.shape and torch.allclose(grad, want_grad, rtol=1e-10, atol=1e-14)
+    assert not loss.requires_grad
+
+    for rf in (False, True):
+        wm = _world_model(rf=rf, dev="cpu").requires_grad_(False)
+        S, a, xi_n = _states(n, seed=4, dev="cpu")
+        acts = a.repeat(H, 1, 1).requires_grad_(True)
+        loss, grad = rollout_gradient(wm.step, S, acts, xi_n, torch.zeros(NUM_J))
+        assert grad.shape == acts.shape and bool(torch.isfinite(grad).all()) and float(loss) > 0
+        assert float(grad[0].abs().max()) > 0 and float(grad[-1].abs().max()) > 0
+
+
+@needs_isaaclab
+def test_speed_pair_grad_horizon_arguments(monkeypatch, capsys):
+    """--grad_horizon differentiates the G1 world models as trained: taken with --mode ndm, refused in the other modes and
+    with the options of the inference copies, the kernels and the accuracy check."""
+    import sys
+
+    from ndm_gym.wmbench import speed_pair
+
+    base = ["speed_pair", "--pair", "clip.npz", "--out", "o.csv", "--single", "--grad_horizon", "32"]
+    monkeypatch.setattr(sys, "argv", base + ["--mode", "ndm"])
+    assert speed_pair.parse_args().grad_horizon == 32
+    monkeypatch.setattr(sys, "argv", base[:-2] + ["--mode", "ndm"])
+    assert speed_pair.parse_args().grad_horizon == 0  # off by default: the step is timed
+    for more in (["--mode", "physics"], ["--mode", "ndm", "--inference_copy", "amp"], ["--mode", "ndm", "--rf_kernels", "blocks"],
+                 ["--mode", "ndm", "--check_steps", "8"], ["--mode", "ndm", "--grad_horizon", "-1"]):  # fmt: skip
+        monkeypatch.setattr(sys, "argv", base + more)
+        with pytest.raises(SystemExit):
+            speed_pair.parse_args()
+        assert "--grad_horizon" in capsys.readouterr().err
+
+
 @gpu
 @needs_isaaclab
 @pytest.mark.parametrize("kernels", ["blocks", "whole"])
