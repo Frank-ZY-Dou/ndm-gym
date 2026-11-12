@@ -19,8 +19,8 @@ tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac L
 MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand (MuJoCo-Warp). The neural
 dynamics models (NDMs) also serve as simulators.
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip" width="100%"/></p>
-<p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held).</i></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip, and a G1 climbing in RoboKit's planner on a world model" width="100%"/></p>
+<p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held). RoboKit MPC: G1 climbing planned on SuperTrack's world model and executed on MuJoCo Warp, planning 1.8x faster.</i></p>
 <p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), and of SPIDER's retarget of an HRDexDB grasp, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## ⚡ Speed
@@ -58,6 +58,9 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** [RoboKit](https://github.com/openrobokit/robokit)'s planner on a world model of its MuJoCo model: G1 box carrying,
+  G1 climbing and Go2 jumping pass with every seed, as on MuJoCo Warp, planning 1.8-3.0x faster on an A100
+  ([below](#ndms-in-robokits-planner)); world models of MuJoCo models in generalized coordinates (`ndm_gym/worldmodels/mjcf.py`).
 - **[2026-11]** The G1 world models against differentiable simulators (NablaEngine, MuJoCo Warp with the adjoint of its pull
   request #1535, MJX): the MLP world model's forward step 3.5-116x and its rollout gradient 2.4-183x faster at 1,024-16,384
   worlds on an A100 40GB ([details](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models)).
@@ -575,6 +578,27 @@ a bf16 copy, the RigidFormer with fused Triton blocks ([details](benchmarks/ndm_
 
 With the acceleration parameterization, the RigidFormer's open-loop errors are lower than the MLP's on all 13 tasks for
 keypoints after 8 steps and for the object after 32 (median ratios 0.90 and 0.76).
+
+### NDMs in RoboKit's planner
+
+[RoboKit](https://github.com/openrobokit/robokit)'s sampling MPC plans on the world model of the example's MuJoCo model, and
+each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the planner's seeds 0-4
+([details](benchmarks/robokit_ndm/results.md)).
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="docs/media/robokit/g1_carry.webp" alt="A G1 carrying a box, planned on the world model" width="100%"><br><sub>G1 box carrying</sub></td>
+<td align="center" width="33%"><img src="docs/media/robokit/g1_climb.webp" alt="A G1 climbing a box, planned on the world model" width="100%"><br><sub>G1 climbing</sub></td>
+<td align="center" width="33%"><img src="docs/media/robokit/go2_jump.webp" alt="A Go2 jumping between targets, planned on the world model" width="100%"><br><sub>Go2 jumping</sub></td>
+</tr>
+</table>
+<p align="center"><sub>G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="NOTICE">see NOTICE</a>).</sub></p>
+
+| task | simulation step | planning time | outcome, seeds 0-4 |
+|---|---|---|---|
+| G1 box carrying | 1.81 → 0.19 ms (9.8x) | 9 → 3 s (3.0x) | 5 of 5 pass, as on MuJoCo Warp |
+| G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) | 5 of 5 pass, as on MuJoCo Warp |
+| Go2 jumping | 0.59 → 0.26 ms (2.3x) | 65 → 31 s (2.1x) | 5 of 5 pass, as on MuJoCo Warp |
 
 ### Key findings
 

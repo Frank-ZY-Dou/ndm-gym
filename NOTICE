@@ -17,6 +17,15 @@ docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
 with the retargets drawn over it, those datasets' object meshes and the XHand's model. They are for non-commercial
 illustration only and are not covered by the MIT license in LICENSE.
 
+docs/media/robokit holds renders of RoboKit's (https://github.com/openrobokit/robokit; MIT) G1 box carrying, G1 climbing and
+Go2 jumping examples, planned on this library's world model and executed in MuJoCo Warp, with Unitree's G1 model
+(BSD-3-Clause) and MuJoCo Menagerie's Unitree Go2 (https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause). The G1
+climbing render tracks a climbing motion capture of OmniRetarget / Holosoma (https://github.com/amazon-far/holosoma;
+Apache-2.0). The G1 box carrying render (g1_carry.webp) tracks a clip of OMOMO (https://github.com/lijiaman/omomo_release, whose
+data terms are not stated) that RoboKit retargets; it is for non-commercial illustration only and is not covered by the MIT
+license in LICENSE.
+
 docs/media/teaser.webp puts 6 s of such renders in a row: its LAFAN1 tracking column under the first paragraph's terms,
-its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's and its Hand-object
-column under the fourth's. No part of it is covered by the MIT license in LICENSE.
+its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's, its Hand-object column
+under the fourth's, and its RoboKit MPC column, the G1 climbing render, with the sources the docs/media/robokit paragraph
+names. No part of it is covered by the MIT license in LICENSE.

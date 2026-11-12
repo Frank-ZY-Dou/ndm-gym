@@ -8,6 +8,12 @@ copyright line is in [`LICENSE`](LICENSE).
 The git submodule `third_party/supermimic` ([zita-ch/supermimic_vibed](https://github.com/zita-ch/supermimic_vibed) @
 `ee0608f`, MIT, Chong Zhang), used unmodified for the equivalence tests, keeps its own license file and copyright notices.
 
+## RoboKit
+
+`tests/test_robokit_rec.py` and `tests/test_robokit_ndm.py` adapt the cart model and planner settings of the SimMPC guide of
+[RoboKit](https://github.com/openrobokit/robokit) (MIT, Copyright (c) 2025 OpenRoboKit). This library's RoboKit modules
+(`ndm_gym/sim/robokit_*.py`, `ndm_gym/wmbench/*robokit*.py`) patch RoboKit's classes at run time and copy none of its files.
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from
