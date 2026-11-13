@@ -21,7 +21,7 @@ dynamics models (NDMs) also serve as simulators.
 
 <p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; below, three of RoboKit's examples planned on a world model" width="100%"/></p>
 <p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held). Below: RoboKit's MPC examples planned on SuperTrack's world model and executed on MuJoCo Warp, planning 3.0x, 1.8x and 2.1x faster; the reference in blue.</i></p>
-<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), of SPIDER's retarget of an HRDexDB grasp, and of RoboKit's examples (G1 box carrying tracks an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), of SPIDER's retarget of an OakInk grasp, and of RoboKit's examples (G1 box carrying tracks an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## ⚡ Speed
 
