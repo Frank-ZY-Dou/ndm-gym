@@ -10,9 +10,14 @@ from PIL import Image, ImageDraw, ImageFont
 
 FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # (label, second line, speedup, baseline): 4,096 parallel worlds in every row (benchmarks/ndm_speed/results.md, benchmarks/g1_boxing/results.md)
+# but RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds, the median over five planner
+# seeds, with the simulation step's speedup in the second line (benchmarks/robokit_ndm/results.md)
 ROWS = [
     ("NDM simulation", "HDMI's scenes", 45.3, "vs Isaac Lab + MuJoCo-Warp"),
     ("NDM simulation", "two G1s", 27.0, "vs Isaac Lab + MuJoCo-Warp"),
+    ("RoboKit planning", "G1 carrying; step 9.8×", 3.0, "vs MuJoCo Warp"),
+    ("RoboKit planning", "G1 climbing; step 3.8×", 1.8, "vs MuJoCo Warp"),
+    ("RoboKit planning", "Go2 jumping; step 2.3×", 2.1, "vs MuJoCo Warp"),
     ("G1 forward step", "", 6.2, "vs NablaEngine"),
     ("G1 forward step", "", 23.2, "vs MuJoCo Warp"),
     ("G1 forward step", "", 98.0, "vs MJX"),

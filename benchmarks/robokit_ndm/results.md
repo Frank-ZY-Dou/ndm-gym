@@ -13,7 +13,7 @@ SXM4 with nothing else running.
 <td align="center" width="33%"><img src="../../docs/media/robokit/go2_jump.webp" alt="A Go2 jumping between targets, planned on the world model" width="100%"><br><sub>Go2 jumping</sub></td>
 </tr>
 </table>
-<p align="center"><sub>The world model in the planner, MuJoCo Warp executing; planner seed 0. Rendered by <code>tools/render_robokit.py</code>: RoboKit's white background and soft shadows, with a grid floor. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="../../NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><sub>The world model in the planner, MuJoCo Warp executing; planner seed 0; in translucent blue, the example's reference (the G1's motion and the box's) and Go2's foot targets. Rendered by <code>tools/render_robokit.py</code>: RoboKit's white background and soft shadows, with a grid floor. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="../../NOTICE">see NOTICE</a>).</sub></p>
 
 <p align="center"><img src="../../docs/media/robokit_speedups.webp" alt="The world model's simulation step and planning time against MuJoCo Warp's" width="760"/></p>
 <p align="center"><sub>Bars: time against MuJoCo Warp's at full width, at the planner's own worlds. Made by <code>tools/make_robokit_chart.py --tasks g1_carry g1_climb go2_jump</code> from <code>benchmarks/robokit_ndm/summarize.py</code>'s json.</sub></p>
@@ -76,13 +76,15 @@ python benchmarks/robokit_ndm/select_arms.py fits/ --out best_arms.json
 python -m ndm_gym.wmbench.speed_mjcf --meta data/g1_climb_s0.json --states data/g1_climb_s2_executed0.npz --nworld 2047 8192 \
   --what physics ndm ndmsim --dtype bf16 --ckpt fits/rfit_g1_climb_dt20_acc_ln.pt --derived kinematics sensor_pos \
   --reset_every 40 --out speed.csv
-# plan on the world model (the plan executes on MuJoCo Warp), then render the executed motion
+# plan on the world model (the plan executes on MuJoCo Warp); the example's reference (no planning); render both
 python -m ndm_gym.wmbench.plan_robokit --example $EX/03_g1_climb.py --seed 0 --ndm 0.02=fits/rfit_g1_climb_dt20_acc_ln.pt \
   --dtype bf16 --derived kinematics sensor_pos --save_executed runs/g1_climb.npz --out runs/g1_climb.json
-MUJOCO_GL=egl python tools/render_robokit.py runs/g1_climb.npz g1_climb.webp --azimuth 45 --distance 2.9 --elevation -13 --lookat_z 0.8
+python -m ndm_gym.wmbench.plan_robokit --example $EX/03_g1_climb.py --save_reference runs/g1_climb_ref.npz --out runs/ref.json
+MUJOCO_GL=egl python tools/render_robokit.py runs/g1_climb.npz g1_climb.webp --reference runs/g1_climb_ref.npz \
+  --azimuth 45 --distance 2.9 --elevation -13 --lookat_z 0.8
 ```
 
-The Go2 animation: `--azimuth 45 --distance 1.15 --elevation -8 --lookat_z 0.22 --grid 0.25`; G1 box carrying's: `--azimuth 45
---distance 3.0 --elevation -13 --lookat_z 0.7`.
+The Go2 animation: `--azimuth 45 --distance 1.15 --elevation -8 --lookat_z 0.22 --grid 0.25 --targets FR FL RR RL`; G1 box
+carrying's: `--azimuth 45 --distance 3.0 --elevation -13 --lookat_z 0.7`.
 
 `plan_robokit` without `--ndm` plans as the example does, on MuJoCo Warp.

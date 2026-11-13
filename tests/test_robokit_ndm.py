@@ -212,4 +212,8 @@ def test_plan_robokit_plans_on_the_world_model_and_executes_on_mujoco_warp(tmp_p
     main(["--example", str(example), "--out", str(tmp_path / "base.json")])  # the example as it is
     with pytest.raises(ValueError, match="--null plans"):
         main(["--example", str(example), "--null", "--ndm", f"0.01={ckpt}", "--out", str(tmp_path / "x.json")])
+    main(["--example", str(example), "--save_reference", str(tmp_path / "ref.npz"), "--out", str(tmp_path / "ref.json")])
+    ref = np.load(tmp_path / "ref.npz")  # the cart's SensorTask target, as the example built it; nothing planned
+    assert ref["sensor_ref"].ndim == 2 and float(ref["ref_dt"]) == pytest.approx(m.opt.timestep) and len(ref["sensor_name"]) == m.nsensor
+    assert (tmp_path / "ref.mjb").exists() and not (tmp_path / "ref.json").exists()
     assert json.loads((tmp_path / "base.json").read_text())["planners"][0]["sim"] == "MjWarpSim"

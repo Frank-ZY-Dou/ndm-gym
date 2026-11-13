@@ -19,14 +19,14 @@ tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac L
 MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand (MuJoCo-Warp). The neural
 dynamics models (NDMs) also serve as simulators.
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip, and a G1 climbing in RoboKit's planner on a world model" width="100%"/></p>
-<p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held). RoboKit MPC: G1 climbing planned on SuperTrack's world model and executed on MuJoCo Warp, planning 1.8x faster.</i></p>
-<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), and of SPIDER's retarget of an HRDexDB grasp, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; below, three of RoboKit's examples planned on a world model" width="100%"/></p>
+<p align="center"><i>SuperTrack's selected configuration on each task, MLP world model. Tracking error over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.2 mm (the apple's position; half speed, last frame held). Below: RoboKit's MPC examples planned on SuperTrack's world model and executed on MuJoCo Warp, planning 3.0x, 1.8x and 2.1x faster; the reference in blue.</i></p>
+<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), of SPIDER's retarget of an HRDexDB grasp, and of RoboKit's examples (G1 box carrying tracks an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 ## ⚡ Speed
 
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
-<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds. HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds; RoboKit's rows: the example's whole planning time at the planner's own worlds, the median over five planner seeds on one A100 40GB SXM4, with the simulation step's speedup beside the task (<a href="benchmarks/robokit_ndm/results.md">details</a>). HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
 ## 🧭 Recommended settings
 
@@ -592,7 +592,7 @@ each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the plann
 <td align="center" width="33%"><img src="docs/media/robokit/go2_jump.webp" alt="A Go2 jumping between targets, planned on the world model" width="100%"><br><sub>Go2 jumping</sub></td>
 </tr>
 </table>
-<p align="center"><sub>G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><sub>In translucent blue, the example's reference: the motion the G1 tracks and the box's, and Go2's foot targets. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 | task | simulation step | planning time | outcome, seeds 0-4 |
 |---|---|---|---|

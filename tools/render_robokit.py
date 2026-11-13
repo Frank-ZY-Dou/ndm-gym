@@ -5,7 +5,11 @@ as an animated WebP, as RoboKit's README animations are.
 The look: no skybox or fog; the background (no geom in the segmentation pass) white; the floor light grey under the robot,
 with grid lines every ``--grid`` metres, fading into the white background over ``--floor_fade`` metres from the camera's
 target, so there is no horizon; shadows darken it (its pixels times the ratio of a render with shadows to one without); the
-scenery fixed to the world (terrain, steps) light grey. The camera looks at the root body (the first free
+scenery fixed to the world (terrain, steps) light grey. With ``--reference`` (plan_robokit --save_reference), the example's
+targets in translucent blue, as this library's other renders draw references: its StateTask's reference as a ghost of the
+robot and its objects at the reference's own place, and with ``--targets`` the named position sensors' targets as discs of
+``--target_radius``. They are drawn in a pass of their own and blended in where they are in front of the scene, so they cast
+no shadow and the floor shows through them. The camera looks at the root body (the first free
 joint's body), smoothed over time, from ``--azimuth`` and ``--elevation`` at ``--distance``. The world's shadow-casting lights
 move horizontally with the camera's target: a light's shadow map covers the model's extent around the light, so a robot that
 travels away from the origin (Go2 jumping, 1.6 m) would otherwise lose its shadow.
@@ -22,6 +26,10 @@ from render import _font, check_egl_device, draw_mark  # tools/render.py: the ND
 import mujoco
 import numpy as np
 from PIL import Image, ImageDraw
+
+
+REF_RGB = (0.25, 0.58, 0.95)  # tools/render.py's reference blue
+REF_ALPHA_GHOST, REF_ALPHA_DISC = 0.25, 0.4  # a ghost over the robot it nearly covers stays light; a target disc on the floor shows
 
 
 def look(model: mujoco.MjModel):
@@ -89,6 +97,9 @@ def main(argv=None):
     p.add_argument("--quality", type=int, default=82)
     p.add_argument("--frames", type=int, default=None, help="only the first this many frames (a sample)")
     p.add_argument("--grid", type=float, default=0.5, help="the floor's grid spacing, metres (0: no grid)")
+    p.add_argument("--reference", default=None, help=".npz of plan_robokit --save_reference: the example's targets, drawn in blue")
+    p.add_argument("--targets", nargs="*", default=[], help="--reference: position sensors whose targets are drawn as discs")
+    p.add_argument("--target_radius", type=float, default=0.1, help="the discs' radius, metres")
     p.add_argument("--floor_fade", type=float, default=None, help="metres from the camera's target over which the floor fades to white (default: 2.5 x --distance)")
     a = p.parse_args(argv)
 
@@ -100,6 +111,25 @@ def main(argv=None):
         raise ValueError(f"render_robokit: qpos has {q.shape[1]} columns, the model {model.nq}")
     planes = look(model)
     body = root_body(model)
+    ref_q, ref_dt, discs = None, None, []
+    if a.reference is not None:
+        ref = np.load(a.reference)
+        ref_dt = float(ref["ref_dt"])
+        if "qpos_ref" in ref:
+            ref_q = ref["qpos_ref"]
+            if ref_q.shape[1] != model.nq:
+                raise ValueError(f"render_robokit: the reference's qpos has {ref_q.shape[1]} columns, the model {model.nq}")
+        names = list(ref["sensor_name"]) if "sensor_name" in ref else []
+        for name in a.targets:  # a position sensor's 3 values per step
+            if name not in names or "sensor_ref" not in ref or int(ref["sensor_dim"][names.index(name)]) != 3:
+                raise ValueError(f"render_robokit: no 3-value sensor target {name!r} in {a.reference}")
+            adr = int(ref["sensor_adr"][names.index(name)])
+            discs.append(ref["sensor_ref"][:, adr : adr + 3])
+        if ref_q is None and not discs:
+            raise ValueError(f"render_robokit: {a.reference} has no qpos_ref; name position sensors with --targets")
+    elif a.targets:
+        raise ValueError("render_robokit: --targets needs --reference")
+    ref_data, pert = mujoco.MjData(model), mujoco.MjvPerturb()
     lights = np.flatnonzero((model.light_bodyid == 0) & model.light_castshadow.astype(bool))  # the world's, casting shadows
     light_xy = model.light_pos[lights, :2].copy()
     data = mujoco.MjData(model)
@@ -151,6 +181,29 @@ def main(argv=None):
                               data.geom_xmat[g].reshape(3, 3), lookat, a.grid, fade)  # fmt: skip
             rgb[px] = 255.0 * (grey[px] * (1.0 - 0.6 * (1.0 - shade[px])))[:, None]
         rgb[seg[..., 0] < 0] = 255.0  # no geom: the white background
+        if ref_dt is not None:  # the targets of this time, in a pass of their own, blended in front of the scene
+            k = min(int(round((t[i] - t[0]) / ref_dt)), (len(ref_q) if ref_q is not None else len(discs[0])) - 1)
+            renderer.enable_depth_rendering()
+            depth = renderer.render().copy()  # the scene's
+            scene = renderer.scene
+            scene.ngeom = 0
+            if ref_q is not None:
+                ref_data.qpos[:] = ref_q[k]
+                mujoco.mj_kinematics(model, ref_data)
+                mujoco.mjv_addGeoms(model, ref_data, opt, pert, int(mujoco.mjtCatBit.mjCAT_DYNAMIC), scene)
+            for d in discs:
+                g = scene.geoms[scene.ngeom]
+                mujoco.mjv_initGeom(g, int(mujoco.mjtGeom.mjGEOM_CYLINDER), np.array([a.target_radius, 0.002, 0.0]),
+                                    d[k] + np.array([0.0, 0.0, 0.003]), np.eye(3).reshape(-1), np.ones(4, dtype=np.float32))  # fmt: skip
+                scene.ngeom += 1
+            for j in range(scene.ngeom):
+                scene.geoms[j].rgba[:] = REF_RGB + (1.0,)
+            ref_depth = renderer.render()
+            renderer.disable_depth_rendering()
+            ref_rgb = renderer.render().astype(np.float32)
+            front = ref_depth < depth - 1e-3  # where a target is in front of the scene
+            alpha = REF_ALPHA_GHOST if ref_q is not None else REF_ALPHA_DISC
+            rgb[front] = (1.0 - alpha) * rgb[front] + alpha * ref_rgb[front]
         rgb = rgb.clip(0, 255).astype(np.uint8)
         img = Image.fromarray(rgb).convert("RGBA")
         over = Image.new("RGBA", img.size, (0, 0, 0, 0))

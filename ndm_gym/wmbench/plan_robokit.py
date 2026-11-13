@@ -43,6 +43,30 @@ def null_sim():
     return NullSim
 
 
+def save_reference(path: str, config, sim):
+    """The example's targets (``--save_reference``): its first StateTask's qpos_ref and first SensorTask's sensor_ref, as built,
+    one row per simulation step of ``ref_dt`` from the executed trajectory's first; the model's sensor names and addresses; and
+    the model as .mjb beside it. A task without either is an error."""
+    import mujoco
+
+    out = {"ref_dt": np.float64(sim.mjm.opt.timestep * sim.substeps)}
+    for term, _, _ in config.terms:
+        kind = type(term).__name__
+        if kind == "StateTask" and "qpos_ref" not in out:
+            out["qpos_ref"] = np.asarray(term.qpos_ref, dtype=np.float64)
+        if kind == "SensorTask" and "sensor_ref" not in out:
+            out["sensor_ref"] = np.asarray(term.sensor_ref, dtype=np.float64)
+    if "qpos_ref" not in out and "sensor_ref" not in out:
+        raise RuntimeError(f"--save_reference: the example's cost terms hold no StateTask or SensorTask ({[type(t).__name__ for t, _, _ in config.terms]})")
+    m = sim.mjm
+    out["sensor_name"] = np.array([m.sensor(i).name for i in range(m.nsensor)])
+    out["sensor_adr"], out["sensor_dim"], out["sensor_type"] = m.sensor_adr.copy(), m.sensor_dim.copy(), m.sensor_type.copy()
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    np.savez_compressed(path, **out)
+    mujoco.mj_saveModel(m, os.path.splitext(path)[0] + ".mjb", None)
+    print(f"[plan_robokit] {path}: {', '.join(f'{k} {np.shape(v)}' for k, v in out.items() if k.endswith('_ref'))}, ref_dt {out['ref_dt']:g} s")
+
+
 def parse_args(argv=None):
     p = argparse.ArgumentParser()
     p.add_argument("--example", required=True, help="the path of one of RoboKit's SimMPC examples")
@@ -56,6 +80,8 @@ def parse_args(argv=None):
     p.add_argument("--seed", type=int, default=None, help="the planner's sampling seed (default: the example's)")
     p.add_argument("--no_compile", action="store_true", help="the world models uncompiled (needed on Warp's CPU device)")
     p.add_argument("--null", action="store_true", help="plan on a simulator whose step does nothing (SimMPC's own cost, the floor)")
+    p.add_argument("--save_reference", default=None,
+                   help=".npz of the example's targets, then stop before planning: its first StateTask's qpos_ref, its first SensorTask's sensor_ref with the model's sensor names and addresses, the step they index, and .mjb of the model beside it")
     p.add_argument("--save_executed", default=None,
                    help=".npz of the executed trajectory (each instance's time, qpos, qvel and ctrl per sim step, every execute() in order), and .mjb of the executed model beside it")
     p.add_argument("--out", required=True, help=".json of the run")
@@ -86,6 +112,9 @@ def main(argv=None):
     planners, executed = [], []
 
     def patched_init(self, config, sim, *a, **kw):
+        if args.save_reference is not None:  # the targets as the example built them, before SimMPC turns them into device arrays
+            save_reference(args.save_reference, config, sim)
+            raise _Stop
         if args.seed is not None:
             config = dataclasses.replace(config, seed=args.seed)
         if args.stages == "fine" and not config.stages:
@@ -125,6 +154,10 @@ def main(argv=None):
                 pass
     finally:  # the patches undone, for whatever runs next in this process
         mod.SimMPC.__init__, mod.SimMPC.execute, viser.ViserServer, sys.argv = saved
+    if args.save_reference is not None:  # stopped at SimMPC's construction, its targets saved; nothing planned
+        if not os.path.exists(args.save_reference):
+            raise RuntimeError(f"{args.example}: no SimMPC was built, so no targets were saved")
+        return
     if not planners:
         raise RuntimeError(f"{args.example}: no SimMPC was built")
     out = {"example": os.path.abspath(args.example), "example_args": args.example_args, "ndm": {str(k): v for k, v in paths.items()},
