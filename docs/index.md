@@ -60,3 +60,5 @@ Results, ablations and trained weights are in the [README](https://github.com/Fr
 
 MIT license. The LAFAN1 motions, HDMI's and MuscleVAE's files are downloaded by the scripts in `tools/` and not
 redistributed; see the [README](https://github.com/Frank-ZY-Dou/ndm-gym#-license-and-acknowledgments).
+The papers, data, robot models and code it builds on are cited in the README's
+[Papers and repositories](https://github.com/Frank-ZY-Dou/ndm-gym#-papers-and-repositories).

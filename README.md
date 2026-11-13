@@ -730,7 +730,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 python -m pytest tests          # CPU; the equivalence tests compare against third_party/supermimic
 ```
 
-## 📄 Papers
+## 📄 Papers and repositories
 
 Implemented:
 - **SuperTrack:** L. Fussell, K. Bergamin, D. Holden. *SuperTrack: Motion Tracking for Physically Simulated Characters
@@ -752,19 +752,67 @@ Implemented:
   [arXiv:2312.07340](https://arxiv.org/abs/2312.07340) · [code](https://github.com/wangchek/MuscleVAE_)
 
 Data:
-- **InterHuman** (the two-person clip): H. Liang, W. Zhang, W. Li, J. Yu, L. Xu. *InterGen: Diffusion-based Multi-human Motion Generation under
-  Complex Interactions.* International Journal of Computer Vision, 2024. [DOI](https://doi.org/10.1007/s11263-024-02042-6) · [data](https://github.com/tr3e/InterGen)
 - **LAFAN1** (motions and the held-out split, subject 5): F. G. Harvey, M. Yurick, D. Nowrouzezahrai, C. Pal. *Robust
   Motion In-betweening.* SIGGRAPH 2020. [DOI](https://doi.org/10.1145/3386569.3392480)
+- **InterHuman** (the two-person clip): H. Liang, W. Zhang, W. Li, J. Yu, L. Xu. *InterGen: Diffusion-based
+  Multi-human Motion Generation under Complex Interactions.* International Journal of Computer Vision, 2024.
+  [DOI](https://doi.org/10.1007/s11263-024-02042-6) · [data](https://github.com/tr3e/InterGen)
+- **OMOMO** (the clip of RoboKit's G1 box carrying, as InterMimic processed it): J. Li, J. Wu, C. K. Liu. *Object Motion
+  Guided Human Motion Synthesis.* ACM Transactions on Graphics 42(6), 2023. [DOI](https://doi.org/10.1145/3618333) ·
+  [code](https://github.com/lijiaman/omomo_release)
+- **InterMimic:** S. Xu, H. Y. Ling, Y.-X. Wang, L.-Y. Gui. *InterMimic: Towards Universal Whole-Body Control for
+  Physics-Based Human-Object Interactions.* CVPR 2025. [arXiv:2502.20390](https://arxiv.org/abs/2502.20390) ·
+  [project page](https://sirui-xu.github.io/InterMimic/)
+- **OmniRetarget** (the motion of RoboKit's G1 climbing): L. Yang, X. Huang, Z. Wu, A. Kanazawa, P. Abbeel,
+  C. Sferrazza, C. K. Liu, R. Duan, G. Shi. *OmniRetarget: Interaction-Preserving Data Generation for Humanoid
+  Whole-Body Loco-Manipulation and Scene Interaction.* arXiv preprint, 2025.
+  [arXiv:2509.26633](https://arxiv.org/abs/2509.26633) · [Holosoma](https://github.com/amazon-far/holosoma)
+- **SPIDER** (the XHand's clips and model; the G1 scene of RoboKit's G1 examples): C. Pan et al. *SPIDER: Scalable
+  Physics-Informed Dexterous Retargeting.* arXiv preprint, 2025. [arXiv:2511.09484](https://arxiv.org/abs/2511.09484) ·
+  [code](https://github.com/facebookresearch/spider) · [data](https://huggingface.co/datasets/retarget/retarget_full) ·
+  [examples](https://huggingface.co/datasets/retarget/retarget_example)
+- **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the XHand's clips): J. Lim, T. Ha, S. Cha,
+  K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
+  Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,
+  X. Zhan, F. Wu, A. Xu, L. Liu, C. Lu. *OakInk: A Large-scale Knowledge Repository for Understanding Hand-Object
+  Interaction.* CVPR 2022. [arXiv:2203.15709](https://arxiv.org/abs/2203.15709) · Y.-W. Chao et al. *DexYCB: A
+  Benchmark for Capturing Hand Grasping of Objects.* CVPR 2021. [arXiv:2104.04631](https://arxiv.org/abs/2104.04631)
 - **MASS** (MuscleVAE's skeleton and the bone meshes of our renders): S. Lee, M. Park, K. Lee, J. Lee. *Scalable
   Muscle-Actuated Human Simulation and Control.* ACM Transactions on Graphics 38(4), 2019.
   [DOI](https://doi.org/10.1145/3306346.3322972)
 
-Simulation:
+Robot models:
+- **Unitree G1:** Unitree Robotics. [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/g1_description`,
+  BSD-3-Clause)
+- **MuJoCo Menagerie** (the Go2 of RoboKit's Go2 jumping): K. Zakka, Y. Tassa, MuJoCo Menagerie Contributors. *MuJoCo
+  Menagerie: A collection of high-quality simulation models for MuJoCo.* 2022.
+  [code](https://github.com/google-deepmind/mujoco_menagerie)
+
+Simulation and planning:
 - **Isaac Lab:** M. Mittal et al. *Isaac Lab: A GPU-Accelerated Simulation Framework for Multi-Modal Robot Learning.*
   arXiv preprint, 2025. [arXiv:2511.04831](https://arxiv.org/abs/2511.04831)
 - **MuJoCo:** E. Todorov, T. Erez, Y. Tassa. *MuJoCo: A physics engine for model-based control.* IROS 2012.
-  [DOI](https://doi.org/10.1109/IROS.2012.6386109)
+  [DOI](https://doi.org/10.1109/IROS.2012.6386109) · [code](https://github.com/google-deepmind/mujoco), with
+  [MJX](https://mujoco.readthedocs.io/en/stable/mjx.html)
+- **MuJoCo Warp** (Google DeepMind and NVIDIA): [code](https://github.com/google-deepmind/mujoco_warp); the adjoint of its
+  pull request [#1535](https://github.com/google-deepmind/mujoco_warp/pull/1535) (*hybrid analytic differentiability*) in
+  the differentiable-simulator comparison
+- **Newton:** The Newton Contributors. *Newton: GPU-accelerated physics simulation for robotics and simulation research.*
+  2025. [code](https://github.com/newton-physics/newton)
+- **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison): W. Lu, Y. Chen. *∇Mimic:
+  Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
+  [arXiv:2610.41654](https://arxiv.org/abs/2610.41654) · [code](https://github.com/sailab-ai/NablaMimic) ·
+  [NablaEngine](https://github.com/sailab-ai/NablaEngine)
+- **RoboKit** (the planner and examples of "NDMs in RoboKit's planner"): J. Ye, X. Peng, C. Mc Gartoll, C. Jing, L. Wei,
+  J. Chen, X. Zou, X. Wang. *RoboKit: Accelerating Parallel Differentiable Optimization for Robot Learning.* CoRL 2026.
+  [code](https://github.com/openrobokit/robokit) · [docs](https://openrobokit.com/docs/robokit/overview/)
+
+Tools:
+- **HoloMotion** (its HoloRetarget retargets InterHuman's clip to two G1s): M. Chen et al. *HoloMotion-1 Technical
+  Report.* arXiv preprint, 2026. [arXiv:2605.15336](https://arxiv.org/abs/2605.15336) ·
+  [code](https://github.com/HorizonRobotics/HoloMotion)
+- **supermimic_vibed** (the code this library started from): C. Zhang. An unofficial SuperMimic reproduction, 2026.
+  [code](https://github.com/zita-ch/supermimic_vibed)
 
 ## 📝 Citation
 
