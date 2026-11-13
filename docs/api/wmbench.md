@@ -10,3 +10,14 @@ Offline: transition datasets collected once in the simulator (`collect`), world 
       members: [pack, unpack]
 
 ::: ndm_gym.wmbench.fit_hoi
+
+RoboKit's examples on a world model ([task](../tasks/robokit.md)): recordings, fits of any MuJoCo model's world model, their
+throughput against MuJoCo Warp, and plans.
+
+::: ndm_gym.wmbench.collect_robokit
+
+::: ndm_gym.wmbench.fit_mjcf
+
+::: ndm_gym.wmbench.speed_mjcf
+
+::: ndm_gym.wmbench.plan_robokit

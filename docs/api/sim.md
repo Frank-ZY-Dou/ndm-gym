@@ -7,3 +7,9 @@ MuJoCo-Warp, `hand_sim` MuJoCo-Warp alone ([Installation](../installation.md)). 
 ::: ndm_gym.sim
 
 ::: ndm_gym.sim.launcher
+
+RoboKit's simulator subclasses need RoboKit and MuJoCo Warp, imported when they are built ([task](../tasks/robokit.md)).
+
+::: ndm_gym.sim.robokit_ndm
+
+::: ndm_gym.sim.robokit_rec

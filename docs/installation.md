@@ -52,6 +52,9 @@ Optional dependencies:
 Fused GPU kernels (`ndm_gym.kernels`, the world models' inference copies) need a CUDA GPU and Triton, included in
 PyTorch's CUDA builds for Linux.
 
+RoboKit's examples run in RoboKit's own environment, with torch and this library importable
+(`pip install -e . --no-deps` there; see [RoboKit's planner on a world model](tasks/robokit.md#setup)).
+
 Without the simulator, the modules and commands that need it raise `ndm_gym.sim.SimulatorNotInstalled`:
 
 ```console

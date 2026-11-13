@@ -17,3 +17,5 @@
 ::: ndm_gym.worldmodels.muscle
 
 ::: ndm_gym.worldmodels.hand
+
+::: ndm_gym.worldmodels.mjcf

@@ -60,3 +60,8 @@ bf16 parameters and RigidFormer's token attention kernel. `fused` adds Triton ke
   actions and the scene's context; `kind` "accel" or "increment", as above; MLP or `HOIRigidFormerNet`.
 - **Muscles**: `worldmodels.muscle.MuscleWorldModel`, the next state of MuscleVAE's 23 bodies (maximal coordinates) and
   of the muscle state from the 284 muscle targets; `kind` "accel" or "increment"; MLP or `MuscleRigidFormerNet`.
+- **Any MuJoCo model** (RoboKit's examples): `worldmodels.mjcf.MjcfWorldModel`, one step of a model's generalized
+  coordinates (qpos, qvel) from its controls, read from the `MjModel` by `MjcfLayout` (free, ball, hinge and slide joints;
+  joint and fixed-tendon actuators with a fixed gain; joint equalities kept exact); `kind` "accel" (integrated as MuJoCo's
+  semi-implicit Euler) or "increment"; MLP; `inference_copy` for bf16 throughput. RoboKit's planner runs it through
+  `sim.robokit_ndm` ([task](tasks/robokit.md)).
