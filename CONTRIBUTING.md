@@ -4,6 +4,11 @@
 
 Install as in the [README](README.md), then `pip install -e ".[dev]"` and `pre-commit install`.
 
+## Claiming a task
+
+If you have a task in mind, claim it before it is finished: open a draft pull request that says what you plan to do. We can
+then look at it early, and others see that it is taken, which avoids duplicate work.
+
 ## Checks
 
 - `make lint`: ruff, also run by CI on every push.
