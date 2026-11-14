@@ -16,7 +16,7 @@ policy is trained by backpropagation through both.
 ## Plan
 
 1. The character (agent) world model with external forces as input.
-2. The environment world model, starting with fluid.
+2. The environment world model.
 3. Policy training through the two-level world model.
 4. A benchmark with results.
 
