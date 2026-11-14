@@ -58,6 +58,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) timed on LAFAN1 with its authors' code, unmodified, and its
+  own evaluation ([training speed](#training-speed), [how to run it](docs/algorithms/nablamimic.md)).
 - **[2026-11]** [RoboKit](https://github.com/openrobokit/robokit)'s planner on a world model of its MuJoCo model: G1 box carrying,
   G1 climbing and Go2 jumping pass with every seed, as on MuJoCo Warp, planning 1.8-3.0x faster on an A100
   ([below](#ndms-in-robokits-planner)); world models of MuJoCo models in generalized coordinates (`ndm_gym/worldmodels/mjcf.py`).
@@ -380,6 +382,13 @@ ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_sta
           --sm_residual --wm_structured $RESETS $SYSTEMS $TIMED --log_dir logs/sm_fast
 ndm-eval --run_dir logs/st_fast --watch --group 18 --repeats 4 --graph   # on a second GPU; the same for logs/sm_fast
 ```
+
+**NablaMimic's own code.** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) trains through a differentiable simulator, without a world
+model. Its authors' code, run unmodified and scored by its own evaluation (seeds 0-2), first reaches return 0.82 after 14.48 ± 4.31 min with its
+published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 min with a reduced-memory configuration on an A100 40GB SXM4, which the published
+one does not fit (minutes from update 50 to its first evaluated checkpoint at 0.82; its authors report 8 min on an RTX PRO 6000). These numbers stand
+beside the table's and are not ranked with them: the evaluators, their simulators and the checkpoint intervals differ
+([details](benchmarks/g1_lafan1_tracking/results.md#nablamimics-own-code-timed), [running it](docs/algorithms/nablamimic.md)).
 
 <details>
 <summary><b>What changed the time</b></summary>
@@ -799,8 +808,8 @@ Simulation and planning:
   the differentiable-simulator comparison
 - **Newton:** The Newton Contributors. *Newton: GPU-accelerated physics simulation for robotics and simulation research.*
   2025. [code](https://github.com/newton-physics/newton)
-- **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison): W. Lu, Y. Chen. *∇Mimic:
-  Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
+- **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison; ∇Mimic's own code timed on
+  LAFAN1): W. Lu, Y. Chen. *∇Mimic: Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
   [arXiv:2610.41654](https://arxiv.org/abs/2610.41654) · [code](https://github.com/sailab-ai/NablaMimic) ·
   [NablaEngine](https://github.com/sailab-ai/NablaEngine)
 - **RoboKit** (the planner and examples of "NDMs in RoboKit's planner"): J. Ye, X. Peng, C. Mc Gartoll, C. Jing, L. Wei,

@@ -10,6 +10,8 @@ buffer and schedule.
 | [`blinkmimic`](blinkmimic.md) | SuperMimic with BlinkMimic's recipe: a preset of the options below | SuperMimic's semi-implicit model | beyond the horizon |
 
 See [how the methods relate](blinkmimic.md#2-how-the-methods-relate) for the objectives and semi-implicit world models.
+[NablaMimic](algorithms/nablamimic.md), which trains through a differentiable simulator without a world model, is not an
+`--algo`: its authors' code is run and timed on the LAFAN1 task.
 
 ## The training loop
 
