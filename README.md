@@ -39,7 +39,8 @@ with what each measured. Both methods are on offer for every task.
 | **LAFAN1**, MLP world model | most accurate | `lafan1-supertrack-accurate`: return 0.861, MPJPE 14.5 mm (3 h with the speed options, A100 40GB) | `lafan1-supermimic-accurate`: 0.824, 28.4 mm (3 h, without them) |
 | | fastest | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4), 2.54 min (H100) | `lafan1-supermimic-fast`: 4.38 and 2.68 min |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
-| **Two G1s** (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893, MPJPE 39 / 14.2 mm | `two-g1-supermimic`: 0.905, 40 / 16.4 mm |
+| **Two G1s**, MLP world model (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893 ± 0.001, MPJPE 46.2 / 14.1 mm (seeds 0-2) | `two-g1-supermimic`: 0.904 ± 0.001, 47.5 / 16.1 mm |
+| **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
 | **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
 | | fastest | `hand-supertrack-fast`: success 0.99 in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
 | **Muscles** (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
@@ -58,6 +59,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** Two G1s: three training seeds for SuperTrack and SuperMimic, with the MLP and with the RigidFormer world model
+  (SuperTrack-RF, SuperMimic-RF) ([results](benchmarks/g1_boxing/results.md#training-seeds-0-2)).
 - **[2026-11]** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) timed on LAFAN1 with its authors' code, unmodified, and its
   own evaluation ([training speed](#training-speed), [how to run it](docs/algorithms/nablamimic.md)).
 - **[2026-11]** [RoboKit](https://github.com/openrobokit/robokit)'s planner on a world model of its MuJoCo model: G1 box carrying,
@@ -241,8 +244,8 @@ SuperTrack and SuperMimic share each task's simulator, data, networks and evalua
 with equal budgets and one rule; the [fastest configurations](#training-speed) use rounds of single changes.
 SuperMimic here is this library's re-implementation, written before its [official code](https://github.com/HybridRobotics/supermimic) was released, so its
 numbers may differ from the authors' code.
-Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1 and the muscles. Not reported here: tracking on
-HDMI's human-object interaction tasks, tracking with the RigidFormer on the two G1s, and the RigidFormer's time to a target
+Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1, the two G1s and the muscles. Not reported here:
+tracking on HDMI's human-object interaction tasks and the RigidFormer's time to a target
 return. Return is the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
 <table>
@@ -253,9 +256,11 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td rowspan="3"><b>LAFAN1 tracking</b><br><sub>MLP world model, 40 clips</sub></td><td>return ↑, 3 h<br><sub>A100 40GB, seeds 1-3</sub></td><td>0.832 ± 0.009</td><td>0.824 ± 0.013</td></tr>
 <tr><td>MPJPE, root-relative ↓, 3 h</td><td>20.0 ± 0.7 mm</td><td>28.4 ± 0.5 mm</td></tr>
 <tr><td>training to return 0.82 ↓<br><sub>fastest configurations, seeds 0-5; H100 / A100 40GB SXM4 / A100 40GB PCIe</sub></td><td>2.54 / 4.19 / 4.37 min</td><td>2.68 / 4.38 / 3.98 min</td></tr>
-<tr><td rowspan="3"><b>Two G1s</b><br><sub>a two-person clip, MLP world model<br>A100 80GB, seed 0</sub></td><td>return ↑, best checkpoint<br><sub>runs of 0.5 h and 0.3 h</sub></td><td>0.893</td><td>0.905</td></tr>
-<tr><td>MPJPE, global / root-relative ↓</td><td>39 / 14.2 mm</td><td>40 / 16.4 mm</td></tr>
-<tr><td>training to return 0.88 ↓</td><td>0.11 h</td><td>0.10 h</td></tr>
+<tr><td rowspan="5"><b>Two G1s</b><br><sub>a two-person clip, seeds 0-2<br>seed 0 on an A100 80GB,<br>seeds 1-2 on an A100 40GB</sub></td><td>return ↑, best checkpoint, MLP world model</td><td>0.893 ± 0.001</td><td>0.904 ± 0.001</td></tr>
+<tr><td>return ↑, best checkpoint, RigidFormer</td><td>0.894 ± 0.002</td><td>0.904 ± 0.001</td></tr>
+<tr><td>MPJPE, global / root-relative ↓, MLP world model</td><td>46.2 ± 7.5 / 14.1 ± 0.2 mm</td><td>47.5 ± 8.6 / 16.1 ± 0.4 mm</td></tr>
+<tr><td>MPJPE, global / root-relative ↓, RigidFormer</td><td>47.2 ± 5.2 / 14.7 ± 0.2 mm</td><td>45.8 ± 2.5 / 17.0 ± 0.7 mm</td></tr>
+<tr><td>training to return 0.88 ↓<br><sub>seed 0, A100 80GB, MLP world model</sub></td><td>0.11 h</td><td>0.10 h</td></tr>
 <tr><td rowspan="4"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>38.1 ± 1.0 mm</td><td>65.6 ± 8.1 mm</td></tr>
 <tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
 <tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
@@ -424,21 +429,22 @@ the marked GPU.
 ### Two G1s, one two-person clip
 
 Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
-redistributed). One policy controls both. Configurations come from two rounds with equal run counts. The table shows five
-evaluations of each selected run's best checkpoint on an A100 80GB; SuperTrack's run trained 0.5 h, SuperMimic's 0.3 h
-([details](benchmarks/g1_boxing/results.md)).
+redistributed). One policy controls both. Configurations come from two rounds with equal run counts and then train with three
+seeds, with the MLP and with a small RigidFormer (SuperTrack-RF, SuperMimic-RF). The table shows the mean ± standard deviation
+over training seeds 0-2 of each run's best checkpoint, evaluated five times. Seed 0 trained on an A100 80GB (0.5 h; SuperMimic
+with the MLP 0.3 h), seeds 1 and 2 on an A100 40GB to seed 0's iteration counts ([details](benchmarks/g1_boxing/results.md)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
-<p align="center"><i>SuperTrack's selected run on InterHuman clip 1566: its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative (the table: the mean of five others).</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<p align="center"><i>SuperTrack's selected run on InterHuman clip 1566 (seed 0): its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
-| pair success | 5 / 5 | 5 / 5 |
-| normalized return | 0.893 | 0.905 |
-| MPJPE, global (mm) | 39 | 40 |
-| MPJPE, root-relative (mm) | 14.2 | 16.4 |
-| training to return 0.88 (h) | 0.11 | 0.10 |
-| best checkpoint, of the run's iterations | 7,000 of 9,396 (0.5 h) | 6,264 of 6,264 (0.3 h) |
+| pair success, every evaluation | 5 / 5 | 5 / 5 |
+| normalized return, MLP world model | 0.893 ± 0.001 | 0.904 ± 0.001 |
+| normalized return, RigidFormer | 0.894 ± 0.002 | 0.904 ± 0.001 |
+| MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 47.5 ± 8.6 / 16.1 ± 0.4 |
+| MPJPE, global / root-relative (mm), RigidFormer | 47.2 ± 5.2 / 14.7 ± 0.2 | 45.8 ± 2.5 / 17.0 ± 0.7 |
+| training to return 0.88 (h), seed 0, MLP world model | 0.11 | 0.10 |
 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
@@ -446,6 +452,9 @@ CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566
 ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --max_hours 0.5 --ckpt_every 1000 --log_dir logs/box_st
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
           --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --max_hours 0.3 --ckpt_every 1000 --log_dir logs/box_sm
+# SuperTrack-RF and SuperMimic-RF: the named configurations (their options: ndm_gym/configs.py)
+ndm-train --config two-g1-supertrack-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_st_rf
+ndm-train --config two-g1-supermimic-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_sm_rf
 ```
 
 At 4096 pairs the physics runs 0.31 M robot-steps per second; with their inference paths the MLP runs 8.4 M (27.0x) and
@@ -643,8 +652,10 @@ each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the plann
 9. **BlinkMimic's recipe as options:** `--algo blinkmimic` first reaches return 0.82 at iterations 1,500 / 1,500 / 1,400 (seeds 0 /
    1 / 2); BlinkMimic's own code reaches 0.834 at iteration 1,500 (seed 0, its evaluator), on the same A100 40GB
    ([details](#blinkmimics-options)).
-10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint of runs of 0.5 / 0.3 h): return 0.893 / 0.905, MPJPE 39 / 40 mm
-    global and 14.2 / 16.4 mm root-relative, return 0.88 after 0.11 / 0.10 h of training ([details](benchmarks/g1_boxing/results.md)).
+10. **Two G1s** (SuperTrack / SuperMimic, best checkpoints, seeds 0-2): return 0.893 ± 0.001 / 0.904 ± 0.001 with the MLP world model and
+    0.894 ± 0.002 / 0.904 ± 0.001 with the RigidFormer; root-relative MPJPE 14.1 ± 0.2 / 16.1 ± 0.4 mm and 14.7 ± 0.2 / 17.0 ± 0.7 mm; global
+    MPJPE 45.8-47.5 mm in the four. With seed 0 on an A100 80GB, the MLP runs reach return 0.88 after 0.11 / 0.10 h of training
+    ([details](benchmarks/g1_boxing/results.md)).
 11. **Muscles**, MLP world model (seeds 1-3, up to 3 h): MPJPE 38.1 ± 1.0 (SuperTrack) and 65.6 ± 8.1 mm (SuperMimic) in the root frame, 38.5 ± 1.1 and
     45.7 ± 2.5 mm in the heading frame; episodes ended 0.011 and 0.053, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg. On SuperMimic's selection
     at `--wm_lr 4e-4`, BlinkMimic's systems options cut the time per iteration by about 45%. At 4,000 iterations its errors were higher with

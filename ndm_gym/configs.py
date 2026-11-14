@@ -10,12 +10,14 @@ import sys
 # option groups, as the README's commands name them
 RECIPE = ("--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 "
           "--pi_lr_mult 4 --lr_decay_ret 0.75 --lr_decay_len 300 --lr_decay_by 1400 --wm_hidden 1024 1024 1024")  # BlinkMimic's  # fmt: skip
+RF_RECIPE = RECIPE.replace(" --wm_hidden 1024 1024 1024", "")  # the recipe without the MLP's size
 RESETS = "--fail_reset 0.3 --bin_fix --eprobe_share 0.15 --eprobe_graph --eprobe_async 20 --eprobe_start 1000 --eprobe_every 125 --eprobe_decay 0.7"
 SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
 # speed options of the 3 h confirmation runs: SPEED for both backbones (SuperMimic's RigidFormer runs also --critic_cudagraphs), RF_SPEED
 # RigidFormer's own
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
+RF_SMALL = "--rf_merge joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2"
 TIMED = "--iterations 6000 --ckpt_every 100"  # the timed runs' length and checkpoints, each evaluated while training (ndm-eval --watch)
 PAIRED = "--motions interhuman --paired"  # with --motion_dir: a two-person clip (tools/convert_interhuman.py)
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
@@ -47,11 +49,22 @@ CONFIGS = {
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
         "two-g1-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {SYSTEMS} {PAIRED} "
                               "--ckpt_every 1000 --max_hours 0.5",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.893, MPJPE 39 / 14.2 mm global / local (A100 80GB, seed 0)"),
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.893 +- 0.001, MPJPE 46.2 / 14.1 mm global / root-relative "
+                              "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
         "two-g1-supermimic": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 "
                               f"--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured {SYSTEMS} {PAIRED} --ckpt_every 1000 "
                               "--max_hours 0.3",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.905, MPJPE 40 / 16.4 mm global / local (A100 80GB, seed 0)"),
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.904 +- 0.001, MPJPE 47.5 / 16.1 mm global / root-relative "
+                              "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
+        "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
+                                 f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
+                                 "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "
+                                 "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
+        "two-g1-supermimic-rf": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RF_RECIPE} --wm_batches 2 "
+                                 f"--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_backbone rigidformer --wm_lr 3e-3 {RF_SMALL} {RF_SPEED} "
+                                 f"{SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
+                                 "two G1s, small RigidFormer (add --motion_dir): return 0.904 +- 0.001, MPJPE 45.8 / 17.0 mm global / root-relative "
+                                 "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
     },
     "train_hand": {
         "hand-supertrack-accurate": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HAND_SYSTEMS}",
