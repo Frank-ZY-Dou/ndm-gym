@@ -28,6 +28,37 @@ dynamics models (NDMs) also serve as simulators.
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
 <p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds; RoboKit's rows: the example's whole planning time at the planner's own worlds, the median over five planner seeds on one A100 40GB SXM4, with the simulation step's speedup beside the task (<a href="benchmarks/robokit_ndm/results.md">details</a>). HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
+## 🏆 Leaderboard
+
+For each task, the fastest and the most accurate configuration in this repository, the leading one first; the commands
+are under [Recommended settings](#-recommended-settings) and [Results](#-results).
+
+| Task | | Leading configuration | Its numbers, then the other algorithm's |
+|---|---|---|---|
+| **LAFAN1 tracking**, 40 clips, MLP world model | 🚀 fastest | SuperTrack and SuperMimic with [BlinkMimic's recipe](#blinkmimics-options), level within the seeds' spread | return 0.82 after **2.54 ± 0.11 min** (SuperTrack) and **2.68 ± 0.19 min** (SuperMimic) on an H100; 4.19 ± 0.16 and 4.38 ± 0.57 min on an A100 40GB SXM4 (seeds 0-5) |
+|  | 🎯 most accurate | SuperTrack with the speed options, 3 h on an A100 40GB | return **0.861**, MPJPE **14.5 mm**; SuperMimic, its best without them, 0.824 ± 0.013, 28.4 ± 0.5 mm (seeds 1-3) |
+| **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | SuperTrack, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm**; SuperMimic 0.804 ± 0.007, 33.1 ± 0.5 mm |
+| **Two G1s**, one two-person clip | 🚀 fastest | SuperMimic | return 0.88 after **0.10 h** on an A100 80GB (seed 0); SuperTrack 0.11 h |
+|  | 🎯 most accurate | SuperMimic by return, SuperTrack by root-relative MPJPE | return **0.904 ± 0.001** and 0.893 ± 0.001; MPJPE, global / root-relative, 47.5 / 16.1 mm and 46.2 / **14.1 mm** (MLP world model, seeds 0-2; with the RigidFormer 0.904 ± 0.001 and 0.894 ± 0.002, 45.8 / 17.0 mm and 47.2 / 14.7 mm) |
+| **Hand-object tracking**, XHand, three clips | 🚀 fastest | SuperTrack and SuperMimic with HOI's optimizer options | a success of 0.99 with the object within 10 mm after **0.9 / 1.5 / 2.4 min** (SuperTrack) and **1.3 / 1.6 / 1.6 min** (SuperMimic) on the apple, the spray bottle and the can, an A100 40GB, mean of seeds 0-2 |
+|  | 🎯 most accurate | SuperTrack with the task's weights | object position **2.4 / 1.6 / 2.3 mm** on the apple, the spray bottle and the can at a success of 99.9-100 % (seeds 0-2, A100 40GB); SuperMimic 3.5 / 2.9 / 3.2 mm at 100 % |
+| **Muscles**, MuscleVAE's character | 🎯 most accurate | SuperTrack, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm**; SuperMimic 0.053 ± 0.014, 65.6 ± 8.1 mm |
+| **NDM in RoboKit's planner**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model, not planned, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
+| **NDM as the simulator**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
+
+On the LAFAN1 task [XMimic](docs/algorithms/xmimic.md), BlinkMimic's trainer rebuilt in JAX, reports the first return of 0.82 after
+1.71 min on one H100 and 0.70 min on four, and 2.25 min for BlinkMimic's own code (its authors' runs and evaluator).
+Measured here with its own code and evaluator on an A100 40GB SXM4 (seeds 0-2): 3.53 ± 0.15 min on one GPU and
+1.81 ± 0.13 min on four, beside this library's recipe at 4.48 ± 0.37 min on one GPU and 2.41-2.89 min with XMimic's
+multi-GPU layouts on two to four ([why it is fast and what carries over](docs/algorithms/xmimic.md)); not ranked: the
+evaluators, the simulators and the clocks differ.
+
+[NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic), which trains through a differentiable simulator without a world model, first
+reaches return 0.82 after 14.48 ± 4.31 min with its published configuration on an A100 80GB SXM4 and after 18.48 ± 1.72 min
+with a reduced-memory configuration on an A100 40GB SXM4 (its authors' code, unmodified, with its own evaluation, seeds 0-2;
+its authors report 8 min on an RTX PRO 6000), beside SuperTrack's 4.19 ± 0.16 and SuperMimic's 4.38 ± 0.57 min on the A100 40GB
+SXM4; not ranked ([details](#training-speed)).
+
 ## 🧭 Recommended settings
 
 Each task's best settings, as measured here, are named configurations. `ndm-train --config NAME` runs one (`train_hand`
@@ -59,6 +90,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** A [leaderboard](#-leaderboard) per task: the fastest and the most accurate configuration of each, with their numbers.
 - **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
   each gives in this library, measured, and its techniques as options of `ndm-train` (multi-GPU layouts `--layout AL` / `AWL`, a
   GPU for the probe sweeps, its learner's restructuring) ([details](docs/algorithms/xmimic.md)).

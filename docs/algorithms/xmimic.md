@@ -56,7 +56,8 @@ Its authors note that the kernel-level gains target Hopper GPUs and may be small
 
 This library's `--algo blinkmimic` is BlinkMimic's recipe in PyTorch. Its collection and its updates already run as
 captured CUDA graphs of compiled step functions, with bf16 products under autocast. Measured on LAFAN1 on one node of
-A100 40GB SXM4 GPUs with nothing else running.
+A100 40GB SXM4 GPUs with nothing else running; XMimic's own code (`54860e1`, unmodified, with its published configuration
+and its own evaluator) ran on the same node.
 
 Time per iteration (seed 0, no evaluation; milliseconds from the training log's wall clock). The learner's options are added
 one group at a time, each row on top of the one above it:
@@ -85,6 +86,11 @@ at least 0.82; GPU-minutes are those minutes times the GPUs the run trains on; t
 | `--layout AWL` | 3 | 87.1 | 1,500-1,600 | 2.69 ± 0.15 | 8.07 ± 0.46 |
 | `--layout AWL --eprobe_gpu 3` | 4 | 87.2 | 1,400-1,700 | 2.57 ± 0.34 | 10.29 ± 1.36 |
 | `--layout AL --eprobe_gpu 2 --pi_encode_once` | 3 | 80.4 | 1,500-1,700 | 2.41 ± 0.26 | 7.23 ± 0.77 |
+| XMimic's own code, one GPU | 1 | 138.9 | 1,400-1,500 | 3.53 ± 0.15 | 3.53 ± 0.15 |
+| XMimic's own code, `AWLP` | 4 | 74.2 | 1,400-1,600 | 1.81 ± 0.13 | 7.25 ± 0.52 |
+
+XMimic's rows stand beside the others and are not ranked with them: the evaluators, the simulators, the constraint rows
+per world in training (256 against 500) and the clocks differ.
 
 What each of the four does here:
 
@@ -100,10 +106,11 @@ What each of the four does here:
    level with the recipe, per iteration (161.2 against 160.8 ms) and in the time to 0.82 (4.60 ± 0.25 against
    4.48 ± 0.37 min). The reason is the starting point: every update here already is one captured CUDA graph with bf16
    products, so most of what the restructuring removes from a direct translation is not there to remove. XMimic's own
-   one-GPU program still has the shorter iteration. A per-phase profile of both codes on this GPU type puts that
-   difference in the collection step, not in the updates: its program steps MuJoCo Warp on MuJoCo's own data, with
-   256 constraint rows per world, where this library steps it through Isaac Lab on Newton, with a state conversion
-   at every substep and 500 rows. `--njmax 256` takes 1.2 % off here and changes results.
+   one-GPU program still has the shorter iteration (138.9 ms against 150.2 with `--pi_encode_once`). A per-phase
+   profile of both codes on this GPU type puts that difference in the collection step, not in the updates: its
+   program steps MuJoCo Warp on MuJoCo's own data, with 256 constraint rows per world, where this library steps it
+   through Isaac Lab on Newton, with a state conversion at every substep and 500 rows. `--njmax 256` takes 1.2 % off
+   here and changes results.
 3. **The sweeps off the trainer's GPU carry over.** While sweeps run, an iteration takes 227.3 ms on one GPU and 180.1
    with the probe worker on a second (`--eprobe_gpu`). `--eprobe_lean`, this library's own, makes the sweep step itself
    cheaper by leaving out what a sweep does not read.
