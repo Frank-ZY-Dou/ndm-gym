@@ -143,6 +143,27 @@ cache holds them (`train.py:773-784`, `:798`, `:855-856`; `jax_cache.py`). `nm_t
 the minutes from update 50, as this library's training speed counts from iteration 50, and the per-seed crossing
 interpolated as its paper does.
 
+**Updates and time to 0.82 on one GPU type.** On an A100 40GB SXM4, three seeds each, each by its own evaluation and clock
+([its runs](../../benchmarks/g1_lafan1_tracking/results.md#nablamimics-own-code-timed),
+[the recipe's](xmimic.md#2-what-carries-over-to-this-library)):
+
+| | NablaMimic, reduced-memory configuration | this library's recipe (`--algo blinkmimic`) |
+|---|---|---|
+| time per update | 0.72 s | 0.16 s (iterations 200-1000; 0.23 s with the probe sweeps of iterations 1000-1500) |
+| first evaluation at 0.82 | updates 1,500, 1,500, 1,750 (evaluated every 250) | iterations 1,400, 1,500, 1,600 (every 100) |
+| minutes from update / iteration 50 | 18.48 ± 1.72 | 4.48 ± 0.37 |
+
+Its published configuration, on an A100 80GB SXM4: 0.67 s per update, updates 1,000, 1,250 and 1,750, 14.48 ± 4.31 min.
+
+The two reach 0.82 in about as many updates, and an update through the exact simulator takes about four times as long.
+Each of its updates differentiates 4,096 windows of 64 control steps. NablaEngine's gradient of a rollout takes 5.5 ms per
+control step at 4,096 worlds on this GPU
+([speed tables](../../benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models)): about 0.35 s
+of the 0.72 s. This library's update differentiates 2,048 windows of 32 steps through the MLP world model, 0.7 to 1.6 ms per
+control step at 1,024 to 4,096 worlds. The exact gradient needs no model and carries no model error; in these runs it does
+not lower the number of updates to 0.82. The evaluators, the simulators and the checkpoint grids differ (the table above),
+so the rows stand side by side and are not a ranking.
+
 ## 5. Memory on the GPU
 
 Its README: the configurations use about 50 GB (tested on an RTX PRO 6000 and an H100); on a smaller GPU, lower

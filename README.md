@@ -57,7 +57,9 @@ evaluators, the simulators and the clocks differ.
 reaches return 0.82 after 14.48 ± 4.31 min with its published configuration on an A100 80GB SXM4 and after 18.48 ± 1.72 min
 with a reduced-memory configuration on an A100 40GB SXM4 (its authors' code, unmodified, with its own evaluation, seeds 0-2;
 its authors report 8 min on an RTX PRO 6000), beside SuperTrack's 4.19 ± 0.16 and SuperMimic's 4.38 ± 0.57 min on the A100 40GB
-SXM4; not ranked ([details](#training-speed)).
+SXM4; not ranked ([details](#training-speed)). On that GPU type the two reach 0.82 in about as many updates (1,500 to 1,750 against 1,400
+to 1,600), and an update through the exact simulator takes 0.72 s against 0.16 s through the world model
+([why](docs/algorithms/nablamimic.md#4-its-evaluation-beside-this-librarys)).
 
 ## 🧭 Recommended settings
 
