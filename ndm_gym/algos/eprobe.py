@@ -32,12 +32,16 @@ i.e. the window before each failure. A share ``--eprobe_share`` of the training 
 (``TrackingSim.set_focus``).
 
 BlinkMimic sweeps in a second, evaluation-mode simulator of its training process. Isaac Lab 3 holds one SimulationContext
-per process, so here the probe simulator runs in a worker process on the same GPU: ``python -m ndm_gym.algos.eprobe --worker
-<dir> <args.json>``, a ``TrackingSim`` in evaluation mode, as ``ndm_gym.evaluate`` builds it. The trainer sends the policy
+per process, so here the probe simulator runs in a worker process on the same GPU (``--eprobe_gpu``, algos.xmimic: on
+another of the trainer's GPUs): ``python -m ndm_gym.algos.eprobe --worker <dir> <args.json>``, a ``TrackingSim`` in evaluation
+mode, as ``ndm_gym.evaluate`` builds it. The trainer sends the policy
 average at the sweep's start and applies the failures at the iteration where BlinkMimic does. With ``--eprobe_async``, that
 is ``ceil(steps / --eprobe_async)`` iterations later (``steps`` = lead + tile; the first sweep three fewer, BlinkMimic's
 graph warm-up), waiting if the worker is not done. Without it, the same iteration. ``--eprobe_graph`` replays one sweep step
 as a CUDA graph and runs all ``steps`` (BlinkMimic's ``--eprobe_graph``); without it the sweep stops once every probe is done.
+``--eprobe_lean`` (this library's): a sweep step computes what the sweep reads, the policy, the simulator's step and the
+termination test (``TrackingSim.step_probe``), and not the step's reward, flattened states and returns; the failures are
+the same, and the sweep's kernels fewer (the reward's forward kinematics run eagerly in the worker).
 """
 
 from __future__ import annotations
@@ -77,6 +81,9 @@ def add_eprobe_args(g):
     g.add_argument("--eprobe_async", type=int, default=0,
                    help="with --eprobe_graph: a sweep's failures apply ceil(steps / this) iterations after its start, as BlinkMimic's "
                    "sweep on a side stream at this many steps per iteration (0: the same iteration)")  # fmt: skip
+    g.add_argument("--eprobe_lean", action="store_true",
+                   help="with --eprobe_share: a sweep step computes what the sweep reads (the policy, the simulator's step, the "
+                   "termination test) and not the step's reward, flattened states and returns (the same failures; this library's)")  # fmt: skip
 
 
 def check_eprobe_args(args: argparse.Namespace):
@@ -84,8 +91,8 @@ def check_eprobe_args(args: argparse.Namespace):
     if not 0 <= args.eprobe_share < 1:
         raise ValueError(f"--eprobe_share must be in [0, 1), got {args.eprobe_share}")
     if args.eprobe_share == 0:
-        if args.eprobe_graph or args.eprobe_async:
-            raise ValueError("--eprobe_graph and --eprobe_async need --eprobe_share")
+        if args.eprobe_graph or args.eprobe_async or getattr(args, "eprobe_lean", False):
+            raise ValueError("--eprobe_graph, --eprobe_async and --eprobe_lean need --eprobe_share")
         return
     if args.pi_ema <= 0:
         raise ValueError("--eprobe_share sweeps the policy average: needs --pi_ema")
@@ -162,9 +169,10 @@ class ProbeSweep:
     """The probe simulator's side (worker process): ``TrackingSim`` in evaluation mode with one world per tile."""
 
     def __init__(self, env, pi, motion: MotionLib, mdp, K: int, Hh: int, residual: bool, ref_u: torch.Tensor, tiles: torch.Tensor,
-                 tile: int, graph: bool):  # fmt: skip
+                 tile: int, graph: bool, lean: bool = False):  # fmt: skip
+        """``lean`` (--eprobe_lean): the simulator's step without what a sweep does not read (TrackingSim.step_probe)."""
         self.env, self.pi, self.motion, self.mdp, self.K, self.Hh = env, pi, motion, mdp, K, Hh
-        self.residual, self.ref_u, self.tiles, self.tile, self.graph = residual, ref_u, tiles, tile, graph
+        self.residual, self.ref_u, self.tiles, self.tile, self.graph, self.lean = residual, ref_u, tiles, tile, graph, lean
         P, dev = len(tiles), env.device
         self.ids = torch.arange(P, device=dev)
         self.fail_f = torch.full((P,), -1, dtype=torch.long, device=dev)
@@ -183,7 +191,7 @@ class ProbeSweep:
         a = probe_action(self.pi, self.hist, self.motion.goal(env.f, self.K), self.residual, self.ref_u, env.f)
         alive = ~env.done_eval
         f_now = env.f.clone()
-        out = env.step(a, S, inplace=True)
+        out = env.step_probe(a) if self.lean else env.step(a, S, inplace=True)
         self.fail_f.copy_(torch.where(alive & (out["term"] | ~torch.isfinite(a).all(-1)), f_now, self.fail_f))
         env.done_eval |= env.f >= self.stop
         env.f.copy_(torch.minimum(env.f, self.cap))
@@ -252,10 +260,16 @@ class EvalProbe:
         self.dir = tempfile.mkdtemp(prefix="eprobe_", dir=os.environ.get("TMPDIR"))
         self.log = open(os.path.join(log_dir, "eprobe_worker.log"), "a")
         cmd = [sys.executable, "-m", "ndm_gym.algos.eprobe", "--worker", self.dir, os.path.join(log_dir, "args.json")]
-        self.proc = subprocess.Popen(cmd, stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+        gpu, env_vars = getattr(args, "eprobe_gpu", -1), None
+        if gpu >= 0:  # --eprobe_gpu (XMimic's prober GPU): the worker on another of the GPUs the trainer sees
+            from .xmimic import probe_device
+
+            env_vars = {**os.environ, "CUDA_VISIBLE_DEVICES": probe_device(gpu, os.environ.get("CUDA_VISIBLE_DEVICES"))}
+        self.proc = subprocess.Popen(cmd, stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env_vars)
         self.k = 0  # requests sent
         self.pending = None  # (k, start iteration, lead, apply iteration, t0)
-        print(f"--eprobe: {len(self.tiles)} probe worlds (tiles of {args.eprobe_tile} frames) in a worker process ({self.dir})", flush=True)
+        where = f"on GPU {env_vars['CUDA_VISIBLE_DEVICES']} (--eprobe_gpu {gpu})" if env_vars else "on the trainer's GPU"
+        print(f"--eprobe: {len(self.tiles)} probe worlds (tiles of {args.eprobe_tile} frames) in a worker process {where} ({self.dir})", flush=True)
 
     def _path(self, kind: str, k: int) -> str:
         return os.path.join(self.dir, f"{kind}_{k:05d}.pt")
@@ -370,7 +384,7 @@ def worker(qdir: str, args_json: str):
         pi.eval()
         residual = ALGOS[a.algo].is_residual(vars(a))
         sweep = ProbeSweep(env, pi, motion, mdp, a.goal_frames, a.hist, residual, reference_setpoints(motion, mdp.default_q, env.alpha),
-                           tiles, a.eprobe_tile, a.eprobe_graph)  # fmt: skip
+                           tiles, a.eprobe_tile, a.eprobe_graph, lean=getattr(a, "eprobe_lean", False))  # fmt: skip
         open(os.path.join(qdir, READY), "w").close()
         print(f"probe worker ready: {len(tiles)} worlds", flush=True)
         k = 0

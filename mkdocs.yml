@@ -107,6 +107,7 @@ nav:
       - SuperTrack: algorithms/supertrack.md
       - SuperMimic: algorithms/supermimic.md
       - BlinkMimic: blinkmimic.md
+      - XMimic: algorithms/xmimic.md
       - NablaMimic: algorithms/nablamimic.md
   - World models:
       - world_models.md

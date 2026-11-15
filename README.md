@@ -59,6 +59,9 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
+  each gives in this library, measured, and its techniques as options of `ndm-train` (multi-GPU layouts `--layout AL` / `AWL`, a
+  GPU for the probe sweeps, its learner's restructuring) ([details](docs/algorithms/xmimic.md)).
 - **[2026-11]** Two G1s: three training seeds for SuperTrack and SuperMimic, with the MLP and with the RigidFormer world model
   (SuperTrack-RF, SuperMimic-RF) ([results](benchmarks/g1_boxing/results.md#training-seeds-0-2)).
 - **[2026-11]** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) timed on LAFAN1 with its authors' code, unmodified, and its
@@ -426,6 +429,11 @@ the marked GPU.
 
 </details>
 
+**Across GPUs.** [XMimic](docs/algorithms/xmimic.md)'s layouts run an iteration's steps side by side. With BlinkMimic's recipe, return 0.82
+comes after 2.89 ± 0.38 min on two A100 40GB SXM4 GPUs and 2.41-2.69 min on three, against 4.48 ± 0.37 min on one, at 1.3-2.3 times
+the GPU-minutes (seeds 0-2). On one GPU, what carries over from its restructured learner is the goal encoder run once per policy
+update, 6.6 % off an iteration ([why XMimic is fast and what carries over](docs/algorithms/xmimic.md)).
+
 ### Two G1s, one two-person clip
 
 Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
@@ -717,6 +725,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
+| [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |
 | [`docs/hoi_design.md`](docs/hoi_design.md), [`docs/hdmi_task_spec.md`](docs/hdmi_task_spec.md) | human-object interaction: design, and HDMI's task as implemented, with references into HDMI's code |
 | [`docs/musclevae_design.md`](docs/musclevae_design.md) | MuscleVAE: simulator, muscle model, policy port, validation |
 
@@ -733,7 +742,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`; inference copies (`g1_infer.py`) |
 | `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
 | `ndm_gym/policies/` | tracking policy and critic; HOI, muscle and hand policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`) |
 | `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
@@ -761,6 +770,9 @@ Implemented:
 - **BlinkMimic** (code, no paper): F. Chen. *BlinkMimic: Whole-Body Motion Tracking for the Unitree G1 in Minutes on One
   GPU.* 2026. [code](https://github.com/fuyichen0725/blinkmimic) · built on InstantTrack
   ([code](https://github.com/Huy-Quang-Dao/instantTrack))
+- **XMimic** (the options of [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md)): N. Bohlinger, J. Peters. *XMimic and XSoma:
+  Learning Humanoid Motion Tracking and Locomotion in Under a Minute.* 2026.
+  [paper](https://nico-bohlinger.github.io/papers/2026_xmimic_xsoma.pdf) · [code](https://github.com/nico-bohlinger/xmimic)
 - **RigidFormer:** Z. Dou, M. Guo, H. Wu, D. Roble, T. Stuyck, W. Matusik. *RigidFormer: Learning Rigid Dynamics using
   Transformers.* arXiv preprint, 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196) ·
   [project page](https://frank-zy-dou.github.io/projects/RigidFormer/)

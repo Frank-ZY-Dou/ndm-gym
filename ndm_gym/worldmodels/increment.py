@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from ..core.nets import ACTIVATIONS, mlp, run_mlp
+from ..core.nets import ACTIVATIONS, mlp, run_mlp, run_mlp_deferred
 from ..core.normalizer import RunningNorm
 from ..core.rotations import so3_exp, so3_log, yaw_mat
 from ..robots.g1 import NUM_J
@@ -56,13 +56,23 @@ class IncrementWorldModel(nn.Module):
             -1,
         )
 
-    def step(self, S, a, xi_n, input_noise: float = 0.0):
-        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer)."""
+    def net_out(self, x, taps=None):
+        """The network's output for its normalized inputs; with ``taps`` (--wm_deferred_grads, the MLP only: one application's
+        slices of ``nets.mlp_taps``) from ``nets.run_mlp_deferred``, with each Linear layer's input."""
+        if taps is None:
+            return run_mlp(self.net, x, amp=self.amp), None
+        if isinstance(self.net, RigidFormerNet):
+            raise ValueError("deferred weight gradients: the MLP world model only")
+        return run_mlp_deferred(self.net, x, taps, amp=self.amp)
+
+    def step(self, S, a, xi_n, input_noise: float = 0.0, taps=None):
+        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer). ``taps``
+        (--wm_deferred_grads; ``net_out``): returns (the next state, the Linear layers' inputs)."""
         p, R, v, w, q, qd = S
         x = self.in_norm(self.inputs(S, a, xi_n))
         if input_noise != 0:
             x = x + input_noise * torch.randn_like(x)
-        y = run_mlp(self.net, x, amp=self.amp)
+        y, ins = self.net_out(x, taps)
         d = y * self.out_norm.std() + self.out_norm.mean
         H = yaw_mat(R)
         dp, dth, dv, dw, dq, dqd = d.split((3, 3, 3, 3, NUM_J, NUM_J), -1)
@@ -70,7 +80,8 @@ class IncrementWorldModel(nn.Module):
         R1 = R @ so3_exp(dth)
         v1 = v + (R @ dv.unsqueeze(-1)).squeeze(-1)
         w1 = w + (R @ dw.unsqueeze(-1)).squeeze(-1)
-        return (p1, R1, v1, w1, q + dq, qd + dqd)
+        S1 = (p1, R1, v1, w1, q + dq, qd + dqd)
+        return S1 if taps is None else (S1, ins)
 
     @staticmethod
     def state_error(S_hat, S):

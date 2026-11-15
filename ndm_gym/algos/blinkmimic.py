@@ -237,23 +237,26 @@ class Mirror:
         out[..., 2 + NUM_J] = -xi[..., 2 + NUM_J]  # the lateral center-of-mass offset
         return out
 
-    def windows(self, w: dict, n: int) -> dict:
-        """Replay windows (``ReplayBuffer.sample_windows``) with the first ``n`` replaced by their mirror images."""
+    def windows(self, w: dict, n: int, stacked: bool = False) -> dict:
+        """Replay windows (``ReplayBuffer.sample_windows``) with the first ``n`` replaced by their mirror images.
+        ``stacked``: several batches of windows (``ReplayBuffer.sample_windows_multi``), the first ``n`` of each."""
         out = dict(w)
         ms = lambda x: flatten_state(self.state(unflatten_state(x)))  # noqa: E731
         for k, fn in (("s", ms), ("s1", ms), ("a", self.joints), ("xi", self.xi)):
-            out[k] = torch.cat((fn(w[k][:n]), w[k][n:]))
+            out[k] = torch.cat((fn(w[k][:, :n]), w[k][:, n:]), 1) if stacked else torch.cat((fn(w[k][:n]), w[k][n:]))
         return out
 
 
 class Graphed:
     """``--update_graphs`` (BlinkMimic's ``--cuda_graph``): ``fn`` runs eagerly until ``ready()``; then eagerly on a side
     stream for ``warmup`` calls, is captured as a CUDA graph on the next call and replayed from then on. Each call is one
-    update; its outputs are cloned out of the graph's memory."""
+    update; its outputs are cloned out of the graph's memory. ``stream`` (train.py --layout, algos.layouts): the capture's
+    stream, one of the update's own device where that is not the first to capture (None: torch's default capture stream)."""
 
-    def __init__(self, fn, ready, name: str, warmup: int = 3):
+    def __init__(self, fn, ready, name: str, warmup: int = 3, stream=None):
         self.fn, self.ready, self.name, self.warmup, self.calls, self.graph, self.out = fn, ready, name, warmup, 0, None, None
         self.side = None  # the warm-up calls' stream: one, so that each reuses the blocks the caching allocator keeps for it
+        self.stream = stream
 
     def __call__(self):
         if self.graph is None and not self.ready():
@@ -272,7 +275,7 @@ class Graphed:
             torch.cuda.empty_cache()  # the eager phase's cached blocks back before the graph takes its own pool
             t0 = time.time()
             self.graph = torch.cuda.CUDAGraph()
-            with torch.cuda.graph(self.graph):
+            with torch.cuda.graph(self.graph, stream=self.stream):
                 self.out = self.fn()
             torch.cuda.synchronize()
             print(f"--update_graphs: captured {self.name} in {time.time() - t0:.1f} s, {torch.cuda.memory_reserved() / 2**30:.1f} GB reserved",

@@ -2,16 +2,24 @@
 failure counts and their window against BlinkMimic's own code (train.py @ d264658, restated below), the focus's share of
 the reset distribution, the deterministic probe policy, the options' checks and the trainer's timing of the sweeps. The
 probe simulator itself runs in the GPU smoke runs (docs/blinkmimic.md); at the defaults nothing changes
-(test_algo_equivalence, test_supertrack_golden)."""
+(test_algo_equivalence, test_supertrack_golden). --eprobe_lean (this library's): the sweep takes the simulator's lean step and
+records the same failures (a stand-in simulator, on CPU); the lean step against the default one in the simulator (a process
+of this file, ``--worker``, on the synthetic clips; marked slow, needs a GPU and Isaac Lab)."""
 
 import argparse
+import importlib.util
 import math
+import os
+import subprocess
+import sys
 import types
 
 import pytest
 import torch
 
-from conftest import DEV
+from conftest import DEV, REPO, synthetic_clips
+
+HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("isaaclab") is not None
 
 
 def _blinkmimic_tiles(motion, tile):
@@ -141,7 +149,8 @@ def _args(**kw):
 @pytest.mark.parametrize(
     "kw",
     [dict(pi_ema=0.0), dict(eprobe_graph=False), dict(eprobe_async=5), dict(paired=True), dict(eprobe_share=1.0), dict(eprobe_tile=0),
-     dict(eprobe_lead_min=500), dict(eprobe_share=0.0), dict(eprobe_decay=1.5)],
+     dict(eprobe_lead_min=500), dict(eprobe_share=0.0), dict(eprobe_decay=1.5),
+     dict(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0, eprobe_lean=True)],
 )  # fmt: skip
 def test_unsupported_probe_settings_are_refused(kw):
     from ndm_gym.algos.eprobe import check_eprobe_args
@@ -156,6 +165,77 @@ def test_probe_settings_accepted():
     check_eprobe_args(_args())  # BlinkMimic's PRESET[main]
     check_eprobe_args(_args(eprobe_graph=False, eprobe_async=0))  # synchronous, eager sweeps
     check_eprobe_args(_args(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0))  # off
+    check_eprobe_args(_args(eprobe_lean=True))  # the lean sweep step
+
+
+def test_lean_step_is_off_by_default():
+    from ndm_gym.algos.eprobe import add_eprobe_args
+
+    p = argparse.ArgumentParser()
+    add_eprobe_args(p)
+    assert p.parse_args([]).eprobe_lean is False and p.parse_args(["--eprobe_lean"]).eprobe_lean is True
+
+
+class _SweepEnv:
+    """A stand-in for the probe simulator: a step moves every world one frame on, to the reference state there, and
+    terminates the worlds whose frame is in ``fail``; ``step`` (the default) and ``step_probe`` (--eprobe_lean) do the
+    same and count their calls."""
+
+    def __init__(self, motion, f0, fail):
+        n = len(f0)
+        self.device, self.motion, self.fail = DEV, motion, fail
+        self.f, self.a_prev, self.xi = f0.clone(), torch.zeros(n, 29), torch.zeros(n, 33)
+        self.done_eval = torch.zeros(n, dtype=torch.bool)
+        self.calls = {"step": 0, "step_probe": 0}
+
+    def _advance(self, a):
+        self.f.copy_(self.f + 1)
+        self.a_prev.copy_(a)
+        term = torch.isin(self.f, self.fail)
+        self.done_eval |= term
+        return {"term": term}
+
+    def step(self, a, S, inplace=False):
+        assert inplace
+        self.calls["step"] += 1
+        return self._advance(a)
+
+    def step_probe(self, a):
+        self.calls["step_probe"] += 1
+        return self._advance(a)
+
+
+def test_lean_sweep_takes_the_lean_step_and_records_the_same_failures(motion, mdp):
+    """ProbeSweep's step with --eprobe_lean calls the simulator's step_probe where the default calls step; given the same
+    terminations both record the same first-failure frames, stop the probes at their tiles' ends and cap their frames."""
+    from ndm_gym.algos.common import reference_setpoints
+    from ndm_gym.algos.eprobe import ProbeSweep, probe_tiles, sweep_frames
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.tasks.tracking import OBS_DIM
+
+    torch.manual_seed(0)
+    K, H, tile, lead, n = 4, 4, 30, 10, 6
+    tiles = probe_tiles(motion, 300)[:n]
+    pi = TrackingPolicy(OBS_DIM, 73 * K, hist=H).to(DEV).eval()
+    ref_u = reference_setpoints(motion, mdp.default_q, torch.ones(29))
+    f0, stop, cap = sweep_frames(motion, tiles, lead, tile)
+    fail = torch.stack((f0[1] + 3, f0[4] + 17))  # two probes fail, at their 3rd and 17th step
+    res = {}
+    for lean in (False, True):
+        env = _SweepEnv(motion, f0, fail)
+        sweep = ProbeSweep(env, pi, motion, mdp, K, H, True, ref_u, tiles, tile, graph=False, lean=lean)
+        sweep.stop.copy_(stop), sweep.cap.copy_(cap)
+        o = mdp.obs(motion.ref_state(env.f), env.a_prev, env.xi, env.f)
+        sweep.hist = o.unsqueeze(1).repeat(1, H, 1)
+        with torch.no_grad():
+            for _ in range(lead + tile):
+                sweep._step(motion.ref_state(env.f))
+        assert env.calls == ({"step": 0, "step_probe": lead + tile} if lean else {"step": lead + tile, "step_probe": 0})
+        res[lean] = (sweep.fail_f.clone(), env.f.clone(), env.done_eval.clone(), sweep.hist.clone())
+    assert all(torch.equal(x, y) for x, y in zip(res[False], res[True]))
+    fail_f = res[True][0]
+    assert fail_f.tolist() == [-1, int(f0[1]) + 2, -1, -1, int(f0[4]) + 16, -1]  # the frame each failing step started at
+    assert bool(res[True][2].all()) and torch.equal(res[True][1], cap)
 
 
 class _Env:
@@ -228,3 +308,113 @@ def test_probe_state_round_trip(motion, tmp_path):
     assert torch.equal(q.focus.counts, p.focus.counts) and torch.equal(q.env.focus_q, p.env.focus_q) and q.env.focus_share == 0.15
     with pytest.raises(ValueError):
         q.load_state_dict({})
+
+
+def worker(out: str):
+    """An evaluation-mode TrackingSim on the synthetic clips, one probe world per tile of 40 frames, with termination
+    thresholds of 2 cm and 0.02 so that probes fail within a few steps. (1) From the same reset and with the same actions,
+    8 default steps and 8 lean steps (TrackingSim.step_probe). (2) Lean steps checked against the default step's rules on
+    the states they leave. (3) A sweep of the default step and one of the lean step as CUDA graphs (ProbeSweep), 15 steps."""
+    sys.path.insert(0, REPO)
+    from isaaclab.app import add_launcher_args, launch_simulation
+
+    from ndm_gym.algos.common import reference_setpoints
+    from ndm_gym.algos.eprobe import ProbeSweep, probe_tiles, sweep_frames
+    from ndm_gym.motion.library import MotionLib
+    from ndm_gym.motion.sources import Clip
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.robots import g1
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import TrackingSim, make_sim
+    from ndm_gym.tasks.tracking import MDP, OBS_DIM, RewardCfg
+
+    p = argparse.ArgumentParser()
+    add_launcher_args(p)
+    launcher = p.parse_args([])
+    torch.manual_seed(0)
+    dev, K, Hh, tile, lead = "cuda:0", 10, 10, 40, 10
+    kin = g1.kinematics(dev)
+    motion = MotionLib([Clip(**c) for c in synthetic_clips(sim=True)], kin, dev)
+    mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev), RewardCfg(term_height=0.02, term_tilt=0.02))
+    tiles = probe_tiles(motion, tile)
+    f0, _, _ = sweep_frames(motion, tiles, lead, tile)
+    sim_cfg = make_sim(dev, launcher)
+    res = {}
+    with launch_simulation(sim_cfg, launcher), torch.no_grad():
+        P = len(tiles)
+        env = TrackingSim(sim_cfg, P, motion, mdp, eval_mode=True)
+        ids = torch.arange(P, device=dev)
+        acts = 0.5 * torch.randn(8, P, 29, device=dev)
+
+        def flags():
+            return {"f": env.f.clone(), "ep_step": env.ep_step.clone(), "a_prev": env.a_prev.clone(), "done": env.done_eval.clone(),
+                    "failed": env.failed_eval.clone()}  # fmt: skip
+
+        def run(lean):  # 8 steps from the reset: the flags after every step, the terminations, the states
+            env.done_eval[:] = False
+            env.failed_eval[:] = False
+            env.reset(ids, f0)
+            rec = {"term": [], "q": [], "p": [], **{k: [] for k in flags()}}
+            for a in acts:
+                S = env.state()
+                tr = env.step_probe(a) if lean else env.step(a, S, inplace=True)
+                S1 = env.state()
+                rec["term"].append(tr["term"].clone()), rec["q"].append(S1[4].clone()), rec["p"].append(S1[0].clone())
+                for k, v in flags().items():
+                    rec[k].append(v)
+            return {k: torch.stack(v).cpu() for k, v in rec.items()}
+
+        res["default"], res["lean"] = run(False), run(True)
+        # (2) a lean step against the default step's rules, on the state it leaves
+        env.done_eval[:] = False
+        env.failed_eval[:] = False
+        env.reset(ids, f0)
+        rules = []
+        for a in acts:
+            before = flags()
+            tr = env.step_probe(a)
+            S1, f1 = env.state(), before["f"] + 1
+            term = mdp.termination(S1, f1)
+            done = term | (f1 >= motion.clip_end[motion.clip_id[before["f"]]])
+            rules.append(bool(torch.equal(tr["term"], term) and torch.equal(env.f, f1) and torch.equal(env.ep_step, before["ep_step"] + 1)
+                              and torch.equal(env.a_prev, a) and torch.equal(env.failed_eval, before["failed"] | (term & ~before["done"]))
+                              and torch.equal(env.done_eval, before["done"] | done)))  # fmt: skip
+        res["rules"] = rules
+        # (3) sweeps as CUDA graphs: 15 steps each (the probes stop 5 frames into their tiles), a policy with large outputs
+        pi = TrackingPolicy(OBS_DIM, 73 * K, hist=Hh).to(dev).eval()
+        pi.dec[-1].weight.mul_(50.0)
+        ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
+        for lean in (False, True):
+            sweep = ProbeSweep(env, pi, motion, mdp, K, Hh, True, ref_u, tiles, 5, graph=True, lean=lean)
+            res["sweep_lean" if lean else "sweep_default"] = {"fail_f": sweep.run(lead), "f": env.f.cpu(), "done": env.done_eval.cpu()}
+    torch.save(res, out)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAVE_SIM, reason="the simulator needs a GPU and Isaac Lab")
+def test_lean_step_is_the_default_step_without_its_reward(tmp_path):
+    """TrackingSim.step_probe (--eprobe_lean): the frame counters and flags of the default evaluation step exactly, its
+    terminations, and its states within the simulator's own run-to-run differences; a sweep of it as a CUDA graph records
+    the default sweep's failures."""
+    out = tmp_path / "lean.pt"
+    r = subprocess.run([sys.executable, os.path.abspath(__file__), "--worker", "--out", str(out)], cwd=REPO, capture_output=True, text=True,
+                       timeout=1800)  # fmt: skip
+    err = r.stderr[r.stderr.find("Traceback") :] if "Traceback" in r.stderr else r.stderr  # Warp's teardown messages follow it
+    assert r.returncode == 0, r.stdout[-2000:] + err[:4000]
+    res = torch.load(out)
+    d, lean = res["default"], res["lean"]
+    for k in ("f", "ep_step", "a_prev", "done", "failed", "term"):
+        assert torch.equal(lean[k], d[k]), k
+    for k in ("q", "p"):
+        torch.testing.assert_close(lean[k], d[k], rtol=1e-4, atol=1e-4)
+    assert bool(d["term"].any()) and not bool(d["term"].all())  # the thresholds make some probes fail, not all at once
+    assert all(res["rules"]), res["rules"]
+    a, b = res["sweep_default"], res["sweep_lean"]
+    assert torch.equal(b["fail_f"], a["fail_f"]) and torch.equal(b["f"], a["f"]) and torch.equal(b["done"], a["done"])
+    assert int((a["fail_f"] >= 0).sum()) > 0
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--worker", action="store_true", required=True)
+    ap.add_argument("--out", required=True)
+    worker(ap.parse_args().out)

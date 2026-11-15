@@ -76,12 +76,14 @@ def run_arguments(ck_args: dict, overrides: list[str], launched: set[str]) -> di
 
     from ndm_gym import configs
     from ndm_gym.algos.blinkmimic import add_blinkmimic_args
+    from ndm_gym.algos.xmimic import add_xmimic_args
     from ndm_gym.train import add_speed_args, add_train_args
 
     parser = argparse.ArgumentParser()  # as ndm_gym.train.parse_args builds it
     add_train_args(parser)
     add_speed_args(parser)
     add_blinkmimic_args(parser)
+    add_xmimic_args(parser)
     add_launcher_args(parser)
     configs.add_config_arg(parser)
     defaults = vars(parser.parse_args(["--algo", ck_args["algo"]]))

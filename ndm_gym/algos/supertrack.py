@@ -17,6 +17,7 @@ import torch.nn as nn
 
 from ..buffer import ReplayBuffer
 from ..core.kinematics import ArticulationKinematics
+from ..core.nets import deferred_grads, mlp_taps, run_mlp, run_mlp_deferred
 from ..core.rotations import mat_to_6d, so3_log, yaw_mat
 from ..motion.library import MotionLib
 from ..robots.g1 import G1_JOINT_NAMES, NUM_J, action_scale
@@ -165,6 +166,14 @@ class SuperTrack(Algo):
                 raise ValueError("--pi_encode_once: not with --pi_rollout_clip (its rerun of the policy reads every step's goal)")
             self.encode_goals = torch.compile(self._encode_goals, **self.pi_compile)
             self.st_imag_step_z = torch.compile(self._st_imag_step_z, **self.pi_compile)
+        # optional (XMimic's --imag_hoist and --pi_deferred_grads, algos.xmimic): with --pi_encode_once the steps compute
+        # only what depends on the imagined state, and the decoder's weight gradients are one product per layer over the steps
+        self.hoist = getattr(args, "imag_hoist", False)
+        self.pi_deferred = getattr(args, "pi_deferred_grads", False)
+        if (self.hoist and not self.encode_once) or (self.pi_deferred and not self.hoist):
+            raise ValueError("--imag_hoist needs --pi_encode_once, and --pi_deferred_grads needs --imag_hoist")
+        if self.hoist:
+            self.st_imag_step_h = torch.compile(self._st_imag_step_h, **self.pi_compile)
         if self.pi_graphs:
             self.mark_static_tensors()
 
@@ -233,6 +242,50 @@ class SuperTrack(Algo):
         o1 = self.mdp.add_noise(self.mdp.obs(S1, u, xi, f1))
         return S1, a, torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1), f1
 
+    def _st_imag_step_h(self, S, hn, z, ref_u, root_R, act_noise, noise, xi, xi_n, taps=None):
+        """--imag_hoist: ``_st_imag_step_z`` on what depends on the imagined state. ``hn`` (B, hist, obs): the observation
+        history normalized, each observation once, when it is produced; ``ref_u`` and ``root_R``: the reference setpoint
+        and root rotation of the step's target frame; ``act_noise`` and ``noise``: the step's exploration noise and
+        observation noise. ``taps`` (--pi_deferred_grads): the decoder through ``nets.run_mlp_deferred``. Returns the next
+        state, the policy's output, the next normalized history and the decoder's Linear inputs (None without taps)."""
+        x = torch.cat((z, hn.flatten(-2)), -1)
+        if taps is None:
+            a, ins = run_mlp(self.pi.dec, x), None
+        else:
+            a, ins = run_mlp_deferred(self.pi.dec, x, taps)
+        u = a + act_noise + ref_u  # PD offset about the reference pose
+        S1 = self.wm.step(S, u, xi_n)
+        if self.args.bptt_clip_k > 0:
+            S1 = cap_rollout_grads(S1, self.args.bptt_clip_k)
+        if self.bptt_decay != 1.0:
+            S1 = decay_rollout_grads(S1, self.bptt_decay)
+        o1 = self.mdp.obs(S1, u, xi, None, root_R=root_R) + noise
+        return S1, a, torch.cat((hn[:, 1:], self.pi.obs_norm(o1).unsqueeze(1)), 1), ins
+
+    def imag_action_noise(self, B: int) -> torch.Tensor:
+        """--imag_hoist: the exploration noise of the rollout's steps, (H, B, J), in one draw (``_st_imag_step``'s per step)."""
+        return self.args.st_imag_noise * torch.randn(self.HZ, B, NUM_J, device=self.dev)
+
+    def _st_imagine_hoisted(self, S, o_hist, f, xi, xi_n, Zs):
+        """The imagined rollout with --imag_hoist: ``policy_update``'s loop over ``st_imag_step_z`` with the reference's
+        terms of all frames, the noise of all steps (one draw each for the actions and the observations: another random
+        stream than draws per step) and the start history's normalization before it. Returns the steps' states, policy
+        outputs and frames, and with --pi_deferred_grads the decoder's (taps, Linear inputs (H, B, in) per layer)."""
+        HZ, B = self.HZ, f.shape[0]
+        frames = f.unsqueeze(0) + torch.arange(1, HZ + 1, device=f.device).unsqueeze(-1)  # the steps' target frames (H, B)
+        ref_u, root_R = self.ref_u[frames].unbind(0), self.motion.root_R[frames].unbind(0)
+        act_noise, noise = self.imag_action_noise(B).unbind(0), self.imag_noise(o_hist).unbind(0)
+        hn = self.pi.obs_norm(o_hist)
+        taps = mlp_taps(self.pi.dec, (HZ, B), o_hist.device) if self.pi_deferred else None
+        steps = None if taps is None else [t.unbind(0) for t in taps]  # the steps' slices: their gradients come back stacked
+        Ss, As, ins = [], [], []
+        for t in range(HZ):
+            step_taps = None if steps is None else [u[t] for u in steps]
+            S, a, hn, x = self.st_imag_step_h(S, hn, Zs[t], ref_u[t], root_R[t], act_noise[t], noise[t], xi, xi_n, step_taps)
+            Ss.append(S), As.append(a), ins.append(x)
+        deferred = None if taps is None else (taps, [torch.stack([x[i] for x in ins]) for i in range(len(taps))])
+        return Ss, As, list(frames.unbind(0)), deferred
+
     def _st_track(self, S_all, f_all):
         """Per-term L1 errors (and squared errors with --st_quad_w): sum over the imagined window, mean over rollouts,
         plus the number of elements of every term."""
@@ -266,16 +319,19 @@ class SuperTrack(Algo):
             self.wm.amp = False
         g = None if self.encode_once else self.motion.goal(f, self.K)
         Zs = self.encode_goals(f).unbind(0) if self.encode_once else None  # --pi_encode_once
-        Ss, As, Fs, taps = [], [], [], []
-        for t in range(self.HZ):
-            if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
-                taps.append((o_hist, g, torch.zeros(args.pi_batch, NUM_J, device=self.dev, requires_grad=True)))
-                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g, taps[-1][2])
-            elif Zs is not None:
-                S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
-            else:
-                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
-            Ss.append(S), As.append(a), Fs.append(f)
+        Ss, As, Fs, taps, deferred = [], [], [], [], None
+        if self.hoist:  # --imag_hoist (--pi_deferred_grads): the steps on what depends on the imagined state
+            Ss, As, Fs, deferred = self._st_imagine_hoisted(S, o_hist, f, xi, xi_n, Zs)
+        else:
+            for t in range(self.HZ):
+                if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
+                    taps.append((o_hist, g, torch.zeros(args.pi_batch, NUM_J, device=self.dev, requires_grad=True)))
+                    S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g, taps[-1][2])
+                elif Zs is not None:
+                    S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
+                else:
+                    S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
+                Ss.append(S), As.append(a), Fs.append(f)
         flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
         S_all, f_all = tuple(flat([St[i] for St in Ss]) for i in range(6)), flat(Fs)
         terms, sq_terms, n_el = self.st_track(S_all, f_all)
@@ -305,6 +361,8 @@ class SuperTrack(Algo):
             loss = loss + self.w_rate * rate + self.w_limit * limit
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
+        if deferred is not None:  # --pi_deferred_grads: the decoder's gradients, one product per layer over the steps
+            deferred_grads(self.pi.dec, deferred[1], deferred[0], self.deferred_bf16)
         if taps:
             clip_rollout_policy_grads(self.pi, taps, self.pi_rollout_clip)
         gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
@@ -332,13 +390,16 @@ class SuperTrack(Algo):
             self.wm.amp = False
         g = None if self.encode_once else self.motion.goal(f, self.K)
         Zs = self.encode_goals(f).unbind(0) if self.encode_once else None  # --pi_encode_once
-        Ss, As, Fs = [], [], []
-        for t in range(self.HZ):
-            if Zs is not None:
-                S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
-            else:
-                S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
-            Ss.append(S), As.append(a), Fs.append(f)
+        Ss, As, Fs, deferred = [], [], [], None
+        if self.hoist:  # --imag_hoist (--pi_deferred_grads): the steps on what depends on the imagined state
+            Ss, As, Fs, deferred = self._st_imagine_hoisted(S, o_hist, f, xi, xi_n, Zs)
+        else:
+            for t in range(self.HZ):
+                if Zs is not None:
+                    S, a, o_hist, f = self.st_imag_step_z(S, o_hist, f, xi, xi_n, Zs[t])
+                else:
+                    S, a, o_hist, f, g = self.st_imag_step(S, o_hist, f, xi, xi_n, g)
+                Ss.append(S), As.append(a), Fs.append(f)
         flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
         S_all, f_all = tuple(flat([St[i] for St in Ss]) for i in range(6)), flat(Fs)
         terms, sq_terms, n_el = self.st_track(S_all, f_all)
@@ -363,6 +424,8 @@ class SuperTrack(Algo):
             loss = loss + self.w_rate * rate + self.w_limit * limit
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
+        if deferred is not None:  # --pi_deferred_grads: the decoder's gradients, one product per layer over the steps
+            deferred_grads(self.pi.dec, deferred[1], deferred[0], self.deferred_bf16)
         gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
         nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
         finite = torch.isfinite(gn)
