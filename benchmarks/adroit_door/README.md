@@ -1,62 +1,82 @@
-# Adroit Door demonstration tracking (planned)
+# Adroit Door demonstration tracking
 
-This draft claims an Adroit Door tracking contribution under CONTRIBUTING.md's
-"Claiming a task" guidance. It contains a task plan, not a finished implementation
-or a claim that all contribution checks have passed.
+This draft adds native Adroit tracking of a physically replayed door-opening
+reference: 28 hand controls, with passive door and latch joints. The task scores
+hand, door and latch tracking separately from opening success. No door/latch
+actuator, external force or per-step reference-state assignment is used.
 
-## Task
+## Implementation
 
-A native Adroit hand follows a door-opening demonstration: approach the handle,
-manipulate the latch, and swing the door open. The reference will describe the
-hand motion and the door and latch joint coordinates. Unlike the existing XHand
-grasp-and-lift examples, this task involves an articulated object with constrained
-motion. This is a tracking adaptation of Adroit Door, not a new manipulation task
-or an offline-RL D4RL score reproduction.
+- A replay exporter and validated reference archive, native MuJoCo transition
+  adapter, articulated tracking reward and policy interfaces.
+- Door adaptations of SuperTrack (acceleration model and imagined L1 tracking)
+  and SuperMimic (increment model, imagined reward and lambda-return critic).
+- An alternating online trainer with whole-episode holdouts, independent seeded
+  initialization, optimizer counters, round-boundary recovery and final physical
+  evaluation. Both methods use an explicitly declared reference-control residual
+  prior; opening is not evidence that feedback was learned.
+- Component tests and a native-scene reference renderer with the NDM Gym mark.
 
-Sources: [Adroit Door](https://robotics.farama.org/envs/adroit_hand/adroit_door/)
-and [DAPG demonstrations](https://github.com/aravindr93/hand_dapg).
-Data, models and their versions and applicable notices will be documented before
-the reproducible adapter is added; demonstration files and checkpoints will not
-be redistributed in this change.
+## Prepare and run
 
-## Implementation scope
+Follow the [task guide](../../docs/tasks/adroit_door.md) to obtain the pinned
+DAPG demonstration and export its reference and native scene. Assets and outputs
+stay outside the repository. Use the supported package environment for training;
+the legacy demonstration exporter has its own isolated environment.
 
-- A pinned demonstration loader, initial-state restoration, physical action replay
-  and reference conversion. State playback alone is not replay validation.
-- A task adapter with observations, reference goals, differentiable tracking
-  reward/loss, termination and separate door-opening metrics.
-- SuperMimic and SuperTrack integration through the existing world-model and
-  policy interfaces, preserving other tasks' defaults.
-- Training, evaluation and repository-style rendering commands, component tests
-  and a reproducible benchmark protocol.
+Generate a new, recorded bootstrap dataset:
 
-## Development status
+```sh
+python -m ndm_gym.collect_door --model /path/to/door.xml \
+  --reference /path/to/reference.npz --output /path/to/new-bootstrap --seed 0
+```
 
-Native CPU physical action replay and a replay video have been obtained in the
-development workspace. The selected clip opens the door to approximately
-1.536 rad without direct door actuation or added external forces. Soft joint-limit
-excess and contact penetration are being documented against the native model;
-exact agreement with the historical demonstration is not established.
+Run either method with explicit inputs and a new output directory:
 
-These are preliminary replay observations, not learned-policy results or results
-reproducible from this documentation-only commit. Experimental supervised residual
-controllers are not evidence for SuperMimic or SuperTrack and are outside this draft.
+```sh
+python -m ndm_gym.train_door_online --method supertrack \
+  --model /path/to/door.xml --reference /path/to/reference.npz \
+  --bootstrap /path/to/new-bootstrap/episodes.npz --output /path/to/new-run \
+  --seed 0 --rounds 10 --bootstrap-updates 1000 --wm-updates 500 \
+  --policy-updates 250 --batch-size 256 --horizon 4
+```
 
-## Planned experiments and validation
+Use `--method supermimic` for the other method and distinct output directories
+for independent seeds. This public bootstrap recipe is reproducible but does
+**not** recreate the historical mixed bootstrap used in the results below.
+The online trainer performs its own final physical evaluation; `eval_door` is
+for the separate development trainer's checkpoint format, not online checkpoints.
+Use `--help` for recovery and measured optional execution paths.
 
-Before training, freeze the reference/version, development and evaluation starts,
-tracking and task-completion metrics, budgets and checkpoint selection rule.
-Evaluate hand tracking, door/latch angle errors, actual opening completion and
-failure modes under declared initial-state perturbations. Use three independent
-training seeds per reported method, final checkpoints and mean/sample standard
-deviation; method comparisons use the same task and declared budgets.
+## Existing three-seed evidence
 
-Reuse applicable measured efficient paths and report hardware, settings, time per
-iteration and total training cost. Videos will identify the reference, controller,
-checkpoint and playback speed. Reference replay belongs in documentation; learned
-policy previews will follow the repository's README conventions when available.
+The [corrected-contract study](online_study_2943.md#corrected-model-contract-replication-round2967)
+reports every seed and mean ± sample standard deviation. Each method received
+6000 world-model and 2500 policy updates, batch 256 and horizon 4, and final-only
+scoring on five narrow initial perturbations of one clip.
 
-Pending: runnable adapter and reproduction commands; model-based training pilots;
-three-seed results; efficiency measurements; and all applicable implementation,
-packaging, equivalence, documentation and merge checks. No performance or
-superiority claim is made by this draft.
+| Method | Training seeds | Opening | Tracking return, mean ± sample SD |
+| --- | --- | --- | --- |
+| SuperTrack | 29701, 29702, 29703 | 15/15 | 8.771478 ± 0.236312 |
+| SuperMimic | 29601, 29602, 29603 | 15/15 | 8.250310 ± 0.169370 |
+| Zero-residual reference controls | No training | 5/5 | 9.035571 |
+
+Higher return is better. Both learned methods worsen tracking against the
+reference-control prior. These are bounded negative results, not robust learned
+feedback or a completed final benchmark. Historical shared-bootstrap acquisition
+cost is unresolved. New optional training flags are not validated by these runs.
+
+## Draft completion checklist
+
+- [x] Native physical replay, task interfaces and genuine method integration.
+- [x] Bounded independent three-seed results, with failures and prior disclosed.
+- [ ] Final frozen, reproducible matched-budget three-seed study.
+- [ ] Complete relevant GPU tests before merging algorithm changes; CPU skips
+  do not certify them. Known upstream kernels exceed L40S shared-memory capacity.
+- [ ] Efficient end-to-end execution measurement against applicable upstream paths.
+- [ ] Trained-policy preview selected and captioned under CONTRIBUTING rules.
+
+The [development notes](development_notes.md) retain measured CPU/CUDA options,
+legacy results and method corrections. The [replay results](results.md) describe
+source selection and physical feasibility. Neither replay nor supervised baseline
+results substitute for the online methods' final study. This PR stays draft.

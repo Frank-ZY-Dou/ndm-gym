@@ -15,3 +15,5 @@ The world models also stand in for simulators:
 | task | robots | simulator replaced | data | command |
 |---|---|---|---|---|
 | [RoboKit's planner on a world model](tasks/robokit.md), its MPC examples | Unitree G1, Go2 | MuJoCo Warp, in RoboKit's sampling MPC | recorded from the examples (`wmbench.collect_robokit`) | `python -m ndm_gym.wmbench.plan_robokit` |
+
+[Adroit Door tracking](tasks/adroit_door.md) provides native replay, articulated tracking, and SuperMimic/SuperTrack development training (final benchmark pending).

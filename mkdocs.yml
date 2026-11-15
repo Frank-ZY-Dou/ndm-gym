@@ -101,6 +101,7 @@ nav:
           - tasks/muscles.md
           - Design: musclevae_design.md
       - Hand-object tracking: tasks/hand.md
+      - Adroit Door tracking: tasks/adroit_door.md
       - RoboKit's planner on a world model: tasks/robokit.md
   - Algorithms:
       - algorithms.md

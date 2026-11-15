@@ -1,0 +1,41 @@
+{
+  "created_utc": "2026-11-14T19:45:14.290648+00:00",
+  "status": "frozen before complete-schedule pilot",
+  "methods": [
+    "supertrack",
+    "supermimic"
+  ],
+  "pilot_seed": 29600,
+  "formal_seeds": [
+    29601,
+    29602,
+    29603
+  ],
+  "budget_each": {
+    "bootstrap_wm": 1000,
+    "online_rounds": 10,
+    "wm_per_round": 500,
+    "policy_per_round": 250,
+    "total_wm": 6000,
+    "total_policy": 2500,
+    "batch": 256,
+    "horizon": 4,
+    "pi_lr": 1e-05,
+    "hidden": [
+      32,
+      32
+    ]
+  },
+  "conditions": "native Adroit clip23 model/reference unchanged; same six shared bootstrap training episodes; same reference/control prior; fresh model/policy initialization for each method/seed; original method objectives; no supervised fitting",
+  "evaluation_offsets": [
+    0,
+    -0.015,
+    -0.0075,
+    0.0075,
+    0.015
+  ],
+  "selection": "final checkpoint only; report all seeds, mean/sampleSD; no superiority eligibility threshold",
+  "pilot_gate": "exact complete schedule finite losses/gradients/checkpoints and physical evaluation, completion failure allowed and reported; change protocol only prospectively before formal seeds",
+  "limits": "CPU one thread/job, <=4GiB/job, <=900s/job, max concurrency2 after exact-schedule pilot; GPU0 compute; remote /data only",
+  "limitations": "five narrow same-clip starts; this is bounded matched replication, not broad task robustness or proof sufficient learning; shared data generation costs separate"
+}
