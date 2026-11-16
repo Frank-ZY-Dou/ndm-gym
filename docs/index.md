@@ -7,7 +7,10 @@ tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac L
 MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking (MuJoCo-Warp). The neural dynamics models (NDMs) also serve as simulators,
 for instance in RoboKit's MPC planner.
 
-- [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`).
+- [Leaderboard](leaderboard.md): each task's fastest and most accurate configuration, and the named configurations.
+- [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`);
+  [XMimic](algorithms/xmimic.md)'s techniques as options; XMimic's and [NablaMimic](algorithms/nablamimic.md)'s own code
+  timed beside.
 - [World models](world_models.md): acceleration and increment models, MLP and RigidFormer backbones, inference copies.
 - [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks, MuscleVAE's character, hand-object
   tracking, and [RoboKit's planner on a world model](tasks/robokit.md).
@@ -44,7 +47,8 @@ See [installation options](installation.md) and the [Quickstart](quickstart.md) 
 | `scripts/`, `tools/` | install and launch scripts; data download and conversion, rendering, plots |
 | `tests/` | equivalence tests against the upstream code, component tests |
 
-Results, ablations and trained weights are in the [README](https://github.com/Frank-ZY-Dou/ndm-gym#-results) and on
+The [Leaderboard](leaderboard.md) carries the README's leaderboard and recommended settings; the results with their
+galleries, the ablations and the trained weights are in the [README](https://github.com/Frank-ZY-Dou/ndm-gym#-results) and on
 [Hugging Face](https://huggingface.co/frankzydou/ndm-gym).
 
 ## Citation

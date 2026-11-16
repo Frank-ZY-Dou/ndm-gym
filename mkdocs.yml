@@ -113,6 +113,7 @@ nav:
       - world_models.md
       - RigidFormer backbone: rigidformer_backbone.md
   - Results:
+      - Leaderboard: leaderboard.md
       - LAFAN1: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/results.md
       - Ablations: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/ablations.md
       - Two G1s: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_boxing/results.md
@@ -128,5 +129,6 @@ nav:
       - World models: api/worldmodels.md
       - Policies: api/policies.md
       - Algorithms: api/algos.md
+      - Commands: api/commands.md
       - World-model benchmark: api/wmbench.md
       - Simulator: api/sim.md

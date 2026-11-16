@@ -7,3 +7,9 @@ The Unitree G1's specification and the state layout shared by simulators, world 
 ::: ndm_gym.state
 
 ::: ndm_gym.robots.xhand
+
+::: ndm_gym.robots.objects
+
+::: ndm_gym.robots.muscles
+
+::: ndm_gym.robots.musclevae_char

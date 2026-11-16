@@ -8,3 +8,11 @@ world models.
 ::: ndm_gym.tasks.contact
 
 ::: ndm_gym.tasks.hand_tracking
+
+HDMI's human-object interaction tasks and MuscleVAE's muscle-actuated tracking.
+
+::: ndm_gym.tasks.hdmi
+
+::: ndm_gym.tasks.hdmi_tasks
+
+::: ndm_gym.tasks.muscle_tracking

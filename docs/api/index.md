@@ -1,6 +1,7 @@
 # API reference
 
-Generated from docstrings of modules that import with the library's `pip install` (PyTorch, NumPy, MuJoCo).
+Generated from the docstrings, which mkdocstrings reads from the source, so the modules that need the simulator are
+listed too (below: what each module needs).
 Dependency layers: `core` → `robots` → `motion` → `sim` → `tasks` → `worldmodels` → `policies` →
 `algos` → `train` / `evaluate`.
 
@@ -9,10 +10,11 @@ Dependency layers: `core` → `robots` → `motion` → `sim` → `tasks` → `w
 | [Core](core.md) | rotations, differentiable kinematics, networks, normalizers, Muon |
 | [Robots and state](robots.md) | the G1's specification; the state layout |
 | [Motion](motion.md) | the motion library and its sources |
-| [Tasks](tasks.md) | LAFAN1 tracking: observations, reward, terminations |
+| [Tasks](tasks.md) | LAFAN1 tracking, hand-object tracking, HDMI's tasks, the muscle-actuated character: observations, rewards, terminations |
 | [World models](worldmodels.md) | SuperTrack's, SuperMimic's, BlinkMimic's; the RigidFormer; inference copies; HOI, muscles and the hand |
 | [Policies](policies.md) | the tracking policy and critic; the HOI, muscle and hand policies |
-| [Algorithms](algos.md) | the algorithm interface, SuperTrack, SuperMimic, BlinkMimic's options |
+| [Algorithms](algos.md) | the algorithm interface and the replay buffer, SuperTrack, SuperMimic, BlinkMimic's and XMimic's options, the other tasks' algorithms |
+| [Commands](commands.md) | the training and evaluation commands and their arguments; named configurations |
 | [World-model benchmark](wmbench.md) | offline fits and scores on collected datasets |
 | [Simulator](sim.md) | `SimulatorNotInstalled`; Isaac Lab's launcher |
 
