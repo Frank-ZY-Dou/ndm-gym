@@ -30,7 +30,8 @@ Apache-2.0). The G1 box carrying render (g1_carry.webp) tracks a clip of OMOMO (
 data terms are not stated) that RoboKit retargets; it is for non-commercial illustration only and is not covered by the MIT
 license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in a row: its LAFAN1 tracking column under the first paragraph's terms,
-its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's, its Hand-object column
-under the fourth's, and its second row, the docs/media/robokit renders, with the sources and terms that paragraph names.
-No part of it is covered by the MIT license in LICENSE.
+docs/media/teaser.webp puts 6 s of such renders in three rows. In the first, the LAFAN1 tracking tile is under the terms of
+the docs/media/final paragraph, the Two G1s tile under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles tile under those of
+docs/media/musclevae and the Hand-object tile under those of docs/media/hand. The second row's four tiles are renders of
+HDMI's tasks, under the terms of the docs/media/hoi paragraph, and the third row's are the docs/media/robokit renders, with
+the sources and terms that paragraph names. No part of it is covered by the MIT license in LICENSE.
