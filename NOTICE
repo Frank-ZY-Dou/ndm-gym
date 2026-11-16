@@ -29,3 +29,11 @@ docs/media/teaser.webp puts 6 s of such renders in a row: its LAFAN1 tracking co
 its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's, its Hand-object column
 under the fourth's, and its second row, the docs/media/robokit renders, with the sources and terms that paragraph names.
 No part of it is covered by the MIT license in LICENSE.
+
+The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
+clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit
+9a1de23df6574e1b94e1da742e3326eb1f61c013; repository license: Apache-2.0). The native Adroit scene and visual assets
+come from Gymnasium-Robotics 1.3.1 (https://github.com/Farama-Foundation/Gymnasium-Robotics; MIT,
+Copyright (c) 2022 Farama Foundation). The demonstration archives, model XML, meshes and textures are obtained
+separately and are not redistributed in this repository. Their original notices and terms are not replaced by
+this repository's LICENSE.

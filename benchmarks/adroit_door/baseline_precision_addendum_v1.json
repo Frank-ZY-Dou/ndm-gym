@@ -1,0 +1,8 @@
+{
+  "status": "specified_before_any_full_budget_final_policy_evaluation",
+  "reason": "The original reference-control evaluator retains float64 actions, while deployed policies store and emit float32 actions.",
+  "original_control": "Retain the original 256-start float64 control as reference_control_float64.",
+  "additional_control": "Evaluate zero residual with the same float32 rounding and clamping as the deployed policy reference buffer, on the identical 256 starts and targets.",
+  "comparison": "Use the precision-matched float32 prior for claims about learned improvement; report the original float64 reference control alongside it.",
+  "invariants": "No changes to training, seed selection, budgets, physical targets, start distribution, scoring or checkpoint selection."
+}

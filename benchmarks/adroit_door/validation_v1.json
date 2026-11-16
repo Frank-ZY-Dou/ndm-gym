@@ -1,0 +1,70 @@
+{
+  "status": "passed_with_explicit_coverage_limits",
+  "source": {
+    "verified_files": 269,
+    "mismatches_before_and_after_tests": [],
+    "manifest_sha256": "820517628fa38098b27ca6b02e1d3500b278e648913c628c5e125b40ae817b85"
+  },
+  "runtime": {
+    "python": "3.12.3",
+    "torch": "2.11.0+cu126",
+    "mujoco": "3.15.0"
+  },
+  "cpu": {
+    "cuda_visible_devices": "",
+    "physical_cores": 4,
+    "ram_budget_gib": 32,
+    "commands": [
+      {
+        "command": "make test-fast",
+        "returncode": 0,
+        "seconds": 633.885627746582
+      },
+      {
+        "command": "make test",
+        "returncode": 0,
+        "seconds": 715.9926807880402
+      }
+    ],
+    "test_fast": {
+      "passed": 682,
+      "skipped": 217,
+      "deselected": 49,
+      "pytest_seconds": 626.54
+    },
+    "test": {
+      "passed": 687,
+      "skipped": 261,
+      "pytest_seconds": 705.98
+    }
+  },
+  "door_gpu": {
+    "gpu": "NVIDIA L40S",
+    "passed": 44,
+    "skipped": 2,
+    "pytest_seconds": 2.98,
+    "files": [
+      "tests/test_train_door_online.py",
+      "tests/test_train_door_full.py",
+      "tests/test_door_ring.py",
+      "tests/test_door_goal_horizon.py"
+    ],
+    "skip_reason": "Two fused-on-CPU combinations are intentionally unsupported; CUDA recovery and CPU/CUDA normalizer checks pass.",
+    "source_integrity": "All ndm_gym source and the four GPU-tested test files are byte-identical to the independently validated GPU snapshot."
+  },
+  "compiler_repair": "Missing Python development headers were supplied via CPATH from a data-disk extraction of Ubuntu libpython3.12-dev 3.12.3-1ubuntu0.17. Both original compiled HOI tests passed unchanged, separately and in the full suite. System Python and training environment were not upgraded.",
+  "coverage": "CPU full and fast suites pass; skipped tests are not passes. This does not certify all upstream GPU kernels: known unmodified Triton configurations require 111104-123392 bytes/block while L40S supports 101376. Door uses native CPU physics and standard Torch GPU learning; its GPU component checks and separate exact-capacity training/recovery evidence have independent coverage.",
+  "evidence_sha256": {
+    "/data/YifanKang/adroit-door/door-source3080.json": "820517628fa38098b27ca6b02e1d3500b278e648913c628c5e125b40ae817b85",
+    "/data/YifanKang/adroit-door/door-source3080-verification.json": "ec48b074abcce2483f54876882165b19956d5e7f8e4af5b6c86f58fe702f24ac",
+    "/data/YifanKang/adroit-door/d0/parent3080-checks.json": "6610417a7fd68e9b861796c0e2a7af9f402fad5bba3a0be3f691324fd2a766e9",
+    "/data/YifanKang/adroit-door/d0/parent3080-test-fast.log": "48f3c963b170160efac97cdbc0e09dd9c4519716c8cd922d57103bbeb06df7db",
+    "/data/YifanKang/adroit-door/d0/parent3080-test.log": "442d66ebfcb4beccbb969375c8c84c6fba254f2b24018b269f35fc4e16e9c9c9",
+    "/data/YifanKang/adroit-door/d0/guard-parent3080-checks/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/d0/guard-parent3080-checks/preflight.json": "b3bc6287fdad51c5c4a0bbf5c6dd6f050310bbde5c298b28889314a31dcd655b",
+    "/data/YifanKang/adroit-door/d0/parent3076-compiled-hoi.log": "f26ee1b772bf38d2475f48d2c2250dee50e458acb8db7734ed79d7e372990eeb",
+    "/data/YifanKang/adroit-door/d0/guard-parent3075-door-gpu/run.log": "fae195dc3e7b69a955a112f24004fe890781503a0360ddcb79e1b799b15552fa",
+    "/data/YifanKang/adroit-door/d0/guard-parent3075-door-gpu/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
+  },
+  "submission_scope": "Five machine-specific operational files are retained outside the contribution. Their 18 passing tests are excluded from these final submission totals. No task test was removed or weakened."
+}

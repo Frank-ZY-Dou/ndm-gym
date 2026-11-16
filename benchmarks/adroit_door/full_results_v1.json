@@ -1,0 +1,302 @@
+{
+  "methods": {
+    "supertrack": {
+      "seeds": [
+        {
+          "seed": 0,
+          "means": {
+            "tracking_return": 9.011478147024919,
+            "translation_rmse_m": 0.0005921129547491786,
+            "hand_rmse_rad": 0.030271474665107764,
+            "door_rmse_rad": 0.007417618901205941,
+            "latch_rmse_rad": 0.005288713798579751,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 0
+          },
+          "normalized_squared_error": 0.0031926388570109277,
+          "training_seconds": 5249.043368957005,
+          "evaluation_seconds": 5.726128409150988,
+          "guarded_elapsed_seconds": 5303.848187208176
+        },
+        {
+          "seed": 1,
+          "means": {
+            "tracking_return": 9.029269572432218,
+            "translation_rmse_m": 0.0005745740831341729,
+            "hand_rmse_rad": 0.01765298835462213,
+            "door_rmse_rad": 0.002753854709664322,
+            "latch_rmse_rad": 0.003182616575641739,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 0
+          },
+          "normalized_squared_error": 0.0011475033215953125,
+          "training_seconds": 5319.709476273041,
+          "evaluation_seconds": 5.754645105917007,
+          "guarded_elapsed_seconds": 5374.398426055908
+        },
+        {
+          "seed": 2,
+          "means": {
+            "tracking_return": 9.02897573597678,
+            "translation_rmse_m": 0.0005273393154381645,
+            "hand_rmse_rad": 0.017569205826230942,
+            "door_rmse_rad": 0.004593620452238914,
+            "latch_rmse_rad": 0.002468026665229974,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 0
+          },
+          "normalized_squared_error": 0.001180044296475816,
+          "training_seconds": 5200.539815646131,
+          "evaluation_seconds": 5.7829782869666815,
+          "guarded_elapsed_seconds": 5255.964331626892
+        }
+      ],
+      "metrics": {
+        "tracking_return": {
+          "mean": 9.023241151811305,
+          "sample_sd": 0.010188120345238458
+        },
+        "translation_rmse_m": {
+          "mean": 0.000564675451107172,
+          "sample_sd": 3.350213835567538e-05
+        },
+        "hand_rmse_rad": {
+          "mean": 0.02183122294865361,
+          "sample_sd": 0.007309592441158833
+        },
+        "door_rmse_rad": {
+          "mean": 0.004921698021036393,
+          "sample_sd": 0.0023491275565489227
+        },
+        "latch_rmse_rad": {
+          "mean": 0.0036464523464838213,
+          "sample_sd": 0.0014664333236788327
+        },
+        "opened_final": {
+          "mean": 1,
+          "sample_sd": 0.0
+        },
+        "opened_ever": {
+          "mean": 1,
+          "sample_sd": 0.0
+        }
+      },
+      "training_seconds": {
+        "mean": 5256.430886958726,
+        "sample_sd": 59.927319063617134
+      },
+      "normalized_tracking_rmse": 0.04289594571006315,
+      "difference_from_deployed_float32_prior": {
+        "tracking_return": -0.01208486008621179,
+        "translation_rmse_m": -1.427366213879917e-05,
+        "hand_rmse_rad": 0.017965090914531884,
+        "door_rmse_rad": 0.0007202690886985779,
+        "latch_rmse_rad": 0.0011327943275332357,
+        "opened_final": 0,
+        "opened_ever": 0
+      }
+    },
+    "supermimic": {
+      "seeds": [
+        {
+          "seed": 0,
+          "means": {
+            "tracking_return": 8.974982179813658,
+            "translation_rmse_m": 0.0008694698138735407,
+            "hand_rmse_rad": 0.04285564498430495,
+            "door_rmse_rad": 0.010678937863467838,
+            "latch_rmse_rad": 0.017000081558818762,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 394000
+          },
+          "normalized_squared_error": 0.0072626596412774,
+          "training_seconds": 5432.777730613016,
+          "evaluation_seconds": 5.724563552998006,
+          "guarded_elapsed_seconds": 5489.037947177887
+        },
+        {
+          "seed": 1,
+          "means": {
+            "tracking_return": 8.941705220287993,
+            "translation_rmse_m": 0.0011174236431059307,
+            "hand_rmse_rad": 0.05366253354109195,
+            "door_rmse_rad": 0.01007573013522715,
+            "latch_rmse_rad": 0.02033935718154598,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 394000
+          },
+          "normalized_squared_error": 0.011454643209228252,
+          "training_seconds": 5565.3510182569735,
+          "evaluation_seconds": 5.710016678087413,
+          "guarded_elapsed_seconds": 5621.5651597976685
+        },
+        {
+          "seed": 2,
+          "means": {
+            "tracking_return": 8.872078202582264,
+            "translation_rmse_m": 0.001224707658672178,
+            "hand_rmse_rad": 0.051396859905639525,
+            "door_rmse_rad": 0.029092903203903682,
+            "latch_rmse_rad": 0.03675039553040001,
+            "opened_final": 1,
+            "opened_ever": 1
+          },
+          "counts": {
+            "training_transitions": 40960000,
+            "warmup_transitions": 65536,
+            "wm_optimizer_steps": 80000,
+            "policy_updates": 19700,
+            "critic_optimizer_steps": 394000
+          },
+          "normalized_squared_error": 0.02063354378966375,
+          "training_seconds": 5281.1619035932235,
+          "evaluation_seconds": 5.693747184239328,
+          "guarded_elapsed_seconds": 5336.8756647109985
+        }
+      ],
+      "metrics": {
+        "tracking_return": {
+          "mean": 8.929588534227971,
+          "sample_sd": 0.05251111971113975
+        },
+        "translation_rmse_m": {
+          "mean": 0.0010705337052172165,
+          "sample_sd": 0.00018220175987267737
+        },
+        "hand_rmse_rad": {
+          "mean": 0.049305012810345474,
+          "sample_sd": 0.005699041873181058
+        },
+        "door_rmse_rad": {
+          "mean": 0.01661585706753289,
+          "sample_sd": 0.010809647316526857
+        },
+        "latch_rmse_rad": {
+          "mean": 0.024696611423588248,
+          "sample_sd": 0.010571564401324708
+        },
+        "opened_final": {
+          "mean": 1,
+          "sample_sd": 0.0
+        },
+        "opened_ever": {
+          "mean": 1,
+          "sample_sd": 0.0
+        }
+      },
+      "training_seconds": {
+        "mean": 5426.4302174877375,
+        "sample_sd": 142.20084885646142
+      },
+      "normalized_tracking_rmse": 0.11452924901550898,
+      "difference_from_deployed_float32_prior": {
+        "tracking_return": -0.10573747766954611,
+        "translation_rmse_m": 0.0004915845919712453,
+        "hand_rmse_rad": 0.045438880776223746,
+        "door_rmse_rad": 0.012414428135195076,
+        "latch_rmse_rad": 0.022182953404637662,
+        "opened_final": 0,
+        "opened_ever": 0
+      }
+    }
+  },
+  "deployed_float32_prior": {
+    "means": {
+      "tracking_return": 9.035326011897517,
+      "translation_rmse_m": 0.0005789491132459711,
+      "hand_rmse_rad": 0.0038661320341217293,
+      "door_rmse_rad": 0.004201428932337815,
+      "latch_rmse_rad": 0.0025136580189505857,
+      "opened_final": 1,
+      "opened_ever": 1
+    },
+    "evaluation_seconds": 4.910716076847166
+  },
+  "reference_control_float64": {
+    "means": {
+      "tracking_return": 9.035326009066392,
+      "translation_rmse_m": 0.0005789492704779229,
+      "hand_rmse_rad": 0.003866131558716545,
+      "door_rmse_rad": 0.004201431406909543,
+      "latch_rmse_rad": 0.0025136576299423846,
+      "opened_final": 1,
+      "opened_ever": 1
+    },
+    "evaluation_seconds": 7.446457682177424
+  },
+  "evidence_sha256": {
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/manifest.json": "efcfe121d0cef53a244d2d142e71cd9dc87b6e5c983bf14cfe43fc62a80e18f4",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed0/result.json": "72e38fb82c24051c0db72b14c5b37a979199588a0d04d4c0dbefd5a56d75c1d4",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed0-evaluation/result.json": "a39e46bb3144b776d149ed8196d81d0c78c06722ea57266a776c7891043d79e2",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed0-execution.json": "7a279c9abd0e3b7bbe8241df1e26eb5f2ac47970f10368173bafd9e4d20b43a7",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed0-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed1/result.json": "92059fc4caa70add07c19993b8bd4b098302105929adc5a424712ba63542910a",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed1-evaluation/result.json": "0c6fe5f1877b605042e7a33a7399db41fd66adb061f0a02854ab9b2517398cef",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed1-execution.json": "77812a57614e2ae585ca54204c4ecccebba169ae8da03addfef3fa7d1a93c342",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed1-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed2/result.json": "c906790862114f911c7424261318e0fe3a973e95bbc1329c0fbe7e2d81455e0a",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed2-evaluation/result.json": "a671e9a574edfcf8a68658ca66a1ad3c82e7bc9a4a1a6d5a1596c30193b5de2b",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed2-execution.json": "7dc8aeeb66f568639496306a692393e2605edd6f52f7c263af226ddfada50841",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supertrack-seed2-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed0/result.json": "b7fa25c19cb195412f77778d5882d4bc08b5a077007ec4e8c34afac1f8119c84",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed0-evaluation/result.json": "7c1083042592a19c413175abda80044ee0d60ecdcf146a54af115f77c72783c5",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed0-execution.json": "199fbd4bfe728423c2c0d7f72306ed1a61714a6ab780fafa40a91c2b16cf98ad",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed0-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed1/result.json": "6a9f2e47b3dc19301159c2ee6140e5caf267ae61dc89a9974ddf0244aa5afc5d",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed1-evaluation/result.json": "4fda3ed1ca91e8ecc792b1b3a85ea9fde9776459b3b3c60509fe6e0353c7515f",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed1-execution.json": "5ddf644cb62bd0dd2229f81b6ea6ef2b5da89b59d44f13621a21a51ebac35db3",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed1-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed2/result.json": "da4962086681bad4af8cdcd4f3fd7abdc180475480b75f59ffa551a2dc15287c",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed2-evaluation/result.json": "2b6e36af8ac853afa97eb03d5a85631b1998dca47c2eaf98146628450e1a12ec",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed2-execution.json": "0625002ffd6bcfef1f8815d10235cdc87c32068338e1110e02866b0a3fedbbe4",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/supermimic-seed2-guard/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/prior/result.json": "f619aae06e972857e315b0ce42513b41e941ec80e0cf1098ddf9ea0b3555f7f1",
+    "/data/YifanKang/adroit-door/full-study-v1-attempt2/prior-float32/result.json": "2b04a8f56f6f07ced3a006345a2ee15511b3239adba3e04c53e4daad40563b2c"
+  },
+  "starts_sha256": "a9b02ee7aadf1f06f34e81401f3bf93cd2dae88092708b393d8e0202f636a133",
+  "study_wall_seconds": 10995.964566469193,
+  "preview_selection": {
+    "method": "supertrack",
+    "seed": 0,
+    "episode": 0,
+    "rule": "presentation_plan_v1.json; all-seed normalized tracking RMSE; terminal frame excluded"
+  },
+  "guarded_gpu_hours": 8.994913810160424,
+  "cost_scope": "Guarded elapsed time includes admission, exact-config warmup, process startup, training and evaluation. Training seconds are the runner internal timer, starting after reference/model loading; evaluation seconds are the physical evaluation and artifact-writing timer. Failed launch attempts, development experiments and rendering must be reported separately.",
+  "scope": "One demonstration; 256 common starts; final checkpoints; all three seeds; no held-out-motion claim."
+}

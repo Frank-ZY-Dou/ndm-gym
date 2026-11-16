@@ -1,0 +1,1573 @@
+{
+  "door_preset": "door-hand-accurate-capacity-v1",
+  "methods": {
+    "supermimic": {
+      "door_resolved": {
+        "batch_size": 4096,
+        "bootstrap": "bootstrap",
+        "bootstrap_updates": 1200,
+        "collect_graph": null,
+        "collection_worlds": 1,
+        "compile_eager": null,
+        "compile_wm": false,
+        "config": "door-hand-accurate-capacity-v1",
+        "correction_imag_noise": 0.0,
+        "correction_reg": 0.0,
+        "critic_epochs": 5,
+        "critic_minibatches": 4,
+        "device": "cpu",
+        "fused_adam": false,
+        "horizon": 16,
+        "imag_hoist": null,
+        "layout": null,
+        "learning_rate": 0.0002,
+        "method": "supermimic",
+        "model": "model",
+        "muon_batched": null,
+        "no_sync": null,
+        "offsets": [
+          0.0,
+          -0.015,
+          -0.0075,
+          0.0075,
+          0.015
+        ],
+        "output": "out",
+        "pi_deferred_grads": null,
+        "policy_hidden": [
+          1024,
+          512,
+          256
+        ],
+        "policy_lr": 0.0002,
+        "policy_updates": 1,
+        "reference": "reference",
+        "reset_masked": null,
+        "resume": null,
+        "rounds": 20000,
+        "seed": 0,
+        "task_weights": false,
+        "train_offsets": [
+          -0.01,
+          -0.005,
+          0.005,
+          0.01
+        ],
+        "update_graphs": null,
+        "upstream_policy_optimizer": true,
+        "wm_batch_size": 2048,
+        "wm_deferred_grads": null,
+        "wm_hidden": [
+          1024,
+          1024,
+          1024
+        ],
+        "wm_presample": null,
+        "wm_updates": 4,
+        "wm_window": 8
+      },
+      "parameters": {
+        "action_noise": {
+          "door_option": null,
+          "door_value": 0.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 0.1
+        },
+        "algo": {
+          "door_option": "method",
+          "door_value": "supermimic",
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": "supermimic"
+        },
+        "amp": {
+          "door_option": null,
+          "door_value": "none",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "none"
+        },
+        "bptt_clip_k": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "bptt_decay": {
+          "door_option": null,
+          "door_value": 1.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 1.0
+        },
+        "buffer_steps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 256
+        },
+        "ckpt_every": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2000
+        },
+        "ckpt_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": []
+        },
+        "clip": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<required-reference>"
+        },
+        "clips": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "collect_graph": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "compile_eager": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "config": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "hand-supermimic-accurate"
+        },
+        "critic_epochs": {
+          "door_option": "critic_epochs",
+          "door_value": 5,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 5
+        },
+        "critic_minibatches": {
+          "door_option": "critic_minibatches",
+          "door_value": 4,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 4
+        },
+        "fused_adam": {
+          "door_option": "fused_adam",
+          "door_value": false,
+          "reason": "Explicit Door adaptation; upstream value is not reproduced. See README.",
+          "status": "adapted",
+          "upstream": true
+        },
+        "gamma": {
+          "door_option": null,
+          "door_value": 0.99,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 0.99
+        },
+        "goal_frames": {
+          "door_option": null,
+          "door_value": 1,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 5
+        },
+        "hist": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 10
+        },
+        "horizon": {
+          "door_option": "horizon",
+          "door_value": 16,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 16
+        },
+        "imag_fail_starts": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "imag_fail_window": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "imag_start_perturb": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "iterations": {
+          "door_option": "rounds",
+          "door_value": 20000,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 20000
+        },
+        "lam": {
+          "door_option": null,
+          "door_value": 0.95,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 0.95
+        },
+        "log_dir": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<upstream-root>/logs/run"
+        },
+        "log_every": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "lr": {
+          "door_option": "learning_rate",
+          "door_value": 0.0002,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 0.0002
+        },
+        "lr_decay_by": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0
+        },
+        "lr_decay_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "lr_decay_iters": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 20000
+        },
+        "lr_decay_len": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 300
+        },
+        "lr_decay_ret": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "max_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "motion_dir": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<upstream-root>/data/lafan1_g1"
+        },
+        "motions": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "lafan1"
+        },
+        "no_critic": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "no_sync": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "num_envs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2048
+        },
+        "paired": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "pi_batch": {
+          "door_option": "batch_size",
+          "door_value": 4096,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 4096
+        },
+        "pi_ema": {
+          "door_option": null,
+          "door_value": 0.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 0.0
+        },
+        "pi_lr_mult": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "pi_opt": {
+          "door_option": null,
+          "door_value": "adam",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "adam"
+        },
+        "pi_rollout_clip": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "pi_updates": {
+          "door_option": "policy_updates",
+          "door_value": 1,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 1
+        },
+        "reset_masked": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "resume": {
+          "door_option": "resume",
+          "door_value": null,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": null
+        },
+        "reward_std_scale": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "rf_anchor_mode": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "mean"
+        },
+        "rf_anchors": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "rf_dim": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 128
+        },
+        "rf_fused_rope": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_heads": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 4
+        },
+        "rf_layers": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 3
+        },
+        "rf_merge": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "none"
+        },
+        "rf_no_rope": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_no_tree_bias": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_registers": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2
+        },
+        "rf_rope_center": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_rope_detach": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "seed": {
+          "door_option": "seed",
+          "door_value": 0,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 0
+        },
+        "sm_residual": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_balance_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_com": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_fail_margin": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_fail_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "st_imag_noise": {
+          "door_option": "correction_imag_noise",
+          "door_value": 0.0,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 0.1
+        },
+        "st_late_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "st_no_root_terms": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_no_task_regs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_obj_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_quad_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "st_reg": {
+          "door_option": "correction_reg",
+          "door_value": 0.0,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 0.01
+        },
+        "st_substeps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "st_task_weights": {
+          "door_option": "task_weights",
+          "door_value": false,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": false
+        },
+        "st_unit_scales": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_vel_terms": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_wm_loss": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "l1"
+        },
+        "update_graphs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "utd": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.4
+        },
+        "warmup_steps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 32
+        },
+        "wm_act": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "silu"
+        },
+        "wm_backbone": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "mlp"
+        },
+        "wm_batch": {
+          "door_option": "wm_batch_size",
+          "door_value": 2048,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 2048
+        },
+        "wm_batches": {
+          "door_option": "wm_updates",
+          "door_value": 4,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 4
+        },
+        "wm_bptt_fp32": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "wm_fail_window": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "wm_fail_windows": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_hidden": {
+          "door_option": "wm_hidden",
+          "door_value": [
+            1024,
+            1024,
+            1024
+          ],
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": [
+            1024,
+            1024,
+            1024
+          ]
+        },
+        "wm_input_noise": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_lr": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "wm_no_ln": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "wm_only_iters": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 300
+        },
+        "wm_opt": {
+          "door_option": null,
+          "door_value": "adam",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "adam"
+        },
+        "wm_prio_alpha": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.6
+        },
+        "wm_sample": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "uniform"
+        },
+        "wm_smooth_dirs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "wm_smooth_eps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.1
+        },
+        "wm_smooth_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_window": {
+          "door_option": "wm_window",
+          "door_value": 8,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 8
+        }
+      }
+    },
+    "supertrack": {
+      "door_resolved": {
+        "batch_size": 4096,
+        "bootstrap": "bootstrap",
+        "bootstrap_updates": 1200,
+        "collect_graph": null,
+        "collection_worlds": 1,
+        "compile_eager": null,
+        "compile_wm": false,
+        "config": "door-hand-accurate-capacity-v1",
+        "correction_imag_noise": 0.0,
+        "correction_reg": 0.0,
+        "critic_epochs": 5,
+        "critic_minibatches": 4,
+        "device": "cpu",
+        "fused_adam": false,
+        "horizon": 16,
+        "imag_hoist": null,
+        "layout": null,
+        "learning_rate": 0.0004,
+        "method": "supertrack",
+        "model": "model",
+        "muon_batched": null,
+        "no_sync": null,
+        "offsets": [
+          0.0,
+          -0.015,
+          -0.0075,
+          0.0075,
+          0.015
+        ],
+        "output": "out",
+        "pi_deferred_grads": null,
+        "policy_hidden": [
+          1024,
+          512,
+          256
+        ],
+        "policy_lr": 0.0004,
+        "policy_updates": 1,
+        "reference": "reference",
+        "reset_masked": null,
+        "resume": null,
+        "rounds": 20000,
+        "seed": 0,
+        "task_weights": true,
+        "train_offsets": [
+          -0.01,
+          -0.005,
+          0.005,
+          0.01
+        ],
+        "update_graphs": null,
+        "upstream_policy_optimizer": true,
+        "wm_batch_size": 2048,
+        "wm_deferred_grads": null,
+        "wm_hidden": [
+          1024,
+          1024,
+          1024
+        ],
+        "wm_presample": null,
+        "wm_updates": 4,
+        "wm_window": 8
+      },
+      "parameters": {
+        "action_noise": {
+          "door_option": null,
+          "door_value": 0.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 0.1
+        },
+        "algo": {
+          "door_option": "method",
+          "door_value": "supertrack",
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": "supertrack"
+        },
+        "amp": {
+          "door_option": null,
+          "door_value": "none",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "none"
+        },
+        "bptt_clip_k": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "bptt_decay": {
+          "door_option": null,
+          "door_value": 1.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 1.0
+        },
+        "buffer_steps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 256
+        },
+        "ckpt_every": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2000
+        },
+        "ckpt_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": []
+        },
+        "clip": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<required-reference>"
+        },
+        "clips": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "collect_graph": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "compile_eager": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "config": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "hand-supertrack-accurate"
+        },
+        "critic_epochs": {
+          "door_option": "critic_epochs",
+          "door_value": 5,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 5
+        },
+        "critic_minibatches": {
+          "door_option": "critic_minibatches",
+          "door_value": 4,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 4
+        },
+        "fused_adam": {
+          "door_option": "fused_adam",
+          "door_value": false,
+          "reason": "Explicit Door adaptation; upstream value is not reproduced. See README.",
+          "status": "adapted",
+          "upstream": true
+        },
+        "gamma": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "Critic/discount arguments are inactive for SuperTrack; retained upstream parser defaults do not enable them.",
+          "status": "unavailable",
+          "upstream": 0.99
+        },
+        "goal_frames": {
+          "door_option": null,
+          "door_value": 1,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 5
+        },
+        "hist": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 10
+        },
+        "horizon": {
+          "door_option": "horizon",
+          "door_value": 16,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 16
+        },
+        "imag_fail_starts": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "imag_fail_window": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "imag_start_perturb": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "iterations": {
+          "door_option": "rounds",
+          "door_value": 20000,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 20000
+        },
+        "lam": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "Critic/discount arguments are inactive for SuperTrack; retained upstream parser defaults do not enable them.",
+          "status": "unavailable",
+          "upstream": 0.95
+        },
+        "log_dir": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<upstream-root>/logs/run"
+        },
+        "log_every": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "lr": {
+          "door_option": "learning_rate",
+          "door_value": 0.0004,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 0.0004
+        },
+        "lr_decay_by": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0
+        },
+        "lr_decay_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "lr_decay_iters": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "adapted",
+          "upstream": 20000
+        },
+        "lr_decay_len": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 300
+        },
+        "lr_decay_ret": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "max_hours": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "motion_dir": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "<upstream-root>/data/lafan1_g1"
+        },
+        "motions": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "lafan1"
+        },
+        "no_critic": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "no_sync": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "num_envs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2048
+        },
+        "paired": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "pi_batch": {
+          "door_option": "batch_size",
+          "door_value": 4096,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 4096
+        },
+        "pi_ema": {
+          "door_option": null,
+          "door_value": 0.0,
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": 0.0
+        },
+        "pi_lr_mult": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "pi_opt": {
+          "door_option": null,
+          "door_value": "adam",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "adam"
+        },
+        "pi_rollout_clip": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "pi_updates": {
+          "door_option": "policy_updates",
+          "door_value": 1,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 1
+        },
+        "reset_masked": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "resume": {
+          "door_option": "resume",
+          "door_value": null,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": null
+        },
+        "reward_std_scale": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "rf_anchor_mode": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "mean"
+        },
+        "rf_anchors": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "rf_dim": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 128
+        },
+        "rf_fused_rope": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_heads": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 4
+        },
+        "rf_layers": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 3
+        },
+        "rf_merge": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "none"
+        },
+        "rf_no_rope": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_no_tree_bias": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_registers": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2
+        },
+        "rf_rope_center": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "rf_rope_detach": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "seed": {
+          "door_option": "seed",
+          "door_value": 0,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 0
+        },
+        "sm_residual": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_balance_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_com": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_fail_margin": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_fail_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 2.0
+        },
+        "st_imag_noise": {
+          "door_option": "correction_imag_noise",
+          "door_value": 0.0,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 0.2
+        },
+        "st_late_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "st_no_root_terms": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_no_task_regs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_obj_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1.0
+        },
+        "st_quad_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "st_reg": {
+          "door_option": "correction_reg",
+          "door_value": 0.0,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 0.01
+        },
+        "st_substeps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "st_task_weights": {
+          "door_option": "task_weights",
+          "door_value": true,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": true
+        },
+        "st_unit_scales": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_vel_terms": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "st_wm_loss": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "l1"
+        },
+        "update_graphs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": true
+        },
+        "utd": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.4
+        },
+        "warmup_steps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 32
+        },
+        "wm_act": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "silu"
+        },
+        "wm_backbone": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "mlp"
+        },
+        "wm_batch": {
+          "door_option": "wm_batch_size",
+          "door_value": 2048,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 2048
+        },
+        "wm_batches": {
+          "door_option": "wm_updates",
+          "door_value": 4,
+          "reason": "Different task coordinates, units, or collection schedule; equal numeric values do not establish equivalence. See README.",
+          "status": "adapted",
+          "upstream": 4
+        },
+        "wm_bptt_fp32": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "wm_fail_window": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 50
+        },
+        "wm_fail_windows": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_hidden": {
+          "door_option": "wm_hidden",
+          "door_value": [
+            1024,
+            1024,
+            1024
+          ],
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": [
+            1024,
+            1024,
+            1024
+          ]
+        },
+        "wm_input_noise": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_lr": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": null
+        },
+        "wm_no_ln": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": false
+        },
+        "wm_only_iters": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 300
+        },
+        "wm_opt": {
+          "door_option": null,
+          "door_value": "adam",
+          "reason": "Implemented fixed native Door value; task/normalizer/collector differences remain, see README.",
+          "status": "supported",
+          "upstream": "adam"
+        },
+        "wm_prio_alpha": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.6
+        },
+        "wm_sample": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": "uniform"
+        },
+        "wm_smooth_dirs": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 1
+        },
+        "wm_smooth_eps": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.1
+        },
+        "wm_smooth_w": {
+          "door_option": null,
+          "door_value": null,
+          "reason": "No matching native Door option; retained upstream default is recorded, not implemented or silently inherited.",
+          "status": "unavailable",
+          "upstream": 0.0
+        },
+        "wm_window": {
+          "door_option": "wm_window",
+          "door_value": 8,
+          "reason": "Value matches; see semantic differences in README.",
+          "status": "supported",
+          "upstream": 8
+        }
+      }
+    }
+  },
+  "status": "development, exact runtime unverified; not upstream equivalence",
+  "upstream_commit": "69b818e2f7eae33828b8de0f434409d72394555e"
+}

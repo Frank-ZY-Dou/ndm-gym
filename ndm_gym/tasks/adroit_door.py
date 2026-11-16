@@ -46,7 +46,10 @@ class DoorTask:
     goal_frame_dim = 60
     action_dim = 28
 
-    def __init__(self, reference: DoorReference, ctrl_range, device="cpu", cfg: DoorRewardCfg | None = None):
+    def __init__(self, reference: DoorReference, ctrl_range, device="cpu", cfg: DoorRewardCfg | None = None, goal_frames=1):
+        if type(goal_frames) is not int or goal_frames < 1:
+            raise ValueError('goal_frames must be a positive integer')
+        self.goal_frames = goal_frames
         self.cfg = cfg or DoorRewardCfg()
         self.q = torch.tensor(reference.qpos, dtype=torch.float32, device=device)
         self.v = torch.tensor(reference.qvel, dtype=torch.float32, device=device)
@@ -64,7 +67,8 @@ class DoorTask:
         q, v = state
         return torch.cat((q, 0.1 * v, a_prev), -1)
 
-    def goal(self, state, frame, goal_frames=1):
+    def goal(self, state, frame, goal_frames=None):
+        goal_frames = self.goal_frames if goal_frames is None else goal_frames
         q, v = state
         parts = []
         for k in range(1, goal_frames + 1):

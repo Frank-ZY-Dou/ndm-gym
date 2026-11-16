@@ -38,7 +38,7 @@ class DoorSuperMimic(DoorSuperTrack):
         self.wm = self.world_model_cls(self.layout, hidden=kwargs.get("wm_hidden", (64, 64)),
                                        amp=False, kind="increment").to(self.reference_actions.device)
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=kwargs.get("lr", 1e-3))
-        self.critic = Critic(self.task.obs_dim + self.task.goal_frame_dim).to(self.reference_actions.device)
+        self.critic = Critic(self.task.obs_dim + self.task.goal_frame_dim * self.task.goal_frames).to(self.reference_actions.device)
         self.opt_v = torch.optim.Adam(self.critic.parameters(), lr=kwargs.get("lr", 1e-3))
         self.gamma, self.lam = .99, .95
         self.last_value_loss = None

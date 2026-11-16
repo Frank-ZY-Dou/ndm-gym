@@ -1,0 +1,181 @@
+{
+  "cpu": "Intel(R) Xeon(R) Platinum 8468V",
+  "physical_cores": 8,
+  "affinity": [
+    56,
+    58,
+    60,
+    62,
+    64,
+    66,
+    68,
+    70
+  ],
+  "worlds": 2048,
+  "repeats": 10,
+  "mujoco": "3.15.0",
+  "noslip_iterations": 20,
+  "contacts": 12,
+  "gpu": "not used for native CPU collection; host has L40S",
+  "measurements": {
+    "native": [
+      {
+        "workers": 1,
+        "initial_frame": 1,
+        "median_seconds": 0.4744365627411753,
+        "p95_seconds": 0.49106313560623677
+      },
+      {
+        "workers": 1,
+        "initial_frame": 114,
+        "median_seconds": 1.397867833962664,
+        "p95_seconds": 1.7485142092918977
+      },
+      {
+        "workers": 1,
+        "initial_frame": 225,
+        "median_seconds": 0.4694031204562634,
+        "p95_seconds": 0.6449416392948476
+      },
+      {
+        "workers": 2,
+        "initial_frame": 1,
+        "median_seconds": 0.2415130406152457,
+        "p95_seconds": 0.2614090673159808
+      },
+      {
+        "workers": 2,
+        "initial_frame": 114,
+        "median_seconds": 0.6970873833633959,
+        "p95_seconds": 0.8962687701452523
+      },
+      {
+        "workers": 2,
+        "initial_frame": 225,
+        "median_seconds": 0.24471233249641955,
+        "p95_seconds": 0.36029785287100813
+      },
+      {
+        "workers": 4,
+        "initial_frame": 1,
+        "median_seconds": 0.130954917287454,
+        "p95_seconds": 0.1446129197953269
+      },
+      {
+        "workers": 4,
+        "initial_frame": 114,
+        "median_seconds": 0.3690382642671466,
+        "p95_seconds": 0.4585970988497137
+      },
+      {
+        "workers": 4,
+        "initial_frame": 225,
+        "median_seconds": 0.13241369556635618,
+        "p95_seconds": 0.16501744133420285
+      },
+      {
+        "workers": 8,
+        "initial_frame": 1,
+        "median_seconds": 0.06400473020039499,
+        "p95_seconds": 0.08623597840778528
+      },
+      {
+        "workers": 8,
+        "initial_frame": 114,
+        "median_seconds": 0.19847016339190304,
+        "p95_seconds": 0.2686370103154331
+      },
+      {
+        "workers": 8,
+        "initial_frame": 225,
+        "median_seconds": 0.06267855851911008,
+        "p95_seconds": 0.10347980028018353
+      }
+    ],
+    "python": [
+      {
+        "workers": 1,
+        "initial_frame": 1,
+        "median_seconds": 0.5972748117055744,
+        "p95_seconds": 0.6377663114340976
+      },
+      {
+        "workers": 1,
+        "initial_frame": 114,
+        "median_seconds": 1.6051338193938136,
+        "p95_seconds": 1.9600272587966172
+      },
+      {
+        "workers": 1,
+        "initial_frame": 225,
+        "median_seconds": 0.5841937260702252,
+        "p95_seconds": 0.7734161782776936
+      },
+      {
+        "workers": 2,
+        "initial_frame": 1,
+        "median_seconds": 0.38795604603365064,
+        "p95_seconds": 0.42636433881707486
+      },
+      {
+        "workers": 2,
+        "initial_frame": 114,
+        "median_seconds": 0.8776157384272665,
+        "p95_seconds": 1.0469747282098978
+      },
+      {
+        "workers": 2,
+        "initial_frame": 225,
+        "median_seconds": 0.33165604155510664,
+        "p95_seconds": 0.43650590772740533
+      },
+      {
+        "workers": 4,
+        "initial_frame": 1,
+        "median_seconds": 0.3206858644261956,
+        "p95_seconds": 0.37101591255050154
+      },
+      {
+        "workers": 4,
+        "initial_frame": 114,
+        "median_seconds": 0.4777461083140224,
+        "p95_seconds": 0.6435888236388564
+      },
+      {
+        "workers": 4,
+        "initial_frame": 225,
+        "median_seconds": 0.2794933714903891,
+        "p95_seconds": 0.36968687926419075
+      },
+      {
+        "workers": 8,
+        "initial_frame": 1,
+        "median_seconds": 0.3167712732683867,
+        "p95_seconds": 0.4143878658069297
+      },
+      {
+        "workers": 8,
+        "initial_frame": 114,
+        "median_seconds": 0.3337698979303241,
+        "p95_seconds": 0.49921124328393474
+      },
+      {
+        "workers": 8,
+        "initial_frame": 225,
+        "median_seconds": 0.3413903252221644,
+        "p95_seconds": 0.45585207492113106
+      }
+    ]
+  },
+  "result_sha256": {
+    "parent3068-native.json": "6292c68e4e214299da4dba8e35e8b448bd17a5d5b0f8966c3c3183eb54221f06",
+    "parent3068-python.json": "b4f756e42042e2dd2fa160314340f41de3bc508c30b0320ca74e13a2878b0747"
+  },
+  "equivalence": "bit-exact serial oracle, perturbed full contact trajectory, terminal/reset and previous actions",
+  "scope": "Collection only, including real contacts and resets. Sequential native then Python timing during shared-host training/rendering activity; no isolated-host or total-training speedup claim.",
+  "source_sha256": {
+    "tools/benchmark_door_parallel.py": "0c08efbf9d88f148ee36d4dff7ce80fc7ca25762c407b0e9abdbd3fc741ef3c2",
+    "ndm_gym/sim/rigid/door_collector.py": "27929bb565a3fc5a8f5ce19d13c28fa9a6745a380050383331ad59f5552f45f2",
+    "ndm_gym/sim/rigid/native/door_batch.cc": "0a469d9a8bd55615480691e8a41cb7e2a60db808d40cf3b9120fa11176348578"
+  }
+}

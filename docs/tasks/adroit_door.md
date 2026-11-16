@@ -1,207 +1,186 @@
 # Adroit Door demonstration tracking
 
-The Door reference adapter records full native hand, door and latch generalized
-coordinates and velocities from actual physical control replay. Actual opening
-is scored separately from tracking; matching a closed-door reference is not opening.
-`ndm_gym.tasks.adroit_door.DoorTask` provides analytic tracking heads on the
-upstream `MjcfWorldModel` state tuple `(qpos, qvel)`. The opt-in residual algorithm and bounded CPU training/evaluation entry points
-are implemented below. Genuine bounded online runs are reported in the [benchmark overview](../../benchmarks/adroit_door/README.md); the final study remains pending.
+A native Adroit hand tracks a physically replayed door-opening demonstration.
+The 28 hand actuators must move the hand, turn the passive latch and open the
+passive door. The task measures hand, door and latch tracking separately from
+opening. There are no door/latch actuators, external assistance forces or
+per-step assignments to the reference state during physical evaluation.
 
-Use an isolated replay environment with `numpy`, `mujoco==3.1.6` and
-`gymnasium-robotics==1.3.1`. This verified legacy replay environment is separate
-from the library's Python >=3.12 / MuJoCo >=3.3 environment. A bounded CPU comparison with MuJoCo 3.15.0 also opens the door (1.53947 rad
-final), using the exported native model and the same 226 actions. Door-angle
-RMSE against 3.1.6 is 0.002535 rad; maximum generalized-coordinate difference
-is 0.067877, so engine equivalence is not established. The supported-runtime CPU adapter and checkpoint deployment have been verified;
-this does not certify efficient GPU training. Do not override the main package dependencies
-to make the legacy replay run.
+The full-budget trainer implements native Door adaptations of SuperTrack and
+SuperMimic. Both use an **explicit demonstration-control residual prior**: the
+policy observes the simulated state and adds a bounded correction to the current
+reference hand action. A zero-residual policy already opens this reference, so
+opening alone does not demonstrate learned feedback or improvement. The
+[benchmark](../../benchmarks/adroit_door/README.md) records the frozen protocol,
+measured execution paths, controls and study status.
 
-Obtain the demonstration from [DAPG at the pinned commit](https://github.com/aravindr93/hand_dapg/tree/9a1de23df6574e1b94e1da742e3326eb1f61c013).
-Only deserialize a trusted pickle; the digest check establishes identity, not
-safety of untrusted Python objects. No demonstrations, models, checkpoints or
-recordings are included in this contribution.
+## Prepare the physical reference
 
-From the repository root, using that isolated environment's Python:
+Use an isolated legacy replay environment with `numpy`, `mujoco==3.1.6` and
+`gymnasium-robotics==1.3.1`. Do not override the main package's dependencies to
+run this exporter. Obtain the demonstration from
+[DAPG at the pinned commit](https://github.com/aravindr93/hand_dapg/tree/9a1de23df6574e1b94e1da742e3326eb1f61c013).
+Only deserialize a trusted pickle: a digest establishes identity, not safety.
+Demonstrations, model assets and checkpoints remain outside the repository.
+
+From the repository root, using the legacy environment's Python:
 
 ```sh
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python tools/replay_adroit_door.py \
   --trusted-demo /path/to/hand_dapg/dapg/demonstrations/door-v0_demos.pickle \
   --sha256 d6ec9a090261f901e5c9bf10082799e30c8d34c3f28aef4026e492a1aefc96c3 \
-  --clip 23 --output /path/outside/repository/door23.npz
+  --clip 23 --output /path/outside/repository/door23.npz \
+  --model-output /path/outside/repository/door23-legacy.xml
 ```
 
-The archive contains T actions and T+1 states: state zero is the restored initial
-scene; action i generates state i+1. Actions use the original controller's clipped
-[-1, 1] mapping. The exporter advances physics at each substep and rejects
-nonfinite states and external applied forces. It reports contacts, penetration,
-soft-limit excess, native named joint order, timing and source identity. It does
-not change native limits or contact settings. Only initialization assigns state.
+The archive contains T actions and T+1 states: action i generates state i+1.
+Actions use the original controller's clipped [-1, 1] mapping. The exporter
+advances physics at every substep, rejects nonfinite states and external applied
+forces, and records native joint order, scene identity and contact diagnostics.
+The XML includes the initialized scene and original actuator parameters.
 
-`ndm_gym.motion.adroit_door.DoorReference.load` reads the resulting non-pickle
-archive without importing a simulator. Errors include native hand generalized
-coordinate RMS (mixed root translation and joint-angle units), door radians and
-latch radians. These diagnostic errors are not a frozen training reward.
+Next, use the supported **MuJoCo 3.15.0** training environment to regenerate the
+physical reference. Meshes and textures remain in the original Gymnasium
+Robotics asset directories:
 
-See `benchmarks/adroit_door/results.md` for development selection, physical
-measurements, historical observation mismatch and outstanding training checks.
-A saved-state video is visualization of the physical rollout, not independent
-proof of dynamics. The renderer labels the preview as a replay reference;
-three new training seeds remain pending. There is no README trained-policy claim.
+```sh
+python tools/prepare_adroit_door.py \
+  --legacy-model /path/outside/repository/door23-legacy.xml \
+  --legacy-reference /path/outside/repository/door23.npz \
+  --output /path/outside/repository/door23-supported
+```
 
-## Articulated tracking heads
+Use the resulting `door.xml` and `reference.npz` for all training and evaluation.
+When moving between hosts, pass `--mesh-dir` and `--texture-dir` pointing to the
+same original assets on the new host. Preparation removes retired XML capacity
+fields and a noncolliding mocap tracker visual while retaining its explicit
+inertia. It preserves the controller, contact settings and 20 no-slip iterations,
+then physically replays the controls. It does not adjust trajectory states to
+improve matching.
 
-`DoorTask` reads the exported reference and exposes `obs`, `goal`, `setpoint`,
-`reward`, `termination` and independent `opened` heads. ARTz translation is
-scored in metres separately from the remaining 27 hand coordinates in radians;
-door and latch each have their own angle kernel. Reward is the sum of four
-Gaussian tracking terms minus normalized action-rate cost, integrated at the
-reference control timestep. Goal features include reference positions and
-velocities. A transition from frame f is scored against f+1. There is no
-error-based early termination: the full reference horizon is scored; nonfinite
-states terminate as failures. Default widths and weights are explicit in
-`DoorRewardCfg`; these are implementation defaults, not a frozen study protocol.
+The supported engine's arrays define the study targets. The 3.1.6 and 3.15.0
+engines are not numerically equivalent: their door-angle RMSE on this replay is
+0.002535 rad. The [preparation check](../../benchmarks/adroit_door/preparation_equivalence_v1.json)
+verifies that the public preparation chain regenerates the frozen study's
+positions, velocities and actions bit for bit, and its XML byte for byte on the
+same asset paths. Archive hashes can differ because metadata includes paths and
+measured timing. `preparation.json` records fresh diagnostics and identities;
+historical supported-reference metadata inherited legacy diagnostics and is not
+used as current-engine performance evidence.
 
-Construct `DoorTask` with the native model's `(28, 2)` actuator control ranges.
-`setpoint` clips normalized actions and maps them through those ranges to
-physical native hand controls. Pass the same physical controls to MuJoCo and
-`MjcfWorldModel.step`: the world model's servo features require physical units.
-It does not output door/latch targets, add a reference feed-forward action or
-modify physics. The existing
-XHand policy has a different action dimension, so it cannot be reused unchanged.
+## Train SuperTrack and SuperMimic
 
-`tools/render_adroit_door.py reference.npz resolved-model.xml preview.webp`
-renders saved states using the common NDM Gym mark and the original Adroit
-scene. Run with an appropriate MuJoCo rendering backend. Keep the output outside
-the source tree while reviewing; the preview is explicitly labeled as a replay
-reference. Rendering assigns saved states and is not a feasibility test.
+Install the repository as described in its README. The measured full-study
+runtime uses Python 3.12.3, PyTorch 2.11.0+cu126 and MuJoCo 3.15.0. Build the
+optional native collection loop with a C++ compiler against that same MuJoCo
+installation, keeping its output outside the checkout:
 
-### Physical transition and policy interfaces
+```sh
+python tools/build_door_native.py --output /path/outside/repository/door_batch.so
+python -m ndm_gym.train_door_full --method supertrack --seed 0 \
+  --model /path/outside/repository/door23-supported/door.xml \
+  --reference /path/outside/repository/door23-supported/reference.npz \
+  --native-library /path/outside/repository/door_batch.so \
+  --output /path/outside/repository/supertrack-seed0
+```
 
-`ndm_gym.sim.rigid.adroit_door.DoorPhysics(model, reference)` accepts the
-caller-supplied pinned native MuJoCo model, including the recorded scene and
-controller parameters. Construction checks native joint/actuator order, scene
-position and timestep. `step(action)` applies 28 normalized hand controls and
-returns `((qpos, qvel), done)`. The terminal state stays available until explicit
-`reset()`; the adapter never resets or overwrites a state within an episode.
-External applied forces are rejected. Optional explicit initial qpos/qvel offsets
-support later perturbed-start evaluation; they do not change the reference.
-This is a single-world CPU correctness path; GPU training throughput has not
-been measured.
+Repeat for seeds 1 and 2 and for `--method supermimic`, using independent output
+directories. Every formal seed starts fresh and runs 20,000 iterations in 2,048
+worlds. The [frozen protocol](../../benchmarks/adroit_door/full_protocol_v1.json)
+uses four model updates per iteration, a 300-iteration model-only phase, policy
+batch 4,096, horizon 16 and five future goal frames. SuperMimic also uses its
+lambda-return critic. Streaming normalization, physical-phase initialization,
+GPU replay sampling, fused Adam and cosine learning-rate decay are part of this
+protocol. `--development-steps` is for diagnostics, not formal study runs.
 
-`ndm_gym.policies.adroit_door.DoorPolicy` uses the upstream MLP, `run_mlp` and
-`RunningNorm` components, with 88 observation inputs, 60 inputs per goal frame
-and 28 bounded action outputs. It does not use demonstration controls as policy
-inputs. This standalone interface is not the trained residual baseline; final world-model
-training and its three independent seeds remain outstanding.
+The named Hand accurate configurations supply the applicable model capacity,
+optimizer and training budget. Door uses articulated native joint states and
+control units rather than XHand Cartesian states and position targets. It has
+finite-clip termination, no XHand soft-failure penalty and no CUDA physics
+collection graph. These adaptations are explicitly enumerated in the protocol;
+they are not claims of literal task or controller equivalence.
 
-### Explicit reference-control residual baseline
+Collection uses native CPU physics with bounded persistent workers and a compiled
+batch loop. The same contact solver and control mapping are retained. The
+[collector measurements](../../benchmarks/adroit_door/collector_speed_v1.json)
+compare this path with Python stepping on identical physical states and settings,
+including a bit-exact serial oracle, contacts and resets. End-to-end seed time
+includes learning and must be reported separately from collection speed.
 
-`DoorResidualPolicy` is an opt-in alternative to `DoorPolicy`: callers supply
-one normalized reference hand action per control frame, and the network adds a
-bounded correction before actuator clipping. Its final layer starts at zero,
-so its initial behavior is exactly open-loop reference-control replay. This
-is an explicit control prior, not a trained policy result or object assistance.
-The simulator applies only the resulting 28 native hand controls.
+Checkpoints include model and optimizer states, normalizers, every world's full
+physical state, replay and CPU/CUDA random states. `--resume` takes a trusted
+checkpoint and a new output directory; source and protocol identities must match.
+Fresh-process recovery has been checked against uninterrupted updates for both
+methods. On shared machines, select GPUs and CPU affinity explicitly and leave
+memory, disk and compute headroom for other users.
 
-A bounded CPU diagnostic on the replay-derived MuJoCo 3.15 clip compared the
-five ARRz initial offsets `0, -.01, -.005, .005, .01` radians. Original controls
-opened the door in all five (final angle 1.528–1.539 radians). Earlier action
-imitation pilots failed all five, despite low supervised error. These narrow
-start perturbations do not establish broad robustness, learned feedback, or
-three-seed training performance. Residual feedback training and efficient
-training-path measurements remain pending.
+## Evaluate the final policy and control
 
-The opt-in `policies.door_imagination.residual_update` performs a bounded,
-time-aligned residual update through the unchanged `MjcfWorldModel.step` API.
-World-model parameters are frozen during the update while action derivatives
-remain enabled; previous parameter gradient flags are restored even on failure.
-Nonfinite losses or gradients reject the optimizer step. The caller supplies
-normalized reference controls explicitly, fits observation normalization, and
-owns model fitting, sampling, checkpoints and physical evaluation. This eager
-fp32 correctness path has no efficient GPU training certification. One finite
-update through an untrained model does not establish useful control gradients.
+```sh
+python -m ndm_gym.eval_door_full \
+  --checkpoint /path/outside/repository/supertrack-seed0/latest.pt \
+  --model /path/outside/repository/door23-supported/door.xml \
+  --reference /path/outside/repository/door23-supported/reference.npz \
+  --native-library /path/outside/repository/door_batch.so \
+  --output /path/outside/repository/supertrack-seed0-evaluation
+```
 
-The opt-in `ndm_gym.algos.DOOR_ALGOS["residual"]` component owns the native
-MJCF increment world model, residual policy and Adam optimizers. Its `wm_loss`
-accepts physical actuator controls; `policy_update` accepts explicit state,
-frame and previous normalized action batches. Callers must fit normalizers on
-training data only. Checkpoints include both optimizers and the control prior;
-loading rejects a different prior, horizon, full reference qpos/qvel, control
-ranges, timestep, reward settings or articulated model layout before changing
-parameters or optimizer state. Older checkpoints without this identity are
-rejected; they must not be silently relabeled as compatible. This eager fp32 path has not been
-certified as the fastest GPU path. Imagined return is diagnostic: the bounded
-physical gain audit did not establish reliable model gradients. Three independent supervised baseline seeds are reported in the
-[benchmark results](../../benchmarks/adroit_door/results.md); they do not validate
-model-gradient learning. GPU efficiency measurements remain outstanding.
+Formal evaluation requires the iteration-20,000 checkpoint and checks the actual
+optimizer counts. It uses one nominal and 255 fixed, multivariate perturbed hand
+starts, with the same starts for every method and seed. It retains every physical
+trajectory and reports full-clip root translation error in metres, hand/door/latch
+errors in radians, tracking return, finiteness and opening. Report all three seed
+means and their sample standard deviation; do not choose the best seed or an
+intermediate checkpoint. This is one demonstration, not held-out-motion evidence.
 
-### Bounded CPU development entry point
+Run `tools/eval_door_control.py` with the same `--model`, `--reference` and
+`--native-library`, plus a new `--output` directory, for the untrained
+zero-residual control rounded to float32 exactly as deployed by the policy.
+The [precision addendum](../../benchmarks/adroit_door/baseline_precision_addendum_v1.json)
+retains the original float64 control too. Learned-improvement comparisons use the
+deployed float32 control, not opening alone.
 
-`python -m ndm_gym.train_door --model /path/to/supported-native-door.xml
---reference /path/to/replay-derived-reference.npz --output /outside/repository/new-run
---seed 0 --wm-updates 100 --policy-updates 0` fits the upstream increment model
-on the reference transitions, saves its final algorithm/optimizer states, and
-executes the final hand policy in native physics. Supply the scene and controller
-settings used to produce that reference. No automatic XML or dependency conversion
-is performed. The output directory must be new; logs, checkpoints and recordings
-belong outside the repository. This is a single-thread eager fp32 CPU correctness
-path, not a certified efficient GPU training configuration.
+## Render saved physical trajectories
 
-The default policy remains the explicitly labelled reference-control baseline.
-Positive `--policy-updates` runs a bounded diagnostic residual update; existing
-model-gradient diagnostics have **not** established physical improvement. Fitting
-on reference transitions does not constitute held-out model validation. Record
-clip, seed, budgets and offsets before execution; evaluate the final checkpoint
-without selecting intermediate policies. The runner reports tracking errors and
-actual opening separately, saves full physical trajectories, and records update
-and evaluation walltime. `--offsets` perturb the joint named **ARRz**, in radians;
-ARRx is a different coordinate. The bounded three-seed supervised baseline is reported in the benchmark results;
-GPU speed measurements remain outstanding.
+```sh
+python tools/render_adroit_door.py \
+  /path/outside/repository/door23-supported/reference.npz \
+  /path/outside/repository/door23-supported/door.xml \
+  /path/outside/repository/policy-preview.webp \
+  --rollouts /path/outside/repository/supertrack-seed0-evaluation/physical-rollouts.npz \
+  --episode 0 --start-frame 0 --end-frame 226 --stride 2 \
+  --label "SuperTrack accurate / seed 0 / 20k"
+```
 
-Deploy a trusted local checkpoint without further updates using
-`python -m ndm_gym.eval_door --checkpoint /outside/repository/run/final.pt
---model /path/to/supported-native-door.xml --reference /path/to/reference.npz
---output /outside/repository/new-evaluation`. Model and reference are explicit;
-the saved task contract is checked before evaluation. Offsets default to the
-saved protocol; `--offsets` explicitly overrides them. The output directory must
-be new. Loading uses Python pickle, so checkpoints must come from a trusted
-source. Saved trajectories contain actual physics states and hand controls.
+Use an appropriate MuJoCo rendering backend. The renderer keeps the native
+Adroit scene and adds the NDM Gym mark, configuration label and provenance
+sidecar. The exclusive endpoint above omits the terminal state. Rendering assigns
+saved states for display; it is not another physics evaluation. Without
+`--rollouts`, the output is explicitly labelled as a reference, not a policy.
 
-### Supervised reference residual baseline
+The [presentation rule](../../benchmarks/adroit_door/presentation_plan_v1.json)
+selects the README method by normalized tracking error over all three seeds and
+all 256 starts, then shows its seed 0 nominal episode. It does not select a
+visually favorable seed. Keep raw trajectories, checkpoints and large recordings
+external; publish only the selected compact WebP preview. Credit DAPG and
+Gymnasium-Robotics alongside the preview; the repository NOTICE records the
+source versions and notices.
 
-`--supervised-updates 1500 --batch-size 128 --teacher-gain 0.3
---train-offsets -.01 -.005 .005 .01` collects native physical feedback targets
-and fits bounded residuals on top of the replay-control prior. This is supervised
-learning, not a model-gradient improvement claim. Seeds 29301/29302/29303 were
-frozen before execution and evaluated at ARRz 0, ±0.0075 and ±0.015 radians.
-All final checkpoints opened all five episodes; tracking changes versus the
-zero-residual baseline were mixed. These are perturbations of one reference,
-not held-out motions. Collection, training and evaluation costs are separate.
+## Interfaces and development history
 
-The preliminary seeds used `--wm-updates 0 --policy-updates 0`. They are
-supervised residual-controller baselines only, not completed SuperMimic or
-SuperTrack training. Five narrow same-clip starts per seed do not establish
-robustness. Subsequent corrected-contract online world-model seeds 29701/29702/29703 for SuperTrack and 29601/29602/29603 for SuperMimic
-completed 6000 model and 2500 policy updates each (plus 2500 critic updates for
-SuperMimic). Both opened 15/15 narrow starts, but tracking returns were lower
-than the zero-update prior; these are negative replication results, not an
-effective final benchmark. See the benchmark report for all seeds and costs. Exact replay equality is a reproducibility observation,
-not an additional upstream contribution requirement.
+`DoorReference.load` reads the non-pickle archive without importing a simulator.
+`DoorTask` provides observation, goal, reward, termination and opening heads on
+`(qpos, qvel)`. Its four Gaussian tracking terms separately score root translation,
+hand angles, door and latch, with a normalized action-rate penalty. `setpoint`
+maps normalized hand controls to physical native actuator units. `DoorPhysics`
+is the single-world correctness adapter; it preserves the terminal state until
+explicit reset and rejects applied assistance forces.
 
-### Online training devices
-
-`python -m ndm_gym.train_door_online` accepts `--device cpu` (default) or
-`--device cuda:0`. For CUDA, explicitly set `CUDA_VISIBLE_DEVICES` to the admitted
-physical GPU. Both paths use eager fp32 and the original world-model-through-time
-objectives; native physical collection and evaluation remain single-world CPU
-MuJoCo. Replay sampling retains CPU RNG semantics and transfers each sampled
-batch to the selected training device. Normalizers are always fitted on CPU
-training episodes, then copied to the selected device; this avoids device-specific
-statistics changing L1 gradient signs. Floating-point training can still differ
-between devices. Recovery protocol format 3 records this normalization rule and
-rejects older protocols rather than silently changing continuation. Round recovery saves CUDA RNG state as
-well as model, optimizers and CPU RNG, and requires the same declared device.
-This path uses ordinary PyTorch operations, not the incompatible upstream Triton
-simulator kernels. It does not certify the full GPU suite or provide a CUDA graph
-training configuration. Measure complete collection/training/evaluation time;
-small models can spend more time transferring and synchronizing than computing.
+`DOOR_ALGOS` registers the native Door algorithms. The standalone `DoorPolicy`,
+residual-update diagnostic and older episode-round trainers remain development
+interfaces; they are not the full-study runner. Historical supervised pilots,
+reduced-budget runs and commands are retained in the
+[development notes](../../benchmarks/adroit_door/development_notes.md),
+[replay results](../../benchmarks/adroit_door/results.md) and
+[legacy runner guide](../../benchmarks/adroit_door/README.md#legacy-development-runner).
+Their budgets and results must not be relabelled as the formal study.

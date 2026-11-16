@@ -39,7 +39,7 @@ class DoorResidual:
         self.layout = layout
         self.reference_actions = actions.detach().clone()
         self.wm = self.world_model_cls(layout, hidden=wm_hidden, amp=False, kind="increment").to(device)
-        self.pi = DoorResidualPolicy(hidden=hidden).to(device)
+        self.pi = DoorResidualPolicy(goal_frames=task.goal_frames, hidden=hidden).to(device)
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=lr)
         self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=lr)
 
@@ -80,7 +80,8 @@ class DoorResidual:
 
     def task_identity(self):
         """Deployment contract, independent of device; validated before recovery."""
-        return {"q": self.task.q.detach().cpu().clone(),
+        return {**({"goal_frames": self.task.goal_frames} if self.task.goal_frames != 1 else {}),
+                "q": self.task.q.detach().cpu().clone(),
                 "v": self.task.v.detach().cpu().clone(),
                 "ctrl_mid": self.task.ctrl_mid.detach().cpu().clone(),
                 "ctrl_half": self.task.ctrl_half.detach().cpu().clone(),

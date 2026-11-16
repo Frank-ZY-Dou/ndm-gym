@@ -21,6 +21,7 @@ from .algos.door import DoorResidual
 from .algos.door_supertrack import DoorSuperTrack
 from .algos.door_supermimic import DoorSuperMimic
 from .motion.adroit_door import JOINT_NAMES, DoorReference
+from .motion.door_identity import input_identity
 from .motion.door_replay import BalancedDoorReplay, DoorReplay, collect_physical_replay
 from .sim.rigid.adroit_door import DoorPhysics
 from .tasks.adroit_door import DoorTask
@@ -153,6 +154,7 @@ def main(argv=None):
     algo = DOOR_METHODS[args.method](task, layout, actions, hidden=(32, 32), horizon=args.horizon, **critic)
     args.output.mkdir(parents=True, exist_ok=False)
     protocol = {k: str(v.resolve()) if isinstance(v, Path) else v for k, v in vars(args).items()}
+    protocol.update(input_identity(args.model, args.reference))
     protocol.update(device="CPU", threads=1, dtype="float32", path="eager",
                     selection="final checkpoint only", heldout_validation=False,
                     three_seed_evidence=False, mujoco=mujoco.__version__, torch=torch.__version__)

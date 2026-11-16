@@ -53,3 +53,24 @@ def test_deployment_historical_flags_default_off():
     assert checkpoint_options({"method": "residual"}, {}) == {}
     assert checkpoint_options({"method": "supertrack"}, {}) == dict(
         task_weights=False, upstream_policy_optimizer=False, correction_reg=0., correction_imag_noise=0.)
+
+
+@pytest.mark.parametrize("changed", ["model", "reference", "missing_digest"])
+def test_deployment_rejects_wrong_physical_identity_before_simulator(monkeypatch, tmp_path, changed):
+    from ndm_gym.motion.door_identity import input_identity
+
+    model, reference = tmp_path / "model.xml", tmp_path / "reference.npz"
+    model.write_bytes(b"native model")
+    reference.write_bytes(b"physical reference")
+    protocol = dict(offsets=[0.], **input_identity(model, reference))
+    if changed == "missing_digest":
+        del protocol["model_sha256"]
+    else:
+        {"model": model, "reference": reference}[changed].write_bytes(b"different")
+    monkeypatch.setattr('ndm_gym.eval_door.torch.load', lambda *a, **k: {'protocol': protocol})
+    # These bytes cannot construct a simulator/reference. Identity must fail first.
+    output = tmp_path / "out"
+    with pytest.raises(ValueError, match="identity mismatch|lacks model_sha256"):
+        main(['--checkpoint', 'trusted.pt', '--model', str(model),
+              '--reference', str(reference), '--output', str(output)])
+    assert not output.exists()

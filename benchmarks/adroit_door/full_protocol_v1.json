@@ -1,0 +1,157 @@
+{
+  "protocol_version": 1,
+  "status": "preregistered_before_full_runs",
+  "upstream_commit": "69b818e2f7eae33828b8de0f434409d72394555e",
+  "methods": [
+    "supertrack",
+    "supermimic"
+  ],
+  "source_configs": [
+    "hand-supertrack-accurate",
+    "hand-supermimic-accurate"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "selection": "final checkpoint at iteration 20000; no best-seed or intermediate selection",
+  "schedule": {
+    "iterations": 20000,
+    "worlds": 2048,
+    "warmup_steps": 32,
+    "wm_only_iterations": 300,
+    "wm_updates_per_iteration": 4,
+    "wm_batch": 2048,
+    "wm_window": 8,
+    "policy_updates_after_wm_only": 1,
+    "policy_batch": 4096,
+    "horizon": 16,
+    "goal_frames": 5,
+    "replay_control_steps": 256,
+    "critic_epochs": 5,
+    "critic_minibatches": 4
+  },
+  "expected_counts": {
+    "training_transitions": 40960000,
+    "warmup_transitions": 65536,
+    "wm_optimizer_steps": 80000,
+    "policy_updates": 19700,
+    "supermimic_critic_optimizer_steps": 394000
+  },
+  "capacity": {
+    "world_model_hidden": [
+      1024,
+      1024,
+      1024
+    ],
+    "policy_hidden": [
+      1024,
+      512,
+      256
+    ],
+    "dtype": "float32",
+    "fused_adam": true
+  },
+  "learning_rates": {
+    "supertrack": 0.0004,
+    "supermimic": 0.0002,
+    "schedule": "upstream cosine decay to 0.03x over 20000 iterations"
+  },
+  "evaluation": {
+    "seed": 20261115,
+    "episodes": 256,
+    "nominal_episodes": 1,
+    "root_translation_position_uniform_m": [
+      -0.001,
+      0.001
+    ],
+    "hand_root_angle_position_uniform_rad": [
+      -0.015,
+      0.015
+    ],
+    "root_translation_velocity_uniform_m_s": [
+      -0.001,
+      0.001
+    ],
+    "hand_root_angle_velocity_uniform_rad_s": [
+      -0.01,
+      0.01
+    ],
+    "passive_door_latch_offsets": 0,
+    "episode_horizon": "complete physical reference; no error-based early exit",
+    "opening_final_rad": 1.35,
+    "metrics": [
+      "tracking_return",
+      "translation_rmse_m",
+      "hand_rmse_rad",
+      "door_rmse_rad",
+      "latch_rmse_rad",
+      "opened_final",
+      "opened_ever",
+      "finite"
+    ],
+    "statistics": "mean and sample standard deviation over three training seeds, each averaged over the same 256 starts",
+    "control": "zero-residual reference controls on the identical 256 starts"
+  },
+  "adaptations": [
+    "Native Adroit joint state and original controller/solver, not XHand Cartesian state",
+    "Explicit demonstration-control residual prior, rather than reference joint-position targets",
+    "Finite-clip termination without XHand tracking-error soft termination; failure penalty has no analogous nonzero term",
+    "Native CPU physics with compiled batched chunks and device replay; no unsupported CUDA-physics/collection-graph claim",
+    "Physical phase initialization by replayed integration-state snapshots; its cost is separate"
+  ],
+  "acceptance": {
+    "superiority_required": false,
+    "all_seeds_reported": true,
+    "full_budget_required": true,
+    "failures_not_silently_excluded": true,
+    "required_evidence": [
+      "source/config/input hashes",
+      "actual optimizer and transition counts",
+      "runtime resource logs",
+      "end-to-end elapsed time and GPU-hours",
+      "final checkpoint physical evaluations",
+      "three-seed aggregation",
+      "policy previews",
+      "CONTRIBUTING check results with unsupported cases explicit"
+    ]
+  },
+  "method_settings": {
+    "both": {
+      "action_noise": 0.1,
+      "Adam_policy_betas": [
+        0.9,
+        0.95
+      ],
+      "gradient_norm_cap": 1.0,
+      "policy_gradient_value_cap": 0.1,
+      "goal_frames": 5,
+      "residual_control_scale": 0.1
+    },
+    "supertrack": {
+      "task_weights": true,
+      "correction_regularization": 0.01,
+      "imagined_correction_noise": 0.2,
+      "world_model_kind": "accel",
+      "world_model_loss": "squared normalized multistep error"
+    },
+    "supermimic": {
+      "gamma": 0.99,
+      "lambda": 0.95,
+      "critic_epochs": 5,
+      "critic_minibatches": 4,
+      "bptt_decay": 1.0,
+      "world_model_kind": "increment",
+      "world_model_loss": "squared normalized multistep error"
+    }
+  },
+  "task_reward": {
+    "translation_std_m": 0.02,
+    "hand_std_rad": 0.3,
+    "door_std_rad": 0.2,
+    "latch_std_rad": 0.3,
+    "action_rate_weight": 0.01,
+    "integration": "sum of four Gaussian kernels minus normalized action-rate cost, multiplied by control dt"
+  }
+}

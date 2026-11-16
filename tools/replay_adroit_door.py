@@ -13,6 +13,7 @@ from pathlib import Path
 import pickle
 import sys
 import time
+import xml.etree.ElementTree as ET
 
 import numpy as np
 
@@ -26,9 +27,12 @@ def main():
     parser.add_argument("--sha256", required=True, help="Expected digest of trusted demo; not a safety sandbox")
     parser.add_argument("--clip", type=int, default=23)
     parser.add_argument("--output", type=Path, required=True, help="New .npz file outside the source tree")
+    parser.add_argument("--model-output", type=Path, help="Also export the initialized native model with resolved asset paths")
     args = parser.parse_args()
     if args.output.suffix != ".npz" or args.output.exists():
         parser.error("output must be a new .npz file")
+    if args.model_output and (args.model_output.suffix != '.xml' or args.model_output.exists()):
+        parser.error("model-output must be a new .xml file")
     if version("mujoco") != "3.1.6" or version("gymnasium-robotics") != "1.3.1":
         parser.error("verified replay requires mujoco==3.1.6 and gymnasium-robotics==1.3.1")
     payload = args.trusted_demo.read_bytes()
@@ -51,6 +55,20 @@ def main():
         env.reset(seed=0)
         env.set_env_state(demo["init_state_dict"])
         model, data = env.model, env.data
+        if args.model_output:
+            # Export AFTER native controller setup and the demonstration's scene
+            # initialization. Assets remain in the separately installed package.
+            mujoco.mj_saveLastXML(str(args.model_output), model)
+            tree = ET.parse(args.model_output)
+            compiler = tree.getroot().find('compiler')
+            for attribute in ('meshdir', 'texturedir'):
+                directory = Path(compiler.get(attribute, '.'))
+                if not directory.is_absolute():
+                    directory = Path(env.fullpath).resolve().parent/directory
+                if not directory.is_dir():
+                    raise ValueError('Missing native asset directory: '+str(directory))
+                compiler.set(attribute, str(directory.resolve())+'/')
+            args.model_output.write_text(ET.tostring(tree.getroot(), encoding='unicode'))
         names = [mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, j) for j in range(model.njnt)]
         if model.nq != 30 or model.nv != 30 or names[-2:] != ["door_hinge", "latch"]:
             raise ValueError("Unexpected native model joint layout")

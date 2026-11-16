@@ -541,6 +541,31 @@ python -m ndm_gym.train_hand --clip $CLIP --algo supertrack --lr 4e-4 --st_fail_
 python -m ndm_gym.train_hand --clip $CLIP $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_sm_s0   # seeds 0-2
 ```
 
+### Adroit Door tracking
+
+<p align="center"><img src="docs/media/adroit_door/policy.webp" alt="A trained SuperTrack policy tracks the native Adroit door-opening reference" width="640"/></p>
+<p align="center"><i>Native Door adaptation of hand-supertrack-accurate: final checkpoint of seed 0, nominal start, at native speed, with the terminal frame omitted. Selected by normalized tracking error across all three seeds and all 256 starts.</i></p>
+<p align="center"><sub>Reference from DAPG; native scene and assets from Gymnasium-Robotics 1.3.1. See <a href="NOTICE">NOTICE</a>.</sub></p>
+
+The 28-actuator Adroit hand tracks a physically replayed opening demonstration; the door and latch remain passive.
+Both SuperTrack and SuperMimic run 20,000 iterations in 2,048 worlds for fresh seeds 0–2, with final-only evaluation
+on the same 256 starts. Collection uses native CPU MuJoCo and learning runs on an L40S GPU. Both policies retain an
+explicit demonstration-control residual prior. **The untrained prior already opens every start; training does not
+improve overall tracking.** These are one-clip results, not held-out-motion robustness.
+
+| | Reference-control prior | SuperTrack | SuperMimic |
+| --- | ---: | ---: | ---: |
+| final opening | 256/256 | 768/768 | 768/768 |
+| tracking return ↑ | 9.0353 | 9.0232 ± 0.0102 | 8.9296 ± 0.0525 |
+| hand RMSE ↓ (rad) | 0.00387 | 0.02183 ± 0.00731 | 0.04931 ± 0.00570 |
+| door RMSE ↓ (rad) | 0.00420 | 0.00492 ± 0.00235 | 0.01662 ± 0.01081 |
+| training minutes / seed | no training | 87.6 ± 1.0 | 90.4 ± 2.4 |
+
+Trained entries are mean ± sample SD over three seed means. Each run uses one L40S and eight physical CPU cores;
+three seeds run concurrently on a shared host. The [full results](benchmarks/adroit_door/full_results_v1.md) include
+all seeds, root/latch errors, control precision, costs and validation scope. See the
+[task guide](docs/tasks/adroit_door.md) for pinned preparation and complete training/evaluation commands.
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`); see [options](docs/blinkmimic.md). On the same
@@ -695,6 +720,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/musclevae/results.md`](benchmarks/musclevae/results.md) | the muscle-actuated character: setup, tuning and results |
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
+| [`benchmarks/adroit_door/`](benchmarks/adroit_door/) | native Adroit Door tracking: full-budget three-seed study and controls |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/hoi_design.md`](docs/hoi_design.md), [`docs/hdmi_task_spec.md`](docs/hdmi_task_spec.md) | human-object interaction: design, and HDMI's task as implemented, with references into HDMI's code |

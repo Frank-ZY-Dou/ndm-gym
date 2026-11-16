@@ -147,3 +147,162 @@ def test_upstream_optimizer_cli_is_opt_in():
                 '--output', 'run', '--method', 'supertrack']
     assert not parser().parse_args(required).upstream_policy_optimizer
     assert parser().parse_args(required + ['--upstream-policy-optimizer']).upstream_policy_optimizer
+
+
+@pytest.mark.parametrize('method', [DoorSuperTrack, DoorSuperMimic])
+def test_independent_model_windows_and_policy_batches_with_critic_schedule(method):
+    """Exercise distinct replay routes and count actual critic optimizer steps."""
+    base = build()
+    kwargs = dict(critic_epochs=5, critic_minibatches=4) if method is DoorSuperMimic else {}
+    algo = method(base.task, base.layout, base.reference_actions,
+                  hidden=(24, 12), wm_hidden=(32, 16), horizon=2, **kwargs)
+    replay = DoorReplay([(torch.randn(6, 30)*.01, torch.randn(6, 30)*.01,
+                          torch.randn(5, 28)*.01)])
+    normalize(algo, replay)
+    requests = []
+    original = replay.sample
+
+    def sample(batch, window):
+        requests.append((batch, window))
+        return original(batch, window)
+
+    replay.sample = sample
+    before = {name: [p.detach().clone() for p in getattr(algo, name).parameters()]
+              for name in ('wm', 'pi') + (('critic',) if method is DoorSuperMimic else ())}
+    updates(algo, replay, 8, 2, 4, 1, wm_batch=6, wm_window=3)
+    assert requests == [(6, 3)]*4 + [(8, 2)]
+    expected = dict(wm=4, policy=1)
+    if method is DoorSuperMimic:
+        expected['critic'] = 20
+    assert optimizer_counts(algo) == expected
+    for name, old in before.items():
+        parameters = list(getattr(algo, name).parameters())
+        assert all(torch.isfinite(p).all() for p in parameters)
+        assert any(not torch.equal(p, previous) for p, previous in zip(parameters, old))
+    restored = method(base.task, base.layout, base.reference_actions,
+                      hidden=(24, 12), wm_hidden=(32, 16), horizon=2, **kwargs)
+    restored.load_state_dict(copy.deepcopy(algo.state_dict()))
+    assert optimizer_counts(restored) == expected
+    for name in before:
+        for p, q in zip(getattr(algo, name).parameters(), getattr(restored, name).parameters()):
+            assert torch.equal(p, q)
+
+
+@pytest.mark.parametrize('method', ['supertrack', 'supermimic'])
+@pytest.mark.parametrize('preset', [False, True])
+def test_real_cli_valid_budget_reaches_asset_loading(monkeypatch, tmp_path, method, preset):
+    """Exercise main validation, not only parser and internal optimizer helpers."""
+    from ndm_gym import train_door_online as trainer
+    from ndm_gym.door_configs import NAME
+
+    class AssetBoundaryReached(Exception):
+        pass
+
+    def load(path):
+        assert path == tmp_path / 'reference.npz'
+        raise AssetBoundaryReached
+
+    monkeypatch.setattr(trainer.DoorReference, 'load', load)
+    argv = ['--method', method, '--model', str(tmp_path / 'model.xml'),
+            '--reference', str(tmp_path / 'reference.npz'), '--bootstrap', str(tmp_path / 'bootstrap.npz'),
+            '--output', str(tmp_path / 'output')]
+    if preset:
+        argv += ['--config', NAME]
+    with pytest.raises(AssetBoundaryReached):
+        trainer.main(argv)
+    assert not (tmp_path / 'output').exists()
+
+
+@pytest.mark.parametrize('option,value', [
+    ('--wm-updates', '-1'), ('--policy-updates', '-1'), ('--bootstrap-updates', '-1'),
+    ('--wm-batch-size', '0'), ('--wm-batch-size', '3'), ('--wm-window', '0'),
+    ('--batch-size', '3'), ('--learning-rate', 'nan'), ('--policy-lr', 'inf'),
+    ('--collection-worlds', '0'), ('--correction-reg', 'nan'), ('--correction-imag-noise', '-1'),
+])
+def test_real_cli_rejects_invalid_budget_before_assets(monkeypatch, tmp_path, option, value):
+    from ndm_gym import train_door_online as trainer
+
+    def load(path):
+        pytest.fail('Invalid budget reached asset loading')
+
+    monkeypatch.setattr(trainer.DoorReference, 'load', load)
+    with pytest.raises(ValueError, match='Invalid'):
+        trainer.main(['--method', 'supertrack', '--model', 'unused', '--reference', 'unused',
+                      '--bootstrap', 'unused', '--output', str(tmp_path / 'output'), option, value])
+    assert not (tmp_path / 'output').exists()
+
+
+@pytest.mark.parametrize('flags', [
+    ['--task-weights'], ['--correction-reg', '.01'],
+    ['--correction-imag-noise', '.2'], ['--critic-minibatches', '3'],
+    ['--critic-minibatches', '0'], ['--fused-adam'],
+])
+def test_real_mimic_cli_rejects_unsupported_semantics_before_assets(monkeypatch, tmp_path, flags):
+    from ndm_gym import train_door_online as trainer
+
+    def load(path):
+        pytest.fail('Unsupported configuration reached asset loading')
+
+    monkeypatch.setattr(trainer.DoorReference, 'load', load)
+    with pytest.raises(ValueError):
+        trainer.main(['--method', 'supermimic', '--model', 'unused', '--reference', 'unused',
+                      '--bootstrap', 'unused', '--output', str(tmp_path / 'output'), *flags])
+    assert not (tmp_path / 'output').exists()
+
+
+@pytest.mark.parametrize('method', [DoorSuperTrack, DoorSuperMimic])
+def test_bootstrap_checkpoint_recovers_first_stochastic_update(tmp_path, method):
+    from ndm_gym.train_door_online import save_checkpoint
+
+    base = build()
+
+    def create():
+        return method(base.task, base.layout, base.reference_actions,
+                      hidden=(16,), wm_hidden=(16,), horizon=2)
+
+    torch.manual_seed(3026)
+    algo = create()
+    replay = DoorReplay([(torch.randn(6, 30)*.01, torch.randn(6, 30)*.01,
+                          torch.randn(5, 28)*.01)])
+    normalize(algo, replay)
+    updates(algo, replay, 4, 2, 2, 0)
+    torch.manual_seed(103026)
+    save_checkpoint(algo, tmp_path, {}, 2, 1, 1, 0)
+    assert not (tmp_path / 'checkpoint.tmp').exists()
+    checkpoint = torch.load(tmp_path / 'latest.pt', weights_only=False)
+    assert checkpoint['completed_rounds'] == 0
+    assert checkpoint['optimizer_counts']['wm'] == 2
+    assert checkpoint['optimizer_counts']['policy'] == 0
+    updates(algo, replay, 4, 2, 1, 1)
+    expected_rng = torch.get_rng_state().clone()
+    recovered = create()
+    assert restore(recovered, checkpoint, {}) == 0
+    updates(recovered, replay, 4, 2, 1, 1)
+    assert torch.equal(torch.get_rng_state(), expected_rng)
+    assert optimizer_counts(recovered) == optimizer_counts(algo)
+    for name in ('wm', 'pi') + (('critic',) if method is DoorSuperMimic else ()):
+        for p, q in zip(getattr(algo, name).parameters(), getattr(recovered, name).parameters()):
+            assert torch.equal(p, q)
+
+
+@pytest.mark.parametrize('method', [DoorSuperTrack, DoorSuperMimic])
+def test_round_timing_checkpoint_does_not_change_rng_or_updates(tmp_path, method):
+    from ndm_gym.train_door_online import save_checkpoint
+
+    base = build()
+    algo = method(base.task, base.layout, base.reference_actions,
+                  hidden=(16,), wm_hidden=(16,), horizon=2)
+    replay = DoorReplay([(torch.randn(6, 30)*.01, torch.randn(6, 30)*.01,
+                          torch.randn(5, 28)*.01)])
+    updates(algo, replay, 4, 2, 2, 1)
+    before = torch.get_rng_state().clone()
+    metrics = [dict(completed_rounds=1, update_seconds=.25, optimizer_counts=optimizer_counts(algo))]
+    save_checkpoint(algo, tmp_path, {}, 1, 1, 1, 1, round_metrics=metrics)
+    assert torch.equal(before, torch.get_rng_state())
+    checkpoint = torch.load(tmp_path / 'latest.pt', weights_only=False)
+    assert checkpoint['round_metrics'] == metrics
+    recovered = method(base.task, base.layout, base.reference_actions,
+                       hidden=(16,), wm_hidden=(16,), horizon=2)
+    assert restore(recovered, checkpoint, {}) == 1
+    assert torch.equal(before, torch.get_rng_state())
+    assert optimizer_counts(recovered) == metrics[0]['optimizer_counts']

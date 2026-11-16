@@ -52,6 +52,9 @@ version = { attr = "ndm_gym.__version__" }
 [tool.setuptools.packages.find]
 include = ["ndm_gym*"]
 
+[tool.setuptools.package-data]
+"ndm_gym.sim.rigid" = ["native/*.cc"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: minutes on CPU (deselect with -m 'not slow')"]

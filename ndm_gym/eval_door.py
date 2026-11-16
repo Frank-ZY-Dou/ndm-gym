@@ -14,6 +14,7 @@ import numpy as np
 import torch
 
 from .motion.adroit_door import DoorReference
+from .motion.door_identity import verify_input_identity
 from .sim.rigid.adroit_door import DoorPhysics
 from .tasks.adroit_door import DoorTask
 from .train_door import DOOR_METHODS, evaluate
@@ -44,6 +45,7 @@ def main(argv=None):
     offsets = protocol["offsets"] if args.offsets is None else args.offsets
     if not offsets or not np.isfinite(offsets).all():
         raise ValueError("Offsets must be nonempty and finite")
+    identity = verify_input_identity(protocol, args.model, args.reference)
     import mujoco
 
     torch.set_num_threads(1)
@@ -53,15 +55,15 @@ def main(argv=None):
     layout = replace(MjcfLayout.from_model(model), dt=task.dt)
     actions = torch.as_tensor(reference.actions, dtype=torch.float32).clamp(-1, 1)
     options = checkpoint_options(protocol, checkpoint["algo"])
-    algo = DOOR_METHODS[protocol.get("method", "residual")](task, layout, actions, hidden=(32, 32), horizon=protocol["horizon"], **options)
+    algo = DOOR_METHODS[protocol.get("method", "residual")](task, layout, actions, hidden=tuple(protocol.get("policy_hidden", [32, 32])),
+        wm_hidden=tuple(protocol.get("wm_hidden", [64, 64])), horizon=protocol["horizon"], **options)
     algo.load_state_dict(checkpoint["algo"])
     args.output.mkdir(parents=True, exist_ok=False)
     metrics, rollouts = evaluate(algo, DoorPhysics(model, reference), reference, offsets)
     np.savez_compressed(args.output / "physical-rollouts.npz", **rollouts)
     result = {"evaluations": metrics, "checkpoint_sha256": hashlib.sha256(
         args.checkpoint.read_bytes()).hexdigest(), "offsets": offsets,
-        "model_sha256": hashlib.sha256(args.model.read_bytes()).hexdigest(),
-        "reference_sha256": hashlib.sha256(args.reference.read_bytes()).hexdigest(),
+        **identity,
         "learned_policy": protocol["policy_updates"] + protocol.get("supervised_updates", 0) > 0, "three_seed_evidence": False,
         "mujoco": mujoco.__version__, "device": "CPU", "threads": 1}
     (args.output / "result.json").write_text(json.dumps(result, indent=2))
