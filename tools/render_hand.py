@@ -10,7 +10,7 @@ reference pose as the position targets, over the same ghost; ``--source referenc
 ffmpeg (or the imageio-ffmpeg package's).
 
 ``--look noir``: a dark stage instead of the studio's light one (a dark gradient sky, a glossy dark floor with a faint grid
-that fades into the haze, a warm key light, a cool rim light from behind, satin materials on the hand and the object, the
+that fades into the haze, a warm key light, a cool rim light from behind, satin materials on the hand and the object (a black hand lifted to graphite), the
 reference as a faintly glowing cyan ghost, the mark in white). ``--orbit d``: the camera turns by d degrees over the clip;
 ``--zoom z``: the camera's distance times z; ``--follow_z``: the camera follows the height too; ``--no_ghost``: the
 solid scene alone; ``--ghost_overlay``: the reference rendered alone and laid over the frame as a translucent blue
@@ -33,7 +33,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ndm_gym.core.rotations import mat_to_quat
-from ndm_gym.robots.xhand import scene_indices
+from ndm_gym.robots.hands import scene_indices
 
 FLOOR_CELL = 0.1  # the side of a floor tile (m)
 GHOST_RGBA = (0.25, 0.58, 0.95, 0.18)
@@ -43,8 +43,16 @@ OVERLAY_RGBA = {"studio": (0.20, 0.50, 0.98, 1.0), "noir": (0.32, 0.62, 1.0, 1.0
 OVERLAY_ALPHA = {"studio": (0.26, 0.75), "noir": (0.26, 0.85)}  # the silhouette's and the outline's opacity
 NOIR_SKY = ((0.115, 0.125, 0.15), (0.012, 0.013, 0.017))  # the gradient's top and bottom
 NOIR_HAZE = (0.016, 0.017, 0.021, 1.0)
+NOIR_DARKEST = 0.36  # the dark stage's darkest hand color: a black hand (the Allegro's, the Inspire's) reads as graphite on it
 LOOKS = ("studio", "noir")
 SHOWN_GROUPS = 3  # geom groups 0-2: the floor, the hand's and the object's visual meshes; not the collision shapes
+
+
+def noir_rgba(rgba) -> list[float]:
+    """A color for the dark stage: those darker than mid grey are lifted toward it, down to NOIR_DARKEST for black."""
+    r, g, b, a = (float(x) for x in rgba)
+    lift = lambda x: x if max(r, g, b) >= 0.5 else NOIR_DARKEST + (0.5 - NOIR_DARKEST) * x / 0.5  # noqa: E731
+    return [lift(r), lift(g), lift(b), a]
 
 
 def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str = "studio", overlay: bool = False) -> mujoco.MjModel:
@@ -64,6 +72,9 @@ def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str
         for geom in spec.geoms:
             if geom.type != mujoco.mjtGeom.mjGEOM_PLANE and not geom.material and geom.group < SHOWN_GROUPS:
                 geom.material = "noir_satin"
+                geom.rgba = noir_rgba(geom.rgba)
+        for material in spec.materials:  # the Allegro hand's black, as the Inspire hand's geoms above
+            material.rgba = noir_rgba(material.rgba)
     if ghost:
         copy = mujoco.MjSpec.from_file(scene_xml)
         for light in copy.lights:

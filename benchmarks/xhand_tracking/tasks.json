@@ -1,7 +1,7 @@
 {
   "dataset_repository": "retarget/retarget_full",
   "revision": "b6050b02146fc412d3db8cd539634dc71a117474",
-  "robot": "xhand",
+  "robots": ["xhand", "allegro", "inspire"],
   "hand": "right",
   "tasks": [
     {"id": "apple", "dataset": "hrdexdb_24f", "task": "apple-0", "trial": 0},

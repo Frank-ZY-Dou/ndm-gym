@@ -16,7 +16,7 @@
 
 NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1 motion
 tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF),
-MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand (MuJoCo-Warp). The neural
+MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp). The neural
 dynamics models (NDMs) also serve as simulators.
 
 <p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; policies on four of HDMI's human-object interaction tasks; below, three of RoboKit's examples planned on a world model" width="100%"/></p>
@@ -92,6 +92,9 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** Hand-object tracking on two more hands: the Allegro hand and the Inspire hand track the three clips with
+  SuperMimic ([below](#hand-object-tracking)); a hand is read from its scene, with no code of its own. Contributed by
+  [Dechen Gao](https://github.com/gaodechen).
 - **[2026-11]** Policies on twelve of HDMI's human-object interaction tasks, one per task ([videos](#human-object-interaction-hdmis-tasks)).
 - **[2026-11]** A [leaderboard](#-leaderboard) per task: the fastest and the most accurate configuration of each, with their numbers.
 - **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
@@ -133,7 +136,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
-  fatigue; a floating XHand tracking human hand-object demonstrations.
+  fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics, with fused Triton inference kernels
   ([results](benchmarks/ndm_speed/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
@@ -272,6 +275,8 @@ python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/roll
 # a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json): SuperTrack, then SuperMimic's defaults
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_st --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
+# another hand of the task list (allegro, inspire), with SuperMimic's fastest configuration
+ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
 
 </details>
@@ -566,13 +571,16 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 ### Hand-object tracking
 
-<p align="center"><img src="docs/media/hand/apple.webp" alt="apple" width="800"/><br>
-<img src="docs/media/hand/oakink_a01002.webp" alt="spray bottle" width="800"/><br>
-<img src="docs/media/hand/can.webp" alt="can" width="800"/></p>
-<p align="center"><i>SuperTrack on the apple, the spray bottle and the can: the last checkpoints of seed 0 from the unperturbed start, at half speed, with the kinematic reference drawn over them in blue. Object error over the clip: 1.2, 1.1 and 2.0 mm.</i></p>
-<p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and the XHand's model, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<table>
+<tr><th></th><th>apple</th><th>spray bottle</th><th>can</th></tr>
+<tr><td align="center"><b>XHand</b></td><td><img src="docs/media/hand/apple.webp" alt="XHand, the apple"/></td><td><img src="docs/media/hand/oakink_a01002.webp" alt="XHand, the spray bottle"/></td><td><img src="docs/media/hand/can.webp" alt="XHand, the can"/></td></tr>
+<tr><td align="center"><b>Allegro</b></td><td><img src="docs/media/hand/allegro/apple.webp" alt="Allegro, the apple"/></td><td><img src="docs/media/hand/allegro/oakink_a01002.webp" alt="Allegro, the spray bottle"/></td><td><img src="docs/media/hand/allegro/can.webp" alt="Allegro, the can"/></td></tr>
+<tr><td align="center"><b>Inspire</b></td><td><img src="docs/media/hand/inspire/apple.webp" alt="Inspire, the apple"/></td><td><img src="docs/media/hand/inspire/oakink_a01002.webp" alt="Inspire, the spray bottle"/></td><td><img src="docs/media/hand/inspire/can.webp" alt="Inspire, the can"/></td></tr>
+</table>
+<p align="center"><i>Three hands on the apple, the spray bottle and the can: last checkpoints from the unperturbed start, at half speed, with the kinematic reference drawn over them in blue. XHand: SuperTrack, seed 0; object error over the clip 1.2, 1.1 and 2.0 mm. Allegro and Inspire: SuperMimic (<code>hand-supermimic-fast</code>), seed 0 (the Inspire hand on the can: seed 1); 2.6, 5.3 and 2.1 mm, and 3.6, 2.1 and 3.1 mm.</i></p>
+<p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-A floating XHand tracks human grasp-and-lift demonstrations on MuJoCo-Warp. The reference is
+A floating hand tracks human grasp-and-lift demonstrations on MuJoCo-Warp: the XHand, and with the same code the Allegro hand and the Inspire hand. The reference is
 [SPIDER](https://github.com/facebookresearch/spider)'s kinematic retarget of the captured hand and of the object's pose.
 Each run trains 20,000 iterations in 2,048 worlds on one A100 40GB, and its last checkpoint plays 256 rollouts of the
 whole clip from perturbed starts. SuperTrack runs with `--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`,
@@ -580,18 +588,30 @@ SuperMimic with its defaults; each was chosen from its own tuning runs by the sa
 ([results](benchmarks/xhand_tracking/results.md), [task](docs/tasks/hand.md)). On one A100 40GB a run trains at 11.6-12.0 (SuperTrack) and 9.4-9.7 iterations/s (SuperMimic) and reaches a
 success of 0.99 with the object within 10 mm in 0.9-8.4 (one run on the can ends at 0.988) and 2.7-8.3 minutes; with
 HOI's optimizer options (Muon, the policy average, the learning-rate ramp; SuperMimic with HDMI's settings at γ 0.99),
-in 0.9-3.2 and 1.0-1.7 minutes ([training time](benchmarks/xhand_tracking/results.md#training-time)).
+in 0.9-3.2 and 1.0-1.7 minutes ([training time](benchmarks/xhand_tracking/results.md#training-time)). The Allegro hand
+(16 finger joints, four fingers) and the Inspire hand (12 finger joints) track the same clips from SPIDER's retargets to
+them, read from their scenes by the same code (`ndm_gym/robots/hands.py`), with SuperMimic's `hand-supermimic-fast` for
+6,000 iterations ([results](benchmarks/xhand_tracking/results.md#more-hands)).
 
-| | apple | spray bottle | can |
-|---|---|---|---|
-| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 99.9 / 100.0 % |
-| object position ↓, reference targets | 20.0 mm | 198.3 mm | 113.3 mm |
-| object position ↓, SuperTrack | 2.4 ± 0.0 mm | 1.6 ± 0.1 mm | 2.3 ± 0.3 mm |
-| object position ↓, SuperMimic | 3.5 ± 0.1 mm | 2.9 ± 0.4 mm | 3.2 ± 0.1 mm |
-| fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.6 mm |
-| fingertips ↓, SuperTrack | 4.8 ± 0.1 mm | 5.8 ± 0.1 mm | 6.4 ± 0.2 mm |
-| fingertips ↓, SuperMimic | 6.8 ± 1.7 mm | 6.6 ± 0.7 mm | 6.6 ± 0.6 mm |
+| hand | training seeds 0, 1, 2 | apple | spray bottle | can |
+|---|---|---|---|---|
+| **XHand** | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 99.9 / 100.0 % |
+| | object position ↓, reference targets | 20.0 mm | 198.3 mm | 113.3 mm |
+| | object position ↓, SuperTrack | 2.4 ± 0.0 mm | 1.6 ± 0.1 mm | 2.3 ± 0.3 mm |
+| | object position ↓, SuperMimic | 3.5 ± 0.1 mm | 2.9 ± 0.4 mm | 3.2 ± 0.1 mm |
+| | fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.6 mm |
+| | fingertips ↓, SuperTrack | 4.8 ± 0.1 mm | 5.8 ± 0.1 mm | 6.4 ± 0.2 mm |
+| | fingertips ↓, SuperMimic | 6.8 ± 1.7 mm | 6.6 ± 0.7 mm | 6.6 ± 0.6 mm |
+| **Allegro** | success ↑, SuperMimic | 100.0 ± 0.0 % | 98.8 ± 2.0 % | 99.6 ± 0.0 % |
+| | object position ↓, reference targets | 98.0 mm | 134.4 mm | 175.5 mm |
+| | object position ↓, SuperMimic | 3.8 ± 0.2 mm | 4.1 ± 0.7 mm | 3.5 ± 0.6 mm |
+| | fingertips ↓, reference targets | 20.2 mm | 19.6 mm | 21.5 mm |
+| | fingertips ↓, SuperMimic | 8.1 ± 0.6 mm | 7.6 ± 0.6 mm | 7.5 ± 0.1 mm |
+| **Inspire** | success ↑, SuperMimic | 100.0 ± 0.0 % | 100.0 ± 0.0 % | 97.7 ± 3.7 % |
+| | object position ↓, reference targets | 97.1 mm | 29.9 mm | 161.4 mm |
+| | object position ↓, SuperMimic | 4.6 ± 0.3 mm | 2.9 ± 0.5 mm | 7.8 ± 6.3 mm |
+| | fingertips ↓, reference targets | 13.9 mm | 17.2 mm | 18.2 mm |
+| | fingertips ↓, SuperMimic | 8.2 ± 0.4 mm | 5.2 ± 0.3 mm | 6.2 ± 0.9 mm |
 
 Reference targets: the same rollouts with the reference's joint positions as the position targets.
 
@@ -600,6 +620,9 @@ HAND_SYSTEMS="--fused_adam --reset_masked --no_sync --compile_eager --collect_gr
 python -m ndm_gym.train_hand --clip $CLIP --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights \
        $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_st_s0      # seeds 0-2
 python -m ndm_gym.train_hand --clip $CLIP $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_sm_s0   # seeds 0-2
+# the Allegro hand (or inspire): the clip's path chooses the hand
+CLIP=data/spider/processed/hrdexdb_24f/allegro/right/apple-0/0
+python -m ndm_gym.train_hand --config hand-supermimic-fast --clip $CLIP --seed 0 --log_dir logs/allegro/apple_s0   # seeds 0-2
 ```
 
 ### BlinkMimic's options
@@ -735,7 +758,7 @@ each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the plann
     the apple, the spray bottle and the can, the object's error is 2.4 / 1.6 / 2.3 mm (SuperTrack) and 3.5 / 2.9 / 3.2 mm
     (SuperMimic), the fingertips' 4.8 / 5.8 / 6.4 and 6.8 / 6.6 / 6.6 mm. A success of 0.99 with the object within 10 mm
     takes 0.9-3.2 and 1.0-1.7 min of training with HOI's optimizer options
-    ([details](benchmarks/xhand_tracking/results.md)).
+    ([details](benchmarks/xhand_tracking/results.md)). The Allegro and the Inspire hand track the same clips with SuperMimic at a success of 97.7-100 %, the object within 2.9-7.8 mm ([more hands](benchmarks/xhand_tracking/results.md#more-hands)).
 
 ## 🔬 Ablations
 
@@ -784,7 +807,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/g1_boxing/`](benchmarks/g1_boxing/) | two G1s tracking a two-person clip: tracking and speed |
 | [`benchmarks/musclevae/results.md`](benchmarks/musclevae/results.md) | the muscle-actuated character: setup, tuning and results |
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
-| [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
+| [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand, the Allegro hand and the Inspire hand: tasks and results |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |
@@ -797,7 +820,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); XHand (`xhand.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands on a floating palm (`hands.py`) |
 | `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`) |
 | `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); a hand and an object on MuJoCo-Warp (`rigid/hand_sim.py`); Isaac Lab's launcher |
 | `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py` |
@@ -861,11 +884,11 @@ Data:
   C. Sferrazza, C. K. Liu, R. Duan, G. Shi. *OmniRetarget: Interaction-Preserving Data Generation for Humanoid
   Whole-Body Loco-Manipulation and Scene Interaction.* arXiv preprint, 2025.
   [arXiv:2509.26633](https://arxiv.org/abs/2509.26633) · [Holosoma](https://github.com/amazon-far/holosoma)
-- **SPIDER** (the XHand's clips and model; the G1 scene of RoboKit's G1 examples): C. Pan et al. *SPIDER: Scalable
+- **SPIDER** (the hands' clips and its models of the XHand, the Allegro hand and the Inspire hand; the G1 scene of RoboKit's G1 examples): C. Pan et al. *SPIDER: Scalable
   Physics-Informed Dexterous Retargeting.* arXiv preprint, 2025. [arXiv:2511.09484](https://arxiv.org/abs/2511.09484) ·
   [code](https://github.com/facebookresearch/spider) · [data](https://huggingface.co/datasets/retarget/retarget_full) ·
   [examples](https://huggingface.co/datasets/retarget/retarget_example)
-- **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the XHand's clips): J. Lim, T. Ha, S. Cha,
+- **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,
   X. Zhan, F. Wu, A. Xu, L. Liu, C. Lu. *OakInk: A Large-scale Knowledge Repository for Understanding Hand-Object
