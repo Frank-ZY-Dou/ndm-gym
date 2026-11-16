@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 
 from ..buffer import ReplayBuffer
+from ..core.nets import deferred_grads, mlp_taps, run_mlp, run_mlp_deferred
 from ..policies.critic import Critic
 from ..robots.g1 import G1_JOINT_NAMES, NUM_J, action_scale
 from ..state import INV_DIM, normalize_xi, unflatten_state
@@ -57,6 +58,21 @@ class SuperMimic(Algo):
         self.imag_step = torch.compile(self._imag_step, **self.pi_compile)
         self.reward_term = torch.compile(self._reward_term, **self.pi_compile)
         self.critic_input_c = torch.compile(self._critic_input, **self.pi_compile)
+        # optional (train.py --pi_encode_once; XMimic's --imag_hoist and --pi_deferred_grads, algos.xmimic): an imagined
+        # step's goal depends on its reference frame only, so the policy's goal encoder runs once over every step's goal and
+        # the steps run its decoder; with --imag_hoist the steps compute only what depends on the imagined state; with
+        # --pi_deferred_grads the decoder's weight gradients are one product per layer over the steps
+        self.encode_once = getattr(args, "pi_encode_once", False)
+        self.hoist = getattr(args, "imag_hoist", False)
+        self.pi_deferred = getattr(args, "pi_deferred_grads", False)
+        if (self.hoist and not self.encode_once) or (self.pi_deferred and not self.hoist):
+            raise ValueError("--imag_hoist needs --pi_encode_once, and --pi_deferred_grads needs --imag_hoist")
+        if self.encode_once:
+            if self.pi_rollout_clip > 0:
+                raise ValueError("--pi_encode_once: not with --pi_rollout_clip (its rerun of the policy reads every step's goal)")
+            self.encode_goals = torch.compile(self._encode_goals, **self.pi_compile)
+            self.imag_step_z = torch.compile(self._imag_step_z, **self.pi_compile)
+            self.imag_step_h = torch.compile(self._imag_step_h, **self.pi_compile)
         if self.pi_graphs:
             self.mark_static_tensors()
 
@@ -112,6 +128,78 @@ class SuperMimic(Algo):
         o_hist = torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1)
         return S1, a, o_hist, f1, self.motion.goal(f1, self.K)
 
+    def _encode_goals(self, f):
+        """--pi_encode_once: the rollout's reference frames (H + 1, B) from the start frames f (B,) on, their goals
+        (H + 1, B, 73 K), and the policy's goal latents (H, B, z) of the steps: step t's goal is that of frame f + t, as
+        ``_imag_step`` passes it on; the last frame's goal is the critic's."""
+        frames = f.unsqueeze(0) + torch.arange(self.HZ + 1, device=f.device).unsqueeze(-1)
+        G = self.motion.goal(frames.flatten(), self.K).view(self.HZ + 1, f.shape[0], -1)
+        return frames, G, self.pi.encode(G[:-1].flatten(0, 1)).view(self.HZ, f.shape[0], -1)
+
+    def _imag_step_z(self, S, o_hist, f, xi, xi_n, z):
+        """``_imag_step`` from the step's goal latent ``z`` (--pi_encode_once): the policy's decoder, no next goal."""
+        a = self.setpoint(self.pi.decode(z, o_hist), f)
+        S1 = self.wm.step(S, a, xi_n)
+        if self.args.bptt_clip_k > 0:
+            S1 = cap_rollout_grads(S1, self.args.bptt_clip_k)
+        if self.bptt_decay != 1.0:
+            S1 = decay_rollout_grads(S1, self.bptt_decay)
+        o1 = self.mdp.add_noise(self.mdp.obs(S1, a, xi, f + 1))
+        return S1, a, torch.cat((o_hist[:, 1:], o1.unsqueeze(1)), 1)
+
+    def _imag_step_h(self, S, hn, z, ref_u, root_R, noise, xi, xi_n, taps=None):
+        """--imag_hoist: ``_imag_step_z`` on what depends on the imagined state. ``hn`` (B, hist, obs): the observation
+        history normalized, each observation once, when it is produced; ``ref_u``: the reference setpoint of the step's
+        target frame (--sm_residual; else None); ``root_R``: the reference's root rotation there; ``noise``: the step's
+        observation noise. ``taps`` (--pi_deferred_grads): the decoder through ``nets.run_mlp_deferred``. Returns the next
+        state, the setpoint, the next normalized history and the decoder's Linear inputs (None without taps)."""
+        x = torch.cat((z, hn.flatten(-2)), -1)
+        if taps is None:
+            a, ins = run_mlp(self.pi.dec, x), None
+        else:
+            a, ins = run_mlp_deferred(self.pi.dec, x, taps)
+        if ref_u is not None:
+            a = a + ref_u
+        S1 = self.wm.step(S, a, xi_n)
+        if self.args.bptt_clip_k > 0:
+            S1 = cap_rollout_grads(S1, self.args.bptt_clip_k)
+        if self.bptt_decay != 1.0:
+            S1 = decay_rollout_grads(S1, self.bptt_decay)
+        o1 = self.mdp.obs(S1, a, xi, None, root_R=root_R) + noise
+        return S1, a, torch.cat((hn[:, 1:], self.pi.obs_norm(o1).unsqueeze(1)), 1), ins
+
+    def _imagine_once(self, S, o_hist, a_prev, f, xi, xi_n):
+        """The imagined rollout with --pi_encode_once: ``policy_update``'s loop over ``imag_step`` from goals encoded
+        before it; with --imag_hoist the reference's terms of all frames, the observation noise of all steps (one draw:
+        another random stream than a draw per step) and the start history's normalization before it too. Returns the
+        steps' states, setpoints and previous setpoints, the frames (H + 1, B) and their goals, the last state, and with
+        --pi_deferred_grads the decoder's (taps, Linear inputs (H, B, in) per layer)."""
+        HZ, B = self.HZ, f.shape[0]
+        F_all, G_all, Z = self.encode_goals(f)
+        Zs = Z.unbind(0)
+        Ss, As, Aps = [], [], []
+        if not self.hoist:
+            for t in range(HZ):
+                Aps.append(a_prev)
+                S, a_prev, o_hist = self.imag_step_z(S, o_hist, F_all[t], xi, xi_n, Zs[t])
+                Ss.append(S), As.append(a_prev)
+            return Ss, As, Aps, F_all, G_all, S, None
+        ref_u = self.ref_u[F_all[1:]].unbind(0) if self.residual else [None] * HZ
+        root_R = self.motion.root_R[F_all[1:]].unbind(0)
+        noise = self.imag_noise(o_hist).unbind(0)
+        hn = self.pi.obs_norm(o_hist)
+        taps = mlp_taps(self.pi.dec, (HZ, B), o_hist.device) if self.pi_deferred else None
+        steps = None if taps is None else [t.unbind(0) for t in taps]  # the steps' slices: their gradients come back stacked
+        ins = []
+        for t in range(HZ):
+            Aps.append(a_prev)
+            step_taps = None if steps is None else [u[t] for u in steps]
+            S, a_prev, hn, x = self.imag_step_h(S, hn, Zs[t], ref_u[t], root_R[t], noise[t], xi, xi_n, step_taps)
+            Ss.append(S), As.append(a_prev), ins.append(x)
+        if taps is None:
+            return Ss, As, Aps, F_all, G_all, S, None
+        return Ss, As, Aps, F_all, G_all, S, (taps, [torch.stack([x[i] for x in ins]) for i in range(len(taps))])
+
     def _reward_term(self, S, f, a, a_prev):
         contact = (self.contact_w, self.feet, self.ref_contact) if self.contact_w > 0 else None
         return self.mdp.reward(S, f, a, a_prev, contact=contact), self.mdp.soft_termination(S, f)
@@ -137,18 +225,22 @@ class SuperMimic(Algo):
         if args.wm_bptt_fp32:
             self.wm.amp = False
         B = args.pi_batch
-        g0 = self.motion.goal(f, K)
-        g = g0
         S0 = S
-        Ss, As, Aps, Fs, Gs, taps = [], [], [], [], [], []
-        for t in range(HZ):
-            Aps.append(a_prev)
-            if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
-                taps.append((o_hist, g, torch.zeros(B, NUM_J, device=dev, requires_grad=True)))
-                S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g, taps[-1][2])
-            else:
-                S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g)
-            Ss.append(S), As.append(a_prev), Fs.append(f), Gs.append(g)
+        Ss, As, Aps, Fs, Gs, taps, deferred = [], [], [], [], [], [], None
+        if self.encode_once:  # --pi_encode_once (--imag_hoist, --pi_deferred_grads): the goals encoded before the rollout
+            Ss, As, Aps, F_all, G_all, S, deferred = self._imagine_once(S, o_hist, a_prev, f, xi, xi_n)
+            Fs, f, g = list(F_all[1:].unbind(0)), F_all[-1], G_all[-1]
+        else:
+            g0 = self.motion.goal(f, K)
+            g = g0
+            for t in range(HZ):
+                Aps.append(a_prev)
+                if self.pi_rollout_clip > 0:  # the step's policy inputs and a zero tensor added to its output (clip_rollout_policy_grads)
+                    taps.append((o_hist, g, torch.zeros(B, NUM_J, device=dev, requires_grad=True)))
+                    S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g, taps[-1][2])
+                else:
+                    S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g)
+                Ss.append(S), As.append(a_prev), Fs.append(f), Gs.append(g)
         flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
         S_all = tuple(flat([St[i] for St in Ss]) for i in range(6))
         f_all = flat(Fs)
@@ -170,6 +262,8 @@ class SuperMimic(Algo):
             tq1 = time.time()
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
+        if deferred is not None:  # --pi_deferred_grads: the decoder's gradients, one product per layer over the steps
+            deferred_grads(self.pi.dec, deferred[1], deferred[0], self.deferred_bf16)
         if taps:
             clip_rollout_policy_grads(self.pi, taps, self.pi_rollout_clip)
         if PROFILE:
@@ -187,8 +281,11 @@ class SuperMimic(Algo):
         if not args.no_critic:
             with torch.no_grad():
                 S_c = tuple(torch.cat((S0[i].unsqueeze(0), torch.stack([St[i].detach() for St in Ss])), 0).flatten(0, 1) for i in range(6))
-                f_c = torch.cat((s["f"].unsqueeze(0), torch.stack(Fs)), 0).flatten()
-                g_c = torch.cat((g0.unsqueeze(0), torch.stack(Gs)), 0).flatten(0, 1)
+                if self.encode_once:  # the rollout's frames (H + 1, B) and goals, as read before it
+                    f_c, g_c = F_all.flatten(), G_all.flatten(0, 1)
+                else:
+                    f_c = torch.cat((s["f"].unsqueeze(0), torch.stack(Fs)), 0).flatten()
+                    g_c = torch.cat((g0.unsqueeze(0), torch.stack(Gs)), 0).flatten(0, 1)
                 xi_c = xi_n.unsqueeze(0).expand(HZ + 1, -1, -1).flatten(0, 1)
                 X = self.critic_input_c(S_c, f_c, xi_c, g_c).view(HZ + 1, B, -1)
             if self.critic_graphs:  # the captured step reads the normalizer's tensors
@@ -241,14 +338,18 @@ class SuperMimic(Algo):
         if args.wm_bptt_fp32:
             self.wm.amp = False
         B = args.pi_batch
-        g0 = self.motion.goal(f, K)
-        g = g0
         S0 = S
-        Ss, As, Aps, Fs, Gs = [], [], [], [], []
-        for t in range(HZ):
-            Aps.append(a_prev)
-            S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g)
-            Ss.append(S), As.append(a_prev), Fs.append(f), Gs.append(g)
+        Ss, As, Aps, Fs, Gs, deferred = [], [], [], [], [], None
+        if self.encode_once:  # --pi_encode_once (--imag_hoist, --pi_deferred_grads): the goals encoded before the rollout
+            Ss, As, Aps, F_all, G_all, S, deferred = self._imagine_once(S, o_hist, a_prev, f, xi, xi_n)
+            Fs, f, g = list(F_all[1:].unbind(0)), F_all[-1], G_all[-1]
+        else:
+            g0 = self.motion.goal(f, K)
+            g = g0
+            for t in range(HZ):
+                Aps.append(a_prev)
+                S, a_prev, o_hist, f, g = self.imag_step(S, o_hist, a_prev, f, xi, xi_n, g)
+                Ss.append(S), As.append(a_prev), Fs.append(f), Gs.append(g)
         flat = lambda xs: torch.stack(xs).flatten(0, 1)  # noqa: E731  (H*B, ...)
         S_all = tuple(flat([St[i] for St in Ss]) for i in range(6))
         f_all = flat(Fs)
@@ -267,6 +368,8 @@ class SuperMimic(Algo):
         loss = -J.mean()
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
+        if deferred is not None:  # --pi_deferred_grads: the decoder's gradients, one product per layer over the steps
+            deferred_grads(self.pi.dec, deferred[1], deferred[0], self.deferred_bf16)
         gn = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
         nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
         finite = torch.isfinite(gn)
@@ -282,8 +385,11 @@ class SuperMimic(Algo):
         if not args.no_critic:
             with torch.no_grad():
                 S_c = tuple(torch.cat((S0[i].unsqueeze(0), torch.stack([St[i].detach() for St in Ss])), 0).flatten(0, 1) for i in range(6))
-                f_c = torch.cat((s["f"].unsqueeze(0), torch.stack(Fs)), 0).flatten()
-                g_c = torch.cat((g0.unsqueeze(0), torch.stack(Gs)), 0).flatten(0, 1)
+                if self.encode_once:  # the rollout's frames (H + 1, B) and goals, as read before it
+                    f_c, g_c = F_all.flatten(), G_all.flatten(0, 1)
+                else:
+                    f_c = torch.cat((s["f"].unsqueeze(0), torch.stack(Fs)), 0).flatten()
+                    g_c = torch.cat((g0.unsqueeze(0), torch.stack(Gs)), 0).flatten(0, 1)
                 xi_c = xi_n.unsqueeze(0).expand(HZ + 1, -1, -1).flatten(0, 1)
                 X = self.critic_input_c(S_c, f_c, xi_c, g_c).view(HZ + 1, B, -1)
             self.critic.norm.update(X)  # --no_sync: in place

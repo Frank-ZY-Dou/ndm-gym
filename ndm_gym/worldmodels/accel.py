@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from ..core.nets import ACTIVATIONS, mlp, run_mlp
+from ..core.nets import ACTIVATIONS, mlp, run_mlp, run_mlp_deferred
 from ..core.normalizer import RunningNorm
 from ..core.rotations import so3_exp
 from ..robots.g1 import NUM_J
@@ -56,16 +56,24 @@ class AccelWorldModel(nn.Module):
         dw = (Rt @ (w1 - w).unsqueeze(-1)).squeeze(-1)
         return torch.cat((dv, dw, qd1 - qd), -1) / CONTROL_DT
 
-    def step(self, S, a, xi_n, input_noise: float = 0.0):
-        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer)."""
+    def step(self, S, a, xi_n, input_noise: float = 0.0, taps=None):
+        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer). ``taps``
+        (--wm_deferred_grads, the MLP only: one application's slices of ``nets.mlp_taps``): the network through
+        ``nets.run_mlp_deferred``; returns (the next state, the Linear layers' inputs)."""
         p, R, v, w, q, qd = S
         x = self.in_norm(self.inputs(S, a, xi_n))
         if input_noise != 0:
             x = x + input_noise * torch.randn_like(x)
-        y = run_mlp(self.net, x, amp=self.amp)
+        if taps is None:
+            y = run_mlp(self.net, x, amp=self.amp)
+        elif isinstance(self.net, RigidFormerNet):
+            raise ValueError("deferred weight gradients: the MLP world model only")
+        else:
+            y, ins = run_mlp_deferred(self.net, x, taps, amp=self.amp)
         acc = y * self.out_norm.std() + self.out_norm.mean
         av, aw, aq = acc.split((3, 3, NUM_J), -1)
         av, aw = (R @ av.unsqueeze(-1)).squeeze(-1), (R @ aw.unsqueeze(-1)).squeeze(-1)
         v1, w1, qd1 = v + CONTROL_DT * av, w + CONTROL_DT * aw, qd + CONTROL_DT * aq
         c = self.pos_coef
-        return (p + CONTROL_DT * (v + c * av), so3_exp(CONTROL_DT * (w + c * aw)) @ R, v1, w1, q + CONTROL_DT * (qd + c * aq), qd1)
+        S1 = (p + CONTROL_DT * (v + c * av), so3_exp(CONTROL_DT * (w + c * aw)) @ R, v1, w1, q + CONTROL_DT * (qd + c * aq), qd1)
+        return S1 if taps is None else (S1, ins)

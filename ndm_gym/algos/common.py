@@ -10,7 +10,7 @@ import torch.nn as nn
 from ..buffer import ReplayBuffer
 from ..core.kinematics import ArticulationKinematics
 from ..core.muon import MuonAdam
-from ..core.nets import run_mlp
+from ..core.nets import deferred_grads, mlp_taps, run_mlp
 from ..motion.library import MotionLib
 from ..policies.tracking_policy import TrackingPolicy
 from ..state import normalize_xi, unflatten_state
@@ -62,10 +62,13 @@ def wm_optimizer(wm: nn.Module, args, opt_kw: dict, capturable: bool, adam_kw: d
     the rest."""
     if getattr(args, "wm_opt", "adam") != "muon":
         return torch.optim.Adam(wm.parameters(), **opt_kw)
+    batched = getattr(args, "muon_batched", False)  # --muon_batched (XMimic; train.py, the MLP)
     if isinstance(wm.net, nn.Sequential):
-        return MuonAdam(wm, [wm.net], lr=args.lr, betas=(0.9, 0.999), capturable=capturable, **adam_kw)
+        return MuonAdam(wm, [wm.net], lr=args.lr, betas=(0.9, 0.999), capturable=capturable, batched=batched, **adam_kw)
     if not hasattr(wm.net, "hidden_matrices"):
         raise ValueError("--wm_opt muon: the MLP and RigidFormer world models only")
+    if batched:
+        raise ValueError("--muon_batched: the MLP world model only")
     return MuonAdam(wm, None, lr=args.lr, betas=(0.9, 0.999), capturable=capturable, matrices=wm.net.hidden_matrices(), **adam_kw)
 
 
@@ -260,7 +263,8 @@ class Algo:
         # RigidFormer world model's: its blocks' matrices, RigidFormerNet.hidden_matrices; wm_optimizer)
         self.opt_wm = wm_optimizer(self.wm, args, self.optimizer_kw(args.lr), self.update_graphs, self.adam_kw)
         if getattr(args, "pi_opt", "adam") == "muon":
-            self.opt_pi = MuonAdam(self.pi, [self.pi.enc, self.pi.dec], lr=args.lr, betas=(0.9, 0.95), capturable=self.update_graphs, **self.adam_kw)
+            self.opt_pi = MuonAdam(self.pi, [self.pi.enc, self.pi.dec], lr=args.lr, betas=(0.9, 0.95), capturable=self.update_graphs,
+                                   batched=getattr(args, "muon_batched", False), **self.adam_kw)  # fmt: skip
         else:
             self.opt_pi = torch.optim.Adam(self.pi.parameters(), betas=(0.9, 0.95), **self.optimizer_kw(args.lr))
         # --no_sync: policy updates skipped for a non-finite gradient, counted on the device (the log's nonfinite column)
@@ -283,6 +287,14 @@ class Algo:
         rf = args.wm_backbone == "rigidformer"
         self.wm_step = torch.compile(self.wm.step, **self.wm_compile) if rf else self.wm.step
         self.wm_rollout = self._wm_rollout if rf else torch.compile(self._wm_rollout, **self.wm_compile)
+        # optional (train.py --wm_deferred_grads, --deferred_bf16; XMimic, algos.xmimic): the fit's gradients of the MLP's
+        # Linear layers as one product per layer over the window's steps, formed after the backward pass
+        self.wm_deferred = getattr(args, "wm_deferred_grads", False)
+        self.deferred_bf16 = getattr(args, "deferred_bf16", False)
+        if self.wm_deferred:
+            if rf:
+                raise ValueError("--wm_deferred_grads: the MLP world model only")
+            self.wm_rollout_deferred = torch.compile(self._wm_rollout_deferred, **self.wm_compile)
         # optional trick (--wm_smooth_w): the world model's network penalized for steep changes about the replay's inputs
         self.smooth_w = check_smoothness_args(args)
         self.wm_smoothness = torch.compile(self._wm_smoothness, **self.wm_compile)
@@ -370,6 +382,18 @@ class Algo:
             preds.append(S)
         return tuple(torch.stack([P[i] for P in preds], 1) for i in range(6))  # (B, k, ...)
 
+    def _wm_rollout_deferred(self, s, a, xi, taps):
+        """``_wm_rollout`` through ``nets.run_mlp_deferred`` (--wm_deferred_grads): ``taps`` per Linear layer the zeros
+        (k, B, out) of ``nets.mlp_taps``; also returns each Linear's inputs over the window, (k, B, in)."""
+        S = unflatten_state(s[:, 0])
+        steps = [t.unbind(0) for t in taps]  # the steps' slices: their gradients come back stacked
+        preds, ins = [], []
+        for j in range(self.args.wm_window):
+            S, x = self.wm.step(S, a[:, j], normalize_xi(xi[:, j]), self.args.wm_input_noise, taps=[t[j] for t in steps])
+            preds.append(S), ins.append(x)
+        S_hat = tuple(torch.stack([P[i] for P in preds], 1) for i in range(6))  # (B, k, ...)
+        return S_hat, [torch.stack([x[i] for x in ins]) for i in range(len(ins[0]))]
+
     def _wm_smoothness(self, s0, a0, xi0):
         """Finite-difference Jacobian penalty of the world model's network (``--wm_smooth_w``) at the windows' first
         inputs x (normalized; replay states): the mean over windows and ``--wm_smooth_dirs`` random unit directions u
@@ -419,15 +443,50 @@ class Algo:
         w = buffer.sample_windows(args.wm_batch, args.wm_window)
         if self.mirror is not None:
             w = self.mirror.windows(w, int(args.wm_batch * args.wm_mirror))
-        S_hat = self.wm_rollout(w["s"], w["a"], w["xi"])
-        loss, e8, _ = self.wm_loss(S_hat, w)
-        objective = loss
+        loss, e8, _, _ = self._wm_fit(w)
+        return loss.detach() / args.wm_window, e8
+
+    def _wm_fit(self, w: dict) -> tuple:
+        """One world-model step on the replay windows ``w``: the k-step rollout, the loss (with --wm_smooth_w its penalty),
+        the backward pass, clipping and the optimizer's step. Returns (the fit loss, the k-step error, the per-window
+        errors, the predicted windows)."""
+        if self.wm_deferred:  # --wm_deferred_grads: the Linear layers' gradients formed after the backward pass
+            taps = mlp_taps(self.wm.net, (self.args.wm_window, w["s"].shape[0]), self.dev, amp=self.wm.amp)
+            S_hat, ins = self.wm_rollout_deferred(w["s"], w["a"], w["xi"], taps)
+        else:
+            S_hat = self.wm_rollout(w["s"], w["a"], w["xi"])
+        loss, e8, per_window = self.wm_loss(S_hat, w)
+        objective = loss  # the fit loss is what the log reports
         if self.smooth_w > 0:
             objective = loss + self.smooth_w * self.wm_smoothness(w["s"][:, 0], w["a"][:, 0], w["xi"][:, 0])
         self.opt_wm.zero_grad(set_to_none=True)
         objective.backward()
+        if self.wm_deferred:
+            deferred_grads(self.wm.net, ins, taps, self.deferred_bf16)
         nn.utils.clip_grad_norm_(self.wm.parameters(), 1.0)
         self.opt_wm.step()
+        return loss, e8, per_window, S_hat
+
+    def wm_updates_presampled(self, buffer: ReplayBuffer, probe: bool = False):
+        """--wm_presample (XMimic): the iteration's --wm_batches world-model updates on windows drawn, read and mirrored
+        in one pass before the first (``ReplayBuffer.sample_windows_multi``: the draws of --wm_batches calls of
+        ``sample_windows`` in their order, so the same windows as one update at a time while the fit itself draws nothing,
+        i.e. without --wm_input_noise and --wm_smooth_w). No host synchronization: also what --update_graphs captures,
+        as one graph for all the updates. Returns the last update's (loss per step, k-step error), with ``probe`` its
+        ``wm_probe`` too."""
+        args = self.args
+        if args.wm_sample == "prioritized" or args.wm_fail_windows > 0:
+            raise ValueError("--wm_presample draws uniform windows: not with --wm_sample prioritized or --wm_fail_windows")
+        W = buffer.sample_windows_multi(args.wm_batches, args.wm_batch, args.wm_window)
+        if self.mirror is not None:
+            W = self.mirror.windows(W, int(args.wm_batch * args.wm_mirror), stacked=True)
+        for b in range(args.wm_batches):
+            w = {key: x[b] for key, x in W.items()}
+            if self.wm_graphs:
+                torch.compiler.cudagraph_mark_step_begin()  # the previous update's graph outputs are no longer used
+            loss, e8, _, S_hat = self._wm_fit(w)
+        if probe:
+            return (loss.detach() / args.wm_window, e8) + self.wm_probe(S_hat, w["s1"], w["mask"])
         return loss.detach() / args.wm_window, e8
 
     def wm_update(self, buffer: ReplayBuffer, probe: bool = False):
@@ -453,15 +512,7 @@ class Algo:
             w = self.mirror.windows(w, int(args.wm_batch * args.wm_mirror))
         if self.wm_graphs:
             torch.compiler.cudagraph_mark_step_begin()  # the previous update's graph outputs are no longer used
-        S_hat = self.wm_rollout(w["s"], w["a"], w["xi"])
-        loss, e8, per_window = self.wm_loss(S_hat, w)
-        objective = loss  # the fit loss is what the log reports
-        if self.smooth_w > 0:
-            objective = loss + self.smooth_w * self.wm_smoothness(w["s"][:, 0], w["a"][:, 0], w["xi"][:, 0])
-        self.opt_wm.zero_grad(set_to_none=True)
-        objective.backward()
-        nn.utils.clip_grad_norm_(self.wm.parameters(), 1.0)
-        self.opt_wm.step()
+        loss, e8, per_window, S_hat = self._wm_fit(w)
         if prioritized:
             buffer.update_priorities(w["start"], per_window)
         if probe:
@@ -530,6 +581,11 @@ class Algo:
         kick = self.args.imag_start_perturb * torch.randn_like(v)
         kick[:, 2] = 0.0
         return (p, R, v + kick, w, q, qd)
+
+    def imag_noise(self, o_hist: torch.Tensor) -> torch.Tensor:
+        """--imag_hoist: the observation noise of the rollout's steps, (H, B, obs), in one draw (``MDP.add_noise``'s per
+        step) for the start histories ``o_hist`` (B, hist, obs)."""
+        return (2 * torch.rand(self.HZ, o_hist.shape[0], o_hist.shape[-1], device=o_hist.device) - 1) * self.mdp.obs_noise
 
     def start_obs_history(self, h: dict) -> torch.Tensor:
         """Noisy observation history of the start states, as the deployed policy would see it."""

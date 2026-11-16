@@ -40,6 +40,24 @@ def hidden_matrices(mlps: list[nn.Module]) -> list[nn.Parameter]:
     return [lin.weight for m in mlps for lin in [x for x in m.modules() if isinstance(x, nn.Linear)][1:-1]]
 
 
+def newton_schulz_batched(grads: torch.Tensor, ns_coefficients, ns_steps: int, eps: float) -> torch.Tensor:
+    """torch.optim.Muon's Newton-Schulz iteration (``_zeropower_via_newtonschulz``) on a stack (n, rows, cols) of equally
+    shaped matrices, each product a batched one instead of n (XMimic's newton_schulz_batched). Every matrix sees the
+    same arithmetic: bf16 operands, its own norm (computed per matrix, as the single iteration computes it), the same
+    products; a batched product may accumulate in another order than a single one."""
+    a, b, c = ns_coefficients
+    x = grads.bfloat16()
+    tall = x.size(1) > x.size(2)
+    if tall:
+        x = x.transpose(1, 2)
+    x = x / torch.stack([m.norm() for m in x.unbind(0)]).clamp(min=eps).view(-1, 1, 1)  # spectral norms at most 1
+    for _ in range(ns_steps):
+        gram = torch.bmm(x, x.transpose(1, 2))
+        gram = torch.baddbmm(gram, gram, gram, beta=b, alpha=c)
+        x = torch.baddbmm(x, gram, x, beta=a)
+    return x.transpose(1, 2) if tall else x
+
+
 class MuonAdam:
     """Muon on the hidden matrices of ``mlps`` (submodules of ``model``), or on the 2-D parameters ``matrices`` of ``model``
     given instead (``mlps`` None), Adam with ``betas`` (and ``adam_kw``, e.g. fused) on the rest of ``model``'s parameters;
@@ -48,10 +66,14 @@ class MuonAdam:
     ``capturable`` (train.py --update_graphs; BlinkMimic's --cuda_graph): the learning rates are 0-dim device tensors (set
     with ``set_lr``), Adam is the capturable fused kernel, and the Muon step is done here with torch.optim.Muon's
     arithmetic and the tensor learning rate (torch.optim.Muon reads a tensor learning rate on the host, so a captured step
-    would freeze it)."""
+    would freeze it).
+
+    ``batched`` (train.py --muon_batched; XMimic): the Muon step is done here as well, with the Newton-Schulz iterations
+    of equally shaped matrices as batched products (``newton_schulz_batched``; a matrix alone in its shape keeps the single
+    iteration)."""
 
     def __init__(self, model: nn.Module, mlps: list[nn.Module] | None, lr: float, betas=(0.9, 0.95), capturable: bool = False,
-                 matrices: list[nn.Parameter] | None = None, **adam_kw):  # fmt: skip
+                 matrices: list[nn.Parameter] | None = None, batched: bool = False, **adam_kw):  # fmt: skip
         if (mlps is None) == (matrices is None):
             raise ValueError("MuonAdam takes the MLPs whose hidden matrices Muon updates or the matrices themselves, one of the two")
         hidden = {id(p) for p in (hidden_matrices(mlps) if matrices is None else matrices)}
@@ -61,7 +83,7 @@ class MuonAdam:
             raise ValueError("Muon's matrices must be parameters of the model")
         if not muon:
             raise ValueError("MuonAdam: no matrices for Muon")
-        self.capturable = capturable
+        self.capturable, self.batched = capturable, batched
         if capturable:
             dev = muon[0].device
             self.muon = torch.optim.Muon(muon, lr=torch.tensor(float(lr), device=dev), weight_decay=0.0, adjust_lr_fn="match_rms_adamw")
@@ -80,12 +102,14 @@ class MuonAdam:
 
     @torch.no_grad()
     def _muon_step_tensor_lr(self, ok: torch.Tensor | None = None):
-        """torch.optim.Muon's step with each group's 0-dim device learning rate; ``ok`` as in ``step``."""
+        """torch.optim.Muon's step with each group's 0-dim device learning rate (or its number); ``ok`` as in ``step``. With
+        ``batched``, the momenta first, then the matrices of each shape orthogonalized together."""
         from torch.optim._muon import _adjust_lr, _zeropower_via_newtonschulz
 
         for g in self.muon.param_groups:
             if g["weight_decay"] != 0.0:
                 raise ValueError("MuonAdam's tensor-lr step has no weight decay")
+            shapes = {}  # --muon_batched: per shape, the matrices and their updates before the orthogonalization
             for p in g["params"]:
                 if p.grad is None:
                     continue
@@ -98,10 +122,22 @@ class MuonAdam:
                 else:
                     buf.copy_(torch.where(ok, buf.lerp(p.grad, 1 - g["momentum"]), buf))
                 update = p.grad.lerp(buf, g["momentum"]) if g["nesterov"] else buf
+                if self.batched:
+                    shapes.setdefault(tuple(p.shape), []).append((p, update))
+                    continue
                 update = _zeropower_via_newtonschulz(update, g["ns_coefficients"], g["ns_steps"], g["eps"])
                 ratio = _adjust_lr(1.0, g["adjust_lr_fn"], p.shape)
                 d = update.to(p.dtype) * (g["lr"] * -ratio)  # fp32 product (a bf16 update times a 0-dim tensor stays bf16)
                 p.add_(d if ok is None else torch.where(ok, d, 0.0))
+            for shape, items in shapes.items():
+                if len(items) == 1:
+                    updates = [_zeropower_via_newtonschulz(items[0][1], g["ns_coefficients"], g["ns_steps"], g["eps"])]
+                else:
+                    updates = newton_schulz_batched(torch.stack([u for _, u in items]), g["ns_coefficients"], g["ns_steps"], g["eps"]).unbind(0)
+                ratio = _adjust_lr(1.0, g["adjust_lr_fn"], shape)
+                for (p, _), update in zip(items, updates):
+                    d = update.to(p.dtype) * (g["lr"] * -ratio)
+                    p.add_(d if ok is None else torch.where(ok, d, 0.0))
 
     @torch.no_grad()
     def step(self, ok: torch.Tensor | None = None):
@@ -109,7 +145,7 @@ class MuonAdam:
         host read (parameters, momenta, Adam's moments and step counts unchanged). The gradients must be finite (zeroed
         first)."""
         if ok is not None:
-            if self.capturable:
+            if self.capturable or self.batched:
                 self._muon_step_tensor_lr(ok)
             else:  # torch.optim.Muon's own step (unchanged arithmetic), undone where ok is false
                 ps = [p for g in self.muon.param_groups for p in g["params"] if p.grad is not None]
@@ -128,7 +164,7 @@ class MuonAdam:
             finally:
                 self.adam.found_inf = None
             return
-        if self.capturable:
+        if self.capturable or self.batched:
             self._muon_step_tensor_lr()
         else:
             self.muon.step()

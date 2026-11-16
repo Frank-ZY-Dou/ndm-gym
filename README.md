@@ -28,6 +28,39 @@ dynamics models (NDMs) also serve as simulators.
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
 <p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds; RoboKit's rows: the example's whole planning time at the planner's own worlds, the median over five planner seeds on one A100 40GB SXM4, with the simulation step's speedup beside the task (<a href="benchmarks/robokit_ndm/results.md">details</a>). HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
+## 🏆 Leaderboard
+
+For each task, the fastest and the most accurate configuration in this repository, the leading one first; the commands
+are under [Recommended settings](#-recommended-settings) and [Results](#-results).
+
+| Task | | Leading configuration | Its numbers, then the other algorithm's |
+|---|---|---|---|
+| **LAFAN1 tracking**, 40 clips, MLP world model | 🚀 fastest | SuperTrack and SuperMimic with [BlinkMimic's recipe](#blinkmimics-options), level within the seeds' spread | return 0.82 after **2.54 ± 0.11 min** (SuperTrack) and **2.68 ± 0.19 min** (SuperMimic) on an H100; 4.19 ± 0.16 and 4.38 ± 0.57 min on an A100 40GB SXM4 (seeds 0-5) |
+|  | 🎯 most accurate | SuperTrack with the speed options, 3 h on an A100 40GB | return **0.861**, MPJPE **14.5 mm**; SuperMimic, its best without them, 0.824 ± 0.013, 28.4 ± 0.5 mm (seeds 1-3) |
+| **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | SuperTrack, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm**; SuperMimic 0.804 ± 0.007, 33.1 ± 0.5 mm |
+| **Two G1s**, one two-person clip | 🚀 fastest | SuperMimic | return 0.88 after **0.10 h** on an A100 80GB (seed 0); SuperTrack 0.11 h |
+|  | 🎯 most accurate | SuperMimic by return, SuperTrack by root-relative MPJPE | return **0.904 ± 0.001** and 0.893 ± 0.001; MPJPE, global / root-relative, 47.5 / 16.1 mm and 46.2 / **14.1 mm** (MLP world model, seeds 0-2; with the RigidFormer 0.904 ± 0.001 and 0.894 ± 0.002, 45.8 / 17.0 mm and 47.2 / 14.7 mm) |
+| **Hand-object tracking**, XHand, three clips | 🚀 fastest | SuperTrack and SuperMimic with HOI's optimizer options | a success of 0.99 with the object within 10 mm after **0.9 / 1.5 / 2.4 min** (SuperTrack) and **1.3 / 1.6 / 1.6 min** (SuperMimic) on the apple, the spray bottle and the can, an A100 40GB, mean of seeds 0-2 |
+|  | 🎯 most accurate | SuperTrack with the task's weights | object position **2.4 / 1.6 / 2.3 mm** on the apple, the spray bottle and the can at a success of 99.9-100 % (seeds 0-2, A100 40GB); SuperMimic 3.5 / 2.9 / 3.2 mm at 100 % |
+| **Muscles**, MuscleVAE's character | 🎯 most accurate | SuperTrack, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm**; SuperMimic 0.053 ± 0.014, 65.6 ± 8.1 mm |
+| **NDM in RoboKit's planner**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model, not planned, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
+| **NDM as the simulator**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
+
+On the LAFAN1 task [XMimic](docs/algorithms/xmimic.md), BlinkMimic's trainer rebuilt in JAX, reports the first return of 0.82 after
+1.71 min on one H100 and 0.70 min on four, and 2.25 min for BlinkMimic's own code (its authors' runs and evaluator).
+Measured here with its own code and evaluator on an A100 40GB SXM4 (seeds 0-2): 3.53 ± 0.15 min on one GPU and
+1.81 ± 0.13 min on four, beside this library's recipe at 4.48 ± 0.37 min on one GPU and 2.41-2.89 min with XMimic's
+multi-GPU layouts on two to four ([why it is fast and what carries over](docs/algorithms/xmimic.md)); not ranked: the
+evaluators, the simulators and the clocks differ.
+
+[NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic), which trains through a differentiable simulator without a world model, first
+reaches return 0.82 after 14.48 ± 4.31 min with its published configuration on an A100 80GB SXM4 and after 18.48 ± 1.72 min
+with a reduced-memory configuration on an A100 40GB SXM4 (its authors' code, unmodified, with its own evaluation, seeds 0-2;
+its authors report 8 min on an RTX PRO 6000), beside SuperTrack's 4.19 ± 0.16 and SuperMimic's 4.38 ± 0.57 min on the A100 40GB
+SXM4; not ranked ([details](#training-speed)). On that GPU type the two reach 0.82 in about as many updates (1,500 to 1,750 against 1,400
+to 1,600), and an update through the exact simulator takes 0.72 s against 0.16 s through the world model
+([why](docs/algorithms/nablamimic.md#4-its-evaluation-beside-this-librarys)).
+
 ## 🧭 Recommended settings
 
 Each task's best settings, as measured here, are named configurations. `ndm-train --config NAME` runs one (`train_hand`
@@ -39,7 +72,8 @@ with what each measured. Both methods are on offer for every task.
 | **LAFAN1**, MLP world model | most accurate | `lafan1-supertrack-accurate`: return 0.861, MPJPE 14.5 mm (3 h with the speed options, A100 40GB) | `lafan1-supermimic-accurate`: 0.824, 28.4 mm (3 h, without them) |
 | | fastest | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4), 2.54 min (H100) | `lafan1-supermimic-fast`: 4.38 and 2.68 min |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
-| **Two G1s** (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893, MPJPE 39 / 14.2 mm | `two-g1-supermimic`: 0.905, 40 / 16.4 mm |
+| **Two G1s**, MLP world model (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893 ± 0.001, MPJPE 46.2 / 14.1 mm (seeds 0-2) | `two-g1-supermimic`: 0.904 ± 0.001, 47.5 / 16.1 mm |
+| **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
 | **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
 | | fastest | `hand-supertrack-fast`: success 0.99 in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
 | **Muscles** (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
@@ -58,6 +92,14 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** A [leaderboard](#-leaderboard) per task: the fastest and the most accurate configuration of each, with their numbers.
+- **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
+  each gives in this library, measured, and its techniques as options of `ndm-train` (multi-GPU layouts `--layout AL` / `AWL`, a
+  GPU for the probe sweeps, its learner's restructuring) ([details](docs/algorithms/xmimic.md)).
+- **[2026-11]** Two G1s: three training seeds for SuperTrack and SuperMimic, with the MLP and with the RigidFormer world model
+  (SuperTrack-RF, SuperMimic-RF) ([results](benchmarks/g1_boxing/results.md#training-seeds-0-2)).
+- **[2026-11]** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) timed on LAFAN1 with its authors' code, unmodified, and its
+  own evaluation ([training speed](#training-speed), [how to run it](docs/algorithms/nablamimic.md)).
 - **[2026-11]** [RoboKit](https://github.com/openrobokit/robokit)'s planner on a world model of its MuJoCo model: G1 box carrying,
   G1 climbing and Go2 jumping pass with every seed, as on MuJoCo Warp, planning 1.8-3.0x faster on an A100
   ([below](#ndms-in-robokits-planner)); world models of MuJoCo models in generalized coordinates (`ndm_gym/worldmodels/mjcf.py`).
@@ -239,8 +281,8 @@ SuperTrack and SuperMimic share each task's simulator, data, networks and evalua
 with equal budgets and one rule; the [fastest configurations](#training-speed) use rounds of single changes.
 SuperMimic here is this library's re-implementation, written before its [official code](https://github.com/HybridRobotics/supermimic) was released, so its
 numbers may differ from the authors' code.
-Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1 and the muscles. Not reported here: tracking on
-HDMI's human-object interaction tasks, tracking with the RigidFormer on the two G1s, and the RigidFormer's time to a target
+Tracking and training-speed results use MLP world models, apart from the RigidFormer tracking results on LAFAN1, the two G1s and the muscles. Not reported here:
+tracking on HDMI's human-object interaction tasks and the RigidFormer's time to a target
 return. Return is the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
 <table>
@@ -251,9 +293,11 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td rowspan="3"><b>LAFAN1 tracking</b><br><sub>MLP world model, 40 clips</sub></td><td>return ↑, 3 h<br><sub>A100 40GB, seeds 1-3</sub></td><td>0.832 ± 0.009</td><td>0.824 ± 0.013</td></tr>
 <tr><td>MPJPE, root-relative ↓, 3 h</td><td>20.0 ± 0.7 mm</td><td>28.4 ± 0.5 mm</td></tr>
 <tr><td>training to return 0.82 ↓<br><sub>fastest configurations, seeds 0-5; H100 / A100 40GB SXM4 / A100 40GB PCIe</sub></td><td>2.54 / 4.19 / 4.37 min</td><td>2.68 / 4.38 / 3.98 min</td></tr>
-<tr><td rowspan="3"><b>Two G1s</b><br><sub>a two-person clip, MLP world model<br>A100 80GB, seed 0</sub></td><td>return ↑, best checkpoint<br><sub>runs of 0.5 h and 0.3 h</sub></td><td>0.893</td><td>0.905</td></tr>
-<tr><td>MPJPE, global / root-relative ↓</td><td>39 / 14.2 mm</td><td>40 / 16.4 mm</td></tr>
-<tr><td>training to return 0.88 ↓</td><td>0.11 h</td><td>0.10 h</td></tr>
+<tr><td rowspan="5"><b>Two G1s</b><br><sub>a two-person clip, seeds 0-2<br>seed 0 on an A100 80GB,<br>seeds 1-2 on an A100 40GB</sub></td><td>return ↑, best checkpoint, MLP world model</td><td>0.893 ± 0.001</td><td>0.904 ± 0.001</td></tr>
+<tr><td>return ↑, best checkpoint, RigidFormer</td><td>0.894 ± 0.002</td><td>0.904 ± 0.001</td></tr>
+<tr><td>MPJPE, global / root-relative ↓, MLP world model</td><td>46.2 ± 7.5 / 14.1 ± 0.2 mm</td><td>47.5 ± 8.6 / 16.1 ± 0.4 mm</td></tr>
+<tr><td>MPJPE, global / root-relative ↓, RigidFormer</td><td>47.2 ± 5.2 / 14.7 ± 0.2 mm</td><td>45.8 ± 2.5 / 17.0 ± 0.7 mm</td></tr>
+<tr><td>training to return 0.88 ↓<br><sub>seed 0, A100 80GB, MLP world model</sub></td><td>0.11 h</td><td>0.10 h</td></tr>
 <tr><td rowspan="4"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>38.1 ± 1.0 mm</td><td>65.6 ± 8.1 mm</td></tr>
 <tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
 <tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
@@ -381,6 +425,13 @@ ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_sta
 ndm-eval --run_dir logs/st_fast --watch --group 18 --repeats 4 --graph   # on a second GPU; the same for logs/sm_fast
 ```
 
+**NablaMimic's own code.** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) trains through a differentiable simulator, without a world
+model. Its authors' code, run unmodified and scored by its own evaluation (seeds 0-2), first reaches return 0.82 after 14.48 ± 4.31 min with its
+published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 min with a reduced-memory configuration on an A100 40GB SXM4, which the published
+one does not fit (minutes from update 50 to its first evaluated checkpoint at 0.82; its authors report 8 min on an RTX PRO 6000). These numbers stand
+beside the table's and are not ranked with them: the evaluators, their simulators and the checkpoint intervals differ
+([details](benchmarks/g1_lafan1_tracking/results.md#nablamimics-own-code-timed), [running it](docs/algorithms/nablamimic.md)).
+
 <details>
 <summary><b>What changed the time</b></summary>
 
@@ -412,24 +463,30 @@ the marked GPU.
 
 </details>
 
+**Across GPUs.** [XMimic](docs/algorithms/xmimic.md)'s layouts run an iteration's steps side by side. With BlinkMimic's recipe, return 0.82
+comes after 2.89 ± 0.38 min on two A100 40GB SXM4 GPUs and 2.41-2.69 min on three, against 4.48 ± 0.37 min on one, at 1.3-2.3 times
+the GPU-minutes (seeds 0-2). On one GPU, what carries over from its restructured learner is the goal encoder run once per policy
+update, 6.6 % off an iteration ([why XMimic is fast and what carries over](docs/algorithms/xmimic.md)).
+
 ### Two G1s, one two-person clip
 
 Two G1s in one scene, with robot-robot contacts, track the two sides of an InterHuman boxing clip (CC BY-NC-SA 4.0, not
-redistributed). One policy controls both. Configurations come from two rounds with equal run counts. The table shows five
-evaluations of each selected run's best checkpoint on an A100 80GB; SuperTrack's run trained 0.5 h, SuperMimic's 0.3 h
-([details](benchmarks/g1_boxing/results.md)).
+redistributed). One policy controls both. Configurations come from two rounds with equal run counts and then train with three
+seeds, with the MLP and with a small RigidFormer (SuperTrack-RF, SuperMimic-RF). The table shows the mean ± standard deviation
+over training seeds 0-2 of each run's best checkpoint, evaluated five times. Seed 0 trained on an A100 80GB (0.5 h; SuperMimic
+with the MLP 0.3 h), seeds 1 and 2 on an A100 40GB to seed 0's iteration counts ([details](benchmarks/g1_boxing/results.md)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
-<p align="center"><i>SuperTrack's selected run on InterHuman clip 1566: its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative (the table: the mean of five others).</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
+<p align="center"><i>SuperTrack's selected run on InterHuman clip 1566 (seed 0): its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
-| pair success | 5 / 5 | 5 / 5 |
-| normalized return | 0.893 | 0.905 |
-| MPJPE, global (mm) | 39 | 40 |
-| MPJPE, root-relative (mm) | 14.2 | 16.4 |
-| training to return 0.88 (h) | 0.11 | 0.10 |
-| best checkpoint, of the run's iterations | 7,000 of 9,396 (0.5 h) | 6,264 of 6,264 (0.3 h) |
+| pair success, every evaluation | 5 / 5 | 5 / 5 |
+| normalized return, MLP world model | 0.893 ± 0.001 | 0.904 ± 0.001 |
+| normalized return, RigidFormer | 0.894 ± 0.002 | 0.904 ± 0.001 |
+| MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 47.5 ± 8.6 / 16.1 ± 0.4 |
+| MPJPE, global / root-relative (mm), RigidFormer | 47.2 ± 5.2 / 14.7 ± 0.2 | 45.8 ± 2.5 / 17.0 ± 0.7 |
+| training to return 0.88 (h), seed 0, MLP world model | 0.11 | 0.10 |
 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
@@ -437,6 +494,9 @@ CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566
 ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --max_hours 0.5 --ckpt_every 1000 --log_dir logs/box_st
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
           --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --max_hours 0.3 --ckpt_every 1000 --log_dir logs/box_sm
+# SuperTrack-RF and SuperMimic-RF: the named configurations (their options: ndm_gym/configs.py)
+ndm-train --config two-g1-supertrack-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_st_rf
+ndm-train --config two-g1-supermimic-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_sm_rf
 ```
 
 At 4096 pairs the physics runs 0.31 M robot-steps per second; with their inference paths the MLP runs 8.4 M (27.0x) and
@@ -634,8 +694,10 @@ each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the plann
 9. **BlinkMimic's recipe as options:** `--algo blinkmimic` first reaches return 0.82 at iterations 1,500 / 1,500 / 1,400 (seeds 0 /
    1 / 2); BlinkMimic's own code reaches 0.834 at iteration 1,500 (seed 0, its evaluator), on the same A100 40GB
    ([details](#blinkmimics-options)).
-10. **Two G1s** (SuperTrack / SuperMimic, seed 0, best checkpoint of runs of 0.5 / 0.3 h): return 0.893 / 0.905, MPJPE 39 / 40 mm
-    global and 14.2 / 16.4 mm root-relative, return 0.88 after 0.11 / 0.10 h of training ([details](benchmarks/g1_boxing/results.md)).
+10. **Two G1s** (SuperTrack / SuperMimic, best checkpoints, seeds 0-2): return 0.893 ± 0.001 / 0.904 ± 0.001 with the MLP world model and
+    0.894 ± 0.002 / 0.904 ± 0.001 with the RigidFormer; root-relative MPJPE 14.1 ± 0.2 / 16.1 ± 0.4 mm and 14.7 ± 0.2 / 17.0 ± 0.7 mm; global
+    MPJPE 45.8-47.5 mm in the four. With seed 0 on an A100 80GB, the MLP runs reach return 0.88 after 0.11 / 0.10 h of training
+    ([details](benchmarks/g1_boxing/results.md)).
 11. **Muscles**, MLP world model (seeds 1-3, up to 3 h): MPJPE 38.1 ± 1.0 (SuperTrack) and 65.6 ± 8.1 mm (SuperMimic) in the root frame, 38.5 ± 1.1 and
     45.7 ± 2.5 mm in the heading frame; episodes ended 0.011 and 0.053, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg. On SuperMimic's selection
     at `--wm_lr 4e-4`, BlinkMimic's systems options cut the time per iteration by about 45%. At 4,000 iterations its errors were higher with
@@ -697,6 +759,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
+| [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |
 | [`docs/hoi_design.md`](docs/hoi_design.md), [`docs/hdmi_task_spec.md`](docs/hdmi_task_spec.md) | human-object interaction: design, and HDMI's task as implemented, with references into HDMI's code |
 | [`docs/musclevae_design.md`](docs/musclevae_design.md) | MuscleVAE: simulator, muscle model, policy port, validation |
 
@@ -713,7 +776,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`; inference copies (`g1_infer.py`) |
 | `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
 | `ndm_gym/policies/` | tracking policy and critic; HOI, muscle and hand policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`) |
 | `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
@@ -741,6 +804,9 @@ Implemented:
 - **BlinkMimic** (code, no paper): F. Chen. *BlinkMimic: Whole-Body Motion Tracking for the Unitree G1 in Minutes on One
   GPU.* 2026. [code](https://github.com/fuyichen0725/blinkmimic) · built on InstantTrack
   ([code](https://github.com/Huy-Quang-Dao/instantTrack))
+- **XMimic** (the options of [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md)): N. Bohlinger, J. Peters. *XMimic and XSoma:
+  Learning Humanoid Motion Tracking and Locomotion in Under a Minute.* 2026.
+  [paper](https://nico-bohlinger.github.io/papers/2026_xmimic_xsoma.pdf) · [code](https://github.com/nico-bohlinger/xmimic)
 - **RigidFormer:** Z. Dou, M. Guo, H. Wu, D. Roble, T. Stuyck, W. Matusik. *RigidFormer: Learning Rigid Dynamics using
   Transformers.* arXiv preprint, 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196) ·
   [project page](https://frank-zy-dou.github.io/projects/RigidFormer/)
@@ -799,8 +865,8 @@ Simulation and planning:
   the differentiable-simulator comparison
 - **Newton:** The Newton Contributors. *Newton: GPU-accelerated physics simulation for robotics and simulation research.*
   2025. [code](https://github.com/newton-physics/newton)
-- **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison): W. Lu, Y. Chen. *∇Mimic:
-  Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
+- **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison; ∇Mimic's own code timed on
+  LAFAN1): W. Lu, Y. Chen. *∇Mimic: Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
   [arXiv:2610.41654](https://arxiv.org/abs/2610.41654) · [code](https://github.com/sailab-ai/NablaMimic) ·
   [NablaEngine](https://github.com/sailab-ai/NablaEngine)
 - **RoboKit** (the planner and examples of "NDMs in RoboKit's planner"): J. Ye, X. Peng, C. Mc Gartoll, C. Jing, L. Wei,
