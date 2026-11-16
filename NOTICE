@@ -12,6 +12,11 @@ docs/media/musclevae holds renders of policies tracking the walk and run clips o
 CC BY-NC-ND 4.0) retargeted to its skeleton, drawn with the bone meshes of MASS (https://github.com/lsw9021/MASS;
 Apache-2.0). They are for non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
+docs/media/hoi holds renders of policies tracking the reference motions of twelve of HDMI's tasks
+(https://github.com/LeCAR-Lab/HDMI, whose repository has no license), drawn with the robot and object models of its
+release in the look of its simulation videos. They are for non-commercial illustration only and are not covered by the
+MIT license in LICENSE.
+
 docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
 (https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk and DexYCB,
 with the retargets drawn over it, those datasets' object meshes and the XHand's model. They are for non-commercial

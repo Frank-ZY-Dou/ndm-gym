@@ -92,6 +92,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 
 ## 🔥 News
 
+- **[2026-11]** Policies on twelve of HDMI's human-object interaction tasks, one per task ([videos](#human-object-interaction-hdmis-tasks)).
 - **[2026-11]** A [leaderboard](#-leaderboard) per task: the fastest and the most accurate configuration of each, with their numbers.
 - **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
   each gives in this library, measured, and its techniques as options of `ndm-train` (multi-GPU layouts `--layout AL` / `AWL`, a
@@ -625,6 +626,33 @@ G1s: LAFAN1's selections; muscles: the starting configurations, before the chara
 Before: LAFAN1 and the two G1s already used CUDA graphs for updates (`--wm_cudagraphs --pi_cudagraphs`, SuperMimic also
 `--critic_cudagraphs`); muscle training had no such options.
 
+### Human-object interaction (HDMI's tasks)
+
+<table>
+<tr>
+<td align="center"><img src="docs/media/hoi/policies/move_suitcase.webp" alt="move_suitcase"/><br><sub>move_suitcase</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/carry_box_over_shoulder.webp" alt="carry_box_over_shoulder"/><br><sub>carry_box_over_shoulder</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/carry_and_place_bread_box.webp" alt="carry_and_place_bread_box"/><br><sub>carry_and_place_bread_box</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/media/hoi/policies/move_foam.webp" alt="move_foam"/><br><sub>move_foam</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/move_stool-climb.webp" alt="move_stool-climb"/><br><sub>move_stool-climb</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/push_box.webp" alt="push_box"/><br><sub>push_box</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/media/hoi/policies/push_door-hand.webp" alt="push_door-hand"/><br><sub>push_door-hand</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/open_door-feet.webp" alt="open_door-feet"/><br><sub>open_door-feet</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/open_foldchair-sit.webp" alt="open_foldchair-sit"/><br><sub>open_foldchair-sit</sub></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/media/hoi/policies/roll_ball-hand.webp" alt="roll_ball-hand"/><br><sub>roll_ball-hand</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/topple_wood_board_and_cross.webp" alt="topple_wood_board_and_cross"/><br><sub>topple_wood_board_and_cross</sub></td>
+<td align="center"><img src="docs/media/hoi/policies/truman.webp" alt="truman"/><br><sub>truman</sub></td>
+</tr>
+</table>
+<p align="center"><i>One policy per task on twelve of HDMI's thirteen tasks, trained in the world model and run in the simulator (evaluation seed 1). Each episode runs to the end of its clip; 8 s of it are shown.</i></p>
+<p align="center"><sub>Renders of policies tracking HDMI's reference motions, with the robot and object models of HDMI's release (its repository has no license), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+
 ### NDMs as simulators (HDMI's scenes)
 
 One H100 80GB, 4096 environments, million env-steps per second (in parentheses, the ratio to physics). The MLP runs as
@@ -905,7 +933,7 @@ CC BY-NC-ND 4.0) and their G1 retargets (Hugging Face
 stay under that license, are downloaded by `tools/download_data.sh` and not redistributed. The G1 description (URDF,
 meshes) is BSD-3-Clause (Unitree). HDMI and MuscleVAE have no license: their files are downloaded at pinned commits by
 `tools/download_hdmi.sh` and `tools/download_musclevae*.sh`, used locally and never committed, and nothing of their code
-is copied (the task and the policy are re-implemented from their papers and documented behavior). The animations of MuscleVAE's character are renders
-of its clips (see [NOTICE](NOTICE)). MASS's bone meshes
+is copied (the task and the policy are re-implemented from their papers and documented behavior). The animations of MuscleVAE's character and of HDMI's
+tasks are renders of their clips and models (see [NOTICE](NOTICE)). MASS's bone meshes
 (Apache-2.0) are downloaded by `tools/download_mass_meshes.sh`. InterHuman (CC BY-NC-SA 4.0) is not redistributed;
 `tools/convert_interhuman.py` calls HoloMotion's HoloRetarget (Apache-2.0) from the user's own installation.
