@@ -1,9 +1,9 @@
 {
   "status": "passed_with_explicit_coverage_limits",
   "source": {
-    "verified_files": 269,
+    "verified_files": 279,
     "mismatches_before_and_after_tests": [],
-    "manifest_sha256": "820517628fa38098b27ca6b02e1d3500b278e648913c628c5e125b40ae817b85"
+    "manifest_sha256": "db92f5cf45070162ad3e777dbe1d8b69c780a045b89250707bb8a5beb66d3b64"
   },
   "runtime": {
     "python": "3.12.3",
@@ -18,24 +18,24 @@
       {
         "command": "make test-fast",
         "returncode": 0,
-        "seconds": 633.885627746582
+        "seconds": 866.2331924438477
       },
       {
         "command": "make test",
         "returncode": 0,
-        "seconds": 715.9926807880402
+        "seconds": 1306.6362433433533
       }
     ],
     "test_fast": {
-      "passed": 682,
-      "skipped": 217,
-      "deselected": 49,
-      "pytest_seconds": 626.54
+      "passed": 837,
+      "skipped": 221,
+      "deselected": 64,
+      "pytest_seconds": 858.66
     },
     "test": {
-      "passed": 687,
-      "skipped": 261,
-      "pytest_seconds": 705.98
+      "passed": 844,
+      "skipped": 278,
+      "pytest_seconds": 1294.17
     }
   },
   "door_gpu": {
@@ -50,7 +50,7 @@
       "tests/test_door_goal_horizon.py"
     ],
     "skip_reason": "Two fused-on-CPU combinations are intentionally unsupported; CUDA recovery and CPU/CUDA normalizer checks pass.",
-    "source_integrity": "All ndm_gym source and the four GPU-tested test files are byte-identical to the independently validated GPU snapshot."
+    "source_integrity": "Door implementation and four GPU-tested files are unchanged from the independently validated GPU snapshot. Changed shared upstream modules have separate full-capacity bit-exact training and all-six-checkpoint redeployment coverage in upstream_compatibility_v1.json."
   },
   "compiler_repair": "Missing Python development headers were supplied via CPATH from a data-disk extraction of Ubuntu libpython3.12-dev 3.12.3-1ubuntu0.17. Both original compiled HOI tests passed unchanged, separately and in the full suite. System Python and training environment were not upgraded.",
   "coverage": "CPU full and fast suites pass; skipped tests are not passes. This does not certify all upstream GPU kernels: known unmodified Triton configurations require 111104-123392 bytes/block while L40S supports 101376. Door uses native CPU physics and standard Torch GPU learning; its GPU component checks and separate exact-capacity training/recovery evidence have independent coverage.",
@@ -64,7 +64,15 @@
     "/data/YifanKang/adroit-door/d0/guard-parent3080-checks/preflight.json": "b3bc6287fdad51c5c4a0bbf5c6dd6f050310bbde5c298b28889314a31dcd655b",
     "/data/YifanKang/adroit-door/d0/parent3076-compiled-hoi.log": "f26ee1b772bf38d2475f48d2c2250dee50e458acb8db7734ed79d7e372990eeb",
     "/data/YifanKang/adroit-door/d0/guard-parent3075-door-gpu/run.log": "fae195dc3e7b69a955a112f24004fe890781503a0360ddcb79e1b799b15552fa",
-    "/data/YifanKang/adroit-door/d0/guard-parent3075-door-gpu/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
+    "/data/YifanKang/adroit-door/d0/guard-parent3075-door-gpu/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/door-source3084.json": "db92f5cf45070162ad3e777dbe1d8b69c780a045b89250707bb8a5beb66d3b64",
+    "/data/YifanKang/adroit-door/door-source3084-verification.json": "e46d48d6171814035a565ac244f49ead3082b6508244f8379bf9d796b11fa608",
+    "/data/YifanKang/adroit-door/d0/parent3084-checks.json": "eb5ea714008341a112d39fc8bef745fcf2994ed48b7cccda7e39534976e7699b",
+    "/data/YifanKang/adroit-door/d0/parent3084-test-fast.log": "5df44a6ce26c8485cac5528cb502499450af917656add3d09f87850bd9fd8667",
+    "/data/YifanKang/adroit-door/d0/parent3084-test.log": "4924a8b564652589ca1ee16f1a7ebfa470e48ef3d066c4a4ea1a213879bcecf6",
+    "/data/YifanKang/adroit-door/d0/guard-parent3084-checks/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/d0/guard-parent3084-checks/preflight.json": "2f8055acee285f6d8d915e938719443756517375dc3d1372af7d751041239e83"
   },
-  "submission_scope": "Five machine-specific operational files are retained outside the contribution. Their 18 passing tests are excluded from these final submission totals. No task test was removed or weakened."
+  "submission_scope": "Five machine-specific operational files are retained outside the contribution. Their 18 passing tests are excluded from these final submission totals. No task test was removed or weakened.",
+  "upstream_sync": "cc1d71cfceb99cbefe1dcb2c25e503839726b769"
 }

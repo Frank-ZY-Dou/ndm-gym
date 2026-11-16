@@ -12,6 +12,11 @@ docs/media/musclevae holds renders of policies tracking the walk and run clips o
 CC BY-NC-ND 4.0) retargeted to its skeleton, drawn with the bone meshes of MASS (https://github.com/lsw9021/MASS;
 Apache-2.0). They are for non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
+docs/media/hoi holds renders of policies tracking the reference motions of twelve of HDMI's tasks
+(https://github.com/LeCAR-Lab/HDMI, whose repository has no license), drawn with the robot and object models of its
+release in the look of its simulation videos. They are for non-commercial illustration only and are not covered by the
+MIT license in LICENSE.
+
 docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
 (https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk and DexYCB,
 with the retargets drawn over it, those datasets' object meshes and the XHand's model. They are for non-commercial
@@ -25,10 +30,11 @@ Apache-2.0). The G1 box carrying render (g1_carry.webp) tracks a clip of OMOMO (
 data terms are not stated) that RoboKit retargets; it is for non-commercial illustration only and is not covered by the MIT
 license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in a row: its LAFAN1 tracking column under the first paragraph's terms,
-its Two G1s column under CC BY-NC-SA 4.0 as in the second, its Muscles column under the third's, its Hand-object column
-under the fourth's, and its second row, the docs/media/robokit renders, with the sources and terms that paragraph names.
-No part of it is covered by the MIT license in LICENSE.
+docs/media/teaser.webp puts 6 s of such renders in three rows. In the first, the LAFAN1 tracking tile is under the terms of
+the docs/media/final paragraph, the Two G1s tile under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles tile under those of
+docs/media/musclevae and the Hand-object tile under those of docs/media/hand. The second row's four tiles are renders of
+HDMI's tasks, under the terms of the docs/media/hoi paragraph, and the third row's are the docs/media/robokit renders, with
+the sources and terms that paragraph names. No part of it is covered by the MIT license in LICENSE.
 
 The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
 clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit

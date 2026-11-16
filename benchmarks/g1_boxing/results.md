@@ -1,7 +1,8 @@
 # Two G1s boxing: results
 
-Two G1s track InterHuman 1566 (11 s at 50 Hz) in one simulation with robot-robot contacts. All runs train on one
-A100-SXM4-80GB. Each checkpoint is evaluated five times from the clip's first frame, both robots at once. Success means
+Two G1s track InterHuman 1566 (11 s at 50 Hz) in one simulation with robot-robot contacts. The runs train on one
+A100-SXM4-80GB, apart from the second and third training seeds of the selected configurations (A100-SXM4-40GB,
+[below](#training-seeds-0-2)). Each checkpoint is evaluated five times from the clip's first frame, both robots at once. Success means
 neither robot terminates; returns and errors average both robots. Global MPJPE uses the world frame; root-relative MPJPE
 measures each body relative to its robot's root.
 
@@ -13,9 +14,10 @@ Setup:
   robot raised once so that its lowest foot point is on the floor.
 - Scene (`--motions interhuman --paired`): two G1s per environment, each tracking its side with the LAFAN1 task; a pair
   resets and ends together; each robot's world model sees only its own state. 4096 robots in 2048 environments.
-- Configurations: seed 0 throughout, MLP world models. LAFAN1's selections, with every speed option: SuperTrack `--algo
+- Configurations: the rounds use seed 0 and MLP world models. LAFAN1's selections, with every speed option: SuperTrack `--algo
   supertrack --st_fail_w 5 --st_balance_w 4`; SuperMimic `--algo supermimic --reward_std_scale 0.7 --action_noise 0.3
-  --imag_start_perturb 0.3`. The selections on the clip are below ([commands](../../README.md#two-g1s-one-two-person-clip)). The speed
+  --imag_start_perturb 0.3`. The selections on the clip are below ([commands](../../README.md#two-g1s-one-two-person-clip)); they and
+  their RigidFormer counterparts then train with [three seeds](#training-seeds-0-2). The speed
   tables' RigidFormer is SuperTrack-RigidFormer's (`--algo supertrack --st_fail_w 5 --st_balance_w 2 --wm_backbone rigidformer
   --wm_lr 4e-4 --wm_batches 5`).
 
@@ -54,6 +56,27 @@ Best-checkpoint return, global and root-relative MPJPE (mm); selections in bold:
 
 Both rounds select the highest return, or within 0.005 of it the lowest global MPJPE. Round 2 compares its shorter runs with round 1's
 selection.
+
+## Training seeds 0-2
+
+The two selections and their RigidFormer counterparts, SuperTrack-RF and SuperMimic-RF, three training seeds each. The
+RigidFormer configurations start from round 1's selections without the MLP's options, use a small RigidFormer (`--rf_merge
+joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2`) and were chosen on the clip with seed 0 in further rounds by
+the rule above. The four are named configurations: `ndm-train --config two-g1-supertrack`, `two-g1-supertrack-rf`,
+`two-g1-supermimic`, `two-g1-supermimic-rf`. All pairs succeed in every evaluation.
+
+| configuration | return, seeds 0 / 1 / 2 | mean ± sd | global MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd | root-relative MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd |
+|---|---|---|---|---|---|---|
+| SuperTrack, MLP | 0.8932 / 0.8931 / 0.8913 | 0.8925 ± 0.0011 | 39.4 / 44.9 / 54.2 | 46.2 ± 7.5 | 14.2 / 13.8 / 14.2 | 14.1 ± 0.2 |
+| SuperTrack-RF | 0.8919 / 0.8946 / 0.8948 | 0.8938 ± 0.0016 | 47.5 / 52.2 / 41.9 | 47.2 ± 5.2 | 14.8 / 14.5 / 14.7 | 14.7 ± 0.2 |
+| SuperMimic, MLP | 0.9047 / 0.9052 / 0.9025 | 0.9042 ± 0.0015 | 40.1 / 45.3 / 57.0 | 47.5 ± 8.6 | 16.4 / 16.4 / 15.6 | 16.1 ± 0.4 |
+| SuperMimic-RF | 0.9048 / 0.9029 / 0.9036 | 0.9038 ± 0.0010 | 43.0 / 47.4 / 47.1 | 45.8 ± 2.5 | 16.6 / 17.8 / 16.7 | 17.0 ± 0.7 |
+
+How it was read: a run's best checkpoint on its learning curve (one checkpoint per 1,000 iterations and the last one, one
+evaluation each) is evaluated five times from the clip's first frame; a cell is the mean of the five, and ± is the standard
+deviation over the three seeds. Seed 0 trained on an A100-SXM4-80GB for 0.5 h (SuperMimic with the MLP 0.3 h). Seeds 1 and 2
+trained on A100-SXM4-40GB GPUs to seed 0's iteration counts (9,396, 4,373, 6,264 and 5,718, in the table's order), so
+training times are not compared across the seeds.
 
 ## LAFAN1's selections, 3 h
 

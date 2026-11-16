@@ -65,13 +65,14 @@ class MDP:
         self.max_step_reward = MAX_STEP_REWARD  # normalizes returns; tasks that add reward terms raise it
 
     # ---------------- observation ----------------
-    def obs(self, S, a_prev, xi, f) -> torch.Tensor:
-        """Noise-free proprioceptive observation (+ reference-relative root orientation)."""
+    def obs(self, S, a_prev, xi, f, root_R: torch.Tensor | None = None) -> torch.Tensor:
+        """Noise-free proprioceptive observation (+ reference-relative root orientation). ``root_R``: the reference's root
+        rotation at frame ``f``, read before (train.py --imag_hoist), instead of the frame."""
         p, R, v, w, q, qd = S
         Rt = R.transpose(-1, -2)
         dq0 = xi[..., 1:30]
         g_b = -R[..., 2, :]  # R^T (0,0,-1)
-        rel = mat_to_6d(Rt @ self.motion.root_R[f])
+        rel = mat_to_6d(Rt @ (self.motion.root_R[f] if root_R is None else root_R))
         return torch.cat((q - self.default_q - dq0, qd, (Rt @ w.unsqueeze(-1)).squeeze(-1), g_b, a_prev, rel), -1)
 
     def add_noise(self, o: torch.Tensor) -> torch.Tensor:

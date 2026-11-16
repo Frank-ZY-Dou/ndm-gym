@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import gc
 import json
 import os
 import sys
@@ -204,8 +205,9 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="the policy's goal of every reference frame computed once (MotionLib.cache_goals) and read in collection and in "
                              "every imagined step (equal up to rounding; 1.2 GB for LAFAN1)")
     parser.add_argument("--pi_encode_once", action="store_true",
-                        help="supertrack: the policy's goal encoder runs once per policy update, over every imagined step's goal (they depend on the "
-                             "reference frames only), and the steps its decoder (equal up to rounding: the encoder's products over all steps at once)")
+                        help="supertrack, supermimic: the policy's goal encoder runs once per policy update, over every imagined step's goal (they "
+                             "depend on the reference frames only), and the steps its decoder (equal up to rounding: the encoder's products over all "
+                             "steps at once)")
     if not rigidformer:
         return
     parser.add_argument("--rf_fused_train", action="store_true",
@@ -221,17 +223,20 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
 
 def parse_args():
     from ndm_gym import configs
+    from ndm_gym.algos import xmimic
     from ndm_gym.algos.blinkmimic import NOT_PORTED, add_blinkmimic_args, check_args, expand_preset
 
     parser = argparse.ArgumentParser()
     add_train_args(parser)
     add_speed_args(parser)
     add_blinkmimic_args(parser)
+    xmimic.add_xmimic_args(parser)
     add_launcher_args(parser)
     configs.add_config_arg(parser)
     try:  # --config: a named configuration's options first; --algo blinkmimic: SuperMimic with BlinkMimic's recipe
         args = parser.parse_args(expand_preset(configs.expand(sys.argv[1:], "train")))
         check_args(args)
+        xmimic.check_args(args)
     except ValueError as e:
         parser.error(str(e))
     if args.pi_updates < 1:
@@ -240,8 +245,8 @@ def parse_args():
         print(f"--algo blinkmimic: SuperMimic with BlinkMimic's recipe; not ported: {NOT_PORTED}", flush=True)
     if args.critic_cudagraphs and args.algo != "supermimic":
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
-    if args.pi_encode_once and args.algo != "supertrack":
-        parser.error("--pi_encode_once: SuperTrack's imagination only")
+    if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
+        parser.error("--pi_encode_once: SuperTrack's and SuperMimic's imagination only")
     if args.paired and (args.motions != "interhuman" or args.num_envs % 2):
         parser.error("--paired: two-person clips (--motions interhuman) and an even --num_envs (two robots per env)")
     return args
@@ -306,7 +311,10 @@ def update_graphs(algo, buffer, args):
     from ndm_gym.algos.blinkmimic import Graphed
 
     full = (lambda: True) if args.graph_early else (lambda: buffer.size == buffer.T)  # noqa: E731
-    wm = Graphed(lambda: algo.wm_update_graphable(buffer), full, "the world-model update")
+    if getattr(args, "wm_presample", False):  # --wm_presample (XMimic): the iteration's updates, their windows drawn first, as one graph
+        wm = Graphed(lambda: algo.wm_updates_presampled(buffer), full, "the world-model updates")
+    else:
+        wm = Graphed(lambda: algo.wm_update_graphable(buffer), full, "the world-model update")
     if getattr(algo, "policy_update_graphable", None) is None:
         return wm, None
     pi = Graphed(lambda: algo.policy_update_graphable(buffer), lambda: full() and (algo.pi_avg is None or int(algo.pi_avg.n_averaged) > 0),
@@ -418,7 +426,7 @@ def main():
         resume_ck = ck
     profile = bool(int(os.environ.get("SM_PROFILE", "0")))
 
-    sim_cfg = make_sim(dev, args, paired=args.paired)
+    sim_cfg = make_sim(dev, args, paired=args.paired, njmax=args.njmax or None)  # --njmax (XMimic): the training simulator's rows
     with launch_simulation(sim_cfg, args):
         env = (PairedTrackingSim if args.paired else TrackingSim)(sim_cfg, args.num_envs, motion, mdp, gamma=args.gamma, **reset_kwargs(args))
         if args.compile_eager:
@@ -438,6 +446,21 @@ def main():
             buffer.use_device_ptr(device_size=args.graph_early)
         obs_hist = torch.zeros(args.num_envs, Hh, OBS_DIM, device=dev)
         graphed_step = GraphedCollector(env, algo, buffer, mdp, motion, obs_hist, args) if args.collect_graph else None
+        split = None
+        if args.layout != "1GPU":  # --layout (XMimic): the iteration's steps on their own GPUs, each on the others' previous results
+            from ndm_gym.algos.layouts import Split
+
+            def algo_on(d: str):  # the algorithm's object for another device, with the task's tables there
+                k = g1.kinematics(d)
+                m = MotionLib(clips, k, d)
+                if args.goal_table:
+                    m.cache_goals(args.goal_frames)
+                task = MDP(k, m, torch.tensor(g1.default_joint_pos_list(), device=d), training_reward_cfg(args.reward_std_scale))
+                return ALGOS[args.algo](args, k, m, task, d)
+
+            split = Split(args, algo, algo_on, buffer)
+            print(split.describe(), flush=True)
+            algo = split.algo  # what the loop reads from here on, each from its owner (the collection's graph keeps the actor's object)
 
         @torch.no_grad()
         def collect(n_steps: int, stats: dict):
@@ -484,13 +507,16 @@ def main():
         # the replay buffer is not checkpointed: a resumed run refills it with --warmup_steps of collection, as a new run starts
         collect(args.warmup_steps, stats)
         if args.update_graphs:
-            wm_update_g, policy_update_g = update_graphs(algo, buffer, args)
+            wm_update_g, policy_update_g = update_graphs(algo, buffer, args) if split is None else split.update_graphs()
         log_f = open(os.path.join(args.log_dir, "train_log.csv"), "a")
         if start_it == 0:
             log_f.write("iteration,wall_h,sim_steps,wm_loss,wm_err8,pi_loss,v_loss,imag_rew,pi_gradnorm,imag_survival,sim_rew,ep_len,"
                         "ep_ret_norm,term_frac,it_per_s,lr,wm_body8_m,wm_q8_rad,sim_action_rate,fail_starts"
                         + (",nonfinite" if args.no_sync else "") + "\n")  # fmt: skip
         light = LightCheckpoints() if args.ckpt_light else None
+        if args.gc_freeze:  # --gc_freeze (XMimic): what the setup allocated leaves the collector's generations
+            gc.collect()
+            gc.freeze()
 
         t_start = time.time() - wall_offset
         t_log = time.time()
@@ -538,17 +564,20 @@ def main():
                 torch.cuda.synchronize()
                 tp1 = time.time()
             log_now = (it + 1) % args.log_every == 0
-            for b in range(args.wm_batches):
-                if args.update_graphs:  # no probe of the k-step body and joint errors (the log's columns are NaN)
-                    res = wm_update_g()
-                else:
-                    res = algo.wm_update(buffer, probe=log_now and b == args.wm_batches - 1)
+            if args.wm_presample:  # --wm_presample (XMimic): the updates' windows drawn in one pass, then the updates
+                res = wm_update_g() if args.update_graphs else algo.wm_updates_presampled(buffer, probe=log_now)
+            else:
+                for b in range(args.wm_batches):
+                    if args.update_graphs:  # no probe of the k-step body and joint errors (the log's columns are NaN)
+                        res = wm_update_g()
+                    else:
+                        res = algo.wm_update(buffer, probe=log_now and b == args.wm_batches - 1)
             wm_l, e8 = res[:2]
             if prof:
                 torch.cuda.synchronize()
                 tp2 = time.time()
             agg["wm"].append(wm_l), agg["wm8"].append(e8)
-            if it >= args.wm_only_iters:
+            if it >= args.wm_only_iters and (split is None or split.ready):  # --layout: from the learner's first batch on
                 for _ in range(args.pi_updates):  # --pi_updates: more policy updates per iteration, each on its own batch
                     if args.update_graphs and policy_update_g is not None:
                         n_avg0 = int(algo.pi_avg.n_averaged) if algo.pi_avg is not None else 0
@@ -564,6 +593,8 @@ def main():
                     print(f"[prof] collect {1e3*(tp1-tp0):.0f} ms ({n} steps) | wm {1e3*(tp2-tp1):.0f} ms | policy {1e3*(tp3-tp2):.0f} ms", flush=True)
                 agg["pi"].append(pl), agg["v"].append(vl), agg["ir"].append(ir), agg["gn"].append(gn), agg["surv"].append(surv)
                 agg["fs"].append(algo.fail_starts)
+            if split is not None:  # --layout: the next batch drawn; batch, world model, normalizers and policy cross the devices
+                split.exchange()
             if log_now:
                 mean = lambda x: float(sum(float(v) for v in x) / max(len(x), 1))  # noqa: E731
                 mean_nn = lambda x: mean([v for v in (float(v) for v in x) if v == v])  # noqa: E731  (--reset_masked: NaN = no end)

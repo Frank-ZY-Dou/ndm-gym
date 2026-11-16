@@ -102,6 +102,23 @@ class ReplayBuffer:
         out["mask"] = mask
         return out
 
+    def sample_windows_multi(self, n: int, B: int, k: int):
+        """``n`` batches of ``sample_windows(B, k)`` in one pass (train.py --wm_presample; XMimic): the same draws in the
+        same order (each batch's start times, then its environments), one read of the replay for all of them. Returns a
+        dict of (n, B, k, ...) tensors and the masks (n, B, k); batch i is what the i-th of n calls of ``sample_windows``
+        returns while nothing else draws random numbers in between."""
+        t0, env = [], []
+        for _ in range(n):
+            t0.append(self._randint(self._size() - k + 1, B))
+            env.append(torch.randint(0, self.N, (B,), device=self.device))
+        t0, env = torch.stack(t0), torch.stack(env)
+        rows = self._row(t0.unsqueeze(-1) + torch.arange(k, device=self.device))
+        e = env.unsqueeze(-1).expand_as(rows)
+        out = {key: self.data[key][rows, e] for key in self.window_keys}
+        d = out["done"].float()
+        out["mask"] = torch.cumprod(torch.cat((torch.ones(n, B, 1, device=self.device), 1 - d[..., :-1]), -1), -1)
+        return out
+
     def sample_windows_prioritized(self, B: int, k: int, alpha: float):
         """Like ``sample_windows`` but with start probability proportional to priority^alpha (no importance
         weighting: emphasizing hard transitions is the point). Also returns the starts for ``update_priorities``."""

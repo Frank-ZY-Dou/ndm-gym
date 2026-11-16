@@ -37,6 +37,52 @@ Its rounds were declared one at a time, each before its runs; the first rounds (
 | A100 40GB SXM4 | 4.00, 4.01, 4.36, 4.18, 4.31, 4.28 | 4.19 ± 0.16 | 5.38, 4.34, 3.99, 3.91, 4.68, 4.00 | 4.38 ± 0.57 |
 | A100 40GB PCIe | 3.69, 4.75, 4.43, 4.48, 4.43, 4.40 | 4.37 ± 0.35 | 3.62, 4.04, 4.01, 4.31, 3.95, 3.97 | 3.98 ± 0.22 |
 
+## NablaMimic's own code, timed
+
+[NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) trains its policy through a differentiable simulator,
+without a world model. Its authors' code at `bfbb2a6` runs here unmodified, with its own entry point and evaluation
+(MuJoCo Warp, its G1 model; the full-clip normalized return of the actor it evaluates): seeds 0-2, one hour of training
+each (its own `--hours 1`, a wall-clock budget), one run at a time while the machine's other GPUs were idle.
+[`nablamimic/run.sh`](nablamimic/run.sh) starts a run, [`nablamimic/nm_table.py`](nablamimic/nm_table.py) writes the
+tables, and [its page](../../docs/algorithms/nablamimic.md) says how it trains and how to run it. Its authors report
+return 0.82 after 8 minutes on one RTX PRO 6000, at 0.38 s per update.
+
+Columns: the first evaluated checkpoint at return 0.82 or above (update / minutes on its own clock / minutes from update
+50, as the training speed above counts from iteration 50); that crossing interpolated linearly between the two
+evaluations around it (its paper's rule, here per seed); the first of three evaluations in a row at 0.82 or above without
+a fall. Its checkpoints come every 250 updates, about 3 minutes here, so its times are read on that grid. Memory is the
+peak of JAX's allocator, of its limit.
+
+**Its published configuration** (`configs/ours.args`, about 50 GB of GPU memory by its README) on one A100 80GB SXM4:
+
+| run | s per update | first ≥ 0.82: update / min on its clock / min from update 50 | crossing, min (interpolated) | ≥ 0.82 without a fall, 3 in a row | best return (update) | last evaluation: return, clips with a fall | peak GPU memory |
+|---|---|---|---|---|---|---|---|
+| `nm_a100_80gb_published_s0` | 0.669 | 1000 / 11.33 / 10.69 | 11.07 | 2000 / 22.59 / 21.95 | 0.877 (5000) | 0.876, 0 of 40 | 44.6 of 63.8 GB |
+| `nm_a100_80gb_published_s1` | 0.671 | 1250 / 14.21 / 13.57 | 13.85 | 2750 / 31.10 / 30.46 | 0.876 (5314) | 0.876, 0 of 40 | 44.7 of 63.8 GB |
+| `nm_a100_80gb_published_s2` | 0.671 | 1750 / 19.81 / 19.17 | 17.81 | 2250 / 25.44 / 24.80 | 0.870 (4500) | 0.851, 1 of 40 | 44.6 of 63.8 GB |
+| mean ± sd | 0.67 ± 0.00 | 1333 / 15.12 ± 4.31 / 14.48 ± 4.31 | 14.25 ± 3.39 | | | | |
+
+**A reduced-memory configuration** on one A100 40GB SXM4, which the published configuration does not fit: the windows
+rematerialized in the backward pass (`remat`: the same algorithm and hyperparameters, more time per update) and a replay
+of 250 × 4096 states instead of 1000 × 4096 (`--replay-steps 250`). It is not a configuration its authors published;
+`remat` alone and `remat` with `--replay-steps 500` also run out of memory on 40 GB.
+
+| run | s per update | first ≥ 0.82: update / min on its clock / min from update 50 | crossing, min (interpolated) | ≥ 0.82 without a fall, 3 in a row | best return (update) | last evaluation: return, clips with a fall | peak GPU memory |
+|---|---|---|---|---|---|---|---|
+| `nm_a100_remat250_s0` | 0.714 | 1500 / 18.13 / 17.46 | 17.25 | 3000 / 36.11 / 35.44 | 0.871 (4995) | 0.871, 0 of 40 | 25.6 of 31.0 GB |
+| `nm_a100_remat250_s1` | 0.717 | 1500 / 18.21 / 17.53 | 16.02 | 3000 / 36.28 / 35.61 | 0.865 (4750) | 0.864, 0 of 40 | 25.5 of 31.0 GB |
+| `nm_a100_remat250_s2` | 0.716 | 1750 / 21.14 / 20.46 | 20.53 | 3250 / 39.17 / 38.49 | 0.872 (4984) | 0.872, 0 of 40 | 25.6 of 31.0 GB |
+| mean ± sd | 0.72 ± 0.00 | 1583 / 19.16 ± 1.72 / 18.48 ± 1.72 | 17.93 ± 2.33 | | | | |
+
+**Beside this library's fastest configurations.** On the A100 40GB SXM4, SuperTrack reaches return 0.82 after
+4.19 ± 0.16 min and SuperMimic after 4.38 ± 0.57 min ([Training speed](#training-speed), seeds 0-5). NablaMimic's rows
+stand beside these numbers and are not ranked with them. The same in both: the 40 clips, the return's formula, each
+clip's start, the fall thresholds, the reward's terms and weights, the G1's joints, gains and mass. Not the same: the
+evaluator and its simulator, the G1's colliders and self-collisions, the anchor body, the clips' heights, one evaluation
+per checkpoint against four, and a checkpoint every 250 updates against one every 100 iterations
+([side by side](../../docs/algorithms/nablamimic.md#4-its-evaluation-beside-this-librarys)). No checkpoint is scored by
+both evaluators.
+
 ## H100 supplement
 
 Selected configurations and their RigidFormer versions, seeds 1-3, one H100 each (16 physical cores per run; other GPUs

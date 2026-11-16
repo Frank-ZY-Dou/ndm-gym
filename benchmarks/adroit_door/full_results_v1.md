@@ -61,9 +61,23 @@ The preregistered [selection rule](presentation_plan_v1.json) gives normalized t
 
 The native scene and NDM Gym mark are retained. This is a render of saved physical policy-evaluation states, not another physics run. The [preview provenance](preview_v1.json) records input/output hashes and camera/window settings. DAPG and Gymnasium-Robotics provide the reference and native assets; see the repository [NOTICE](../../NOTICE).
 
+## Upstream synchronization
+
+The formal runs retain their frozen runtime source identity, included in commit
+`bebd40b45ce1016e663c6306afd3e4e7cb7562e9`. The contribution was subsequently
+synchronized with upstream `cc1d71cfceb99cbefe1dcb2c25e503839726b769` to resolve a
+NOTICE conflict and preserve upstream's newer algorithms and documentation.
+Door's referenced symbols in changed shared modules are structurally unchanged.
+The [compatibility record](upstream_compatibility_v1.json) compares the frozen and
+merged versions: both methods' 20-update full-capacity probes are bit-exact in
+model/optimizer, collector, replay and random state; redeployment of all six
+original final checkpoints gives identical physical arrays and per-episode
+metrics for all 1,536 episodes. These checks are additional compatibility
+evidence, not new full-budget runs or replacements for the frozen study.
+
 ## Validation and reproduction
 
-The final submission tree passes `make test-fast` (682 passed, 217 skipped, 49 deselected) and `make test` (687 passed, 261 skipped), with unchanged upstream equivalence and golden tests. Separate Door GPU checks pass 44 tests; two fused-on-CPU combinations are intentionally unsupported. The [validation record](validation_v1.json) states exact versions, scope, timings and evidence hashes. Skipped upstream GPU tests are not passes: known unmodified Triton configurations exceed L40S per-block shared memory. This does not certify the complete upstream GPU suite.
+The final submission tree passes `make test-fast` (837 passed, 221 skipped, 64 deselected) and `make test` (844 passed, 278 skipped), with unchanged upstream equivalence and golden tests. Separate Door GPU checks pass 44 tests; two fused-on-CPU combinations are intentionally unsupported. The [validation record](validation_v1.json) states exact versions, scope, timings and evidence hashes. Skipped upstream GPU tests are not passes: known unmodified Triton configurations exceed L40S per-block shared memory. This does not certify the complete upstream GPU suite.
 
 The [task guide](../../docs/tasks/adroit_door.md) provides pinned input preparation, native-loop build, training, evaluation and rendering commands. The [preparation check](preparation_equivalence_v1.json) regenerates the frozen physical arrays exactly. Fresh-process recovery for both full-capacity methods preserves optimizer, replay, simulator and random state exactly. The result aggregator verifies frozen source/input identities, all six final checkpoint hashes, complete update counts, identical evaluation starts and finite raw episode metrics before computing the statistics.
 

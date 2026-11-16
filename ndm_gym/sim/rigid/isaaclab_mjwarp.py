@@ -240,11 +240,12 @@ class PairSceneCfg(TrackingSceneCfg):
     robot_b = replace(G1_CFG, prim_path="{ENV_REGEX_NS}/RobotB", init_state=replace(G1_CFG.init_state, pos=(2.0, 0.0, 0.76)))
 
 
-def make_sim(device: str, args, paired: bool = False) -> SimulationContext:
-    """``paired``: the two-robot scene (PairSceneCfg), with room for twice the constraints and contacts per env."""
-    njmax, nconmax = (1000, 256) if paired else (500, 128)
+def make_sim(device: str, args, paired: bool = False, njmax: int | None = None) -> SimulationContext:
+    """``paired``: the two-robot scene (PairSceneCfg), with room for twice the constraints and contacts per env. ``njmax``
+    (train.py's --njmax, XMimic): the constraint rows per env instead of the scene's; a world that needs more loses the rest."""
+    rows, nconmax = (1000, 256) if paired else (500, 128)
     physics = NewtonCfg(
-        solver_cfg=MJWarpSolverCfg(njmax=njmax, nconmax=nconmax, cone="pyramidal", integrator="implicitfast", use_mujoco_contacts=True),
+        solver_cfg=MJWarpSolverCfg(njmax=njmax or rows, nconmax=nconmax, cone="pyramidal", integrator="implicitfast", use_mujoco_contacts=True),
         num_substeps=4,
     )
     return sim_utils.SimulationCfg(dt=CONTROL_DT, device=device, physics=physics)
@@ -607,6 +608,31 @@ class TrackingSim:
             self.reset(ids)
         return out
 
+
+    def step_probe(self, a: torch.Tensor) -> dict:
+        """``step(a, S, inplace=True)`` for a probe sweep (algos.eprobe, --eprobe_lean), which reads the step's termination
+        test and nothing else of it: the same simulator step, frame counter, episode step, previous action and evaluation
+        flags, in place. Not computed: the step's reward (its forward kinematics: about 2,000 tensor operations a step
+        where the reward is not compiled), the transition's flattened states and the episode's returns, which keep their
+        values. Returns {"term"}."""
+        if not self.eval_mode or self.object is not None:
+            raise ValueError("step_probe is the evaluation step without an object")
+        f1 = self.f + 1
+        clip_end = self.motion.clip_end[self.motion.clip_id[self.f]]
+        target = self.default_q + self.xi[:, 1:30] + self.alpha * a
+        self.robot.set_joint_position_target_index(target=target)
+        self.scene.write_data_to_sim()
+        self.sim.step(render=False)
+        self.scene.update(CONTROL_DT)
+        S1 = self.state(lazy_now(self.robot.data, "root_link_vel_w"))
+        term = self.mdp.termination(S1, f1)
+        done = term | (f1 >= clip_end) | (self.ep_step + 1 >= self.max_episode_steps)
+        self.f.copy_(f1)
+        self.ep_step.add_(1)
+        self.a_prev.copy_(a)
+        self.failed_eval |= term & ~self.done_eval
+        self.done_eval |= done
+        return {"term": term}
 
     # ------------------------------------------------------------------ the training step as a CUDA graph (train.py --collect_graph)
     def step_core(self, a: torch.Tensor, S: tuple) -> dict:

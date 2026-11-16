@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import torch
 
-from ..core.nets import run_mlp
 from ..core.normalizer import RunningNorm
 from ..core.rotations import so3_exp, yaw_mat
 from ..robots.g1 import NUM_J
@@ -86,10 +85,12 @@ class SemiImplicitIncrementWorldModel(IncrementWorldModel):
         dp, dth, dq = dp + gp, dth + gth, dq + gq
         return (p + (yaw_mat(R) @ dp.unsqueeze(-1)).squeeze(-1), R @ so3_exp(dth), v1, w1, q + dq, qd1)
 
-    def step(self, S, a, xi_n, input_noise: float = 0.0):
-        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer)."""
+    def step(self, S, a, xi_n, input_noise: float = 0.0, taps=None):
+        """``input_noise``: std of Gaussian noise on the normalized inputs (only while fitting, as a regularizer). ``taps``
+        (--wm_deferred_grads; ``net_out``): returns (the next state, the Linear layers' inputs)."""
         x = self.in_norm(self.inputs(S, a, xi_n))
         if input_noise != 0:
             x = x + input_noise * torch.randn_like(x)
-        y = run_mlp(self.net, x, amp=self.amp)
-        return self.integrate(S, y * self.out_norm.std() + self.out_norm.mean)
+        y, ins = self.net_out(x, taps)
+        S1 = self.integrate(S, y * self.out_norm.std() + self.out_norm.mean)
+        return S1 if taps is None else (S1, ins)

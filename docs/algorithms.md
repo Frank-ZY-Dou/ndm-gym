@@ -10,6 +10,8 @@ buffer and schedule.
 | [`blinkmimic`](blinkmimic.md) | SuperMimic with BlinkMimic's recipe: a preset of the options below | SuperMimic's semi-implicit model | beyond the horizon |
 
 See [how the methods relate](blinkmimic.md#2-how-the-methods-relate) for the objectives and semi-implicit world models.
+[NablaMimic](algorithms/nablamimic.md), which trains through a differentiable simulator without a world model, is not an
+`--algo`: its authors' code is run and timed on the LAFAN1 task.
 
 ## The training loop
 
@@ -39,6 +41,7 @@ the original behavior, checked bit for bit by upstream equivalence and SuperTrac
 | motions | `--motions`, `--motion_dir`, `--clips`, `--paired` |
 | speed (same results up to rounding, or noted) | `--fused_adam`, `--elementwise_3x3`, `--combo_kernels`, `--compile_eager`, `--wm_cudagraphs`, `--pi_cudagraphs`, `--critic_cudagraphs`, `--goal_table`, `--pi_encode_once`, `--rf_fused_train`, `--rf_fit_keep_ops`, `--rf_bptt_keep_blocks` |
 | systems (BlinkMimic) | `--no_sync`, `--update_graphs`, `--graph_early`, `--collect_graph`, `--reset_masked`, `--ckpt_light` (with `--last_every_min`) |
+| machinery (XMimic; [details](algorithms/xmimic.md)) | `--layout`, `--eprobe_gpu`, `--njmax`, `--gc_freeze`, `--imag_hoist`, `--pi_deferred_grads`, `--wm_deferred_grads`, `--deferred_bf16`, `--muon_batched`, `--wm_presample` |
 
 See [BlinkMimic's options](blinkmimic.md#3-blinkmimics-changes-as-options) for the preset and overrides. Selected task
 configurations are in the

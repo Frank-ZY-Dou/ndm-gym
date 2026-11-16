@@ -5,10 +5,11 @@ networks, schedule and evaluation.
 
 | | |
 |---|---|
-| [`results.md`](results.md) | how the numbers were obtained, the training speed, the H100 supplement, SuperMimic's late drop and its noise check, the RigidFormer checks and final configurations, the policy-gradient diagnostic |
+| [`results.md`](results.md) | how the numbers were obtained, the training speed, NablaMimic's own code timed, the H100 supplement, SuperMimic's late drop and its noise check, the RigidFormer checks and final configurations, the policy-gradient diagnostic |
 | [`ablations.md`](ablations.md) | which factor contributes what, and training efficiency (tables from `tools/ablations.py`) |
 | [`splits/`](splits/) | clip lists for `ndm_gym.train --clips`: LAFAN1's own split, subject 5 held out (RigidFormer check 3) |
 | [`grad_diag.sh`](grad_diag.sh) | the policy-gradient diagnostic of finished runs (`tools/grad_stats.py`) |
+| [`nablamimic/`](nablamimic/) | NablaMimic's own code on the 40 clips: the launcher of its unmodified checkout and the script of its tables |
 
 ## Reproducing
 
@@ -16,4 +17,4 @@ Commands: [selected configurations](../../README.md#lafan1-motion-tracking),
 [fastest configurations](../../README.md#training-speed), [ablation changes](ablations.md).
 The 3 h A100 40GB runs used `scripts/run_train.sh` (memory cap, CPU pinning to the GPU's NUMA node, GPU lock, evaluation watcher) and the offline
 world-model fits `scripts/run_wmbench.sh`. The training-speed runs ran `ndm-train` with `ndm-eval --watch` on a second GPU; other runs on other GPU types ran
-`ndm-train`, then `ndm-eval` on every checkpoint.
+`ndm-train`, then `ndm-eval` on every checkpoint. NablaMimic's runs: [`nablamimic/`](nablamimic/README.md).

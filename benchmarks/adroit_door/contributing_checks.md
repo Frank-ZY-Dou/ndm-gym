@@ -12,8 +12,9 @@ reduced-budget runs remain development evidence.
 | Development setup and pre-commit | Development tools installed; repository Ruff hook installed | Done locally |
 | `make lint` | Ruff passes the current local source | Passed |
 | `make docs` | Strict MkDocs build passes | Passed after final report edits |
-| `make test-fast` before commit | Latest implementation, reporting and preparation source verified against the checked snapshot: 682 passed, 217 skipped, 49 deselected (626.54 s) | Passed on CPU; skipped cases are not passes |
-| Full tests before merging algorithm changes | `make test`: 687 passed, 261 skipped, exit 0; unchanged upstream equivalence and golden tests pass. Door GPU checks: 44 passed, two unsupported fused-on-CPU cases skipped; exact-capacity GPU recovery verified separately | Passed within [documented coverage](validation_v1.json); upstream GPU skips are not certified |
+| `make test-fast` before commit | Latest implementation, reporting and preparation source verified against the checked snapshot: 837 passed, 221 skipped, 64 deselected (858.66 s) | Passed on CPU; skipped cases are not passes |
+| Full tests before merging algorithm changes | `make test`: 844 passed, 278 skipped, exit 0; unchanged upstream equivalence and golden tests pass. Door GPU checks: 44 passed, two unsupported fused-on-CPU cases skipped; exact-capacity GPU recovery verified separately | Passed within [documented coverage](validation_v1.json); upstream GPU skips are not certified |
+| Synchronize with current upstream | `cc1d71c` merged; both methods match frozen training in full-capacity probes and all six final checkpoints reproduce every physical evaluation exactly; see [compatibility evidence](upstream_compatibility_v1.json) | Passed |
 | Keep existing algorithm defaults | Existing defaults retained; five-goal/full-budget behavior is selected by the new runner. Unchanged equivalence and golden tests pass | Passed |
 | Tests for new components | Collector, replay, goal horizon, schedule, recovery, evaluation, aggregation and preparation tests are included in the checked source | Passed; see validation coverage |
 | Measure the proposed efficient path | Matched Python/native collector timings and bit-exact contact/reset oracle in `collector_speed_v1.json` | Passed; full per-seed end-to-end timings in [results](full_results_v1.md) |

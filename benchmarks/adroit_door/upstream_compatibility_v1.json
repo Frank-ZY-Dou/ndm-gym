@@ -1,0 +1,136 @@
+{
+  "status": "passed",
+  "scope": "Compatibility check, not replacement training: two fresh 20-update exact-capacity probes and all six original final checkpoints redeployed on merged upstream source.",
+  "frozen_training_commit": "bebd40b45ce1016e663c6306afd3e4e7cb7562e9",
+  "upstream_sync": "cc1d71cfceb99cbefe1dcb2c25e503839726b769",
+  "sources": {
+    "frozen": "/data/YifanKang/adroit-door/parent3066",
+    "merged": "/data/YifanKang/adroit-door/check-parent3084"
+  },
+  "evidence": [
+    {
+      "method": "supertrack",
+      "twenty_full_capacity_updates_bit_exact": true,
+      "compared_keys": [
+        "protocol",
+        "iteration",
+        "algo",
+        "collector",
+        "replay",
+        "torch_rng",
+        "cuda_rng"
+      ]
+    },
+    {
+      "method": "supermimic",
+      "twenty_full_capacity_updates_bit_exact": true,
+      "compared_keys": [
+        "protocol",
+        "iteration",
+        "algo",
+        "collector",
+        "replay",
+        "torch_rng",
+        "cuda_rng"
+      ]
+    },
+    {
+      "method": "supertrack",
+      "seed": 0,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "323c9c5bc2865bd8789b65e026833a578638368e18c03f8a8b63aa4175817f4e"
+    },
+    {
+      "method": "supertrack",
+      "seed": 1,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "68ced00258cfd68c58f42ae84bd458c6d0eb050a41de6c04e49f6b32a1f876af"
+    },
+    {
+      "method": "supertrack",
+      "seed": 2,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "393138679bb9f5e66c0db4e0730e4ef2fb0fd6212cdb7ec4cc7293e5ea3e369d"
+    },
+    {
+      "method": "supermimic",
+      "seed": 0,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "078c8e52d090547a9b523d80ac828cca87441d12a2f39937507ce8fa49dde733"
+    },
+    {
+      "method": "supermimic",
+      "seed": 1,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "919f4fbc6cc7d79c107afc42a3a1d4b50676faa046ea37b8bc63a862141133b6"
+    },
+    {
+      "method": "supermimic",
+      "seed": 2,
+      "final_episodes": 256,
+      "physical_arrays_bit_exact": 768,
+      "metrics_bit_exact": true,
+      "checkpoint_sha256": "ef4e48d9c4e97eedbb303ce2361852943be171fbc5c13cb50da2ac712a214b05"
+    }
+  ],
+  "script_sha256": "ebbe89895d9d94c7712aa06834f17bc8f7b8221411544637f4d7cdfc4dc66e80",
+  "unchanged_shared_symbols": [
+    {
+      "file": "ndm_gym/core/nets.py",
+      "symbol": "mlp",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/core/nets.py",
+      "symbol": "run_mlp",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/core/nets.py",
+      "symbol": "ACTIVATIONS",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/core/nets.py",
+      "symbol": "AMP_DTYPE",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/algos/supertrack.py",
+      "symbol": "LossBalancer",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/algos/common.py",
+      "symbol": "lr_at",
+      "ast_identical": true
+    },
+    {
+      "file": "ndm_gym/algos/common.py",
+      "symbol": "set_lr",
+      "ast_identical": true
+    }
+  ],
+  "source_hashes": {
+    "frozen": "48fd2d09d41b3c13e94d24fb5ee493a3174c37fb77d786de782ce91ea4babe61",
+    "merged": "ec1655cebeb25c91c83a5881726b22a89ad9a2c1ae391437c029d5e7eab3a568"
+  },
+  "evidence_sha256": {
+    "/data/YifanKang/adroit-door/d0/parent3084-revision-check/result.json": "d3631d7a45b4ff0e2f26f62ebb2c960a5d7675d0014d0881138f3d42455e9d6b",
+    "/data/YifanKang/adroit-door/d0/guard-parent3084-revision/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "/data/YifanKang/adroit-door/door-source3084.json": "db92f5cf45070162ad3e777dbe1d8b69c780a045b89250707bb8a5beb66d3b64",
+    "/data/YifanKang/adroit-door/door-source3084-verification.json": "e46d48d6171814035a565ac244f49ead3082b6508244f8379bf9d796b11fa608",
+    "/data/YifanKang/adroit-door/d0/parent3084-revision-check.py": "ebbe89895d9d94c7712aa06834f17bc8f7b8221411544637f4d7cdfc4dc66e80"
+  },
+  "reproduction": "Run tools/benchmark_door_full.py --method METHOD --steps 20 with identical explicit model/reference/native-library in frozen and merged checkouts. Compare saved algo/optimizer, collector, replay and RNG state with tools/validate_door_full_recovery.py:identical, excluding wall timers. Re-run ndm_gym.eval_door_full on each of the six original final checkpoints in the merged checkout and compare all saved physical arrays, per-episode metrics and starts. This is not additional full-budget training."
+}
