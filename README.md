@@ -25,18 +25,18 @@ The algorithms share one pipeline within each task:
 - **Muscles:** MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp).
 - **Hands:** hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp).
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; policies on four of HDMI's human-object interaction tasks; below, three of RoboKit's examples planned on a world model" width="100%"/></p>
-<p align="center"><i>Top: SuperTrack on LAFAN1, two G1s, the muscles and a hand-object clip (half speed). Middle: HDMI's tasks, trained in the world model (1.5x speed). Below: RoboKit's MPC planned on a world model; the reference in blue.</i></p>
-<p align="center"><sub>Renders of motions from LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), InterHuman (CC BY-NC-SA 4.0) and MuscleVAE (LAFAN1's, on its character), of SPIDER's retarget of an OakInk grasp, of HDMI's tasks, and of RoboKit's examples (G1 box carrying tracks an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; one of HDMI's human-object interaction tasks; RoboKit's Go2 jumping example planned on a world model" width="100%"/></p>
+<p align="center"><i>SuperTrack on LAFAN1, two G1s, the muscles and a hand-object clip (half speed).<br>An HDMI task trained in the world model (1.5x speed); RoboKit's Go2 jumping, planned on a world model.</i></p>
+<p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; also on MuscleVAE's character), InterHuman (CC BY-NC-SA 4.0), SPIDER's OakInk retarget, HDMI and RoboKit, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 <details>
 <summary>The teaser's runs and errors</summary>
 
-| row | runs | tracking error, speed-up |
+| tiles | runs | tracking error, speed-up |
 |---|---|---|
-| top | SuperTrack's selected configuration on each task, MLP world model; the hand-object clip at half speed, its last frame held | over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.1 mm (the spray bottle's position) |
-| middle | four of HDMI's human-object interaction tasks, one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
-| below | RoboKit's MPC examples planned on SuperTrack's world model and executed on MuJoCo Warp; the reference in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
+| LAFAN1, two G1s, muscles, hand-object | SuperTrack's selected configuration on each task, MLP world model; the hand-object clip at half speed, its last frame held | over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.1 mm (the spray bottle's position) |
+| human-object interaction | HDMI's carry_box_over_shoulder, one policy, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
+| RoboKit planning | RoboKit's Go2 jumping example, planned on SuperTrack's world model and executed on MuJoCo Warp; its foot targets in blue | planning 2.1x faster than on MuJoCo Warp |
 
 </details>
 
@@ -333,21 +333,8 @@ One policy on the G1 tracks all 40 LAFAN1 clips, retargeted to the robot; traini
 version) for the fewest failed clips under pushes, either fast configuration for speed.
 
 <!-- videos:begin -->
-<table>
-<tr>
-<td><img src="docs/media/final/dance1_subject2.webp" alt="dance1_subject2"/></td>
-<td><img src="docs/media/final/fightAndSports1_subject1.webp" alt="fightAndSports1_subject1"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/final/jumps1_subject1.webp" alt="jumps1_subject1"/></td>
-<td><img src="docs/media/final/sprint1_subject2.webp" alt="sprint1_subject2"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/final/fallAndGetUp2_subject2.webp" alt="fallAndGetUp2_subject2"/></td>
-<td><img src="docs/media/final/fight1_subject2.webp" alt="fight1_subject2"/></td>
-</tr>
-</table>
-<p align="center"><i>SuperTrack's selected configuration, seed 2, 3 h checkpoint on an A100. One clip per motion category, its 10 s with the most motion. Blue ghost: the reference.</i></p>
+<p align="center"><img src="docs/media/final/grid.webp" alt="SuperTrack tracking six LAFAN1 clips, with the MLP world model and with the RigidFormer" width="773"/></p>
+<p align="center"><i>SuperTrack: MLP, the selected configuration, seed 2; RigidFormer, every speed option, seed 8 (12,677 iterations).<br>3 h checkpoints on an A100; one clip per motion category, its 10 s with the most motion. Blue ghost: the reference.</i></p>
 <!-- videos:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
@@ -381,30 +368,6 @@ RigidFormer: final configurations with every speed option, fresh seeds 7-9.
 | failed clips under root pushes of 1 m/s every 2 s | 5.3 ± 1.2 | 1.3 ± 0.6 |
 | failed clips under root pushes of 2 m/s every 2 s | 24.3 ± 3.1 | 9.0 ± 2.0 |
 | iterations in 3 h | 12,676 | 10,710 |
-
-<details>
-<summary><b>Videos with the RigidFormer world model</b></summary>
-
-<!-- videos_rf:begin -->
-<table>
-<tr>
-<td><img src="docs/media/rf/dance1_subject2.webp" alt="dance1_subject2"/></td>
-<td><img src="docs/media/rf/fightAndSports1_subject1.webp" alt="fightAndSports1_subject1"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/rf/jumps1_subject1.webp" alt="jumps1_subject1"/></td>
-<td><img src="docs/media/rf/sprint1_subject2.webp" alt="sprint1_subject2"/></td>
-</tr>
-<tr>
-<td><img src="docs/media/rf/fallAndGetUp2_subject2.webp" alt="fallAndGetUp2_subject2"/></td>
-<td><img src="docs/media/rf/fight1_subject2.webp" alt="fight1_subject2"/></td>
-</tr>
-</table>
-<p align="center"><i>SuperTrack-RF, the final configuration with every speed option, seed 8, 3 h checkpoint (12,677 iterations) on an A100. Same clips and windows.</i></p>
-<!-- videos_rf:end -->
-<p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
-
-</details>
 
 ```bash
 SPEED="--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"   # the speed options of both world models
@@ -579,12 +542,7 @@ Seeds 1-3, at most 3 h on an A100 40GB PCIe.
 **In short:** `muscles-supertrack-rf` for position tracking (`muscles-supertrack` with the MLP); `muscles-supermimic`
 and `muscles-supermimic-rf` have the lower joint error (9.7 and 8.7 deg against 10.6 and 10.1).
 
-<table>
-<tr>
-<td><img src="docs/media/musclevae/policies/walk.webp" alt="walk"/></td>
-<td><img src="docs/media/musclevae/policies/run.webp" alt="run"/></td>
-</tr>
-</table>
+<p align="center"><img src="docs/media/musclevae/policies/grid.webp" alt="SuperTrack on MuscleVAE's walk and run" width="804"/></p>
 <p align="center"><i>SuperTrack on MuscleVAE's walk and run: its best seed of the 3 h runs (seed 1, iteration 26,000), muscles red by activation, the reference in blue. Root-frame MPJPE over the clips' episodes: 24.9 mm (walk) and 46.6 mm (run).</i></p>
 <p align="center"><sub>Renders of MuscleVAE's walk and run clips (LAFAN1 motions, © 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
@@ -772,28 +730,7 @@ Before: LAFAN1 and the two G1s already used CUDA graphs for updates (`--wm_cudag
 The G1 tracks HDMI's 13 human-object interaction tasks; the world model also predicts the contact forces. Tracking
 results on these tasks are not reported here.
 
-<table>
-<tr>
-<td align="center"><img src="docs/media/hoi/policies/move_suitcase.webp" alt="move_suitcase"/><br><sub>move_suitcase</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/carry_box_over_shoulder.webp" alt="carry_box_over_shoulder"/><br><sub>carry_box_over_shoulder</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/carry_and_place_bread_box.webp" alt="carry_and_place_bread_box"/><br><sub>carry_and_place_bread_box</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/media/hoi/policies/move_foam.webp" alt="move_foam"/><br><sub>move_foam</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/move_stool-climb.webp" alt="move_stool-climb"/><br><sub>move_stool-climb</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/push_box.webp" alt="push_box"/><br><sub>push_box</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/media/hoi/policies/push_door-hand.webp" alt="push_door-hand"/><br><sub>push_door-hand</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/open_door-feet.webp" alt="open_door-feet"/><br><sub>open_door-feet</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/open_foldchair-sit.webp" alt="open_foldchair-sit"/><br><sub>open_foldchair-sit</sub></td>
-</tr>
-<tr>
-<td align="center"><img src="docs/media/hoi/policies/roll_ball-hand.webp" alt="roll_ball-hand"/><br><sub>roll_ball-hand</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/topple_wood_board_and_cross.webp" alt="topple_wood_board_and_cross"/><br><sub>topple_wood_board_and_cross</sub></td>
-<td align="center"><img src="docs/media/hoi/policies/truman.webp" alt="truman"/><br><sub>truman</sub></td>
-</tr>
-</table>
+<p align="center"><img src="docs/media/hoi/policies/grid.webp" alt="One policy per task on twelve of HDMI's human-object interaction tasks" width="100%"/></p>
 <p align="center"><i>One policy per task on twelve of HDMI's thirteen tasks, trained in the world model and run in the simulator (evaluation seed 1). Each episode runs to the end of its clip; 8 s of it are shown.</i></p>
 <p align="center"><sub>Renders of policies tracking HDMI's reference motions, with the robot and object models of HDMI's release (its repository has no license), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
@@ -835,13 +772,7 @@ at the planning horizon, in units of one true step's spread ([details](benchmark
 **In short:** plan on SuperTrack's acceleration model, the fit with the lowest held-out error on all three tasks;
 SuperMimic's increment model (0.643 / 0.619 / 0.0297) has not been planned with yet.
 
-<table>
-<tr>
-<td align="center" width="33%"><img src="docs/media/robokit/g1_carry.webp" alt="A G1 carrying a box, planned on the world model" width="100%"><br><sub>G1 box carrying</sub></td>
-<td align="center" width="33%"><img src="docs/media/robokit/g1_climb.webp" alt="A G1 climbing a box, planned on the world model" width="100%"><br><sub>G1 climbing</sub></td>
-<td align="center" width="33%"><img src="docs/media/robokit/go2_jump.webp" alt="A Go2 jumping between targets, planned on the world model" width="100%"><br><sub>Go2 jumping</sub></td>
-</tr>
-</table>
+<p align="center"><img src="docs/media/robokit/grid.webp" alt="RoboKit's G1 box carrying, G1 climbing and Go2 jumping, planned on the world model" width="100%"/></p>
 <p align="center"><sub>In translucent blue, the example's reference: the motion the G1 tracks and the box's, and Go2's foot targets. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 | task | simulation step | planning time | outcome, seeds 0-4 |

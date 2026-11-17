@@ -26,12 +26,13 @@ docs/media/robokit holds renders of RoboKit's (https://github.com/openrobokit/ro
 Go2 jumping examples, planned on this library's world model and executed in MuJoCo Warp, with Unitree's G1 model
 (BSD-3-Clause) and MuJoCo Menagerie's Unitree Go2 (https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause). The G1
 climbing render tracks a climbing motion capture of OmniRetarget / Holosoma (https://github.com/amazon-far/holosoma;
-Apache-2.0). The G1 box carrying render (g1_carry.webp) tracks a clip of OMOMO (https://github.com/lijiaman/omomo_release, whose
-data terms are not stated) that RoboKit retargets; it is for non-commercial illustration only and is not covered by the MIT
-license in LICENSE.
+Apache-2.0). The G1 box carrying render (g1_carry.webp, and its tile in grid.webp) tracks a clip of OMOMO
+(https://github.com/lijiaman/omomo_release, whose data terms are not stated) that RoboKit retargets; it is for non-commercial
+illustration only and is not covered by the MIT license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in three rows. In the first, the LAFAN1 tracking tile is under the terms of
-the docs/media/final paragraph, the Two G1s tile under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles tile under those of
-docs/media/musclevae and the Hand-object tile under those of docs/media/hand. The second row's four tiles are renders of
-HDMI's tasks, under the terms of the docs/media/hoi paragraph, and the third row's are the docs/media/robokit renders, with
-the sources and terms that paragraph names. No part of it is covered by the MIT license in LICENSE.
+docs/media/teaser.webp puts 6 s of such renders in two rows. In the first, the LAFAN1 tracking tile is under the terms of
+the docs/media/final paragraph, the Two G1s tile under CC BY-NC-SA 4.0 as docs/media/boxing and the Muscles tile under
+those of docs/media/musclevae. In the second, the Hand-object tile is under those of docs/media/hand, the Human-object
+interaction tile, a render of HDMI's carry_box_over_shoulder task, under those of the docs/media/hoi paragraph, and the
+RoboKit planning tile, the docs/media/robokit render of Go2 jumping, under the sources and terms that paragraph names. No
+part of it is covered by the MIT license in LICENSE.
