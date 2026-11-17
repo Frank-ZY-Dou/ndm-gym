@@ -60,7 +60,7 @@ class HandSuperMimic:
         if not 0 < self.bptt_decay <= 1:
             raise ValueError(f"--bptt_decay must be in (0, 1], got {self.bptt_decay}")
         goal_dim = task.goal_frame_dim * self.goal_frames
-        self.wm = HandWorldModel(kin.num_joints, kin.palm_translations, kin.palm_keypoints, hidden=args.wm_hidden, act=args.wm_act,
+        self.wm = HandWorldModel(kin.num_joints, kin.palm_translations, kin.palm_keypoints.tolist(), hidden=args.wm_hidden, act=args.wm_act,
                                  layer_norm=not args.wm_no_ln, kind=self.kind).to(dev)  # fmt: skip
         self.pi = HandPolicy(task.obs_dim, goal_dim, kin.num_joints).to(dev)
         self.critic = Critic(task.obs_dim + goal_dim).to(dev)

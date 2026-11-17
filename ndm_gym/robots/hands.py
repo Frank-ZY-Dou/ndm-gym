@@ -83,9 +83,10 @@ class HandKinematics:
             raise ValueError(f"the scene has {len(hands)} palms' sites for {self.num_hands} hands' actuators")
         site_ids = [s for sites in hands for s in sites]
         self.num_keypoints = len(site_ids)
-        self.palm_keypoints = [sum(len(h) for h in hands[:i]) for i in range(self.num_hands)]
-        self.hand_keypoints = [(start, start + len(sites)) for start, sites in zip(self.palm_keypoints, hands, strict=True)]
-        self.fingertip_keypoints = [k for k in range(self.num_keypoints) if k not in self.palm_keypoints]
+        palms = [sum(len(h) for h in hands[:i]) for i in range(self.num_hands)]
+        self.hand_keypoints = [(start, start + len(sites)) for start, sites in zip(palms, hands, strict=True)]
+        self.palm_keypoints = torch.tensor(palms, device=device)
+        self.fingertip_keypoints = torch.tensor([k for k in range(self.num_keypoints) if k not in palms], device=device)
         order = sorted({b for s in site_ids for b in chain_of(s)})  # MuJoCo orders parents before children
         local = {0: -1, **{b: i for i, b in enumerate(order)}}
         tensor = lambda x: torch.tensor(x, dtype=torch.float32, device=device)  # noqa: E731
@@ -136,7 +137,7 @@ class HandKinematics:
                     R = mat_mat(R, Rj)
             pos.append(p), rot.append(R)
         keypoints = torch.stack([pos[b] + mat_vec(rot[b], self.site_pos[k]) for k, b in enumerate(self.site_body)], -2)
-        return keypoints, torch.stack([rot[self.site_body[k]] for k in self.palm_keypoints], -3)
+        return keypoints, torch.stack([rot[self.site_body[start]] for start, _ in self.hand_keypoints], -3)
 
     def fingertips_about_palms(self, keypoints: torch.Tensor, palm_R: torch.Tensor) -> torch.Tensor:
         """Every fingertip about its hand's palm, in that palm's frame: (..., num_keypoints - num_hands, 3)."""

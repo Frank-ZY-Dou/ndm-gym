@@ -88,7 +88,7 @@ def test_kinematics_match_mujoco(fingers, palm_bodies, sides):
     kin = HandKinematics(model, "cpu")
     hands = len(sides)
     assert (kin.num_joints, kin.num_keypoints, kin.num_hands) == (hands * (6 + sum(fingers.values())), hands * (1 + len(fingers)), hands)
-    assert kin.palm_keypoints == [h * (1 + len(fingers)) for h in range(hands)]
+    assert kin.palm_keypoints.tolist() == [h * (1 + len(fingers)) for h in range(hands)]
     idx, data = scene_indices(model), mujoco.MjData(model)
     names = [f"{side}_{part}" for side in sides for part in ("palm", *(f"{finger}_tip" for finger in fingers))]
     sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, n) for n in names]
@@ -98,7 +98,7 @@ def test_kinematics_match_mujoco(fingers, palm_bodies, sides):
         data.qpos[idx["qpos"]] = q[i].numpy()
         mujoco.mj_kinematics(model, data)
         np.testing.assert_allclose(keypoints[i].numpy(), data.site_xpos[sites], atol=1e-5)
-        for hand, k in enumerate(kin.palm_keypoints):
+        for hand, k in enumerate(kin.palm_keypoints.tolist()):
             np.testing.assert_allclose(palm_R[i, hand].numpy(), data.site_xmat[sites[k]].reshape(3, 3), atol=1e-5)
 
 
