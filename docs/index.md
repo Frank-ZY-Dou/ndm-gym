@@ -2,11 +2,11 @@
 
 **Neural Dynamics Modeling Gym**: neural world models for controlling physical agents.
 
-NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1 motion
-tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with 29 DoF),
-MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp) and hand-object tracking with the XHand, the Allegro hand and the
-Inspire hand (MuJoCo-Warp). The neural dynamics models (NDMs) also serve as simulators, for instance in RoboKit's MPC planner and
-mbrl-lib's CEM planner.
+NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1
+motion tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with
+29 DoF), MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp), hand-object tracking with the XHand, the Allegro hand
+and the Inspire hand, and a racing quadrotor tracking flown trajectories (both MuJoCo-Warp). The neural dynamics models (NDMs)
+also serve as simulators, for instance in RoboKit's MPC planner and mbrl-lib's CEM planner.
 
 - [Leaderboard](leaderboard.md): each task's fastest and most accurate configuration, and the named configurations.
 - [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`);
@@ -14,7 +14,8 @@ mbrl-lib's CEM planner.
   timed beside.
 - [World models](world_models.md): acceleration and increment models, MLP and RigidFormer backbones, inference copies.
 - [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks, MuscleVAE's character, hand-object
-  tracking, and [RoboKit's](tasks/robokit.md) and [mbrl-lib's](tasks/mbrl.md) planners on a world model.
+  tracking, [quadrotor trajectory tracking](tasks/quadrotor.md), and [RoboKit's](tasks/robokit.md) and
+  [mbrl-lib's](tasks/mbrl.md) planners on a world model.
 - [Evaluation](quickstart.md): tracking errors, push robustness, held-out clips, videos and offline world-model fits.
 - [Coverage](coverage.md): every method, simulator, dataset and robot model the library covers, with its link.
 

@@ -96,3 +96,21 @@ def test_block_cells_of_its_own(tmp_path):
     assert f[40:110, 160:236, 0].mean() > 2 * f[40:110, 160:236, 2].mean() and f[40:110, 264:340, 2].mean() > 2 * f[40:110, 264:340, 0].mean()
     r = _run(out, "--columns", "2", "--tile", "64", "48", *tiles[:-10], "--block", "B", "2", "1", "100", "90", *tiles[-4:])
     assert r.returncode != 0 and "equally tall" in r.stderr
+
+
+def test_blocks_in_rows_given(tmp_path):
+    """--row_blocks: the blocks of each row in place of rows of --columns; counts that do not add up are refused."""
+    for name, rgb in (("red", (220, 40, 40)), ("green", (40, 220, 40)), ("blue", (40, 40, 220))):
+        _webp(str(tmp_path / f"{name}.webp"), rgb, 4, size=(64, 48))
+    blocks = [a for name in ("red", "green", "blue") for a in ("--block", name.upper(), "1", "1", "--clip", str(tmp_path / f"{name}.webp"))]
+    out = str(tmp_path / "rows.webp")
+    r = _run(out, "--columns", "2", "--row_blocks", "1", "2", "--tile", "64", "48", "--quality", "90", *blocks)
+    assert r.returncode == 0, r.stderr
+    with Image.open(out) as im:
+        assert im.size == (2 * 64 + 16, 2 * (24 + 48) + 16)  # RED alone and centred in the first row, GREEN and BLUE in the second
+        im.seek(1)
+        f = np.asarray(im.convert("RGB")).astype(float)
+    for (x0, x1, y0, y1), ch in (((46, 98, 30, 66), 0), ((6, 58, 118, 154), 1), ((86, 138, 118, 154), 2)):
+        assert f[y0:y1, x0:x1, ch].mean() > 1.8 * np.delete(f[y0:y1, x0:x1], ch, axis=2).mean()
+    r = _run(out, "--columns", "2", "--row_blocks", "2", "2", "--tile", "64", "48", *blocks)
+    assert r.returncode != 0 and "--row_blocks" in r.stderr

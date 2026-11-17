@@ -2,11 +2,11 @@
 
 A racing quadrotor tracks flown trajectories: the autonomous flights of
 [Race Against the Machine](https://github.com/tii-racing/drone-racing-dataset) (Bosello et al., RA-L 2024; the data CC BY
-4.0), a 5-inch racing drone recorded by motion capture at 275 Hz on an ellipse (up to 21.8 m/s), a lemniscate (up to
-10.2 m/s) and a 3-D race track of seven gates (up to 21.4 m/s), flown by its controller (the autonomous flights, two or
-three smooth laps) and by human pilots (the piloted flights: ten or more laps of the ellipse and the lemniscate at up to
-9.4 m/s with a line of their own on every lap, and a professional pilot's laps of the race track at up to 20.9 m/s and
-9 g), on MuJoCo-Warp directly (no Isaac Lab;
+4.0), a 5-inch racing drone recorded by motion capture at 275 Hz on an ellipse, a lemniscate and a 3-D race track of
+seven gates, flown by its controller (the autonomous flights, two or three smooth laps; the benchmark's at up to 21.7,
+10.0 and 21.2 m/s) and by human pilots (the piloted flights: the benchmark's 14 laps of the ellipse and 12 of the
+lemniscate at up to 8.3 m/s with a line of their own on every lap, and a professional pilot's 8 laps of the race track at
+up to 19.3 m/s and 9 g), on MuJoCo-Warp directly (no Isaac Lab;
 `ndm_gym/sim/rigid/quadrotor_sim.py`). It is the library's flying embodiment: an underactuated rigid body without contacts,
 with fast dynamics and four commands.
 
@@ -40,9 +40,11 @@ of 20 ms (roll, pitch) and 50 ms (yaw) and the torque limited. Both are MuJoCo a
 physics rate (400 Hz) inside the simulator, and a policy's command is held for a control step (100 Hz).
 
 **How the model fits the data.** The force that the flights' accelerations need, against gravity and the model's drag, lies
-along the motion-captured body z axis (the cosine's median is 1.000 on the three tasks' flights, its 5th percentile 0.987
-or more) and stays below the model's largest thrust (at most 58.5 of 64.0 N, on the ellipse). The flights are therefore
-flyable by the model. The results are tracking in simulation; nothing is claimed about the real drone.
+along the motion-captured body z axis (the cosine's median is 1.000 on the three tasks' flights, its 5th percentile 0.987 or
+more) and stays below the model's largest thrust (at most 58.5 of 64.0 N, on the ellipse). These flights are therefore
+flyable by the model; the professional pilot's race track needs up to 77 N at its peaks, where the command is clamped ([the
+piloted flights](../../benchmarks/quadrotor_racing_tracking/results.md#the-piloted-flights)). The results are tracking in
+simulation; nothing is claimed about the real drone.
 
 ## Task
 

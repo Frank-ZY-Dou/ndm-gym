@@ -3,7 +3,7 @@
 The --clip tiles fill rows of --columns in their order (a shorter last row centred). With --block NAME COLS ROWS [W H], the
 clips that follow fill that block's COLS x ROWS cells of --tile (or W x H) instead, each the first cells where it fits, row by
 row (a clip may span ROWS x COLS cells, given after its box), with NAME above the block; the blocks, equally tall, fill rows of
---columns, --block_gap apart, each row centred.
+--columns (or rows of the counts --row_blocks gives), --block_gap apart, each row centred.
 A clip is an animated WebP (read with Pillow, by its frames' durations) or anything ffmpeg reads; it starts at START s
 (default 0), shows its whole frame or the box X Y W H in its pixels, and is scaled to its tile (Lanczos; the frame or the box
 must have the tile's aspect). The tiles start together at --fps. A tile that ends sooner holds its last frame until the
@@ -41,8 +41,9 @@ The README's grids, from the repository's root:
       (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
-marks out (mbrl-lib's: tools/render_mbrl.py --no_mark):
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --tile 256 192 --seconds 6 --quality 70 --max_mb 9 \\
+marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the racing quadrotor's a row of its own, four of its renders (the
+piloted race track's from its grid) in cells as wide as the blocks above:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 --tile 256 192 --seconds 6 --quality 60 --max_mb 11 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -55,7 +56,10 @@ marks out (mbrl-lib's: tools/render_mbrl.py --no_mark):
       --clip topple_wood_board_and_cross.mp4 0 400 130 1120 840 \\
       --block "RoboKit planning" 2 2 --clip $M/robokit/g1_carry.webp 0.2 375 100 343 520 2 1 \\
       --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
-      --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4
+      --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4 \\
+      --block "Racing quadrotor" 4 1 525 388 --clip $M/quadrotor/race_track.webp 0 60 0 731 540 \\
+      --clip $M/quadrotor/grid.webp 3 770 392 244 180 --clip $M/quadrotor/ellipse.webp 0 60 0 731 540 \\
+      --clip $M/quadrotor/lemniscate.webp 0 60 0 731 540
 """
 
 import argparse
@@ -127,13 +131,18 @@ class InOrder(argparse.Action):
 
 def place_blocks(blocks, tiles, gap, block_gap, per_row, band):
     """The block layout: (W, H, each tile's (x, y, w, h), each block's name and centre in its band). Blocks of COLS x ROWS cells
-    of their size fill rows of ``per_row``, each row centred; every block must be equally tall. A block's tiles take the first
-    cells where they fit, row by row, spanning ROWS x COLS cells each, and must cover its cells exactly."""
+    of their size fill rows of ``per_row`` (a list: the blocks of each row), each row centred; every block must be equally tall.
+    A block's tiles take the first cells where they fit, row by row, spanning ROWS x COLS cells each, and must cover its cells
+    exactly."""
     sizes = [(c * cw + (c - 1) * gap, r * ch + (r - 1) * gap) for _, c, r, _, (cw, ch) in blocks]
     bh = sizes[0][1]
     if any(h != bh for _, h in sizes):
         raise ValueError(f"--block: every block must be equally tall (ROWS x H and the gaps), not {sorted({h for _, h in sizes})}")
-    rows_of = [range(i, min(i + per_row, len(blocks))) for i in range(0, len(blocks), per_row)]
+    if isinstance(per_row, int):
+        rows_of = [range(i, min(i + per_row, len(blocks))) for i in range(0, len(blocks), per_row)]
+    else:  # --row_blocks
+        ends = np.cumsum(per_row).tolist()
+        rows_of = [range(e - k, e) for k, e in zip(per_row, ends)]
     widths = [sum(sizes[b][0] for b in row) + (len(row) - 1) * block_gap for row in rows_of]
     W, H = max(widths), len(rows_of) * (band + bh + block_gap) - block_gap
     places, names = [None] * len(tiles), []
@@ -167,6 +176,8 @@ def main():
                    help="NAME COLS ROWS [W H]: a block of COLS x ROWS cells of --tile (or W x H), its NAME above it; "
                         "the clips that follow fill it")  # fmt: skip
     p.add_argument("--columns", type=int, required=True, help="tiles per row, or with --block blocks per row")
+    p.add_argument("--row_blocks", type=int, nargs="+", default=None, metavar="N",
+                   help="with --block: the blocks of each row, in order, instead of rows of --columns")  # fmt: skip
     p.add_argument("--block_gap", type=int, default=16, help="pixels between blocks")
     p.add_argument("--tile", type=int, nargs=2, default=(320, 180), metavar=("W", "H"), help="a tile's size in pixels")
     p.add_argument("--fps", type=float, default=20.0)
@@ -206,6 +217,8 @@ def main():
         p.error(f"--row_labels: {len(a.row_labels)} names for {R} rows")
     if a.names is not None and (len(a.names) != n or a.col_labels is not None):
         p.error(f"--names: {len(a.names)} names for {n} tiles, and not with --col_labels")
+    if a.row_blocks is not None and (not blocks or min(a.row_blocks) < 1 or sum(a.row_blocks) != len(blocks)):
+        p.error(f"--row_blocks {' '.join(map(str, a.row_blocks))}: blocks per row, with --block, adding up to its {len(blocks)} blocks")
     if a.mark and a.names is None and a.col_labels is None and not blocks:
         p.error("--mark goes in the band of names above the tiles: give --names, --col_labels or --block")
     look = LIGHT if a.light else DARK
@@ -214,7 +227,7 @@ def main():
     font = ImageFont.truetype(BOLD, round(15 * s)) if a.light else ImageFont.truetype(FONT, 13)
     if blocks:
         band = round(30 * s) if a.light else 24
-        W, H, places, top = place_blocks(blocks, tiles, a.gap, a.block_gap, C, band)
+        W, H, places, top = place_blocks(blocks, tiles, a.gap, a.block_gap, a.row_blocks or C, band)
         left, row_y = 0, []
     else:
         band = (round(30 * s) if a.light else 24) if (a.names or a.col_labels) else 0
@@ -250,7 +263,7 @@ def main():
     if a.mark:  # tools/render.py's mark, in the teaser's grey, clear of the names in the top band
         small = ImageFont.truetype(BOLD, round(11 * s))
         x0 = draw.textbbox((W - 6, band / 2), "NDM Gym", font=small, anchor="rm")[0]
-        for t, xy in top[:C]:
+        for t, xy in top[: a.row_blocks[0] if a.row_blocks else C]:  # the top row's names
             if draw.textbbox(xy, t, font=font, anchor="mm")[2] + 8 > x0:
                 raise ValueError(f"the mark would touch the name {t!r} in the top band: shorten it, or put a shorter name last in the top row")
         draw.text((W - 6, band / 2), "NDM Gym", fill=MARK_INK, font=small, anchor="rm")

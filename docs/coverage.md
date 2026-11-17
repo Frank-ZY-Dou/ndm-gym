@@ -60,7 +60,8 @@ this repository yet.
 | OmniRetarget (holosoma) | [amazon-far/holosoma](https://github.com/amazon-far/holosoma) | RoboKit's G1 climbing |
 | SPIDER's retargets | [retarget/retarget_full](https://huggingface.co/datasets/retarget/retarget_full) | the hands' clips |
 | HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
-| Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset) | the quadrotor's flights, autonomous and piloted |
+| Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset), [paper](https://doi.org/10.1109/LRA.2024.3371288) | the quadrotor's flights, autonomous and piloted |
+| On Your Own | [paper](https://doi.org/10.1109/LRA.2026.3653405), [release v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0) | the professional pilot's race-track flights |
 
 ## Robots and hands
 
