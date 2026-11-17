@@ -249,6 +249,9 @@ iterations, the three clips): the learning rate at 2e-4 and 8e-4 (4e-4 in both p
 imagined noise 0.1 for 0.2, SuperMimic's action noise 0.2 for 0.3) and the failure's weight or the return's horizon
 (SuperTrack `--st_fail_w 5` for 2, SuperMimic `--gamma 0.995` for 0.99). Iterations to the target are the first
 checkpoint from which every later one has a success of 0.99 or more with the object within 10 mm (-: none by 6,000).
+The screen's runs trained on an A100 40GB, but for the Inspire hand's four SuperTrack arms and SuperMimic's `--lr 2e-4`
+arm, which trained on an RTX 2080 Ti (fp32, as all): a development reading of iterations and errors, not of time; every
+configuration the rules chose then trained on A100 40GB with three seeds.
 
 | hand | | arm | iterations to the target, apple / spray bottle / can ↓ | object position at 6,000, mean of the clips ↓ |
 |---|---|---|---|---|
