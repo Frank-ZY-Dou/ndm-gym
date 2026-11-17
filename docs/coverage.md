@@ -53,6 +53,7 @@ this repository yet.
 | InterHuman (InterGen) | [tr3e/InterGen](https://github.com/tr3e/InterGen) | the two-person clip |
 | OMOMO | [lijiaman/omomo_release](https://github.com/lijiaman/omomo_release) | RoboKit's G1 box carrying |
 | OmniRetarget (holosoma) | [amazon-far/holosoma](https://github.com/amazon-far/holosoma) | RoboKit's G1 climbing |
+| Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset) | the quadrotor's flights, autonomous and piloted |
 
 ## Robots and hands
 
@@ -67,6 +68,7 @@ this repository yet.
 | Wuji Hand 1, Wuji Hand 2.2 | dexterous hands | [openrobokit/robokit](https://github.com/openrobokit/robokit) | hand-object tracking with our own retargets, RoboKit's cube *(ongoing)* |
 | Sharpa hand | dexterous hand | [openrobokit/robokit](https://github.com/openrobokit/robokit) | RoboKit's pen *(ongoing)* |
 | Adroit hand | dexterous hand, 28 actuators | [the contributed pull request](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3) | door opening *(ongoing)* |
+| Race Against the Machine's racer | 5-inch racing quadrotor | written here from the paper's specification (`ndm_gym/robots/quadrotor.py`) | trajectory tracking |
 | MuscleVAE's character | muscle-actuated humanoid | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | tracking with muscles |
 | ASE's humanoid | sword-and-shield character | [xbpeng/MimicKit](https://github.com/xbpeng/MimicKit) | MimicKit's methods *(ongoing)* |
 

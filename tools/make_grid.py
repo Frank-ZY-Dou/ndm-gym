@@ -35,6 +35,10 @@ The README's grids, from the repository's root:
       --clip $M/robokit/g1_carry.webp --clip $M/robokit/g1_climb.webp --clip $M/robokit/go2_jump.webp
   python tools/make_grid.py $M/mbrl/grid.webp --columns 2 --tile 400 300 --col_labels cart-pole pusher --clip cartpole.mp4 --clip pusher.mp4
       (tools/render_mbrl.py's renders)
+  python tools/make_grid.py $M/quadrotor/grid.webp --columns 3 --tile 320 180 --quality 45 --hold 0.8 --max_mb 8 --col_labels ellipse lemniscate "race track" \\
+      --row_labels "autonomous\\nSuperTrack" "autonomous\\nSuperMimic" "piloted\\nSuperTrack" "piloted\\nSuperMimic" \\
+      $(for r in st sm stp smp; do for t in ellipse lemniscate race_track; do echo --clip ${r}_$t.webp; done; done)
+      (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark):

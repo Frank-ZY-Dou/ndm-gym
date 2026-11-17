@@ -101,6 +101,7 @@ nav:
           - tasks/muscles.md
           - Design: musclevae_design.md
       - Hand-object tracking: tasks/hand.md
+      - Quadrotor trajectory tracking: tasks/quadrotor.md
       - RoboKit's planner on a world model: tasks/robokit.md
       - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:

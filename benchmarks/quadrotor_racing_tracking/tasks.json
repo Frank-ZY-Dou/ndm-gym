@@ -1,0 +1,82 @@
+{
+  "dataset": "https://github.com/tii-racing/drone-racing-dataset",
+  "release": "v3.0.0",
+  "tasks": [
+    {
+      "id": "ellipse",
+      "flights": [
+        "flight-01a-ellipse"
+      ]
+    },
+    {
+      "id": "lemniscate",
+      "flights": [
+        "flight-07a-lemniscate"
+      ]
+    },
+    {
+      "id": "race_track",
+      "flights": [
+        "flight-13a-trackRATM"
+      ]
+    },
+    {
+      "id": "ellipse_piloted",
+      "flights": [
+        "flight-01p-ellipse"
+      ]
+    },
+    {
+      "id": "lemniscate_piloted",
+      "flights": [
+        "flight-07p-lemniscate"
+      ]
+    },
+    {
+      "id": "race_track_piloted",
+      "flights": [
+        "flight-13p-trackRATM"
+      ]
+    }
+  ],
+  "all_flights": [
+    "flight-01a-ellipse",
+    "flight-02a-ellipse",
+    "flight-03a-ellipse",
+    "flight-04a-ellipse",
+    "flight-05a-ellipse",
+    "flight-06a-ellipse",
+    "flight-07a-lemniscate",
+    "flight-08a-lemniscate",
+    "flight-09a-lemniscate",
+    "flight-10a-lemniscate",
+    "flight-11a-lemniscate",
+    "flight-12a-lemniscate",
+    "flight-13a-trackRATM",
+    "flight-14a-trackRATM",
+    "flight-15a-trackRATM",
+    "flight-16a-trackRATM",
+    "flight-17a-trackRATM",
+    "flight-18a-trackRATM"
+  ],
+  "piloted_flights": [
+    "flight-01p-ellipse",
+    "flight-02p-ellipse",
+    "flight-03p-ellipse",
+    "flight-04p-ellipse",
+    "flight-05p-ellipse",
+    "flight-06p-ellipse",
+    "flight-07p-lemniscate",
+    "flight-08p-lemniscate",
+    "flight-09p-lemniscate",
+    "flight-10p-lemniscate",
+    "flight-11p-lemniscate",
+    "flight-12p-lemniscate",
+    "flight-13p-trackRATM",
+    "flight-14p-trackRATM",
+    "flight-15p-trackRATM",
+    "flight-16p-trackRATM",
+    "flight-17p-trackRATM",
+    "flight-18p-trackRATM"
+  ]
+}
