@@ -13,7 +13,7 @@ RECIPE = ("--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon
 RF_RECIPE = RECIPE.replace(" --wm_hidden 1024 1024 1024", "")  # the recipe without the MLP's size
 RESETS = "--fail_reset 0.3 --bin_fix --eprobe_share 0.15 --eprobe_graph --eprobe_async 20 --eprobe_start 1000 --eprobe_every 125 --eprobe_decay 0.7"
 SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
-# speed options of the 3 h confirmation runs: SPEED for both backbones (SuperMimic's RigidFormer runs also --critic_cudagraphs), RF_SPEED
+# speed options of the 3 h runs: SPEED for both backbones (SuperMimic's runs also --critic_cudagraphs), RF_SPEED the
 # RigidFormer's own
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
@@ -36,10 +36,12 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 CONFIGS = {
     "train": {
         "lafan1-supertrack-accurate": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {SPEED} --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB with the speed options (about 35,700 iterations): return 0.861 +- 0.003, "
-                                       "MPJPE 14.5 +- 0.2 mm (seeds 7-9)"),
-        "lafan1-supermimic-accurate": ("--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB: return 0.824 +- 0.013, MPJPE 28.4 +- 0.5 mm (seeds 1-3)"),
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 36,200 iterations): return "
+                                       "0.857 +- 0.004, MPJPE 15.2 +- 1.0 mm (seeds 7-9)"),
+        "lafan1-supermimic-accurate": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.1 --imag_start_perturb 0.3 --sm_residual {SPEED} "
+                                       "--critic_cudagraphs --max_hours 3",
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 33,800 iterations): return "
+                                       "0.872 +- 0.003, MPJPE 21.2 +- 0.3 mm (seeds 7-9)"),
         "lafan1-supertrack-fast": (f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table "
                                    f"--pi_encode_once {RESETS} {SYSTEMS} {TIMED}",
                                    "LAFAN1: return 0.82 after 4.19 +- 0.16 min on an A100 40GB SXM4, 2.54 +- 0.11 min on an H100 (seeds 0-5)"),
