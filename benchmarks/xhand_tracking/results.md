@@ -26,6 +26,8 @@ SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift cli
 | `apple` | HRDexDB `apple-0` | 102 | 26.2 cm |
 | `oakink_a01002` | OakInk `oakink_0000_right_A01002_00` (a spray bottle) | 86 | 24.3 cm |
 | `can` | DexYCB `dexycb_01_right_002_master_chef_can_20200709_141754_00` | 106 | 32.7 cm |
+| `mustard_bottle` | DexYCB `dexycb_01_right_006_mustard_bottle_20200709_143211_00` | 106 | 24.1 cm |
+| `mug` | DexYCB `dexycb_01_right_025_mug_20200709_150949_00` | 106 | 30.9 cm |
 
 ```bash
 python tools/download_hand_clips.py                    # the clips of tasks.json into data/spider
@@ -388,6 +390,28 @@ synchronized at each boundary, so their sum is not the running iteration:
 
 With three GPUs the steps run at once, so an iteration takes about as long as the slowest: 25.3 ms for SuperTrack (its
 two updates, 24.9 and 24.6 ms) and 33.8 ms for SuperMimic (its policy update with the critic's, 33.3 ms).
+
+## More clips
+
+The mustard bottle and the mug, two more of DexYCB's demonstrations, on the XHand and the Allegro hand. Training and
+evaluation as in [More hands](#more-hands): SuperMimic with `--config hand-supermimic-fast`, 6,000 iterations, training
+seeds 0-2, the last checkpoint; no setting was tuned on these clips.
+
+```bash
+benchmarks/xhand_tracking/run.sh mustard_bottle <seed> data/spider logs/xhand_sm --config hand-supermimic-fast
+ROBOT=allegro benchmarks/xhand_tracking/run.sh mug <seed> data/spider logs/allegro_sm --config hand-supermimic-fast
+```
+
+| hand | task | | seeds | success | object position | object position, last frame | fingertips | object lift |
+|---|---|---|---|---|---|---|---|---|
+| XHand | `mustard_bottle` | reference targets | | 1 % | 157.9 mm | 308.7 mm | 29.1 mm | -4.3 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.7 ± 0.0 mm | 1.1 ± 0.7 mm | 7.1 ± 0.2 mm | 24.2 ± 0.0 cm |
+| | `mug` | reference targets | | 0 % | 136.8 mm | 313.2 mm | 30.3 mm | -0.3 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.9 ± 0.3 mm | 3.8 ± 0.7 mm | 8.9 ± 1.2 mm | 31.0 ± 0.3 cm |
+| Allegro | `mustard_bottle` | reference targets | | 100 % | 22.9 mm | 22.2 mm | 22.7 mm | 23.0 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.0 ± 0.0 mm | 0.7 ± 0.1 mm | 5.0 ± 0.2 mm | 24.1 ± 0.0 cm |
+| | `mug` | reference targets | | 88 % | 50.3 mm | 65.7 mm | 22.5 mm | 24.8 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.5 ± 0.6 mm | 3.0 ± 0.6 mm | 8.1 ± 1.4 mm | 31.0 ± 0.1 cm |
 
 ## Training time
 
