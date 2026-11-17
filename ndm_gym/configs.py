@@ -41,6 +41,9 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
+# manipulation demonstration tracking: the hand task's settings and systems options as the starting point
+ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights {HAND_SYSTEMS}"
+ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -147,6 +150,10 @@ CONFIGS = {
         "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
                                 "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
+    },
+    "train_robomimic": {
+        "robomimic-supertrack-dev": (ROBOMIMIC_ST, "development: the hand task's SuperTrack settings with its systems options (add --task, --demo); not measured yet"),
+        "robomimic-supermimic-dev": (ROBOMIMIC_SM, "development: SuperMimic's defaults with the hand task's systems options (add --task, --demo); not measured yet"),
     },
 }
 
