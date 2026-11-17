@@ -40,8 +40,12 @@ are under [Recommended settings](#-recommended-settings) and [Results](#-results
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | SuperTrack, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm**; SuperMimic 0.804 ± 0.007, 33.1 ± 0.5 mm |
 | **Two G1s**, one two-person clip | 🚀 fastest | SuperMimic | return 0.88 after **0.10 h** on an A100 80GB (seed 0); SuperTrack 0.11 h |
 |  | 🎯 most accurate | SuperMimic by return, SuperTrack by root-relative MPJPE | return **0.904 ± 0.001** and 0.893 ± 0.001; MPJPE, global / root-relative, 47.5 / 16.1 mm and 46.2 / **14.1 mm** (MLP world model, seeds 0-2; with the RigidFormer 0.904 ± 0.001 and 0.894 ± 0.002, 45.8 / 17.0 mm and 47.2 / 14.7 mm) |
-| **Hand-object tracking**, XHand, three clips | 🚀 fastest | SuperTrack and SuperMimic with HOI's optimizer options | a success of 0.99 with the object within 10 mm after **0.9 / 1.5 / 2.4 min** (SuperTrack) and **1.3 / 1.6 / 1.6 min** (SuperMimic) on the apple, the spray bottle and the can, an A100 40GB, mean of seeds 0-2 |
-|  | 🎯 most accurate | SuperTrack with the task's weights | object position **2.4 / 1.6 / 2.3 mm** on the apple, the spray bottle and the can at a success of 99.9-100 % (seeds 0-2, A100 40GB); SuperMimic 3.5 / 2.9 / 3.2 mm at 100 % |
+| **Hand-object tracking**, XHand, three clips | ⏱ time to the target, not engineered | SuperTrack and SuperMimic with HOI's optimizer options | a success of 0.99 with the object within 10 mm after **0.9 / 1.5 / 2.4 min** (SuperTrack) and **1.3 / 1.6 / 1.6 min** (SuperMimic) on the apple, the spray bottle and the can, an A100 40GB, mean of seeds 0-2 |
+| | 🎯 most accurate | SuperTrack with the task's weights | object position **2.4 / 1.6 / 2.3 mm** on the apple, the spray bottle and the can at a success of 99.9-100 % (seeds 0-2, A100 40GB); SuperMimic 3.5 / 2.9 / 3.2 mm at 100 % |
+| **Hand-object tracking**, Allegro hand, three clips | ⏱ time to the target, not engineered | SuperTrack with `--st_fail_w 5` on the spray bottle, SuperMimic on the apple and the can | a success of 0.99 with the object within 10 mm after 1.6 / **1.3** / 8.8 min (SuperTrack, every run) and **1.4** / - / **2.7** min (SuperMimic, no seed on the spray bottle within 6,000 iterations) on the apple, the spray bottle and the can, an A100 40GB, mean of seeds 0-2 |
+| | 🎯 most accurate | SuperTrack with `--st_fail_w 5` for 20,000 iterations | object position **2.6 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB); SuperMimic with `--action_noise 0.2` for 20,000 iterations 3.7 / 11.7 / 3.4 mm at 82.7-100 % |
+| **Hand-object tracking**, Inspire hand, three clips | ⏱ time to the target, not engineered | SuperTrack | **2.4 / 1.5 / 3.1 min**, every run; SuperMimic with `--lr 2e-4` 2.5 / 2.1 / 4.9 min, one seed on the can not within 6,000 iterations |
+| | 🎯 most accurate | SuperTrack with `--st_imag_noise 0.1` for 20,000 iterations | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 %; SuperMimic with `hand-supermimic-accurate` 5.2 / 2.5 / 11.2 mm at 93.8-100 % |
 | **Muscles**, MuscleVAE's character | 🎯 most accurate | SuperTrack, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm**; SuperMimic 0.053 ± 0.014, 65.6 ± 8.1 mm |
 | **NDM in RoboKit's planner**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model, not planned, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
 | **NDM as the simulator**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
@@ -75,7 +79,11 @@ with what each measured. Both methods are on offer for every task.
 | **Two G1s**, MLP world model (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893 ± 0.001, MPJPE 46.2 / 14.1 mm (seeds 0-2) | `two-g1-supermimic`: 0.904 ± 0.001, 47.5 / 16.1 mm |
 | **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
 | **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
-| | fastest | `hand-supertrack-fast`: success 0.99 in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
+| | fast, not engineered | `hand-supertrack-fast`: success 0.99 in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
+| **Allegro hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm |
+| | fast, not engineered | `hand-supertrack-fast --st_fail_w 5`: success 0.99 in 1.6 / 1.3 / 8.8 min | `hand-supermimic-fast`: 1.4 / - / 2.7 min |
+| **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
+| | fast, not engineered | `hand-supertrack-fast`: success 0.99 in 2.4 / 1.5 / 3.1 min | `hand-supermimic-fast --lr 2e-4`: 2.5 / 2.1 / 4.9 min |
 | **Muscles** (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
@@ -93,8 +101,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 ## 🔥 News
 
 - **[2026-11]** Hand-object tracking on two more hands: the Allegro hand and the Inspire hand track the three clips with
-  SuperMimic ([below](#hand-object-tracking)); a hand is read from its scene, with no code of its own. Contributed by
-  [Dechen Gao](https://github.com/gaodechen).
+  SuperTrack and SuperMimic ([below](#hand-object-tracking)); a hand is read from its scene, with no code of its own.
+  Contributed by [Dechen Gao](https://github.com/gaodechen).
 - **[2026-11]** Policies on twelve of HDMI's human-object interaction tasks, one per task ([videos](#human-object-interaction-hdmis-tasks)).
 - **[2026-11]** A [leaderboard](#-leaderboard) per task: the fastest and the most accurate configuration of each, with their numbers.
 - **[2026-11]** Why [XMimic](https://github.com/nico-bohlinger/xmimic) is fast and what carries over: its four factors, how much
@@ -275,7 +283,8 @@ python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/roll
 # a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json): SuperTrack, then SuperMimic's defaults
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_st --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
-# another hand of the task list (allegro, inspire), with SuperMimic's fastest configuration
+# another hand of the task list (allegro, inspire), with the fast configurations
+ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
 
@@ -311,6 +320,10 @@ return. Return is the evaluation's undiscounted reward sum over its maximum. ↑
 <tr><td rowspan="3"><b>Hand-object tracking</b><br><sub>XHand: apple / spray bottle / can, MLP world model<br>A100 40GB, seeds 0-2</sub></td><td>success ↑, 256 perturbed starts</td><td>100.0 / 100.0 / 99.9 %</td><td>100.0 / 100.0 / 100.0 %</td></tr>
 <tr><td>object position ↓</td><td>2.4 ± 0.0 / 1.6 ± 0.1 / 2.3 ± 0.3 mm</td><td>3.5 ± 0.1 / 2.9 ± 0.4 / 3.2 ± 0.1 mm</td></tr>
 <tr><td>fingertips ↓</td><td>4.8 ± 0.1 / 5.8 ± 0.1 / 6.4 ± 0.2 mm</td><td>6.8 ± 1.7 / 6.6 ± 0.7 / 6.6 ± 0.6 mm</td></tr>
+<tr><td rowspan="4"><b>Hand-object tracking</b><br><sub>Allegro and Inspire hands:<br>apple / spray bottle / can,<br>each algorithm's most accurate<br>configuration, A100 40GB, seeds 0-2</sub></td><td>success ↑, Allegro hand</td><td>100.0 / 100.0 / 99.7 %</td><td>100.0 / 82.7 / 99.6 %</td></tr>
+<tr><td>object position ↓, Allegro hand</td><td>2.6 ± 0.1 / 1.3 ± 0.0 / 2.0 ± 0.7 mm</td><td>3.7 ± 0.2 / 11.7 ± 5.1 / 3.4 ± 0.2 mm</td></tr>
+<tr><td>success ↑, Inspire hand</td><td>99.7 / 100.0 / 99.9 %</td><td>99.9 / 100.0 / 93.8 %</td></tr>
+<tr><td>object position ↓, Inspire hand</td><td>2.4 ± 0.1 / 1.3 ± 0.0 / 2.0 ± 0.5 mm</td><td>5.2 ± 0.7 / 2.5 ± 0.1 / 11.2 ± 13.7 mm</td></tr>
 </tbody>
 </table>
 
@@ -571,13 +584,8 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 ### Hand-object tracking
 
-<table>
-<tr><th></th><th>apple</th><th>spray bottle</th><th>can</th></tr>
-<tr><td align="center"><b>XHand</b></td><td><img src="docs/media/hand/apple.webp" alt="XHand, the apple"/></td><td><img src="docs/media/hand/oakink_a01002.webp" alt="XHand, the spray bottle"/></td><td><img src="docs/media/hand/can.webp" alt="XHand, the can"/></td></tr>
-<tr><td align="center"><b>Allegro</b></td><td><img src="docs/media/hand/allegro/apple.webp" alt="Allegro, the apple"/></td><td><img src="docs/media/hand/allegro/oakink_a01002.webp" alt="Allegro, the spray bottle"/></td><td><img src="docs/media/hand/allegro/can.webp" alt="Allegro, the can"/></td></tr>
-<tr><td align="center"><b>Inspire</b></td><td><img src="docs/media/hand/inspire/apple.webp" alt="Inspire, the apple"/></td><td><img src="docs/media/hand/inspire/oakink_a01002.webp" alt="Inspire, the spray bottle"/></td><td><img src="docs/media/hand/inspire/can.webp" alt="Inspire, the can"/></td></tr>
-</table>
-<p align="center"><i>Three hands on the apple, the spray bottle and the can: last checkpoints from the unperturbed start, at half speed, with the kinematic reference drawn over them in blue. XHand: SuperTrack, seed 0; object error over the clip 1.2, 1.1 and 2.0 mm. Allegro and Inspire: SuperMimic (<code>hand-supermimic-fast</code>), seed 0 (the Inspire hand on the can: seed 1); 2.6, 5.3 and 2.1 mm, and 3.6, 2.1 and 3.1 mm.</i></p>
+<p align="center"><img src="docs/media/hand/grid.webp" alt="The XHand, the Allegro hand and the Inspire hand tracking the apple, the spray bottle and the can with SuperTrack and SuperMimic" width="100%"/></p>
+<p align="center"><i>Three hands on the apple, the spray bottle and the can, each with SuperTrack and with SuperMimic: per hand, algorithm and clip the policy with the lowest object error among that algorithm's configurations of record, from the unperturbed start at half speed, with the kinematic reference drawn over it in blue; the XHand's rows show its accurate presets (its fast presets' runs kept no rollout). A tile holds its last frame until the longest clip ends (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 A floating hand tracks human grasp-and-lift demonstrations on MuJoCo-Warp: the XHand, and with the same code the Allegro hand and the Inspire hand. The reference is
@@ -588,10 +596,12 @@ SuperMimic with its defaults; each was chosen from its own tuning runs by the sa
 ([results](benchmarks/xhand_tracking/results.md), [task](docs/tasks/hand.md)). On one A100 40GB a run trains at 11.6-12.0 (SuperTrack) and 9.4-9.7 iterations/s (SuperMimic) and reaches a
 success of 0.99 with the object within 10 mm in 0.9-8.4 (one run on the can ends at 0.988) and 2.7-8.3 minutes; with
 HOI's optimizer options (Muon, the policy average, the learning-rate ramp; SuperMimic with HDMI's settings at γ 0.99),
-in 0.9-3.2 and 1.0-1.7 minutes ([training time](benchmarks/xhand_tracking/results.md#training-time)). The Allegro hand
-(16 finger joints, four fingers) and the Inspire hand (12 finger joints) track the same clips from SPIDER's retargets to
-them, read from their scenes by the same code (`ndm_gym/robots/hands.py`), with SuperMimic's `hand-supermimic-fast` for
-6,000 iterations ([results](benchmarks/xhand_tracking/results.md#more-hands)).
+in 0.9-3.2 and 1.0-1.7 minutes ([training time](benchmarks/xhand_tracking/results.md#training-time)); these times are
+not engineered (no per-phase time table of the hand trainer yet). The Allegro hand (16 finger joints, four fingers) and
+the Inspire hand (12 finger joints) track the same clips from SPIDER's retargets to them, read from their scenes by the
+same code (`ndm_gym/robots/hands.py`). Each algorithm trained the XHand's four named configurations and, per hand, the
+changes that a screen of four single changes of its own chose by the same rules; below, each algorithm's most accurate
+configuration on each hand ([results](benchmarks/xhand_tracking/results.md#more-hands)).
 
 | hand | training seeds 0, 1, 2 | apple | spray bottle | can |
 |---|---|---|---|---|
@@ -602,27 +612,37 @@ them, read from their scenes by the same code (`ndm_gym/robots/hands.py`), with 
 | | fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.6 mm |
 | | fingertips ↓, SuperTrack | 4.8 ± 0.1 mm | 5.8 ± 0.1 mm | 6.4 ± 0.2 mm |
 | | fingertips ↓, SuperMimic | 6.8 ± 1.7 mm | 6.6 ± 0.7 mm | 6.6 ± 0.6 mm |
-| **Allegro** | success ↑, SuperMimic | 100.0 ± 0.0 % | 98.8 ± 2.0 % | 99.6 ± 0.0 % |
-| | object position ↓, reference targets | 98.0 mm | 134.4 mm | 175.5 mm |
-| | object position ↓, SuperMimic | 3.8 ± 0.2 mm | 4.1 ± 0.7 mm | 3.5 ± 0.6 mm |
+| **Allegro** | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 82.7 % | 99.7 / 99.6 % |
+| | object position ↓, reference targets | 98.0 mm | 134.5 mm | 175.3 mm |
+| | object position ↓, SuperTrack | 2.6 ± 0.1 mm | 1.3 ± 0.0 mm | 2.0 ± 0.7 mm |
+| | object position ↓, SuperMimic | 3.7 ± 0.2 mm | 11.7 ± 5.1 mm | 3.4 ± 0.2 mm |
 | | fingertips ↓, reference targets | 20.2 mm | 19.6 mm | 21.5 mm |
-| | fingertips ↓, SuperMimic | 8.1 ± 0.6 mm | 7.6 ± 0.6 mm | 7.5 ± 0.1 mm |
-| **Inspire** | success ↑, SuperMimic | 100.0 ± 0.0 % | 100.0 ± 0.0 % | 97.7 ± 3.7 % |
+| | fingertips ↓, SuperTrack | 6.1 ± 0.2 mm | 7.2 ± 0.1 mm | 7.5 ± 0.2 mm |
+| | fingertips ↓, SuperMimic | 7.6 ± 0.3 mm | 12.0 ± 0.3 mm | 7.2 ± 0.4 mm |
+| **Inspire** | success ↑, SuperTrack / SuperMimic | 99.7 / 99.9 % | 100.0 / 100.0 % | 99.9 / 93.8 % |
 | | object position ↓, reference targets | 97.1 mm | 29.9 mm | 161.4 mm |
-| | object position ↓, SuperMimic | 4.6 ± 0.3 mm | 2.9 ± 0.5 mm | 7.8 ± 6.3 mm |
+| | object position ↓, SuperTrack | 2.4 ± 0.1 mm | 1.3 ± 0.0 mm | 2.0 ± 0.5 mm |
+| | object position ↓, SuperMimic | 5.2 ± 0.7 mm | 2.5 ± 0.1 mm | 11.2 ± 13.7 mm |
 | | fingertips ↓, reference targets | 13.9 mm | 17.2 mm | 18.2 mm |
-| | fingertips ↓, SuperMimic | 8.2 ± 0.4 mm | 5.2 ± 0.3 mm | 6.2 ± 0.9 mm |
+| | fingertips ↓, SuperTrack | 7.9 ± 0.2 mm | 5.6 ± 0.1 mm | 4.1 ± 0.1 mm |
+| | fingertips ↓, SuperMimic | 10.2 ± 1.7 mm | 5.0 ± 0.1 mm | 6.5 ± 1.4 mm |
 
-Reference targets: the same rollouts with the reference's joint positions as the position targets.
+Reference targets: the same rollouts with the reference's joint positions as the position targets. Allegro: SuperTrack
+`hand-supertrack-fast --st_fail_w 5 --iterations 20000`, SuperMimic `hand-supermimic-fast --action_noise 0.2 --iterations
+20000`; Inspire: SuperTrack `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`, SuperMimic
+`hand-supermimic-accurate`.
 
 ```bash
 HAND_SYSTEMS="--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
 python -m ndm_gym.train_hand --clip $CLIP --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights \
        $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_st_s0      # seeds 0-2
 python -m ndm_gym.train_hand --clip $CLIP $HAND_SYSTEMS --seed 0 --log_dir logs/xhand_tracking/apple_sm_s0   # seeds 0-2
-# the Allegro hand (or inspire): the clip's path chooses the hand
+# the Allegro hand (or inspire): the clip's path chooses the hand; each algorithm's most accurate configuration on it
 CLIP=data/spider/processed/hrdexdb_24f/allegro/right/apple-0/0
-python -m ndm_gym.train_hand --config hand-supermimic-fast --clip $CLIP --seed 0 --log_dir logs/allegro/apple_s0   # seeds 0-2
+python -m ndm_gym.train_hand --config hand-supertrack-fast --st_fail_w 5 --iterations 20000 --clip $CLIP --seed 0 \
+       --log_dir logs/allegro/apple_st_s0   # seeds 0-2
+python -m ndm_gym.train_hand --config hand-supermimic-fast --action_noise 0.2 --iterations 20000 --clip $CLIP --seed 0 \
+       --log_dir logs/allegro/apple_sm_s0   # seeds 0-2
 ```
 
 ### BlinkMimic's options
@@ -758,7 +778,10 @@ each plan executes on MuJoCo Warp. One A100 40GB SXM4; the median over the plann
     the apple, the spray bottle and the can, the object's error is 2.4 / 1.6 / 2.3 mm (SuperTrack) and 3.5 / 2.9 / 3.2 mm
     (SuperMimic), the fingertips' 4.8 / 5.8 / 6.4 and 6.8 / 6.6 / 6.6 mm. A success of 0.99 with the object within 10 mm
     takes 0.9-3.2 and 1.0-1.7 min of training with HOI's optimizer options
-    ([details](benchmarks/xhand_tracking/results.md)). The Allegro and the Inspire hand track the same clips with SuperMimic at a success of 97.7-100 %, the object within 2.9-7.8 mm ([more hands](benchmarks/xhand_tracking/results.md#more-hands)).
+    ([details](benchmarks/xhand_tracking/results.md)); the times are not engineered. On the Allegro and the Inspire hand,
+    with each algorithm's most accurate configuration, the object's error is 2.6 / 1.3 / 2.0 and 2.4 / 1.3 / 2.0 mm at a
+    success of 99.7-100 % (SuperTrack) and 3.7 / 11.7 / 3.4 and 5.2 / 2.5 / 11.2 mm at 82.7-100 and 93.8-100 % (SuperMimic)
+    ([more hands](benchmarks/xhand_tracking/results.md#more-hands)).
 
 ## 🔬 Ablations
 

@@ -34,6 +34,7 @@ site and the fingertip sites it has. The task, the world model, the policy and t
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire      # default: every hand of the task list
+ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
 
@@ -112,8 +113,24 @@ within 5 cm of its last reference position.
 the simulated hand and object solid, the kinematic reference a translucent ghost, a camera that follows them, the NDM
 Gym mark (`--no_mark`: none). `--source reference_targets` renders the rollout with
 the reference pose as the targets, `--source reference` the reference alone; `tools/side_by_side.py` joins two renders.
-`--look noir` renders on a dark stage, and `--ghost_overlay` draws the reference over the frame as a blue silhouette; the
-README's animations use `--look noir --orbit 30 --zoom 0.72 --follow_z --elevation -12 --ghost_overlay`, each render titled
-with ffmpeg's `drawtext` and the two joined by `tools/side_by_side.py`. On the dark stage a hand darker than mid grey (the Allegro's, the Inspire's) is lifted to graphite; the Allegro hand's animations use `--zoom 0.9`.
+`--look noir` renders on a dark stage, `--brightness` scales its sky, floor and lights, and `--ghost_overlay` draws the
+reference over the frame as a blue silhouette. The README's animations use `--look noir --brightness 1.6 --orbit 30
+--zoom 0.72 --follow_z --elevation -12 --ghost_overlay` (the Allegro hand's `--zoom 0.9`);
+`benchmarks/xhand_tracking/scripts/hand_grid.py` tiles the 18 renders (three hands, two algorithms, three clips) into
+the README's grid as one synchronized loop, and the single animations are
+`docs/media/hand/<hand>_<algorithm>_<clip>.webp`. On the dark stage a hand darker than mid grey (the Allegro's, the
+Inspire's) is lifted to graphite.
+
+The README's animations one by one (per hand, algorithm and clip the policy with the lowest object error among that
+algorithm's configurations of record; which runs: [results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
+
+| | apple | spray bottle | can |
+|---|---|---|---|
+| XHand, SuperTrack | <img src="../media/hand/xhand_supertrack_apple.webp" alt="XHand, SuperTrack, apple" width="320"/> | <img src="../media/hand/xhand_supertrack_oakink_a01002.webp" alt="XHand, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/xhand_supertrack_can.webp" alt="XHand, SuperTrack, can" width="320"/> |
+| XHand, SuperMimic | <img src="../media/hand/xhand_supermimic_apple.webp" alt="XHand, SuperMimic, apple" width="320"/> | <img src="../media/hand/xhand_supermimic_oakink_a01002.webp" alt="XHand, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/xhand_supermimic_can.webp" alt="XHand, SuperMimic, can" width="320"/> |
+| Allegro, SuperTrack | <img src="../media/hand/allegro_supertrack_apple.webp" alt="Allegro, SuperTrack, apple" width="320"/> | <img src="../media/hand/allegro_supertrack_oakink_a01002.webp" alt="Allegro, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/allegro_supertrack_can.webp" alt="Allegro, SuperTrack, can" width="320"/> |
+| Allegro, SuperMimic | <img src="../media/hand/allegro_supermimic_apple.webp" alt="Allegro, SuperMimic, apple" width="320"/> | <img src="../media/hand/allegro_supermimic_oakink_a01002.webp" alt="Allegro, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/allegro_supermimic_can.webp" alt="Allegro, SuperMimic, can" width="320"/> |
+| Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/inspire_supertrack_can.webp" alt="Inspire, SuperTrack, can" width="320"/> |
+| Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/inspire_supermimic_can.webp" alt="Inspire, SuperMimic, can" width="320"/> |
 
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

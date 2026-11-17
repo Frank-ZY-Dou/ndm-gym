@@ -1,7 +1,7 @@
 # Hand-object tracking: results
 
 SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift clips with a floating right XHand
-([the task](../../docs/tasks/hand.md)); SuperMimic also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
+([the task](../../docs/tasks/hand.md)); both also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
 
 ## Setup
 
@@ -61,44 +61,228 @@ benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/xhand_sm $SYSTEM
 
 ## More hands
 
-The Allegro hand (16 finger joints, four fingers) and the Inspire hand (12 finger joints) on the three clips, from
-SPIDER's retargets of the same demonstrations to them. The hand is read from its scene (`ndm_gym/robots/hands.py`); no
-option differs from the XHand's.
+The Allegro hand (16 finger joints, four fingers) and the Inspire hand (12 finger joints) track the same three clips,
+from SPIDER's retargets of the same demonstrations to them. A hand is read from its scene (`ndm_gym/robots/hands.py`: the
+actuated joints in the actuators' order, the palm's site and the fingertip sites the hand has), so the task, the world
+models, the policies and the options are the XHand's. The two hands and this reading of a scene were contributed in
+[pull request 6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6); on the XHand's three scenes the code before and after
+it gives the same indices, kinematics, task outputs and training updates bit for bit on the CPU.
 
-- **Training:** SuperMimic with `--config hand-supermimic-fast` (HDMI's settings at γ 0.99 with HOI's optimizer options and
-  the systems options), 6,000 iterations in 2,048 worlds on one A100 40GB, training seeds 0-2; no setting was tuned on
-  these hands.
-- **Evaluation:** as above, on the last checkpoint.
+- **Training:** both algorithms with the XHand's named configurations, `hand-supertrack-fast` and `hand-supermimic-fast`
+  (6,000 iterations, with HOI's optimizer options) and `hand-supertrack-accurate` and `hand-supermimic-accurate` (20,000
+  iterations); 2,048 worlds, training seeds 0-2, one A100 40GB per run. Then, per hand and algorithm, four single changes
+  of its fast configuration on training seed 0, the same kinds for both, and three-seed runs of the changes chosen by the
+  same rules ([below](#how-the-two-hands-configurations-were-chosen)): timed at 6,000 iterations, and at 20,000.
+- **Evaluation:** as above, on the last checkpoint. The 6,000-iteration runs trained alone on a GPU; their checkpoints,
+  every 200 iterations, were evaluated after training, as in [training time](#training-time).
+
+Each algorithm's configurations of record, on `apple` / `oakink_a01002` / `can` (mean of training seeds 0-2; most
+accurate: object position at 20,000 iterations; time: minutes to a success of 0.99 with the object within 10 mm, over the
+seeds that reach it, not engineered):
+
+| hand | | SuperTrack | SuperMimic |
+|---|---|---|---|
+| Allegro | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm at a success of 100.0 / 100.0 / 99.7 % | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm at 100.0 / 82.7 / 99.6 % |
+| | time to the target, not engineered | `hand-supertrack-fast --st_fail_w 5`: 1.6 / 1.3 / 8.8 min, 9 of its 9 runs at the target | `hand-supermimic-fast`: 1.4 / - / 2.7 min, 6 of 9 |
+| Inspire | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm at a success of 99.7 / 100.0 / 99.9 % | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm at 99.9 / 100.0 / 93.8 % |
+| | time to the target, not engineered | `hand-supertrack-fast`: 2.4 / 1.5 / 3.1 min, 9 of its 9 runs at the target | `hand-supermimic-fast --lr 2e-4`: 2.5 / 2.1 / 4.9 min, 8 of 9 |
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire
-ROBOT=allegro benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/allegro_sm --config hand-supermimic-fast
-ROBOT=inspire benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/inspire_sm --config hand-supermimic-fast
+ROBOT=allegro benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5 --iterations 20000
+ROBOT=allegro benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/allegro_sm --config hand-supermimic-fast --action_noise 0.2 --iterations 20000
+ROBOT=inspire benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/inspire_st --config hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000
+ROBOT=inspire benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/inspire_sm --config hand-supermimic-accurate
 ```
 
-| hand | task | | seeds | success | object position | object position, last frame | fingertips | object lift |
+### Accuracy, 20,000 iterations
+
+The last checkpoint over 256 perturbed starts, mean ± SD over training seeds 0-2. Per hand and algorithm two
+configurations trained for 20,000 iterations: its accurate preset and the change its screen chose. The one with the
+lower object error over the three clips is its most accurate configuration: Allegro, SuperTrack 2.24 mm (preset) and
+1.97 mm, SuperMimic 7.89 and 6.28 mm; Inspire, SuperTrack 2.56 and 1.92 mm, SuperMimic 6.31 and 46.88 mm. Trained on to
+20,000 iterations, SuperMimic's fast configuration loses the Inspire hand's can in all three seeds (a success of 2.0,
+43.4 and 0.0 %; 100.0, 81.2 and 98.8 % at 6,000 iterations), its return in the simulator falling through training (seed
+0: 0.90 at iteration 3,000, 0.78 at 20,000).
+
+**The Allegro hand**
+
+| task | | seeds | success | object position | object position, last frame | fingertips | object lift |
+|---|---|---|---|---|---|---|---|
+| `apple` | reference targets | | 0 % | 98.0 mm | 268.0 mm | 20.2 mm | 0.0 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 100.0 ± 0.0 % | 2.4 ± 0.1 mm | 0.3 ± 0.1 mm | 6.2 ± 0.0 mm | 26.2 ± 0.0 cm |
+| | SuperTrack, `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 2.6 ± 0.1 mm | 0.3 ± 0.1 mm | 6.1 ± 0.2 mm | 26.2 ± 0.0 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 97.7 ± 4.1 % | 6.0 ± 3.9 mm | 8.3 ± 12.4 mm | 9.8 ± 1.7 mm | 25.7 ± 1.0 cm |
+| | SuperMimic, `hand-supermimic-fast --action_noise 0.2 --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 3.7 ± 0.2 mm | 2.0 ± 0.6 mm | 7.6 ± 0.3 mm | 26.3 ± 0.1 cm |
+| `oakink_a01002` | reference targets | | 0 % | 134.5 mm | 279.2 mm | 19.6 mm | -2.7 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 100.0 ± 0.0 % | 1.4 ± 0.0 mm | 0.4 ± 0.1 mm | 7.4 ± 0.2 mm | 24.3 ± 0.0 cm |
+| | SuperTrack, `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 1.3 ± 0.0 mm | 0.3 ± 0.0 mm | 7.2 ± 0.1 mm | 24.3 ± 0.0 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 84.5 ± 17.4 % | 13.5 ± 12.4 mm | 33.7 ± 35.9 mm | 13.1 ± 6.4 mm | 21.7 ± 3.4 cm |
+| | SuperMimic, `hand-supermimic-fast --action_noise 0.2 --iterations 20000` | 0, 1, 2 | 82.7 ± 16.2 % | 11.7 ± 5.1 mm | 29.6 ± 18.9 mm | 12.0 ± 0.3 mm | 22.2 ± 1.7 cm |
+| `can` | reference targets | | 0 % | 175.3 mm | 341.4 mm | 21.5 mm | -1.0 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 99.5 ± 0.2 % | 2.8 ± 0.6 mm | 2.2 ± 0.8 mm | 7.9 ± 0.6 mm | 32.5 ± 0.1 cm |
+| | SuperTrack, `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | 0, 1, 2 | 99.7 ± 0.2 % | 2.0 ± 0.7 mm | 1.3 ± 0.9 mm | 7.5 ± 0.2 mm | 32.6 ± 0.1 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 99.6 ± 0.0 % | 4.1 ± 0.2 mm | 4.5 ± 0.5 mm | 7.9 ± 0.1 mm | 32.5 ± 0.0 cm |
+| | SuperMimic, `hand-supermimic-fast --action_noise 0.2 --iterations 20000` | 0, 1, 2 | 99.6 ± 0.0 % | 3.4 ± 0.2 mm | 3.5 ± 0.5 mm | 7.2 ± 0.4 mm | 32.6 ± 0.1 cm |
+
+**The Inspire hand**
+
+| task | | seeds | success | object position | object position, last frame | fingertips | object lift |
+|---|---|---|---|---|---|---|---|
+| `apple` | reference targets | | 0 % | 97.1 mm | 264.3 mm | 13.9 mm | -0.1 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 100.0 ± 0.0 % | 2.8 ± 0.0 mm | 1.7 ± 0.1 mm | 8.2 ± 0.6 mm | 26.1 ± 0.0 cm |
+| | SuperTrack, `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | 0, 1, 2 | 99.7 ± 0.2 % | 2.4 ± 0.1 mm | 1.5 ± 0.5 mm | 7.9 ± 0.2 mm | 26.1 ± 0.1 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 99.9 ± 0.2 % | 5.2 ± 0.7 mm | 5.4 ± 2.4 mm | 10.2 ± 1.7 mm | 25.8 ± 0.2 cm |
+| | SuperMimic, `hand-supermimic-fast --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 4.5 ± 0.1 mm | 4.7 ± 1.1 mm | 8.0 ± 0.3 mm | 25.8 ± 0.1 cm |
+| `oakink_a01002` | reference targets | | 99 % | 29.9 mm | 31.2 mm | 17.2 mm | 21.5 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 100.0 ± 0.0 % | 1.7 ± 0.0 mm | 1.0 ± 0.1 mm | 5.2 ± 0.1 mm | 24.3 ± 0.0 cm |
+| | SuperTrack, `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 1.3 ± 0.0 mm | 0.7 ± 0.0 mm | 5.6 ± 0.1 mm | 24.2 ± 0.0 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 100.0 ± 0.0 % | 2.5 ± 0.1 mm | 1.8 ± 0.5 mm | 5.0 ± 0.1 mm | 24.3 ± 0.0 cm |
+| | SuperMimic, `hand-supermimic-fast --iterations 20000` | 0, 1, 2 | 100.0 ± 0.0 % | 2.5 ± 0.1 mm | 1.8 ± 0.3 mm | 4.8 ± 0.1 mm | 24.3 ± 0.0 cm |
+| `can` | reference targets | | 0 % | 161.4 mm | 334.7 mm | 18.2 mm | -0.7 cm |
+| | SuperTrack, `hand-supertrack-accurate` | 0, 1, 2 | 99.7 ± 0.2 % | 3.1 ± 0.6 mm | 2.1 ± 0.9 mm | 5.7 ± 0.7 mm | 32.5 ± 0.1 cm |
+| | SuperTrack, `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | 0, 1, 2 | 99.9 ± 0.2 % | 2.0 ± 0.5 mm | 1.2 ± 0.9 mm | 4.1 ± 0.1 mm | 32.6 ± 0.1 cm |
+| | SuperMimic, `hand-supermimic-accurate` | 0, 1, 2 | 93.8 ± 10.8 % | 11.2 ± 13.7 mm | 25.7 ± 40.9 mm | 6.5 ± 1.4 mm | 30.4 ± 3.9 cm |
+| | SuperMimic, `hand-supermimic-fast --iterations 20000` | 0, 1, 2 | 15.1 ± 24.5 % | 133.7 ± 34.9 mm | 324.6 ± 91.8 mm | 22.4 ± 6.9 mm | 2.9 ± 8.6 cm |
+
+### Time to the target, 6,000 iterations
+
+These times are not engineered: the hand trainer has no per-phase time table yet (collection, the world model's and the
+policy's updates, evaluation, host time), so no configuration here is called the fastest.
+
+Each run trained alone on a GPU. Minutes: the training wall clock at the first of the run's checkpoints (every 200
+iterations) from which every later one has a success of 0.99 or more with the object within 10 mm (-: none within 6,000
+iterations); iterations/s are with policy updates (the log's rows 1,000-3,000). Per hand and algorithm two
+configurations: its fast preset and its change with the fewest iterations to the target in the screen. The one with the
+lower mean time over its nine runs (a run without the target counted at its whole training time) is its fast
+configuration: Allegro, SuperTrack 4.21 min (preset) and 3.90 min, SuperMimic 5.31 and 5.32 min; Inspire, SuperTrack
+2.34 and 3.26 min, SuperMimic 4.13 and 3.81 min.
+
+**The Allegro hand**
+
+| task | | seeds | minutes to a success of 0.99 with the object within 10 mm ↓ | iterations/s ↑ | success at 6,000 | object position at 6,000 ↓ | fingertips at 6,000 ↓ |
+|---|---|---|---|---|---|---|---|
+| `apple` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 1.9, 3.2, 1.3 | 10.6 | 100.0 ± 0.0 % | 2.6 ± 0.1 mm | 6.3 ± 0.2 mm |
+|  | SuperTrack, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 2.2, 1.3, 1.3 | 10.6 | 100.0 ± 0.0 % | 2.6 ± 0.0 mm | 6.1 ± 0.1 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | 1.5, 1.2, 1.5 | 8.7 | 100.0 ± 0.0 % | 3.8 ± 0.1 mm | 7.9 ± 0.2 mm |
+|  | SuperMimic, `hand-supermimic-fast --gamma 0.995` | 0, 1, 2 | 1.5, 1.5, 1.9 | 8.7 | 100.0 ± 0.0 % | 4.0 ± 0.1 mm | 8.7 ± 0.4 mm |
+| `oakink_a01002` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 2.7, 1.6, 1.3 | 10.9 | 100.0 ± 0.0 % | 1.4 ± 0.1 mm | 8.0 ± 0.4 mm |
+|  | SuperTrack, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 1.6, 1.3, 1.0 | 10.9 | 100.0 ± 0.0 % | 1.4 ± 0.1 mm | 7.6 ± 0.3 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | -, -, - | 8.9 | 91.4 ± 4.7 % | 8.0 ± 2.0 mm | 8.6 ± 1.1 mm |
+|  | SuperMimic, `hand-supermimic-fast --gamma 0.995` | 0, 1, 2 | 11.3, -, 10.1 | 8.9 | 98.4 ± 2.4 % | 5.1 ± 2.1 mm | 8.6 ± 1.0 mm |
+| `can` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 10.0, 6.8, 9.0 | 10.9 | 99.6 ± 0.0 % | 2.7 ± 0.1 mm | 7.8 ± 0.1 mm |
+|  | SuperTrack, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 9.0, 8.1, 9.3 | 10.9 | 99.5 ± 0.2 % | 3.2 ± 0.3 mm | 7.6 ± 0.3 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | 3.9, 2.3, 1.9 | 8.9 | 99.6 ± 0.0 % | 3.3 ± 0.0 mm | 7.6 ± 0.2 mm |
+|  | SuperMimic, `hand-supermimic-fast --gamma 0.995` | 0, 1, 2 | 5.7, 2.3, 2.3 | 8.9 | 99.6 ± 0.0 % | 4.5 ± 0.6 mm | 8.7 ± 0.7 mm |
+
+**The Inspire hand**
+
+| task | | seeds | minutes to a success of 0.99 with the object within 10 mm ↓ | iterations/s ↑ | success at 6,000 | object position at 6,000 ↓ | fingertips at 6,000 ↓ |
+|---|---|---|---|---|---|---|---|
+| `apple` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 1.5, 0.9, 4.8 | 11.2 | 99.9 ± 0.2 % | 3.0 ± 0.2 mm | 8.2 ± 0.4 mm |
+|  | SuperTrack, `hand-supertrack-fast --lr 8e-4` | 0, 1, 2 | 6.3, 2.4, 1.8 | 11.3 | 100.0 ± 0.0 % | 2.9 ± 0.0 mm | 8.3 ± 0.1 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | 3.2, 1.8, 1.8 | 9.2 | 100.0 ± 0.0 % | 4.7 ± 0.2 mm | 8.4 ± 0.9 mm |
+|  | SuperMimic, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 1.4, 1.8, 4.3 | 9.2 | 100.0 ± 0.0 % | 4.4 ± 0.3 mm | 8.7 ± 0.8 mm |
+| `oakink_a01002` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 2.1, 1.2, 1.2 | 11.7 | 100.0 ± 0.0 % | 1.7 ± 0.0 mm | 5.1 ± 0.0 mm |
+|  | SuperTrack, `hand-supertrack-fast --lr 8e-4` | 0, 1, 2 | 1.2, 0.9, 0.9 | 11.6 | 100.0 ± 0.0 % | 1.6 ± 0.0 mm | 5.3 ± 0.0 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | 3.7, 1.0, 1.0 | 9.4 | 100.0 ± 0.0 % | 2.6 ± 0.1 mm | 5.0 ± 0.3 mm |
+|  | SuperMimic, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 1.4, 3.5, 1.4 | 9.4 | 100.0 ± 0.0 % | 2.9 ± 0.3 mm | 5.4 ± 0.5 mm |
+| `can` | SuperTrack, `hand-supertrack-fast` | 0, 1, 2 | 2.7, 5.5, 1.2 | 11.6 | 100.0 ± 0.0 % | 2.4 ± 0.2 mm | 4.6 ± 0.1 mm |
+|  | SuperTrack, `hand-supertrack-fast --lr 8e-4` | 0, 1, 2 | 1.5, 6.9, 7.5 | 11.6 | 99.9 ± 0.2 % | 3.1 ± 0.5 mm | 5.4 ± 0.7 mm |
+|  | SuperMimic, `hand-supermimic-fast` | 0, 1, 2 | 3.3, -, - | 9.4 | 93.4 ± 10.5 % | 14.3 ± 16.0 mm | 7.3 ± 1.0 mm |
+|  | SuperMimic, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 7.4, -, 2.5 | 9.4 | 97.0 ± 5.2 % | 8.5 ± 6.7 mm | 8.2 ± 1.2 mm |
+
+### The README's animations
+
+Per hand, algorithm and clip the README's grid shows the run with the lowest object error over the perturbed starts at
+its last checkpoint among that algorithm's configurations of record on the hand (for the XHand its accurate preset: the
+fast presets' timed runs kept no rollout), from the unperturbed start. Configuration and training seed:
+
+| hand | | `apple` | `oakink_a01002` | `can` |
+|---|---|---|---|---|
+| XHand | SuperTrack | `hand-supertrack-accurate`, 1 | the same, 1 | the same, 2 |
+| | SuperMimic | `hand-supermimic-accurate`, 2 | the same, 1 | the same, 2 |
+| Allegro | SuperTrack | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`, 2 | the same, 1 | the same, 0 |
+| | SuperMimic | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`, 0 | `hand-supermimic-fast`, 2 | as on `apple`, 2 |
+| Inspire | SuperTrack | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`, 1 | the same, 1 | the same, 2 |
+| | SuperMimic | `hand-supermimic-fast --lr 2e-4`, 0 | `hand-supermimic-accurate`, 0 | `hand-supermimic-accurate`, 0 |
+
+### Pull request 6's table, and its configuration here
+
+The pull request reported SuperMimic with `hand-supermimic-fast` from runs with two speed changes that are not part of
+its code (the palm's kinematics alone in the world model's rollout, and an imagined state's observation and goal
+computed once). Here its code trained as it is, on the same GPU type, beside SuperTrack's fast configuration (6,000
+iterations, the last checkpoint, training seeds 0-2):
+
+| hand | task | | seeds | success % | object mm | object, last frame mm | fingertips mm | lift cm |
 |---|---|---|---|---|---|---|---|---|
-| Allegro | `apple` | reference targets | | 0 % | 98.0 mm | 268.0 mm | 20.2 mm | 0.0 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.8 ± 0.2 mm | 2.1 ± 0.7 mm | 8.1 ± 0.6 mm | 26.3 ± 0.2 cm |
-| | `oakink_a01002` | reference targets | | 0 % | 134.4 mm | 278.7 mm | 19.6 mm | -2.6 cm |
-| | | SuperMimic | 0, 1, 2 | 98.8 ± 2.0 % | 4.1 ± 0.7 mm | 5.5 ± 2.3 mm | 7.6 ± 0.6 mm | 24.1 ± 0.2 cm |
-| | `can` | reference targets | | 0 % | 175.5 mm | 341.6 mm | 21.5 mm | -1.0 cm |
-| | | SuperMimic | 0, 1, 2 | 99.6 ± 0.0 % | 3.5 ± 0.6 mm | 3.6 ± 0.7 mm | 7.5 ± 0.1 mm | 32.6 ± 0.1 cm |
-| Inspire | `apple` | reference targets | | 0 % | 97.1 mm | 264.3 mm | 13.9 mm | -0.1 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 4.6 ± 0.3 mm | 5.3 ± 0.6 mm | 8.2 ± 0.4 mm | 25.8 ± 0.0 cm |
-| | `oakink_a01002` | reference targets | | 99 % | 29.9 mm | 31.2 mm | 17.2 mm | 21.5 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.9 ± 0.5 mm | 2.5 ± 0.9 mm | 5.2 ± 0.3 mm | 24.3 ± 0.0 cm |
-| | `can` | reference targets | | 0 % | 161.4 mm | 334.7 mm | 18.2 mm | -0.7 cm |
-| | | SuperMimic | 0, 1, 2 | 97.7 ± 3.7 % | 7.8 ± 6.3 mm | 12.0 ± 13.1 mm | 6.2 ± 0.9 mm | 31.9 ± 1.3 cm |
+| Allegro | `apple` | SuperTrack here | 0, 1, 2 | 100.0 ± 0.0 | 2.6 ± 0.1 | 0.3 ± 0.1 | 6.3 ± 0.2 | 26.2 ± 0.0 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 100.0 ± 0.0 | 3.8 ± 0.1 | 2.1 ± 0.6 | 7.9 ± 0.2 | 26.3 ± 0.1 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 100.0 ± 0.0 | 3.8 ± 0.2 | 2.1 ± 0.7 | 8.1 ± 0.6 | 26.3 ± 0.2 |
+| Allegro | `oakink_a01002` | SuperTrack here | 0, 1, 2 | 100.0 ± 0.0 | 1.4 ± 0.1 | 0.4 ± 0.0 | 8.0 ± 0.4 | 24.3 ± 0.0 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 91.4 ± 4.7 | 8.0 ± 2.0 | 18.2 ± 7.8 | 8.6 ± 1.1 | 23.0 ± 0.6 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 98.8 ± 2.0 | 4.1 ± 0.7 | 5.5 ± 2.3 | 7.6 ± 0.6 | 24.1 ± 0.2 |
+| Allegro | `can` | SuperTrack here | 0, 1, 2 | 99.6 ± 0.0 | 2.7 ± 0.1 | 1.9 ± 0.0 | 7.8 ± 0.1 | 32.6 ± 0.0 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 99.6 ± 0.0 | 3.3 ± 0.0 | 3.8 ± 0.3 | 7.6 ± 0.2 | 32.6 ± 0.0 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 99.6 ± 0.0 | 3.5 ± 0.6 | 3.6 ± 0.7 | 7.5 ± 0.1 | 32.6 ± 0.1 |
+| Inspire | `apple` | SuperTrack here | 0, 1, 2 | 99.9 ± 0.2 | 3.0 ± 0.2 | 2.1 ± 0.6 | 8.2 ± 0.4 | 26.1 ± 0.1 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 100.0 ± 0.0 | 4.7 ± 0.2 | 5.0 ± 1.3 | 8.4 ± 0.9 | 25.8 ± 0.1 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 100.0 ± 0.0 | 4.6 ± 0.3 | 5.3 ± 0.6 | 8.2 ± 0.4 | 25.8 ± 0.0 |
+| Inspire | `oakink_a01002` | SuperTrack here | 0, 1, 2 | 100.0 ± 0.0 | 1.7 ± 0.0 | 1.1 ± 0.1 | 5.1 ± 0.0 | 24.3 ± 0.0 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 100.0 ± 0.0 | 2.6 ± 0.1 | 2.0 ± 0.1 | 5.0 ± 0.3 | 24.2 ± 0.0 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 100.0 ± 0.0 | 2.9 ± 0.5 | 2.5 ± 0.9 | 5.2 ± 0.3 | 24.3 ± 0.0 |
+| Inspire | `can` | SuperTrack here | 0, 1, 2 | 100.0 ± 0.0 | 2.4 ± 0.2 | 1.0 ± 0.0 | 4.6 ± 0.1 | 32.7 ± 0.0 |
+|  |  | SuperMimic here, the pull request's code | 0, 1, 2 | 93.4 ± 10.5 | 14.3 ± 16.0 | 27.3 ± 38.5 | 7.3 ± 1.0 | 30.4 ± 3.7 |
+|  |  | SuperMimic, the pull request's table | 0, 1, 2 | 97.7 ± 3.7 | 7.8 ± 6.3 | 12.0 ± 13.1 | 6.2 ± 0.9 | 31.9 ± 1.3 |
 
-Per seed, success / object position: the Allegro hand on `oakink_a01002` 100.0 / 96.5 / 100.0 % and 4.2 / 4.7 / 3.3 mm;
-the Inspire hand on `can` 93.4 / 100.0 / 99.6 % and 15.1 / 3.7 / 4.7 mm. Seed 0 of the Inspire hand on `can` drops the
-can in its rollout from the unperturbed start; the README's animation of that cell is seed 1's.
+Four of the six pairs of hand and clip read as the pull request's table, the object error within 0.3 mm of it. On the
+Allegro hand's `oakink_a01002` the seeds read lower here: success / object position 88.7 / 88.7 / 96.9 % and 7.9 / 10.1
+/ 6.0 mm (the pull request: 100.0 / 96.5 / 100.0 % and 4.2 / 4.7 / 3.3 mm). On the Inspire hand's `can` one seed of
+three loses the object in part of the rollouts in both: 100.0 / 81.2 / 98.8 % and 3.5 / 32.8 / 6.8 mm here (the pull
+request: 93.4 / 100.0 / 99.6 % and 15.1 / 3.7 / 4.7 mm). On the GPU a run does not repeat itself bit for bit (two runs
+of the same code and seed differ from the first iterations on), so a seed's outcome is not reproduced exactly.
 
-The runs trained with the palm's kinematics alone in the world model's rollout and an imagined state's observation and
-goal computed once, two changes that leave the values equal up to rounding and are not part of this code.
+### How the two hands' configurations were chosen
+
+Per hand and algorithm, four single changes of the fast configuration, the same kinds for both (training seed 0, 6,000
+iterations, the three clips): the learning rate at 2e-4 and 8e-4 (4e-4 in both presets), the exploration (SuperTrack's
+imagined noise 0.1 for 0.2, SuperMimic's action noise 0.2 for 0.3) and the failure's weight or the return's horizon
+(SuperTrack `--st_fail_w 5` for 2, SuperMimic `--gamma 0.995` for 0.99). Iterations to the target are the first
+checkpoint from which every later one has a success of 0.99 or more with the object within 10 mm (-: none by 6,000).
+
+| hand | | arm | iterations to the target, apple / spray bottle / can ↓ | object position at 6,000, mean of the clips ↓ |
+|---|---|---|---|---|
+| Allegro | SuperTrack | `hand-supertrack-fast` | 1,200 / 1,000 / 5,800 | 2.26 mm |
+| | | `--lr 2e-4` | 1,000 / 800 / 5,800 | (can 98.8 %) |
+| | | `--lr 8e-4` | 1,200 / 800 / 3,200 | (can 98.8 %) |
+| | | `--st_imag_noise 0.1` | 1,400 / 1,000 / 3,200 | (can 98.4 %) |
+| | | `--st_fail_w 5` | 800 / 1,000 / 3,400 | 2.00 mm |
+| | SuperMimic | `hand-supermimic-fast` | 800 / - / 1,200 | (spray bottle 88.7 %) |
+| | | `--lr 2e-4` | 800 / - / 1,600 | (spray bottle 98.0 %) |
+| | | `--lr 8e-4` | - / - / 1,000 | (apple 23.8 %) |
+| | | `--action_noise 0.2` | 1,000 / 2,000 / 1,200 | 3.52 mm |
+| | | `--gamma 0.995` | 800 / 1,200 / 1,600 | 4.21 mm |
+| Inspire | SuperTrack | `hand-supertrack-fast` | 1,000 / 800 / 1,200 | 2.36 mm |
+| | | `--lr 2e-4` | 1,000 / 800 / 3,000 | 2.26 mm |
+| | | `--lr 8e-4` | 1,000 / 800 / 2,200 | 2.37 mm |
+| | | `--st_imag_noise 0.1` | 2,200 / 600 / 4,400 | 2.02 mm |
+| | | `--st_fail_w 5` | 800 / 800 / 2,600 | 2.34 mm |
+| | SuperMimic | `hand-supermimic-fast` | 1,800 / 1,200 / 1,000 | 3.64 mm |
+| | | `--lr 2e-4` | 1,000 / 800 / 1,200 | 3.90 mm |
+| | | `--lr 8e-4` | - / 800 / - | (can 98.4 %) |
+| | | `--action_noise 0.2` | 800 / 600 / 4,400 | 3.65 mm |
+| | | `--gamma 0.995` | 1,000 / 1,200 / - | (can 96.1 %) |
+
+Object errors in brackets: a success below 0.99 on that clip, so the arm was not a candidate for the most accurate
+configuration. Each algorithm's fast configuration on a hand is the faster, by the mean minutes over nine timed runs,
+of its preset and its change with the fewest mean iterations to the target; its most accurate one is the lower, by the
+object error over the three clips and three seeds at 20,000 iterations, of its accurate preset and its change with the
+lowest object error at 6,000 trained for 20,000 iterations.
 
 ## Training time
+
+These times are not engineered: the hand trainer has no per-phase time table yet (collection, the world model's and the
+policy's updates, evaluation, host time), so no configuration here is called the fastest.
 
 Each run trains alone on an A100 40GB for 6,000 iterations with the systems options, three training seeds per
 configuration; its checkpoints, every 200 iterations, are evaluated after training as above. A run's time is its
@@ -149,4 +333,5 @@ Both algorithms started from the settings selected on HDMI's tasks and were then
 ## Acknowledgment
 
 The task, its simulator, SuperMimic on it and the evaluation were contributed by Dechen Gao
-([pull request 2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand by the same author.
+([pull request 2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand and the reading of a
+hand from its scene by the same author ([pull request 6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
