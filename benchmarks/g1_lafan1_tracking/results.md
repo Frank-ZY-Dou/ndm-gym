@@ -435,7 +435,8 @@ Iterations reached in 3 h: SuperTrack-RF 12654, 12677, 12696; SuperMimic-RF 1071
 | SuperMimic | RigidFormer - MLP | 0.804 ± 0.007; **+0.667 [0.246, 1.088]** | 0.78 ± 0.38; **-36.67 [-47.55, -25.79]** | 33.1 ± 0.5; -22.6 [-52.3, 7.1] | 6.05 ± 0.62; -3.64 [-7.76, 0.47] | 1.3 ± 0.6; **-38.0 [-40.4, -35.6]** | 9.0 ± 2.0; **-31.0 [-36.0, -26.0]** |
 | SuperMimic | MLP iterations in 3 h | 33184, 33205, 33244 | | | | | |
 
-With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861.
+With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861 ± 0.003 and its
+MPJPE-local 14.5 ± 0.2 mm (seeds 7-9; `ndm-train --config lafan1-supertrack-accurate`).
 SuperMimic's MLP drops late, as on the H100 with
 action noise 0.3 (return 0.137 at about 33k iterations); its highest per-checkpoint evaluation averages 0.841 over the
 seeds, SuperMimic-RF's 0.811.
