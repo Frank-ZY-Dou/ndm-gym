@@ -43,20 +43,30 @@ The algorithms share one pipeline within each task:
 ## ⚡ Speed
 
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
-<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width; 4,096 parallel worlds; RoboKit's rows: the example's whole planning time at the planner's own worlds, the median over five planner seeds on one A100 40GB SXM4, with the simulation step's speedup beside the task (<a href="benchmarks/robokit_ndm/results.md">details</a>). HDMI's scenes: one H100, the median of three tasks; two G1s: one A100 80GB; the G1's forward step and the gradient of a 32-step rollout: one A100 40GB, the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting (<a href="benchmarks/ndm_speed/results.md">details</a>). Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds; RoboKit's rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+
+<details>
+<summary>The chart's rows</summary>
+
+| rows | measure | GPU |
+|---|---|---|
+| NDM simulation: HDMI's scenes, two G1s ([details](benchmarks/ndm_speed/results.md)) | time per step at 4,096 worlds; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
+| the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
+| RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds, the median over five planner seeds; the simulation step's speedup beside the task | one A100 40GB SXM4 |
+
+</details>
 
 ## 🏆 Leaderboard
 
 For each task, the fastest and the most accurate configuration in this repository; each task's section has its settings
 table and both algorithms' results. Hands: apple / spray bottle / can; the target is a success of 0.99 with the object
-within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results](#-results). In the four-GPU row, the times of the
-code its layout comes from, run here on the same GPUs, stand beside this library's and are not ranked with them.
+within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results](#-results).
 
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
 | **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options)), level within the seeds' spread | return 0.82 after **2.54 ± 0.11** and **2.68 ± 0.19 min** on an H100; 4.19 ± 0.16 and 4.38 ± 0.57 min on an A100 40GB SXM4 (seeds 0-5) |
 |  | 🎯 most accurate | `lafan1-supertrack-accurate`, 3 h with the speed options on an A100 40GB | return **0.861 ± 0.003**, MPJPE **14.5 ± 0.2 mm** (seeds 7-9) |
-| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | ⏱ time to the target, not engineered | the iteration's steps side by side: actor, world model, policy and probe sweeps on a GPU each (`--layout AWL --eprobe_gpu 3`, a probe sweep every 250 iterations; [XMimic](docs/algorithms/xmimic.md)'s layout) | return 0.82 after **2.30 ± 0.22 min** on four A100 40GB SXM4 with BlinkMimic's recipe, against 4.48 ± 0.37 min on one (seeds 0-2); XMimic's own code 1.81 ± 0.13 min on four, 3.53 ± 0.15 min on one (its evaluator; not ranked) |
+| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | ⏱ time to the target, not engineered | `--algo blinkmimic --layout AWL --eprobe_gpu 3`, a probe sweep every 250 iterations ([XMimic](docs/algorithms/xmimic.md)'s layout: actor, world model, policy and probe sweeps on a GPU each) | return 0.82 after **2.30 ± 0.22 min** on four A100 40GB SXM4, against 4.48 ± 0.37 min on one (seeds 0-2); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min on four, 3.53 ± 0.15 min on one (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
 | **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | 🚀 fastest | `two-g1-supermimic` | return 0.88 after **0.10 h** on an A100 80GB (seed 0) |
 |  | 🎯 most accurate | `two-g1-supermimic` by return, `two-g1-supertrack` by root-relative MPJPE | return **0.904 ± 0.001**; MPJPE **14.1 mm** root-relative (MLP world model, seeds 0-2) |
@@ -67,17 +77,8 @@ code its layout comes from, run here on the same GPUs, stand beside this library
 | **Hand-object tracking**, Inspire hand, three clips | ⏱ time to the target, not engineered | `hand-supertrack-fast` | **2.4 / 1.5 / 3.1 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character, MLP world model | 🎯 most accurate | `muscles-supertrack`, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm** (seeds 1-3) |
-| **NDM in RoboKit's planner**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model, not planned, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
+| **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model not yet run in the planner, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
-
-**Several GPUs.** The iteration's steps (collection, world-model updates, policy update, probe sweeps) run side by side on
-two to four GPUs: 87 ms per iteration instead of 161. With BlinkMimic's recipe, return 0.82 comes after 2.30-2.89 min on two
-to four A100 40GB SXM4, against 4.48 ± 0.37 min on one, at 1.3-2.3 times the GPU-minutes
-([results](benchmarks/g1_lafan1_tracking/results.md#multi-gpu-layouts-and-the-learners-restructuring-timed)). The layouts are
-[XMimic](https://github.com/nico-bohlinger/xmimic)'s. Its own code (JAX, unmodified, its evaluator) reaches 0.82 after
-1.81 ± 0.13 min on four of these GPUs and 3.53 ± 0.15 min on one; its own target (no failed clip, three checkpoints in a
-row) after 2.44 ± 0.25 min on four, and 4.62 and 4.01 min on one (seeds 0 and 2; seed 1 not within its 6.2 min budget).
-Minutes from iteration 50 ([why it is fast](docs/algorithms/xmimic.md)).
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
 Its authors' code, unmodified, with its own evaluation (seeds 0-2), first reaches return 0.82 after 14.48 ± 4.31 min
@@ -124,10 +125,11 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; world models of MuJoCo models in generalized
   coordinates (`ndm_gym/worldmodels/mjcf.py`).
-- **[2026-11] NDMs as simulators:** [throughput against physics](benchmarks/ndm_speed/results.md);
-  [RoboKit's planner](#ndms-in-robokits-planner) on world models, planning 1.8-3.0x faster on an A100; the G1's MLP
-  world model [against differentiable simulators](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models),
+- **[2026-11] NDMs as simulators:** [throughput against physics](benchmarks/ndm_speed/results.md); the G1's MLP world
+  model [against differentiable simulators](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models),
   its forward step 3.5-116x and its rollout gradient 2.4-183x faster (1,024-16,384 worlds, A100 40GB).
+- **[2026-11] NDMs in planners:** a world model scores the planner's candidates in place of the physics steps:
+  [RoboKit's](#ndms-in-robokits-planner) examples plan 1.8-3.0x faster than on MuJoCo Warp, on an A100.
 - **[2026-11] Training speed:** what makes training fast, measured and offered as options: a recipe and systems options
   ([BlinkMimic's](#blinkmimics-options)), multi-GPU layouts ([XMimic's](docs/algorithms/xmimic.md));
   [time to return 0.82](#training-speed), with [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside.
@@ -473,11 +475,12 @@ ndm-eval --run_dir logs/st_fast --watch --group 18 --repeats 4 --graph   # on a 
 
 **Training through an exact simulator.** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) backpropagates
 through a differentiable simulator, without a world model. Its authors' code, run unmodified and scored by its own
-evaluation (seeds 0-2), first reaches return 0.82 after 14.48 ± 4.31 min with its published configuration on an A100
-80GB SXM4, and after 18.48 ± 1.72 min with a reduced-memory configuration on an A100 40GB SXM4, which the published one
-does not fit. Minutes count from update 50; its authors report 8 min on an RTX PRO 6000.
+evaluation (seeds 0-2; minutes from update 50), first reaches return 0.82 after:
 
-On the A100 40GB SXM4 it needs about as many updates as this library's recipe (`--algo blinkmimic`; 1,500-1,750 against
+- 14.48 ± 4.31 min with its published configuration, on an A100 80GB SXM4;
+- 18.48 ± 1.72 min with a reduced-memory configuration, on an A100 40GB SXM4, which the published one does not fit.
+
+Its authors report 8 min on an RTX PRO 6000. On the A100 40GB SXM4 it needs about as many updates as this library's recipe (`--algo blinkmimic`; 1,500-1,750 against
 1,400-1,600), but an update through the exact simulator takes 0.72 s, one through the world model 0.16 s
 ([why](docs/algorithms/nablamimic.md#4-its-evaluation-beside-this-librarys)). These numbers stand beside the table and
 are not ranked with it: the evaluators, their simulators and the checkpoint intervals differ
@@ -514,12 +517,27 @@ a marked row and those below it on the marked GPU.
 
 </details>
 
-**Across GPUs.** An iteration's steps run side by side on several GPUs (`--layout AL | AWL`, `--eprobe_gpu`; the layouts of
-[XMimic](docs/algorithms/xmimic.md)). With BlinkMimic's recipe, return 0.82 comes after 2.89 ± 0.38 min on two A100 40GB SXM4
-GPUs, 2.41-2.69 min on three and 2.30-2.57 min on four, against 4.48 ± 0.37 min on one, at 1.3-2.3 times the GPU-minutes
-(seeds 0-2; on four GPUs 2.30 ± 0.22 min with a probe sweep every 250 iterations,
-[results](benchmarks/g1_lafan1_tracking/results.md#multi-gpu-layouts-and-the-learners-restructuring-timed)). On one GPU, what
-carries over from XMimic's restructured learner is the goal encoder run once per policy update, 6.6 % off an iteration.
+**Across GPUs.** The iteration's steps (collection, world-model updates, policy update, probe sweeps) run side by side on
+several GPUs (`--layout AL | AWL`, `--eprobe_gpu`; [XMimic](docs/algorithms/xmimic.md)'s layouts): 87 ms per iteration
+instead of 161. With BlinkMimic's recipe, seeds 0-2, A100 40GB SXM4
+([results](benchmarks/g1_lafan1_tracking/results.md#multi-gpu-layouts-and-the-learners-restructuring-timed)):
+
+| GPUs | minutes to return 0.82 |
+|---|---|
+| one | 4.48 ± 0.37 |
+| two | 2.89 ± 0.38 |
+| three | 2.41-2.69 |
+| four | 2.30-2.57; 2.30 ± 0.22 with a probe sweep every 250 iterations |
+
+The layouts take 1.3-2.3 times the GPU-minutes. On one GPU, what carries over from XMimic's restructured learner is the
+goal encoder run once per policy update, 6.6 % off an iteration.
+
+XMimic's own code (JAX, unmodified, its evaluator; minutes from iteration 50) on the same GPUs, not ranked with this
+library's times ([why it is fast](docs/algorithms/xmimic.md)):
+
+- return 0.82 after 1.81 ± 0.13 min on four GPUs and 3.53 ± 0.15 min on one;
+- its own target (no failed clip, three checkpoints in a row) after 2.44 ± 0.25 min on four, and 4.62 and 4.01 min on one
+  (seeds 0 and 2; seed 1 not within its 6.2 min budget).
 
 ### Two G1s, one two-person clip
 
@@ -829,7 +847,7 @@ and each plan executes on MuJoCo Warp. Planning time is the simulator's steps pl
 
 | goal | configuration | result |
 |---|---|---|
-| fastest planning; lowest held-out error | SuperTrack's acceleration model, MLP, as a bf16 copy | planning 3.0x / 1.8x / 2.1x faster than on MuJoCo Warp, every seed passing as there; held-out error 0.555 / 0.531 / 0.0283 |
+| planning time, not engineered; lowest held-out error | SuperTrack's acceleration model, MLP, as a bf16 copy | planning 3.0x / 1.8x / 2.1x faster than on MuJoCo Warp, every seed passing as there; held-out error 0.555 / 0.531 / 0.0283 |
 
 G1 box carrying / G1 climbing / Go2 jumping; one A100 40GB SXM4, the median over the planner's seeds 0-4; held-out error
 at the planning horizon, in units of one true step's spread ([details](benchmarks/robokit_ndm/results.md)).
