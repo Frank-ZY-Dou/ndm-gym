@@ -1,7 +1,7 @@
-# Hand-object tracking on the XHand: results
+# Hand-object tracking: results
 
 SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift clips with a floating right XHand
-([the task](../../docs/tasks/hand.md)).
+([the task](../../docs/tasks/hand.md)); SuperMimic also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
 
 ## Setup
 
@@ -59,6 +59,45 @@ benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/xhand_sm $SYSTEM
 | SuperMimic, HDMI's settings at γ 0.99 | `--lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95` |
 | SuperMimic, defaults | none |
 
+## More hands
+
+The Allegro hand (16 finger joints, four fingers) and the Inspire hand (12 finger joints) on the three clips, from
+SPIDER's retargets of the same demonstrations to them. The hand is read from its scene (`ndm_gym/robots/hands.py`); no
+option differs from the XHand's.
+
+- **Training:** SuperMimic with `--config hand-supermimic-fast` (HDMI's settings at γ 0.99 with HOI's optimizer options and
+  the systems options), 6,000 iterations in 2,048 worlds on one A100 40GB, training seeds 0-2; no setting was tuned on
+  these hands.
+- **Evaluation:** as above, on the last checkpoint.
+
+```bash
+python tools/download_hand_clips.py --robots allegro inspire
+ROBOT=allegro benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/allegro_sm --config hand-supermimic-fast
+ROBOT=inspire benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/inspire_sm --config hand-supermimic-fast
+```
+
+| hand | task | | seeds | success | object position | object position, last frame | fingertips | object lift |
+|---|---|---|---|---|---|---|---|---|
+| Allegro | `apple` | reference targets | | 0 % | 98.0 mm | 268.0 mm | 20.2 mm | 0.0 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.8 ± 0.2 mm | 2.1 ± 0.7 mm | 8.1 ± 0.6 mm | 26.3 ± 0.2 cm |
+| | `oakink_a01002` | reference targets | | 0 % | 134.4 mm | 278.7 mm | 19.6 mm | -2.6 cm |
+| | | SuperMimic | 0, 1, 2 | 98.8 ± 2.0 % | 4.1 ± 0.7 mm | 5.5 ± 2.3 mm | 7.6 ± 0.6 mm | 24.1 ± 0.2 cm |
+| | `can` | reference targets | | 0 % | 175.5 mm | 341.6 mm | 21.5 mm | -1.0 cm |
+| | | SuperMimic | 0, 1, 2 | 99.6 ± 0.0 % | 3.5 ± 0.6 mm | 3.6 ± 0.7 mm | 7.5 ± 0.1 mm | 32.6 ± 0.1 cm |
+| Inspire | `apple` | reference targets | | 0 % | 97.1 mm | 264.3 mm | 13.9 mm | -0.1 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 4.6 ± 0.3 mm | 5.3 ± 0.6 mm | 8.2 ± 0.4 mm | 25.8 ± 0.0 cm |
+| | `oakink_a01002` | reference targets | | 99 % | 29.9 mm | 31.2 mm | 17.2 mm | 21.5 cm |
+| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.9 ± 0.5 mm | 2.5 ± 0.9 mm | 5.2 ± 0.3 mm | 24.3 ± 0.0 cm |
+| | `can` | reference targets | | 0 % | 161.4 mm | 334.7 mm | 18.2 mm | -0.7 cm |
+| | | SuperMimic | 0, 1, 2 | 97.7 ± 3.7 % | 7.8 ± 6.3 mm | 12.0 ± 13.1 mm | 6.2 ± 0.9 mm | 31.9 ± 1.3 cm |
+
+Per seed, success / object position: the Allegro hand on `oakink_a01002` 100.0 / 96.5 / 100.0 % and 4.2 / 4.7 / 3.3 mm;
+the Inspire hand on `can` 93.4 / 100.0 / 99.6 % and 15.1 / 3.7 / 4.7 mm. Seed 0 of the Inspire hand on `can` drops the
+can in its rollout from the unperturbed start; the README's animation of that cell is seed 1's.
+
+The runs trained with the palm's kinematics alone in the world model's rollout and an imagined state's observation and
+goal computed once, two changes that leave the values equal up to rounding and are not part of this code.
+
 ## Training time
 
 Each run trains alone on an A100 40GB for 6,000 iterations with the systems options, three training seeds per
@@ -110,4 +149,4 @@ Both algorithms started from the settings selected on HDMI's tasks and were then
 ## Acknowledgment
 
 The task, its simulator, SuperMimic on it and the evaluation were contributed by Dechen Gao
-([pull request 2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)).
+([pull request 2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand by the same author.

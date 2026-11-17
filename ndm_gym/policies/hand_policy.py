@@ -8,13 +8,12 @@ import torch.nn as nn
 
 from ..core.nets import mlp, run_mlp
 from ..core.normalizer import RunningNorm
-from ..robots.xhand import NUM_J
 
 
 class HandPolicy(nn.Module):
-    def __init__(self, obs_dim: int, goal_dim: int, hidden=(1024, 512, 256)):
+    def __init__(self, obs_dim: int, goal_dim: int, num_joints: int, hidden=(1024, 512, 256)):
         super().__init__()
-        self.net = mlp(obs_dim + goal_dim, list(hidden), NUM_J)
+        self.net = mlp(obs_dim + goal_dim, list(hidden), num_joints)
         with torch.no_grad():
             self.net[-1].weight.mul_(0.01)
             self.net[-1].bias.zero_()
