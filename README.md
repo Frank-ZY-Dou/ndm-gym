@@ -44,8 +44,8 @@ The algorithms share one pipeline within each task:
 
 ## ⚡ Speed
 
-<p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators" width="760"/></p>
-<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds; RoboKit's rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+<p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators, and of RoboKit's and mbrl-lib's planning on them" width="760"/></p>
+<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds; the planners' rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
 <details>
 <summary>The chart's rows</summary>
@@ -55,6 +55,7 @@ The algorithms share one pipeline within each task:
 | NDM simulation: HDMI's scenes, two G1s ([details](benchmarks/ndm_speed/results.md)) | time per step at 4,096 worlds; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | the MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
 | RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds, the median over five planner seeds; the simulation step's speedup beside the task | one A100 40GB SXM4 |
+| mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
 
 </details>
 
