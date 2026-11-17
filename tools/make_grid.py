@@ -1,13 +1,16 @@
 """Animated WebP grids for the README: rendered clips as the tiles of one synchronized loop, with names in the margins only.
 
-The --clip tiles fill rows of --columns in their order (a shorter last row centred). A clip is an animated WebP (read with
-Pillow, by its frames' durations) or anything ffmpeg reads; it starts at START s (default 0), shows its whole frame or the box
-X Y W H in its pixels, and is scaled to --tile (Lanczos; the frame or the box must have the tile's aspect). The tiles start
-together at --fps. A tile that ends sooner holds its last frame until the longest one ends (or --seconds pass); then all
-hold --hold s more and the loop restarts. Names stand in the margins only: --col_labels above the columns, --row_labels left
-of the rows ("\\n" breaks a line), or --names above each tile (tiles of different things, e.g. tasks). Nothing is drawn on
-the tiles, which keep the NDM Gym marks of their renders; --mark draws one mark at the right end of the top band instead,
-for boxes that leave the renders' marks out (an error where it would touch a name).
+The --clip tiles fill rows of --columns in their order (a shorter last row centred). With --block NAME COLS ROWS, the clips
+that follow fill that block's COLS x ROWS cells of --tile instead, each the first cells where it fits, row by row (a clip may
+span ROWS x COLS cells, given after its box), with NAME above the block; the blocks fill rows of --columns, --block_gap apart.
+A clip is an animated WebP (read with Pillow, by its frames' durations) or anything ffmpeg reads; it starts at START s
+(default 0), shows its whole frame or the box X Y W H in its pixels, and is scaled to its tile (Lanczos; the frame or the box
+must have the tile's aspect). The tiles start together at --fps. A tile that ends sooner holds its last frame until the
+longest one ends (or --seconds pass); then all hold --hold s more and the loop restarts. Names stand in the margins only:
+--col_labels above the columns, --row_labels left of the rows ("\\n" breaks a line), --names above each tile (tiles of
+different things, e.g. tasks), or the blocks' names. Nothing is drawn on the tiles, which keep the NDM Gym marks of their
+renders; --mark draws one mark at the right end of the top band instead, for boxes that leave the renders' marks out (an
+error where it would touch a name).
 
 Two looks: by default dark margins and small grey names, as the hand-object grid (benchmarks/xhand_tracking/scripts/hand_grid.py);
 with --light, white margins and gaps and bold names that grow with the tile, as the teaser. The WebP is lossy at --quality,
@@ -29,12 +32,21 @@ The README's grids, from the repository's root:
       $(for t in $T; do echo --clip $M/hoi/policies/$t.webp; done)
   python tools/make_grid.py $M/robokit/grid.webp --columns 3 --tile 320 208 --hold 0.5 --col_labels "G1 box carrying" "G1 climbing" "Go2 jumping" \\
       --clip $M/robokit/g1_carry.webp --clip $M/robokit/g1_climb.webp --clip $M/robokit/go2_jump.webp
-The teaser, from renders without labels (tools/render.py --no_labels and the other renderers; HDMI's task at 1.5 times the
-speed, the hand-object clip at half speed), boxes that leave their marks out:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 3 --tile 512 384 --seconds 6 --quality 65 --max_mb 8 \\
-      --names "LAFAN1 tracking" "Two G1s" "Muscles" "Hand-object" "Human-object interaction" "RoboKit planning" \\
-      --clip lafan1.mp4 0 338 216 1152 864 --clip two_g1s.mp4 0 120 216 1440 1080 --clip muscles_walk.mp4 0.5 390 60 1216 912 \\
-      --clip hand_object.mp4 0 176 24 1344 1008 --clip hdmi_task.mp4 0 410 170 1080 810 --clip $M/robokit/go2_jump.webp 1.0 150 80 640 480
+The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
+renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips at half speed) in boxes that leave their marks out:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 3 --tile 256 192 --seconds 6 --quality 70 --max_mb 9 \\
+      --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
+      --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
+      --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
+      --block "Two G1s" 2 2 --clip two_g1s.mp4 0 120 216 1440 1080 2 2 \\
+      --block Muscles 2 2 --clip walk.mp4 0.5 0 195 1920 714 1 2 --clip run.mp4 0.5 0 195 1920 714 1 2 \\
+      --block Hand-object 2 2 --clip xhand_spray_bottle.mp4 0 260 20 1333 1000 --clip inspire_can.mp4 0 330 140 1120 840 \\
+      --clip allegro_spray_bottle.mp4 0 290 0 1040 780 --clip xhand_apple.mp4 0 450 180 1000 750 \\
+      --block "Human-object interaction" 2 2 --clip carry_box_over_shoulder.mp4 0 410 170 1080 810 \\
+      --clip open_foldchair-sit.mp4 0 344 98 1152 864 --clip roll_ball-hand.mp4 0 414 118 1152 864 \\
+      --clip topple_wood_board_and_cross.mp4 0 400 130 1120 840 \\
+      --block "RoboKit planning" 2 2 --clip $M/robokit/g1_carry.webp 0.2 375 100 343 520 2 1 \\
+      --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480
 """
 
 import argparse
@@ -97,12 +109,53 @@ def clip_frames(path: str, start: float, box: tuple[int, int, int, int] | None, 
     return np.frombuffer(raw, np.uint8)[: n * size[0] * size[1] * 3].reshape(n, size[1], size[0], 3)
 
 
+class InOrder(argparse.Action):
+    """Keeps --block and --clip in the order given: a block's tiles are the clips that follow it."""
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        namespace.items = [*(getattr(namespace, "items", None) or []), (self.dest, values)]
+
+
+def place_blocks(blocks, tiles, tw, th, gap, block_gap, per_row, band):
+    """The block layout: (W, H, each tile's (x, y, w, h), each block's name and centre in its band). Blocks of COLS x ROWS cells
+    of tw x th fill rows of ``per_row`` (a shorter last row centred); a block's tiles take the first cells where they fit,
+    row by row, spanning ROWS x COLS cells each, and must cover its cells exactly."""
+    cols, rows = blocks[0][1], blocks[0][2]
+    if any((b[1], b[2]) != (cols, rows) for b in blocks):
+        raise ValueError("--block: every block needs the same COLS ROWS")
+    bw, bh, B = cols * tw + (cols - 1) * gap, rows * th + (rows - 1) * gap, len(blocks)
+    W = per_row * bw + (per_row - 1) * block_gap
+    H = math.ceil(B / per_row) * (band + bh + block_gap) - block_gap
+    places, names = [None] * len(tiles), []
+    for b, (name, _, _, members) in enumerate(blocks):
+        r, c = divmod(b, per_row)
+        k = min(per_row, B - r * per_row)  # blocks in this row
+        x0, y0 = (W - k * bw - (k - 1) * block_gap) // 2 + c * (bw + block_gap), r * (band + bh + block_gap) + band
+        names.append((name, (x0 + bw / 2, y0 - band / 2)))
+        free = np.ones((rows, cols), bool)
+        for i in members:
+            rs, cs = tiles[i][3]
+            spot = next(((y, x) for y in range(rows - rs + 1) for x in range(cols - cs + 1) if free[y : y + rs, x : x + cs].all()), None)
+            if spot is None:
+                raise ValueError(f"--block {name!r}: no {rs} x {cs} cells left for {tiles[i][0]}")
+            y, x = spot
+            free[y : y + rs, x : x + cs] = False
+            places[i] = (x0 + x * (tw + gap), y0 + y * (th + gap), cs * tw + (cs - 1) * gap, rs * th + (rs - 1) * gap)
+        if free.any():
+            raise ValueError(f"--block {name!r}: its tiles leave {int(free.sum())} of its {rows * cols} cells empty")
+    return W, H, places, names
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("out", help="the grid, an animated .webp")
-    p.add_argument("--clip", nargs="+", action="append", required=True, metavar="ARG",
-                   help="a tile, in row-major order: PATH, or PATH START, or PATH START X Y W H (the box in the clip's pixels)")  # fmt: skip
-    p.add_argument("--columns", type=int, required=True, help="tiles per row")
+    p.add_argument("--clip", nargs="+", action=InOrder, required=True, metavar="ARG",
+                   help="a tile, in order: PATH, or PATH START, or PATH START X Y W H (the box in the clip's pixels); in a block also "
+                        "PATH START X Y W H ROWS COLS, the cells it spans")  # fmt: skip
+    p.add_argument("--block", nargs=3, action=InOrder, metavar=("NAME", "COLS", "ROWS"),
+                   help="a block of COLS x ROWS cells of --tile, its NAME above it; the clips that follow fill it")  # fmt: skip
+    p.add_argument("--columns", type=int, required=True, help="tiles per row, or with --block blocks per row")
+    p.add_argument("--block_gap", type=int, default=16, help="pixels between blocks")
     p.add_argument("--tile", type=int, nargs=2, default=(320, 180), metavar=("W", "H"), help="a tile's size in pixels")
     p.add_argument("--fps", type=float, default=20.0)
     p.add_argument("--seconds", type=float, default=None, help="the loop's length before --hold; default: the longest clip from its start")
@@ -116,66 +169,81 @@ def main():
     p.add_argument("--quality", type=int, default=70, help="WebP quality (lossy), 0-100")
     p.add_argument("--max_mb", type=float, default=5.0, help="the largest file allowed")
     a = p.parse_args()
-    tiles = []
-    for c in a.clip:
-        if len(c) not in (1, 2, 6):
-            p.error(f"--clip {' '.join(c)}: give PATH, PATH START or PATH START X Y W H")
-        tiles.append((c[0], float(c[1]) if len(c) > 1 else 0.0, tuple(int(v) for v in c[2:]) if len(c) == 6 else None))
+    tiles, blocks = [], []  # tiles: (path, start, box, (rows, cols) spanned); blocks: [name, cols, rows, its tiles]
+    for kind, v in a.items:
+        if kind == "block":
+            blocks.append((v[0], int(v[1]), int(v[2]), []))
+            continue
+        if len(v) not in (1, 2, 6, 8) or (len(v) == 8 and not blocks):
+            p.error(f"--clip {' '.join(v)}: give PATH, PATH START or PATH START X Y W H, and in a block ROWS COLS after the box")
+        if any(k == "block" for k, _ in a.items) and not blocks:
+            p.error(f"--clip {v[0]}: before the first --block")
+        if blocks:
+            blocks[-1][3].append(len(tiles))
+        tiles.append((v[0], float(v[1]) if len(v) > 1 else 0.0, tuple(int(x) for x in v[2:6]) if len(v) >= 6 else None,
+                      (int(v[6]), int(v[7])) if len(v) == 8 else (1, 1)))  # fmt: skip
     n, C, (tw, th) = len(tiles), a.columns, a.tile
     R = math.ceil(n / C)
+    if blocks and (a.col_labels or a.row_labels or a.names):
+        p.error("--col_labels, --row_labels and --names label a grid without blocks; a block carries its name")
     if a.col_labels is not None and (len(a.col_labels) != C or n != R * C):
         p.error(f"--col_labels: {len(a.col_labels)} names for {C} columns, which {n} tiles must fill")
     if a.row_labels is not None and len(a.row_labels) != R:
         p.error(f"--row_labels: {len(a.row_labels)} names for {R} rows")
     if a.names is not None and (len(a.names) != n or a.col_labels is not None):
         p.error(f"--names: {len(a.names)} names for {n} tiles, and not with --col_labels")
-    if a.mark and a.names is None and a.col_labels is None:
-        p.error("--mark goes in the band of names above the tiles: give --names or --col_labels")
-    for path, start, box in tiles:
+    if a.mark and a.names is None and a.col_labels is None and not blocks:
+        p.error("--mark goes in the band of names above the tiles: give --names, --col_labels or --block")
+    look = LIGHT if a.light else DARK
+    labels = [t.replace("\\n", "\n") for t in a.row_labels or ()]
+    s = ((blocks[0][2] * th + (blocks[0][2] - 1) * a.gap) if blocks else th) / 225 if a.light else 1.0  # names grow with a block or tile
+    font = ImageFont.truetype(BOLD, round(15 * s)) if a.light else ImageFont.truetype(FONT, 13)
+    if blocks:
+        band = round(30 * s) if a.light else 24
+        W, H, places, top = place_blocks(blocks, tiles, tw, th, a.gap, a.block_gap, C, band)
+        left, row_y = 0, []
+    else:
+        band = (round(30 * s) if a.light else 24) if (a.names or a.col_labels) else 0
+        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        left = max(probe.multiline_textbbox((0, 0), t, font=font, spacing=3)[2] for t in labels) + 24 if labels else 0
+        step = th + a.gap + (band if a.names else 0)  # from one row's top to the next one's: each row has its band with --names
+        row_y = [band + r * step for r in range(R)]
+        counts = [min(C, n - r * C) for r in range(R)]
+        row_x = [left + (C - k) * (tw + a.gap) // 2 for k in counts]  # a shorter row centred
+        W, H = left + C * tw + (C - 1) * a.gap, row_y[-1] + th
+        places = [(row_x[i // C] + (i % C) * (tw + a.gap), row_y[i // C], tw, th) for i in range(n)]
+        top = [(t, (left + j * (tw + a.gap) + tw / 2, band / 2)) for j, t in enumerate(a.col_labels or ())]
+        top += [(t, (row_x[i // C] + (i % C) * (tw + a.gap) + tw / 2, row_y[i // C] - band / 2)) for i, t in enumerate(a.names or ())]
+    for (path, start, box, _), (_, _, pw, ph) in zip(tiles, places):
         w, h = source_size(path)
         if box is not None and (box[0] < 0 or box[1] < 0 or box[0] + box[2] > w or box[1] + box[3] > h):
             raise ValueError(f"{path}: the box {box} leaves its {w} x {h} frame")
         bw, bh = (w, h) if box is None else box[2:]
-        if abs(bw * th / (bh * tw) - 1) > 0.02:
-            raise ValueError(f"{path}: {'the box' if box else 'the frame'} {bw} x {bh} is not of the tile's aspect {tw} x {th}")
+        if abs(bw * ph / (bh * pw) - 1) > 0.02:
+            raise ValueError(f"{path}: {'the box' if box else 'the frame'} {bw} x {bh} is not of the tile's aspect {pw} x {ph}")
     limit = None if a.seconds is None else round(a.seconds * a.fps)
-    frames = [clip_frames(path, start, box, (tw, th), a.fps, limit) for path, start, box in tiles]
+    frames = [clip_frames(path, start, box, (pw, ph), a.fps, limit) for (path, start, box, _), (_, _, pw, ph) in zip(tiles, places)]
     length = max(len(f) for f in frames) if limit is None else limit
-    for (path, start, _), f in zip(tiles, frames):
+    for (path, start, _, _), f in zip(tiles, frames):
         held = f", its last frame held for {(length - len(f)) / a.fps:.2f} s" if len(f) < length else ""
         print(f"{path}: {len(f)} frames from {start:g} s{held}")
-    look = LIGHT if a.light else DARK
-    s = th / 225 if a.light else 1.0  # the teaser's names grow with its tiles
-    font = ImageFont.truetype(BOLD, round(15 * s)) if a.light else ImageFont.truetype(FONT, 13)
-    band = (round(30 * s) if a.light else 24) if (a.names or a.col_labels) else 0
-    labels = [t.replace("\\n", "\n") for t in a.row_labels or ()]
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    left = max(probe.multiline_textbbox((0, 0), t, font=font, spacing=3)[2] for t in labels) + 24 if labels else 0
-    step = th + a.gap + (band if a.names else 0)  # from one row's top to the next one's: each row has its band with --names
-    row_y = [band + r * step for r in range(R)]
-    counts = [min(C, n - r * C) for r in range(R)]
-    row_x = [left + (C - k) * (tw + a.gap) // 2 for k in counts]  # a shorter row centred
-    W, H = left + C * tw + (C - 1) * a.gap, row_y[-1] + th
     back = Image.new("RGB", (W, H), look["back"])
     draw = ImageDraw.Draw(back)
-    top = [(t, (left + j * (tw + a.gap) + tw / 2, band / 2)) for j, t in enumerate(a.col_labels or ())]
-    above = [(t, (row_x[i // C] + (i % C) * (tw + a.gap) + tw / 2, row_y[i // C] - band / 2)) for i, t in enumerate(a.names or ())]
-    for t, xy in top + above:
+    for t, xy in top:
         draw.text(xy, t, fill=look["ink"], font=font, anchor="mm")
     for r, t in enumerate(labels):
         draw.multiline_text((left / 2, row_y[r] + th / 2), t, fill=look["ink"], font=font, anchor="mm", align="center", spacing=3)
     if a.mark:  # tools/render.py's mark, in the teaser's grey, clear of the names in the top band
         small = ImageFont.truetype(BOLD, round(11 * s))
         x0 = draw.textbbox((W - 6, band / 2), "NDM Gym", font=small, anchor="rm")[0]
-        for t, xy in (top + above)[:C]:
+        for t, xy in top[:C]:
             if draw.textbbox(xy, t, font=font, anchor="mm")[2] + 8 > x0:
                 raise ValueError(f"the mark would touch the name {t!r} in the top band: shorten it, or put a shorter name last in the top row")
         draw.text((W - 6, band / 2), "NDM Gym", fill=MARK_INK, font=small, anchor="rm")
     canvas, out = np.asarray(back).copy(), []
-    places = [(row_x[i // C] + (i % C) * (tw + a.gap), row_y[i // C]) for i in range(n)]
     for k in range(length + round(a.hold * a.fps)):
-        for (x, y), f in zip(places, frames):
-            canvas[y : y + th, x : x + tw] = f[min(k, len(f) - 1)]
+        for (x, y, pw, ph), f in zip(places, frames):
+            canvas[y : y + ph, x : x + pw] = f[min(k, len(f) - 1)]
         out.append(Image.fromarray(canvas.copy()))
     ms = np.round(np.arange(len(out) + 1) * 1000.0 / a.fps)  # whole ms that add up to the frames' times
     tmp = a.out + ".tmp.webp"
@@ -186,7 +254,8 @@ def main():
         os.remove(tmp)
         raise ValueError(f"{a.out}: {mb:.2f} MB at quality {a.quality}, above --max_mb {a.max_mb}: lower --quality, --fps or --tile")
     os.replace(tmp, a.out)
-    print(f"{a.out}: {R} x {C} tiles of {tw} x {th}, {len(out)} frames at {a.fps:g} fps ({len(out) / a.fps:.2f} s), {W} x {H}, {mb:.2f} MB")
+    shape = f"{len(blocks)} blocks of {blocks[0][1]} x {blocks[0][2]} cells" if blocks else f"{R} x {C} tiles"
+    print(f"{a.out}: {shape} of {tw} x {th}, {len(out)} frames at {a.fps:g} fps ({len(out) / a.fps:.2f} s), {W} x {H}, {mb:.2f} MB")
 
 
 if __name__ == "__main__":

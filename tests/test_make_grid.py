@@ -50,3 +50,32 @@ def test_grid_layout_and_hold(tmp_path):
         assert r.returncode != 0 and why in r.stderr
     r = _run(out, "--columns", "1", "--tile", "64", "36", "--clip", str(tmp_path / "wide.webp"))
     assert r.returncode != 0 and "aspect" in r.stderr
+
+
+def test_blocks_with_spans(tmp_path):
+    clips = {
+        "red": ((220, 40, 40), (132, 100)),
+        "green": ((40, 220, 40), (64, 100)),
+        "blue": ((40, 40, 220), (64, 48)),
+        "grey": ((150, 150, 150), (64, 48)),
+    }
+    for name, (rgb, size) in clips.items():
+        _webp(str(tmp_path / f"{name}.webp"), rgb, 4, size=size)
+    c = {name: str(tmp_path / f"{name}.webp") for name in clips}
+    out = str(tmp_path / "blocks.webp")
+    tiles = ["--block", "A", "2", "2", "--clip", c["red"], "0", "0", "0", "132", "100", "2", "2",
+             "--block", "B", "2", "2", "--clip", c["green"], "0", "0", "0", "64", "100", "2", "1",
+             "--clip", c["blue"], "--clip", c["grey"]]  # fmt: skip
+    r = _run(out, "--columns", "2", "--tile", "64", "48", "--quality", "90", *tiles)
+    assert r.returncode == 0, r.stderr
+    with Image.open(out) as im:
+        assert im.size == (2 * 132 + 16, 24 + 100)  # two blocks of 2 x 2 cells, 16 px apart, under their band
+        im.seek(2)
+        f = np.asarray(im.convert("RGB")).astype(float)
+    for (x0, x1, y0, y1), ch in (((10, 120, 35, 115), 0), ((152, 208, 35, 115), 1), ((220, 276, 30, 66), 2)):
+        assert f[y0:y1, x0:x1, ch].mean() > 1.8 * np.delete(f[y0:y1, x0:x1], ch, axis=2).mean()
+    assert abs(f[82:118, 220:276].std(axis=2).mean()) < 6 and f[82:118, 220:276].mean() > 100  # grey under blue, beside the tall green
+    r = _run(out, "--columns", "2", "--tile", "64", "48", *tiles[:-2])
+    assert r.returncode != 0 and "cells empty" in r.stderr
+    r = _run(out, "--columns", "1", "--tile", "64", "48", "--clip", c["green"], "0", "0", "0", "64", "100", "2", "1")
+    assert r.returncode != 0 and "in a block" in r.stderr
