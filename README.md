@@ -25,18 +25,20 @@ The algorithms share one pipeline within each task:
 - **Muscles:** MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp).
 - **Hands:** hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp).
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Policies tracking LAFAN1, two G1s, a muscle-actuated character and a hand-object clip; one of HDMI's human-object interaction tasks; RoboKit's Go2 jumping example planned on a world model" width="100%"/></p>
-<p align="center"><i>SuperTrack on LAFAN1, two G1s, the muscles and a hand-object clip (half speed).<br>An HDMI task trained in the world model (1.5x speed); RoboKit's Go2 jumping, planned on a world model.</i></p>
-<p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; also on MuscleVAE's character), InterHuman (CC BY-NC-SA 4.0), SPIDER's OakInk retarget, HDMI and RoboKit, for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Six tasks with several cases each: four LAFAN1 clips, two G1s, a muscle-actuated character walking and running, three robot hands with their objects, four of HDMI's human-object interaction tasks, and RoboKit's three examples planned on a world model" width="100%"/></p>
+<p align="center"><i>SuperTrack on four LAFAN1 clips, two G1s, the muscles' walk and run, and three hands with their objects (half speed).<br>Four HDMI tasks trained in the world model (1.5x speed); RoboKit's three examples, planned on a world model.</i></p>
+<p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), MuscleVAE, InterHuman (CC BY-NC-SA 4.0), SPIDER's hand retargets, HDMI and RoboKit (with an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 <details>
 <summary>The teaser's runs and errors</summary>
 
-| tiles | runs | tracking error, speed-up |
+| block | runs | tracking error, speed-up |
 |---|---|---|
-| LAFAN1, two G1s, muscles, hand-object | SuperTrack's selected configuration on each task, MLP world model; the hand-object clip at half speed, its last frame held | over the window shown: LAFAN1 15.3 mm and two G1s 13.2 mm (MPJPE, root-relative), muscles 24.3 mm over the walk clip (MPJPE, root frame), hand-object 1.1 mm (the spray bottle's position) |
-| human-object interaction | HDMI's carry_box_over_shoulder, one policy, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
-| RoboKit planning | RoboKit's Go2 jumping example, planned on SuperTrack's world model and executed on MuJoCo Warp; its foot targets in blue | planning 2.1x faster than on MuJoCo Warp |
+| LAFAN1 tracking | SuperTrack's selected configuration, MLP world model, seed 2, 3 h checkpoint: dance1_subject2, fight1_subject2, fallAndGetUp2_subject2 and sprint1_subject2, 6 s of each clip's window in its section | |
+| Two G1s, muscles | SuperTrack's selected configuration on each task, MLP world model; MuscleVAE's walk and run | over the window shown: two G1s 13.2 mm (MPJPE, root-relative), the walk 24.3 mm (MPJPE, root frame) |
+| Hand-object | SuperTrack's runs in its section's grid ([which](benchmarks/xhand_tracking/results.md#the-readmes-animations)): the XHand on the spray bottle and the apple, the Allegro hand on the spray bottle, the Inspire hand on the can; half speed, last frames held | |
+| Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
+| RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
 
 </details>
 
