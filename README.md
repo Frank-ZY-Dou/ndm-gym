@@ -68,7 +68,7 @@ within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results
 |  | 🎯 most accurate | `lafan1-supertrack-accurate`, 3 h with the speed options on an A100 40GB | return **0.861 ± 0.003**, MPJPE **14.5 ± 0.2 mm** (seeds 7-9) |
 | **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | ⏱ time to the target, not engineered | `--algo blinkmimic --layout AWL --eprobe_gpu 3`, a probe sweep every 250 iterations ([XMimic](docs/algorithms/xmimic.md)'s layout: actor, world model, policy and probe sweeps on a GPU each) | return 0.82 after **2.30 ± 0.22 min** on four A100 40GB SXM4, against 4.48 ± 0.37 min on one (seeds 0-2); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min on four, 3.53 ± 0.15 min on one (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
-| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | 🚀 fastest | `two-g1-supermimic` | return 0.88 after **0.10 h** on an A100 80GB (seed 0) |
+| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered (seed 0) | `two-g1-supermimic` | return 0.88 after **0.10 h** on an A100 80GB (seed 0) |
 |  | 🎯 most accurate | `two-g1-supermimic` by return, `two-g1-supertrack` by root-relative MPJPE | return **0.904 ± 0.001**; MPJPE **14.1 mm** root-relative (MLP world model, seeds 0-2) |
 | **[Hand-object tracking](#hand-object-tracking)**, XHand, three clips | ⏱ time to the target, not engineered | `hand-supermimic-fast` | **1.3 / 1.6 / 1.6 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
@@ -523,13 +523,13 @@ redistributed). One policy controls both.
 
 | goal | configuration | result |
 |---|---|---|
-| most accurate by return; fastest | `--config two-g1-supermimic` | return 0.904 ± 0.001; return 0.88 after 0.10 h (seed 0, A100 80GB) |
+| most accurate by return; time to the target, not engineered (seed 0) | `--config two-g1-supermimic` | return 0.904 ± 0.001; return 0.88 after 0.10 h (seed 0, A100 80GB) |
 | most accurate by root-relative MPJPE | `--config two-g1-supertrack` | MPJPE 14.1 mm, root-relative |
 
 Add `--motion_dir`; seeds 0-2, GPUs below.
 
-**In short:** `two-g1-supermimic` for return and speed, `two-g1-supertrack` for root-relative MPJPE; the times come
-from one seed (0.10 and 0.11 h), and global MPJPE is 45.8-47.5 mm in all four configurations.
+**In short:** `two-g1-supermimic` for return and the time to return 0.88, `two-g1-supertrack` for root-relative MPJPE; the
+times come from one seed (0.10 and 0.11 h, not engineered), and global MPJPE is 45.8-47.5 mm in all four configurations.
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack's selected run on InterHuman clip 1566 (seed 0): its best checkpoint (iteration 7,000), MLP world model; blue ghosts: the references. MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
