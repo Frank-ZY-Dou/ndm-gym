@@ -148,6 +148,7 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
                                 "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
     },
+    "train_animal": {},  # the selected configurations come with the study's runs (benchmarks/mimic_mjx_animal_tracking)
 }
 
 
