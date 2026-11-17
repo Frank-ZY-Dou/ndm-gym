@@ -13,7 +13,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
-def main():
+def main(*, reference_cls=None, native_camera=False):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("reference", type=Path)
     parser.add_argument("model", type=Path)
@@ -33,15 +33,17 @@ def main():
     import numpy as np
     from PIL import Image, ImageDraw
 
-    from ndm_gym.motion.adroit_door import JOINT_NAMES, DoorReference
+    from ndm_gym.motion.adroit_door import DoorReference
 
-    ref = DoorReference.load(args.reference)
+    ref = (reference_cls or DoorReference).load(args.reference)
+    title = "Adroit " + ref.metadata.get("task", "door").capitalize()
     end = args.end_frame if args.end_frame is not None else ref.frames
     if not 0 <= args.start_frame < end <= ref.frames:
         parser.error("frame window must be nonempty and within the saved trajectory")
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
     names = tuple(mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_JOINT, i) for i in range(model.njnt))
-    if names != JOINT_NAMES or model.nq != 30 or model.nv != 30:
+    if (names != tuple(ref.metadata["joint_names"]) or model.nq != ref.qpos.shape[1]
+            or model.nv != ref.qvel.shape[1]):
         raise ValueError("Model does not have the reference's native joint layout")
     qpos, qvel = ref.qpos, ref.qvel
     if args.rollouts:
@@ -56,6 +58,16 @@ def main():
     data, camera = mujoco.MjData(model), mujoco.MjvCamera()
     camera.azimuth, camera.elevation, camera.distance = 90, -25, 1.8
     camera.lookat[:] = [-.2, .1, .35]
+    if native_camera:
+        # Frame the manipulation above the native table, not the scene extent
+        # (which includes table legs and puts its center below the tabletop).
+        distance, azimuth, focus = {
+            "pen": (.75, -45., [0., -.2, .24]),
+            "hammer": (1.2, 45., [0., -.16, .14]),
+            "relocate": (1.15, 135., [.1, -.05, .14]),
+        }[ref.metadata["task"]]
+        camera.distance, camera.azimuth = distance, azimuth
+        camera.lookat[:] = focus
     frames = []
     bold = _font(0, 20)
     with mujoco.Renderer(model, height=480, width=640) as renderer:
@@ -66,7 +78,7 @@ def main():
             frame = Image.fromarray(np.array(renderer.render(), copy=True)).convert("RGBA")
             overlay = Image.new("RGBA", frame.size)
             draw = ImageDraw.Draw(overlay)
-            draw.text((12, 12), ("Adroit Door: " + args.label if args.rollouts else "Adroit Door: physical replay reference"), font=bold, fill=(255, 255, 255, 255))
+            draw.text((12, 12), (title+": " + args.label if args.rollouts else title+": physical replay reference"), font=bold, fill=(255, 255, 255, 255))
             draw.text((12, 38), ("Saved physical control rollout" if args.rollouts else "Not a trained policy"), font=bold, fill=(255, 255, 255, 255))
             draw_mark(draw, 640, 480, bold, fill=(255, 255, 255, 220))
             frames.append(Image.alpha_composite(frame, overlay).convert("RGB"))

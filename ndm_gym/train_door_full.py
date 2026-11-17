@@ -18,14 +18,15 @@ from .door_schedule import FullHandSchedule
 from .motion.adroit_door import DoorReference
 from .motion.door_ring import DoorReplayRing
 from .sim.rigid.door_collector import ParallelNativeDoorCollector
+from .sim.rigid.adroit_door import DoorPhysics
 from .tasks.adroit_door import DoorTask
 from .train_door import DOOR_METHODS
 from .train_door_online import configure_fused_adam, fingerprint, optimizer_counts, updates
 from .worldmodels.mjcf import MjcfLayout
 
 
-def make_algorithm(method, model, reference, device):
-    task = DoorTask(reference, model.actuator_ctrlrange, device=device, goal_frames=5)
+def make_algorithm(method, model, reference, device, *, task_cls=DoorTask):
+    task = task_cls(reference, model.actuator_ctrlrange, device=device, goal_frames=5)
     rate = 4e-4 if method == 'supertrack' else 2e-4
     options = (dict(task_weights=True, correction_reg=.01, correction_imag_noise=.2)
                if method == 'supertrack' else dict(critic_epochs=5, critic_minibatches=4))
@@ -91,7 +92,7 @@ def restore(checkpoint, algo, collector, ring, protocol):
     return checkpoint['iteration'], checkpoint['timing']
 
 
-def main(argv=None):
+def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics):
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('model', 'reference', 'native-library', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
@@ -109,11 +110,13 @@ def main(argv=None):
     import mujoco
     torch.set_num_threads(1)
     torch.manual_seed(a.seed)
-    reference = DoorReference.load(a.reference)
+    reference = reference_cls.load(a.reference)
+    if reference_cls is not DoorReference and reference.metadata.get('model_sha256') != fingerprint(a.model):
+        raise ValueError('Physical reference model hash mismatch')
     model = mujoco.MjModel.from_xml_path(str(a.model.resolve()))
     started = time.perf_counter()
-    algo, rate = make_algorithm(a.method, model, reference, a.device)
-    ring = DoorReplayRing(256, schedule.worlds, a.device)
+    algo, rate = make_algorithm(a.method, model, reference, a.device, task_cls=task_cls)
+    ring = DoorReplayRing(256, schedule.worlds, a.device, nq=model.nq, nv=model.nv, nu=model.nu)
     protocol = dict(format=1, method=a.method, seed=a.seed, schedule=asdict(schedule),
                     workers=a.workers, device=a.device, goal_frames=5, horizon=16,
                     wm_batch=2048, wm_window=8, pi_batch=4096, lr=rate, action_noise=.1,
@@ -122,6 +125,9 @@ def main(argv=None):
                     adaptation='native articulated state and action units; demonstration-control residual; finite-clip terminal; native CPU physics',
                     unavailable='XHand FK, error-based soft termination/failure penalty, CUDA physics/collection graphs',
                     input_hashes={key: fingerprint(getattr(a, key)) for key in ('model', 'reference', 'native_library')})
+    if reference_cls is not DoorReference:
+        protocol['task'] = reference.metadata['task']
+        protocol['reference_schema'] = reference.metadata['kind']
     source = Path(__file__).parent
     protocol['source_sha256'] = hashlib.sha256(b''.join(
         str(f.relative_to(source)).encode()+f.read_bytes() for f in sorted(source.rglob('*.py')))).hexdigest()
@@ -129,7 +135,7 @@ def main(argv=None):
     (a.output/'protocol.json').write_text(json.dumps(protocol, indent=2)+'\n')
     sync = torch.cuda.synchronize if a.device.startswith('cuda') else lambda: None
     with ParallelNativeDoorCollector(model, reference, schedule.worlds, a.workers,
-                                     a.native_library.resolve()) as collector:
+                                     a.native_library.resolve(), physics_cls=physics_cls) as collector:
         iteration = 0
         timing = dict(collection_seconds=0., update_seconds=0., checkpoint_seconds=0.)
         if a.resume:

@@ -42,6 +42,7 @@ class DoorTask:
     Actual opening is independent of the dense tracking reward.
     """
 
+    nq, nv = 30, 30
     obs_dim = 88  # qpos30 + scaled qvel30 + previous controls28
     goal_frame_dim = 60
     action_dim = 28
@@ -59,6 +60,16 @@ class DoorTask:
             raise ValueError("Expected finite increasing native actuator ranges (28, 2)")
         self.ctrl_mid = ranges.mean(-1)
         self.ctrl_half = (ranges[:, 1] - ranges[:, 0]) / 2
+
+    @property
+    def tracking_widths(self):
+        c = self.cfg
+        return (c.translation_std, c.hand_std, c.door_std, c.latch_std)
+
+    def tracking_terms(self, state, frame):
+        delta = (state[0] - self.q[frame]).abs()
+        return torch.stack((delta[..., 0], delta[..., 1:28].mean(-1),
+                            delta[..., 28], delta[..., 29]), -1)
 
     def next_frame(self, frame):
         return (frame + 1).clamp(max=self.frames - 1)

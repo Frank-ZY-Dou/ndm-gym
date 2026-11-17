@@ -9,14 +9,14 @@ class DoorReplayRing:
     or synchronizes per-world tensors with the host. Capacity is control steps.
     """
 
-    def __init__(self, capacity, worlds, device='cpu'):
+    def __init__(self, capacity, worlds, device='cpu', *, nq=30, nv=30, nu=28):
         if type(capacity) is not int or type(worlds) is not int or min(capacity, worlds) < 1:
             raise ValueError('positive integer capacity and worlds required')
         self.capacity, self.worlds = capacity, worlds
         self.device = torch.device(device)
         self.data = {key: torch.empty((capacity, worlds, size), device=device)
-                     for key, size in [('qpos', 30), ('qvel', 30), ('next_qpos', 30),
-                                       ('next_qvel', 30), ('actions', 28), ('previous_actions', 28)]}
+                     for key, size in [('qpos', nq), ('qvel', nv), ('next_qpos', nq),
+                                       ('next_qvel', nv), ('actions', nu), ('previous_actions', nu)]}
         self.frames = torch.empty((capacity, worlds), dtype=torch.long, device=device)
         self.done = torch.empty((capacity, worlds), dtype=torch.bool, device=device)
         self.total = 0

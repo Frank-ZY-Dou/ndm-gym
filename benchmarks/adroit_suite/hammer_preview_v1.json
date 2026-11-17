@@ -1,0 +1,24 @@
+{
+  "label": "supermimic accurate / seed 0 / 20k",
+  "camera": {
+    "azimuth": 45.0,
+    "elevation": -25.0,
+    "distance": 1.2,
+    "lookat": [
+      0.0,
+      -0.16,
+      0.14
+    ]
+  },
+  "episode": 0,
+  "start_frame": 0,
+  "end_frame_exclusive": 624,
+  "stride": 2,
+  "contains_terminal_frame": false,
+  "input_sha256": {
+    "reference": "0d10ff0c5d2afab0e00cab3510e99b38de042cda1914d80ac2f3ddaa7672aed2",
+    "model": "1f4a20c842b776ffc08a9200073e2d7e3a7ac34b8b874643bd02bd610c08ca1d",
+    "rollouts": "7eca59db51a58c6c5d47202d14b3a8c6fe8cdc68dc01e2e40a882ff0015e14f9"
+  },
+  "output_sha256": "0a9d5dc137e120fcdc6da9e7b03260929328dca0c81c763b4cdca0c7ab959033"
+}

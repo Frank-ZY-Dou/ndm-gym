@@ -1,0 +1,269 @@
+{
+  "status": "complete_single_seed_study",
+  "rows": [
+    {
+      "task": "pen",
+      "method": "supertrack",
+      "seed": 0,
+      "clip": 1,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 0
+      },
+      "means": {
+        "tracking_return": 5.978124993810274,
+        "normalized_tracking_rmse": 0.04923169852306917,
+        "hand_rotation_joint_rmse_rad": 0.012516707711938897,
+        "object_translation_rmse_m": 0.0008118730634794591,
+        "object_rotation_joint_rmse_rad": 0.018069918220069606,
+        "native_success_final": 0.98046875,
+        "native_success_ever": 0.98046875,
+        "native_success_frame_fraction": 0.5736132812499999,
+        "finite": 1.0
+      },
+      "training_seconds": 8247.23675563559,
+      "evaluation_seconds": 19.595331344753504,
+      "checkpoint_sha256": "c8a3b4da39b2a924632c070bdcc5180853e9fcdc807c68de02aa55650cd2c5ae",
+      "guarded_seconds": 8317.025834083557
+    },
+    {
+      "task": "pen",
+      "method": "supermimic",
+      "seed": 0,
+      "clip": 1,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 394000
+      },
+      "means": {
+        "tracking_return": 5.8363018112500304,
+        "normalized_tracking_rmse": 0.16748442732771357,
+        "hand_rotation_joint_rmse_rad": 0.050175090881239115,
+        "object_translation_rmse_m": 0.003252100687328206,
+        "object_rotation_joint_rmse_rad": 0.05127682069316916,
+        "native_success_final": 0.99609375,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.6497460937499999,
+        "finite": 1.0
+      },
+      "training_seconds": 8925.456298392732,
+      "evaluation_seconds": 19.294538985937834,
+      "checkpoint_sha256": "a8fd6747253459a9fbd46a3678f8cb5dad25df321ec1f2e403bc26aca1a66e78",
+      "guarded_seconds": 8997.158608198166
+    },
+    {
+      "task": "hammer",
+      "method": "supertrack",
+      "seed": 0,
+      "clip": 3,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 0
+      },
+      "means": {
+        "tracking_return": 24.875085374446186,
+        "normalized_tracking_rmse": 0.05851849764485558,
+        "hand_rotation_joint_rmse_rad": 0.02544950051734196,
+        "nail_rmse_m": 0.00034648550162465035,
+        "object_translation_rmse_m": 0.0013503638762568067,
+        "object_rotation_joint_rmse_rad": 0.008171996819628186,
+        "native_success_final": 1.0,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.2467948717948718,
+        "finite": 1.0
+      },
+      "training_seconds": 7317.351027065422,
+      "evaluation_seconds": 48.770090671256185,
+      "checkpoint_sha256": "55121082528f0d0d6593cdd764463d4d2fa85b550dba68a34352a11af6cf0744",
+      "guarded_seconds": 7416.655036449432
+    },
+    {
+      "task": "hammer",
+      "method": "supermimic",
+      "seed": 0,
+      "clip": 3,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 394000
+      },
+      "means": {
+        "tracking_return": 24.901886452993825,
+        "normalized_tracking_rmse": 0.04774058127602104,
+        "hand_rotation_joint_rmse_rad": 0.022024351867104226,
+        "nail_rmse_m": 0.0002227324758453107,
+        "object_translation_rmse_m": 0.0009787463707543152,
+        "object_rotation_joint_rmse_rad": 0.008594586896076804,
+        "native_success_final": 0.0,
+        "native_success_ever": 0.0,
+        "native_success_frame_fraction": 0.0,
+        "finite": 1.0
+      },
+      "training_seconds": 8476.503983313218,
+      "evaluation_seconds": 46.489002543501556,
+      "checkpoint_sha256": "0b1817ced35132a9321b826d8be0a25ef02082e84c0c15d6f564bf7d20679d11",
+      "guarded_seconds": 8572.380537509918
+    },
+    {
+      "task": "relocate",
+      "method": "supertrack",
+      "seed": 0,
+      "clip": 0,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 0
+      },
+      "means": {
+        "tracking_return": 14.047388164759317,
+        "normalized_tracking_rmse": 0.04770654404388786,
+        "hand_translation_rmse_m": 0.0004100944956733534,
+        "hand_rotation_joint_rmse_rad": 0.024465330851844734,
+        "object_translation_rmse_m": 0.00046315202673853975,
+        "object_rotation_joint_rmse_rad": 0.01127524269863557,
+        "native_success_final": 1.0,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.48295454545454564,
+        "finite": 1.0
+      },
+      "training_seconds": 5609.387360898312,
+      "evaluation_seconds": 21.75215490255505,
+      "checkpoint_sha256": "f3ba430c3be4e7e780628dbf40d3d540046ff712e047beab9d3a16220a2cff53",
+      "guarded_seconds": 5678.833211898804
+    },
+    {
+      "task": "relocate",
+      "method": "supermimic",
+      "seed": 0,
+      "clip": 0,
+      "counts": {
+        "training_transitions": 40960000,
+        "warmup_transitions": 65536,
+        "wm_optimizer_steps": 80000,
+        "policy_updates": 19700,
+        "critic_optimizer_steps": 394000
+      },
+      "means": {
+        "tracking_return": 13.36883013505117,
+        "normalized_tracking_rmse": 0.2351328226749861,
+        "hand_translation_rmse_m": 0.002901792810846627,
+        "hand_rotation_joint_rmse_rad": 0.07411731387670893,
+        "object_translation_rmse_m": 0.003010730457483176,
+        "object_rotation_joint_rmse_rad": 0.1004288395913311,
+        "native_success_final": 1.0,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.48599520596590895,
+        "finite": 1.0
+      },
+      "training_seconds": 6589.305824301206,
+      "evaluation_seconds": 19.77472197636962,
+      "checkpoint_sha256": "b26c156db2ac7c18a70f54dda2f5206a8de1d5e9e127d4749ca9b19d7cbe2845",
+      "guarded_seconds": 6655.246011257172
+    }
+  ],
+  "priors": {
+    "pen": {
+      "tracking_return": 5.173141444940927,
+      "normalized_tracking_rmse": 0.40236948125511274,
+      "hand_rotation_joint_rmse_rad": 0.05768271741642995,
+      "object_translation_rmse_m": 0.005452187366971565,
+      "object_rotation_joint_rmse_rad": 0.17925545570430068,
+      "native_success_final": 0.5859375,
+      "native_success_ever": 0.59375,
+      "native_success_frame_fraction": 0.372578125,
+      "finite": 1.0
+    },
+    "hammer": {
+      "tracking_return": 24.905185097200167,
+      "normalized_tracking_rmse": 0.03891350524344251,
+      "hand_rotation_joint_rmse_rad": 0.004779164617355779,
+      "nail_rmse_m": 0.0004261760232276069,
+      "object_translation_rmse_m": 0.0005823529483043222,
+      "object_rotation_joint_rmse_rad": 0.01540511972241795,
+      "native_success_final": 0.51171875,
+      "native_success_ever": 0.51171875,
+      "native_success_frame_fraction": 0.12633338341346154,
+      "finite": 1.0
+    },
+    "relocate": {
+      "tracking_return": 14.062240840771691,
+      "normalized_tracking_rmse": 0.03156494934393668,
+      "hand_translation_rmse_m": 0.00035772779438927936,
+      "hand_rotation_joint_rmse_rad": 0.003861219539001006,
+      "object_translation_rmse_m": 0.0004329028868608273,
+      "object_rotation_joint_rmse_rad": 0.016062743227091857,
+      "native_success_final": 1.0,
+      "native_success_ever": 1.0,
+      "native_success_frame_fraction": 0.48295454545454564,
+      "finite": 1.0
+    }
+  },
+  "selected_preview_methods": {
+    "pen": "supertrack",
+    "hammer": "supermimic",
+    "relocate": "supertrack"
+  },
+  "frozen_source_sha256": "ddbc3527a5932fba98f0eb4c1b7919959e85da7c3bc1bb3d607f5057e098a079",
+  "evidence_sha256": {
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0/result.json": "914bdb80f67b4e0718e59205d821ddd34ed95f74ea86b206870ff7f6b03f2e9e",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0/protocol.json": "daf6bfb3bb054b58bc64f68a2fc3d3589dcd4634efeb219ee94145279076d798",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0-evaluation/result.json": "e0d04de09057955ad2125187aaa8b3f6725a593b352c5de7728a8b51a7b84a07",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0-evaluation/starts.npz": "4b0127e0793f026431c2773961826be8286671477740cdbdb03424c1fdfc57b4",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0-evaluation/physical-rollouts.npz": "ddf8f9c7804b22d77fcbcf1713666a418f2473c0eeb975e9f0f40eea1519ec84",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supermimic-seed0/result.json": "eac8eaef50239c208a8a7a2c994086498f6b381540fa664d9ce25e56239d6d7b",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supermimic-seed0/protocol.json": "dc7786ad9b0b545418fcb95d0b7a993d37936e8389b60015898d33542fc6fecc",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supermimic-seed0-evaluation/result.json": "a2c31a4fbf281d8e32223efe5a8f01613751fa4c66c6cb41dde0897e4831c423",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supermimic-seed0-evaluation/starts.npz": "4b0127e0793f026431c2773961826be8286671477740cdbdb03424c1fdfc57b4",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supermimic-seed0-evaluation/physical-rollouts.npz": "bab021817cb8bd3bbde74407aadab48c57df3ff257775794ee345c32c810b431",
+    "/data/YifanKang/adroit-suite-v1/prechecks-pen/prior/result.json": "fbbed1f8c85701532f44bf8dfd575b26eb7ca1cf2bb64ee0ed587f107336dfee",
+    "/data/YifanKang/adroit-suite-v1/pen/preparation.json": "3ed9a1e3e11ea7802cc528c84dba6343fd1407361659f8b872d9c3ce1ebb08d6",
+    "/data/YifanKang/adroit-suite-v1/prechecks-pen/native.json": "ad3049d0bb681071ab4c3b230eeede8095dd8be6cb5bd87d4bc99918dedf4d14",
+    "/data/YifanKang/adroit-suite-v1/prechecks-pen/recovery/result.json": "e5931e638a26eea84e4d9a36359f99fb7968e7e874b385cb3699de5b0447da35",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supertrack-seed0/result.json": "2a51bdd5b59e3749634b1fa70b96770c597b5514e1a56990b463420515412875",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supertrack-seed0/protocol.json": "3795ee19c19295f0793395647037a2d992f3c6073d4134285d9d04699e18a88a",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supertrack-seed0-evaluation/result.json": "6215feeceaf0124eda39eab741e4b18f1570ff076ec7ab168fb0335c53c918c8",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supertrack-seed0-evaluation/starts.npz": "652b049337469c442edcc6ce4032ead72d5653d065470ffb95d7781bb38b465f",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supertrack-seed0-evaluation/physical-rollouts.npz": "53fecf552d13c41b3f1b40e7892b192bfb4eaeb3b52ca971ebb21a5c337871af",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0/result.json": "d2f0378cb8f6715622789eabed5a4986097bb2dddf871a3b49d27428d650bfd3",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0/protocol.json": "6718c85828c9e1b72f198718f001953030007a1360be2c7fe3e48422c2df8c84",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0-evaluation/result.json": "86ce580c49934ec5fc991a22db2d894020b1332894e5836dc7209ca6f6377182",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0-evaluation/starts.npz": "652b049337469c442edcc6ce4032ead72d5653d065470ffb95d7781bb38b465f",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0-evaluation/physical-rollouts.npz": "7eca59db51a58c6c5d47202d14b3a8c6fe8cdc68dc01e2e40a882ff0015e14f9",
+    "/data/YifanKang/adroit-suite-v1/prechecks-hammer/prior/result.json": "903e21611d5dd3cec6553d93b2a2fde91a830e02e409cdb4bd19449bba109d6b",
+    "/data/YifanKang/adroit-suite-v1/hammer/preparation.json": "cc8609d4b240bafcacbe34de2b07136d6f27b1741cd15cb9db9e913622d2732f",
+    "/data/YifanKang/adroit-suite-v1/prechecks-hammer/native.json": "f65d1c41bb9afdc50be8f36097e6ea6cc575b8c0423aca38e04d6c8b664d61ed",
+    "/data/YifanKang/adroit-suite-v1/prechecks-hammer/recovery/result.json": "5b3903ac939536b21048d09976e63c5b0e15e8d867738b3bb5f33b774ee7bb7a",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0/result.json": "4c271dd4780c7fbfce40d27bc923bfbe545908e66a852b1f2b96db566d0c9e37",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0/protocol.json": "dba6031b5ddee6edc44a1afa68c408fadd86ef10c5336d9c4843f1faf0f0e769",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0-evaluation/result.json": "27576b8dfc6bb6500064641a3c8ef8b4f9f529296a9c71d6b7c2251ffd6641da",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0-evaluation/starts.npz": "f2fdd679cc963e6602ce79434867ad4de14ffc22199c50f74c4ce4b4efe30491",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0-evaluation/physical-rollouts.npz": "6f8af2077227625f2d7939507c952473953cf8b4b1e1e7d7efb8d21112ee64c1",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supermimic-seed0/result.json": "820aeafce6bbd8f132360a9a51aa98d1133a5467dd7214ba44be76cd70ad0277",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supermimic-seed0/protocol.json": "b316012c345c82a7796901c601f212ec932df58a8b245698b9bee9d56be7f2b3",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supermimic-seed0-evaluation/result.json": "e6f971f2e0dde9eee6278cdca376310763a2e7640dc1e7d3a7d80d7609c76209",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supermimic-seed0-evaluation/starts.npz": "f2fdd679cc963e6602ce79434867ad4de14ffc22199c50f74c4ce4b4efe30491",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supermimic-seed0-evaluation/physical-rollouts.npz": "b824ed994380841d6067e8b30d9fe2eba9529c590f8debc0d59c76b7b99f13cb",
+    "/data/YifanKang/adroit-suite-v1/prechecks-relocate/prior/result.json": "a3578bd1bd9bf5ef634c6453390b0b8fcf889a9f994f5daf1f573c6af8ec95a0",
+    "/data/YifanKang/adroit-suite-v1/relocate/preparation.json": "d6bbecc01b2059fcb4b770e346de25b8df29fbf41535b1e299b408a43e767923",
+    "/data/YifanKang/adroit-suite-v1/prechecks-relocate/native.json": "f177b42c1218d7605234917816ea990009e96b6eeb04ff0eda5cb63b39cc4d99",
+    "/data/YifanKang/adroit-suite-v1/prechecks-relocate/recovery/result.json": "486aa6d58bc1fc56f07ff3f4dc2d3125418d093a2a09714dabe30f4e612a2730",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/manifest.json": "65819f8d8073aa4650309d23bcfc084319496aff6309377fd2d3dd748b1d8c1c",
+    "/data/YifanKang/adroit-suite-v1/formal-v1/execution.json": "5f30ae93b2d14a911a0c19978fc6bd5e4acfc800763959e951ca9c6855085fbe"
+  },
+  "study_wall_seconds": 9202.165666818619,
+  "guarded_gpu_hours": 12.67702756649918,
+  "scope": "Six fresh full-budget runs, one seed per task/method. No training-seed standard deviation or held-out-motion claim. Guarded costs exclude earlier development/prechecks and CPU tests."
+}

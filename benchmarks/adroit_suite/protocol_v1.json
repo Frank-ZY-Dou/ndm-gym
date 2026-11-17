@@ -1,0 +1,12 @@
+{
+  "status": "fixed_before_training",
+  "scope": "Pen, Hammer, Relocate; Door remains in its independent PR",
+  "training_seeds": [0],
+  "methods": ["supertrack", "supermimic"],
+  "budget": {"iterations": 20000, "worlds": 2048, "schedule": "existing full Hand accurate adaptation"},
+  "selection": "Export all 25 original demonstrations per task; replay on pinned supported MuJoCo 3.15.0. Choose smallest clip index with finite whole replay, native success at final frame and at least five successful frames among last ten. No policy outcomes influence selection. If none qualifies, fix replay compatibility before training.",
+  "evaluation": "Final checkpoint only; same 256 starts per task (one nominal, 255 seeded hand-only perturbations), both methods and float32-deployed reference-control prior. Original native success reported independently of tracking reward. All trajectories retained externally.",
+  "preview_selection": "Lower mean normalized tracking RMSE over all 256 episodes; fixed seed 0, nominal episode, nonterminal window. Single seed is preliminary and no seed-variance claim is allowed.",
+  "task_adaptation": "Native scalar joint coordinates, hand-only actuator control, explicit demonstration-control residual prior, finite complete reference horizon. Angular tracking is wrapped joint-coordinate error, not Cartesian SO(3) error. No held-out demonstration claim.",
+  "release": "Local review only. No changes pushed to Door PR and no new PR without user instruction."
+}

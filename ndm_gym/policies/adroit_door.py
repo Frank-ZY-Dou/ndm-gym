@@ -9,13 +9,13 @@ from ..tasks.adroit_door import DoorTask
 
 
 class DoorPolicy(nn.Module):
-    def __init__(self, goal_frames=1, hidden=(256, 256)):
+    def __init__(self, goal_frames=1, hidden=(256, 256), *, task_spec=DoorTask):
         super().__init__()
         if not isinstance(goal_frames, int) or goal_frames < 1:
             raise ValueError("goal_frames must be positive")
-        n = DoorTask.obs_dim + DoorTask.goal_frame_dim * goal_frames
+        n = task_spec.obs_dim + task_spec.goal_frame_dim * goal_frames
         self.norm = RunningNorm(n)
-        self.net = mlp(n, list(hidden), DoorTask.action_dim)
+        self.net = mlp(n, list(hidden), task_spec.action_dim)
         with torch.no_grad():
             self.net[-1].weight.mul_(0.01)
             self.net[-1].bias.zero_()
@@ -33,12 +33,12 @@ class DoorResidualPolicy(DoorPolicy):
     This opt-in policy does not change DoorPolicy or simulator behavior.
     """
 
-    def __init__(self, goal_frames=1, hidden=(256, 256), residual_scale=0.1):
+    def __init__(self, goal_frames=1, hidden=(256, 256), residual_scale=0.1, *, task_spec=DoorTask):
         import math
 
         if not math.isfinite(residual_scale) or residual_scale <= 0:
             raise ValueError("residual_scale must be finite and positive")
-        super().__init__(goal_frames, hidden)
+        super().__init__(goal_frames, hidden, task_spec=task_spec)
         self.residual_scale = residual_scale
         with torch.no_grad():
             self.net[-1].weight.zero_()

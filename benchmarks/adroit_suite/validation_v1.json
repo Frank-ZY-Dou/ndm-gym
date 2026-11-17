@@ -1,0 +1,44 @@
+{
+  "status": "complete_local_review_candidate",
+  "base_commit": "031da5d6f2da077e8748f612fd979547b346f271",
+  "source_files_verified": 289,
+  "source_manifest": "tested_source_v1.json",
+  "runtime": {
+    "python": "3.12.3",
+    "mujoco": "3.15.0",
+    "torch": "2.11.0+cu126"
+  },
+  "tests": {
+    "fast": {
+      "passed": 864,
+      "skipped": 221,
+      "deselected": 64,
+      "pytest_seconds": 844.49
+    },
+    "full": {
+      "passed": 871,
+      "skipped": 278,
+      "pytest_seconds": 947.84
+    },
+    "commands": [
+      {
+        "command": "make test-fast",
+        "returncode": 0,
+        "seconds": 852.2970156669617
+      },
+      {
+        "command": "make test",
+        "returncode": 0,
+        "seconds": 959.2674903869629
+      }
+    ]
+  },
+  "scope": "Software suites executed with CPU visibility; skipped tests are not passes. Separately, exact configured Adroit full-capacity learning/recovery and six formal runs use L40S GPUs. Unsupported upstream fused Triton shared-memory kernels are not validated by this study.",
+  "prechecks": "All three tasks: original success predicates, finite physical reference, native serial oracle, matched timings, and both methods full-capacity fresh-process recovery passed.",
+  "lint": "make lint passed",
+  "docs": "make docs / mkdocs build --strict passed",
+  "results_audit": "Six fresh 20k seed-0 runs: frozen source/inputs, full optimizer counts, identical 256 starts per task, final-checkpoint SHA and finite archived rollouts verified",
+  "visual_review": "First/middle/last frames inspected for all three final policy previews; rendered input and output hashes verified; Hammer nominal failure retained and captioned",
+  "resource_evidence": "resources_v1.json",
+  "publication": "No new PR or push; Door PR remains separate"
+}

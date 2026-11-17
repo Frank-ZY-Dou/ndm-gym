@@ -627,6 +627,31 @@ three seeds run concurrently on a shared host. The [full results](benchmarks/adr
 all seeds, root/latch errors, control precision, costs and validation scope. See the
 [task guide](docs/tasks/adroit_door.md) for pinned preparation and complete training/evaluation commands.
 
+### Adroit Pen, Hammer and Relocate tracking
+
+These native Adroit tasks reuse Door's physical collector and full-budget learning infrastructure. Each method runs a fresh seed 0 for 20,000 iterations in 2,048 worlds; final checkpoints and the float32 reference-control prior use the same 256 starts. Door's independent three-seed study remains unchanged.
+
+| Task | Prior final success | SuperTrack final success | SuperMimic final success |
+| --- | ---: | ---: | ---: |
+| Pen | 58.59% | 98.05% | 99.61% |
+| Hammer | 51.17% | 100.00% | 0.00% |
+| Relocate | 100.00% | 100.00% | 100.00% |
+
+Pen improves tracking over the prior: normalized RMSE falls from 0.4024 to 0.0492 (SuperTrack) or 0.1675 (SuperMimic). Hammer and Relocate do not improve overall tracking. Hammer's success is threshold-sensitive: final nail-to-goal distance must be below 10 mm; medians are 9.833 mm for SuperTrack and 10.166 mm for SuperMimic. Lower average tracking error therefore does not imply task success. These are single-clip, single-seed tracking results, not the standard D4RL offline-RL benchmark.
+
+<p align="center"><img src="docs/media/adroit_suite/pen.webp" alt="Native Adroit Pen trained SuperTrack policy rollout" width="640"/></p>
+<p align="center"><i>Pen: native Hand accurate adaptation / SuperTrack, final seed-0 checkpoint at 20k. Fixed nominal episode, native speed, terminal frame omitted; method selected by lower mean normalized tracking RMSE over all 256 starts.</i></p>
+
+<p align="center"><img src="docs/media/adroit_suite/hammer.webp" alt="Native Adroit Hammer trained SuperMimic policy rollout" width="640"/></p>
+<p align="center"><i>Hammer: native Hand accurate adaptation / SuperMimic, final seed-0 checkpoint at 20k. Fixed nominal episode, native speed, terminal frame omitted; method selected by lower mean normalized tracking RMSE over all 256 starts. This nominal Hammer episode fails the original success threshold.</i></p>
+
+<p align="center"><img src="docs/media/adroit_suite/relocate.webp" alt="Native Adroit Relocate trained SuperTrack policy rollout" width="640"/></p>
+<p align="center"><i>Relocate: native Hand accurate adaptation / SuperTrack, final seed-0 checkpoint at 20k. Fixed nominal episode, native speed, terminal frame omitted; method selected by lower mean normalized tracking RMSE over all 256 starts.</i></p>
+
+<p align="center"><sub>References from DAPG; native scenes and assets from Gymnasium-Robotics 1.3.1. See <a href="NOTICE">NOTICE</a>.</sub></p>
+
+Measured training takes 93.5–148.8 minutes per run on one L40S with eight physical CPU cores; six parallel guarded runs including evaluation span 2.56 hours. See [full results, controls and limitations](benchmarks/adroit_suite/results_v1.md), [performance/equivalence checks](benchmarks/adroit_suite/preflight_v1.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`); see [options](docs/blinkmimic.md). On the same
@@ -811,6 +836,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand: tasks and results |
 | [`benchmarks/adroit_door/`](benchmarks/adroit_door/) | native Adroit Door tracking: full-budget three-seed study and controls |
+| [`benchmarks/adroit_suite/`](benchmarks/adroit_suite/) | native Adroit Pen, Hammer and Relocate: full-budget single-seed tracking study and controls |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |
