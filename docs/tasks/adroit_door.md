@@ -140,6 +140,23 @@ The [precision addendum](../../benchmarks/adroit_door/baseline_precision_addendu
 retains the original float64 control too. Learned-improvement comparisons use the
 deployed float32 control, not opening alone.
 
+## The door and latch started open
+
+`--door-latch-offset D` starts every training episode after the first with the door and the latch raised by U(0, D) rad
+each, and `eval_door_full` and `tools/eval_door_control.py` take the same option for their 255 perturbed starts (the
+nominal one stays closed). With D = 0.3 the demonstration's controls alone open 167 of 256 starts. The training settings
+are options too (`--lr`, `--residual-scale`, `--action-noise`, `--wm-only-iters`; SuperTrack's `--correction-reg` and
+`--correction-imag-noise`; SuperMimic's `--gamma`), recorded in the run and rebuilt by the evaluation:
+
+```sh
+python -m ndm_gym.train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3 --seed 0 \
+  --snapshot-every 500 --model ... --reference ... --native-library ... --output /path/outside/repository/st-offset-seed0
+python -m ndm_gym.eval_door_full --checkpoint /path/outside/repository/st-offset-seed0/latest.pt --door-latch-offset 0.3 \
+  --model ... --reference ... --native-library ... --output /path/outside/repository/st-offset-seed0-evaluation
+```
+
+Results on A100 40GB, both settings, every seed: [results](../../benchmarks/adroit_door/results_a100.md).
+
 ## Render saved physical trajectories
 
 ```sh

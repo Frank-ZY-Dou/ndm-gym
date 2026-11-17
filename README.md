@@ -25,6 +25,8 @@ The algorithms share one pipeline within each task:
 - **Muscles:** MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp).
 - **Hands:** hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp).
 - **Quadrotor:** a racing quadrotor tracking flown trajectories, autonomous and piloted (MuJoCo-Warp).
+- **Adroit hand:** the 28-actuator Adroit hand opening a door by tracking one of DAPG's demonstrations (MuJoCo on the
+  CPU).
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -91,6 +93,8 @@ the position within 20 mm. Commands: [Recommended settings](#-recommended-settin
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2) |
 |  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
+| **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on **99.3 %** of 256 starts (the demonstration's controls: 65.2 %), return **8.165 ± 0.054** (seeds 0-2, A100 40GB) |
+|  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s) ([results](benchmarks/robokit_ndm/results.md)) |
@@ -107,7 +111,8 @@ with its published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 m
 Each training task's best settings, as measured here, are named configurations (on the Allegro and the Inspire hand with
 options beside them); both methods are on offer for every task.
 
-- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles` and `train_quadrotor` take `--config` too.
+- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles` and `train_quadrotor` take `--config` too;
+  `train_door_full` takes the options as given in its rows.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
 
@@ -128,6 +133,8 @@ options beside them); both methods are on offer for every task.
 | **Muscles**, RigidFormer | | `muscles-supertrack-rf`: MPJPE 34.9 mm | `muscles-supermimic-rf`: 60.2 mm |
 | **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.38 / 2.02 / 2.19 mm | `quadrotor-supermimic-accurate`: 6.55 / 4.96 / 5.08 mm |
 | | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
+| **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
+| | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -143,7 +150,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   12), a [muscle-actuated character](#muscle-actuated-character) (MuscleVAE's), [two G1s](#two-g1s-one-two-person-clip)
   on a two-person clip ([three training seeds](benchmarks/g1_boxing/results.md#training-seeds-0-2)),
   [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand,
-  [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted.
+  [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
+  [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; a body-token RigidFormer on the muscle-actuated
   character, its most accurate configuration ([results](#muscle-actuated-character)); world models of MuJoCo models in
@@ -160,7 +168,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [time to return 0.82](#training-speed), with [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside.
 - **[2026-11] Contributed** by [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it;
   the Allegro and the Inspire hand, each read from its scene with no code of its own; by
-  [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights.
+  [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights; by
+  [Yifan Kang](https://github.com/YIFANK): Adroit Door tracking with SuperTrack and SuperMimic.
 - **[2026-11] Using it:** a [leaderboard](#-leaderboard), [named configurations](#-recommended-settings) (`--config`),
   trained weights of the G1 / LAFAN1 runs on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym), a library-only
   `pip` installation ([details](docs/installation.md)), a [documentation site](https://frank-zy-dou.github.io/ndm-gym/).
@@ -181,7 +190,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
-  flown trajectories of up to 21.7 m/s; RoboKit's G1 box carrying, G1 climbing and Go2 jumping, and PETS' cart-pole and
+  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; RoboKit's G1 box carrying,
+  G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics on HDMI's scenes, with fused Triton inference
   kernels; the G1's step and rollout gradient against differentiable simulators ([results](benchmarks/ndm_speed/results.md));
@@ -834,6 +844,43 @@ python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor
 python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supermimic-accurate --seed 0 --log_dir logs/quad/ellipse_sm_s0  # seeds 0-2
 ```
 
+### Adroit Door tracking
+
+The 28-actuator Adroit hand opens a door by tracking one demonstration: clip 23 of
+[DAPG](https://github.com/aravindr93/hand_dapg)'s door task, replayed in MuJoCo, with the scene and hand of
+[Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics). The door and its latch are passive, and the
+policy adds a bounded correction to the demonstration's own control at each step. Physics runs in MuJoCo on eight CPU
+cores, learning on the GPU. Two settings: the demonstration's start, and the door and latch started up to 0.3 rad open
+(`--door-latch-offset 0.3`).
+
+| goal | configuration (`python -m ndm_gym.train_door_full`) | result |
+|---|---|---|
+| most accurate, door and latch up to 0.3 rad open | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on 99.3 % of 256 starts, return 8.165 ± 0.054; the demonstration's controls alone 65.2 %, 6.102 (seeds 0-2, A100 40GB) |
+| time to the target, not engineered | `--method supermimic --door-latch-offset 0.3` | 99 % of the starts open after 13.1 ± 7.9 min of training (seeds 0-2, A100 40GB; the contributed implementation) |
+| most accurate, the demonstration's start | `--method supertrack` | return 9.018 ± 0.013, every start open; the demonstration's controls 9.035 (seeds 0-2, A100 40GB) |
+
+Opening: the door open at the end of the clip; 256 starts, one nominal and 255 with the hand perturbed (and, with the
+offset, the door and latch raised by up to 0.3 rad each); 20,000 iterations. Most accurate: the higher return where the
+opening rates are within their seeds' spread.
+
+**In short:** from the demonstration's start its controls already open every start, and training leaves the tracking
+a little below them (SuperMimic: return 8.934); with the door and latch started open, a learned correction opens 99 % of
+the starts against 65 % (SuperMimic's: 99.5 %, return 7.927; SuperTrack with `--lr 8e-4`: 99 % open after 35.5 min).
+
+<p align="center"><img src="docs/media/adroit_door/policy.webp" alt="A trained SuperTrack policy opens the Adroit door, tracking the demonstration" width="640"/></p>
+<p align="center"><i>SuperTrack from the demonstration's start, seed 0, at the clip's speed.</i></p>
+<p align="center"><sub>The demonstration from DAPG; the scene and hand from Gymnasium-Robotics 1.3.1 (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
+- **Why a correction on the demonstration's control:** the policy starts from controls that already open the door, so
+  learning only has to fix what perturbed starts break. With the door started open, SuperTrack's correction scaled by
+  0.2 instead of 0.1 opened 99.8 % of the starts in its screen instead of 87.3 %.
+- **Why the time is not engineered:** the contributed trainer collects with MuJoCo on the CPU (about 0.1 s an iteration)
+  and learns in eager fp32 (0.24-0.33 s); the times are that implementation's.
+
+All seeds and the screen of each algorithm's settings: [results](benchmarks/adroit_door/results_a100.md); the
+contributed study on an L40S: [full results](benchmarks/adroit_door/full_results_v1.md); preparation and commands:
+[task guide](docs/tasks/adroit_door.md).
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -1191,6 +1238,9 @@ Data:
 - **MASS** (MuscleVAE's skeleton and the bone meshes of our renders): S. Lee, M. Park, K. Lee, J. Lee. *Scalable
   Muscle-Actuated Human Simulation and Control.* ACM Transactions on Graphics 38(4), 2019.
   [DOI](https://doi.org/10.1145/3306346.3322972) · [code](https://github.com/lsw9021/MASS)
+- **DAPG** (the Adroit door demonstration): A. Rajeswaran, V. Kumar, A. Gupta, G. Vezzani, J. Schulman, E. Todorov,
+  S. Levine. *Learning Complex Dexterous Manipulation with Deep Reinforcement Learning and Demonstrations.* RSS 2018.
+  [arXiv:1709.10087](https://arxiv.org/abs/1709.10087) · [code and demonstrations](https://github.com/aravindr93/hand_dapg)
 
 Robot models:
 - **Unitree G1:** Unitree Robotics. [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/g1_description`,
@@ -1201,6 +1251,9 @@ Robot models:
 - **mjlab** (the G1 of the differentiable-simulator comparison, as NablaEngine bundles it): K. Zakka, Q. Liao, B. Yi,
   L. Le Lay, K. Sreenath, P. Abbeel. *mjlab: A Lightweight Framework for GPU-Accelerated Robot Learning.* arXiv preprint,
   2026. [arXiv:2601.22074](https://arxiv.org/abs/2601.22074) · [code](https://github.com/mujocolab/mjlab)
+- **Gymnasium-Robotics** (the Adroit hand and the door scene): R. de Lazcano, K. Andreas, J. J. Tai, S. R. Lee,
+  J. Terry. *Gymnasium Robotics.* 2024. [code](https://github.com/Farama-Foundation/Gymnasium-Robotics) ·
+  [documentation](https://robotics.farama.org/)
 
 Simulation and planning:
 - **Isaac Lab:** M. Mittal et al. *Isaac Lab: A GPU-Accelerated Simulation Framework for Multi-Modal Robot Learning.*
@@ -1276,3 +1329,5 @@ MIT ([`LICENSE`](LICENSE)).
 - **Race Against the Machine** (TII Racing, CC BY 4.0): the flights (release v3.0.0, with On Your Own's piloted ones)
   are downloaded, checked and converted by `tools/download_drone_racing.py` and not redistributed; the quadrotor's model
   is written here from the paper's specification.
+- **DAPG's demonstrations and Gymnasium-Robotics' Adroit scene** (Apache-2.0 and MIT): obtained by the user, prepared by
+  `tools/replay_adroit_door.py` and `tools/prepare_adroit_door.py`, and not redistributed (see [NOTICE](NOTICE)).
