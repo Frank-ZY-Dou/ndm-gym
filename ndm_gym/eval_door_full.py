@@ -30,6 +30,15 @@ def evaluation_offsets(seed=20261115):
     return q, v
 
 
+def evaluation_starts(door_latch_offset=0.):
+    """The 256 starts of ``evaluation_offsets``; with ``door_latch_offset`` d > 0 the door and latch angles of starts
+    1-255 are also raised by U(0, d) each (seed 20261116), inside their ranges at the closed start. d = 0: unchanged."""
+    q, v = evaluation_offsets()
+    if door_latch_offset:
+        q[1:, 28:30] = door_latch_offset * np.random.default_rng(20261116).uniform(0., 1., (256, 2))[1:]
+    return q, v
+
+
 def initialize_evaluation(collector, offsets, velocities):
     import mujoco
     chunk = collector.chunks[0]
@@ -101,14 +110,18 @@ def main(argv=None):
     p.add_argument('--allow-development', action='store_true', help='Explicitly evaluate an incomplete prefix')
     p.add_argument('--device', choices=('cpu', 'cuda:0'), default='cuda:0')
     p.add_argument('--workers', type=int, default=8)
+    p.add_argument('--door-latch-offset', type=float, default=0.,
+                   help='Also raise the door and latch angles of the perturbed starts by U(0, d) rad (default 0: the original starts)')
     a = p.parse_args(argv)
+    if not np.isfinite(a.door_latch_offset) or a.door_latch_offset < 0:
+        p.error('--door-latch-offset must be finite and nonnegative')
     import mujoco
     torch.set_num_threads(1)
     ref = DoorReference.load(a.reference)
     model = mujoco.MjModel.from_xml_path(str(a.model.resolve()))
     ck = torch.load(a.checkpoint, map_location='cpu', weights_only=False) if a.checkpoint else None
     method = ck['protocol']['method'] if ck else 'supertrack'
-    algo, _ = make_algorithm(method, model, ref, a.device)
+    algo, _ = make_algorithm(method, model, ref, a.device, ck['protocol'].get('options') if ck else None)
     if ck:
         for key in ('model', 'reference', 'native_library'):
             if fingerprint(getattr(a, key)) != ck['protocol']['input_hashes'][key]:
@@ -116,13 +129,13 @@ def main(argv=None):
         if ck['iteration'] != 20000 and not a.allow_development:
             raise ValueError('Final study requires iteration 20000')
         algo.load_state_dict(ck['algo'])
-        counts = FullHandSchedule().counts(ck['iteration'], method=method)
+        counts = FullHandSchedule(**ck['protocol']['schedule']).counts(ck['iteration'], method=method)
         actual = optimizer_counts(algo)
         assert actual['wm'] == counts['wm_optimizer_steps']
         assert actual['policy'] == counts['policy_updates']
         assert actual.get('critic', 0) == counts['critic_optimizer_steps']
     a.output.mkdir(parents=True, exist_ok=False)
-    qoffset, voffset = evaluation_offsets()
+    qoffset, voffset = evaluation_starts(a.door_latch_offset)
     np.savez_compressed(a.output/'starts.npz', qpos=qoffset, qvel=voffset)
     started = time.perf_counter()
     with ParallelNativeDoorCollector(model, ref, 256, a.workers, a.native_library.resolve()) as collector:
@@ -142,6 +155,9 @@ def main(argv=None):
                   means={key: float(np.mean([r[key] for r in results])) for key in results[0]},
                   wall_seconds=time.perf_counter()-started,
                   evaluation_scope='one nominal and 255 multivariate perturbed hand starts on one clip; no held-out motions')
+    if a.door_latch_offset:
+        report.update(door_latch_offset=a.door_latch_offset,
+                      evaluation_scope='one nominal and 255 perturbed hand, door and latch starts on one clip; no held-out motions')
     (a.output/'result.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report['means']))
 
