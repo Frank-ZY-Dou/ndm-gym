@@ -79,3 +79,20 @@ def test_blocks_with_spans(tmp_path):
     assert r.returncode != 0 and "cells empty" in r.stderr
     r = _run(out, "--columns", "1", "--tile", "64", "48", "--clip", c["green"], "0", "0", "0", "64", "100", "2", "1")
     assert r.returncode != 0 and "in a block" in r.stderr
+
+
+def test_block_cells_of_its_own(tmp_path):
+    for name, rgb, size in (("grey", (150, 150, 150), (132, 100)), ("red", (220, 40, 40), (100, 100)), ("blue", (40, 40, 220), (100, 100))):
+        _webp(str(tmp_path / f"{name}.webp"), rgb, 4, size=size)
+    out = str(tmp_path / "cells.webp")
+    tiles = ["--block", "A", "2", "2", "--clip", str(tmp_path / "grey.webp"), "0", "0", "0", "132", "100", "2", "2",
+             "--block", "B", "2", "1", "100", "100", "--clip", str(tmp_path / "red.webp"), "--clip", str(tmp_path / "blue.webp")]  # fmt: skip
+    r = _run(out, "--columns", "2", "--tile", "64", "48", "--quality", "90", *tiles)
+    assert r.returncode == 0, r.stderr
+    with Image.open(out) as im:
+        assert im.size == (132 + 16 + 2 * 100 + 4, 24 + 100)  # B's two square cells beside A's 2 x 2 cells of the tile
+        im.seek(1)
+        f = np.asarray(im.convert("RGB")).astype(float)
+    assert f[40:110, 160:236, 0].mean() > 2 * f[40:110, 160:236, 2].mean() and f[40:110, 264:340, 2].mean() > 2 * f[40:110, 264:340, 0].mean()
+    r = _run(out, "--columns", "2", "--tile", "64", "48", *tiles[:-10], "--block", "B", "2", "1", "100", "90", *tiles[-4:])
+    assert r.returncode != 0 and "equally tall" in r.stderr

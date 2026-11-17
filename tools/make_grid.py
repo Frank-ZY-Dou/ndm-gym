@@ -1,8 +1,9 @@
 """Animated WebP grids for the README: rendered clips as the tiles of one synchronized loop, with names in the margins only.
 
-The --clip tiles fill rows of --columns in their order (a shorter last row centred). With --block NAME COLS ROWS, the clips
-that follow fill that block's COLS x ROWS cells of --tile instead, each the first cells where it fits, row by row (a clip may
-span ROWS x COLS cells, given after its box), with NAME above the block; the blocks fill rows of --columns, --block_gap apart.
+The --clip tiles fill rows of --columns in their order (a shorter last row centred). With --block NAME COLS ROWS [W H], the
+clips that follow fill that block's COLS x ROWS cells of --tile (or W x H) instead, each the first cells where it fits, row by
+row (a clip may span ROWS x COLS cells, given after its box), with NAME above the block; the blocks, equally tall, fill rows of
+--columns, --block_gap apart, each row centred.
 A clip is an animated WebP (read with Pillow, by its frames' durations) or anything ffmpeg reads; it starts at START s
 (default 0), shows its whole frame or the box X Y W H in its pixels, and is scaled to its tile (Lanczos; the frame or the box
 must have the tile's aspect). The tiles start together at --fps. A tile that ends sooner holds its last frame until the
@@ -50,7 +51,7 @@ marks out (mbrl-lib's: tools/render_mbrl.py --no_mark):
       --clip topple_wood_board_and_cross.mp4 0 400 130 1120 840 \\
       --block "RoboKit planning" 2 2 --clip $M/robokit/g1_carry.webp 0.2 375 100 343 520 2 1 \\
       --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
-      --block "mbrl-lib planning" 2 2 --clip cartpole_strip.mp4 0 0 0 1376 512 1 2 --clip pusher_strip.mp4 0 0 0 1376 512 1 2
+      --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4
 """
 
 import argparse
@@ -120,33 +121,35 @@ class InOrder(argparse.Action):
         namespace.items = [*(getattr(namespace, "items", None) or []), (self.dest, values)]
 
 
-def place_blocks(blocks, tiles, tw, th, gap, block_gap, per_row, band):
+def place_blocks(blocks, tiles, gap, block_gap, per_row, band):
     """The block layout: (W, H, each tile's (x, y, w, h), each block's name and centre in its band). Blocks of COLS x ROWS cells
-    of tw x th fill rows of ``per_row`` (a shorter last row centred); a block's tiles take the first cells where they fit,
-    row by row, spanning ROWS x COLS cells each, and must cover its cells exactly."""
-    cols, rows = blocks[0][1], blocks[0][2]
-    if any((b[1], b[2]) != (cols, rows) for b in blocks):
-        raise ValueError("--block: every block needs the same COLS ROWS")
-    bw, bh, B = cols * tw + (cols - 1) * gap, rows * th + (rows - 1) * gap, len(blocks)
-    W = per_row * bw + (per_row - 1) * block_gap
-    H = math.ceil(B / per_row) * (band + bh + block_gap) - block_gap
+    of their size fill rows of ``per_row``, each row centred; every block must be equally tall. A block's tiles take the first
+    cells where they fit, row by row, spanning ROWS x COLS cells each, and must cover its cells exactly."""
+    sizes = [(c * cw + (c - 1) * gap, r * ch + (r - 1) * gap) for _, c, r, _, (cw, ch) in blocks]
+    bh = sizes[0][1]
+    if any(h != bh for _, h in sizes):
+        raise ValueError(f"--block: every block must be equally tall (ROWS x H and the gaps), not {sorted({h for _, h in sizes})}")
+    rows_of = [range(i, min(i + per_row, len(blocks))) for i in range(0, len(blocks), per_row)]
+    widths = [sum(sizes[b][0] for b in row) + (len(row) - 1) * block_gap for row in rows_of]
+    W, H = max(widths), len(rows_of) * (band + bh + block_gap) - block_gap
     places, names = [None] * len(tiles), []
-    for b, (name, _, _, members) in enumerate(blocks):
-        r, c = divmod(b, per_row)
-        k = min(per_row, B - r * per_row)  # blocks in this row
-        x0, y0 = (W - k * bw - (k - 1) * block_gap) // 2 + c * (bw + block_gap), r * (band + bh + block_gap) + band
-        names.append((name, (x0 + bw / 2, y0 - band / 2)))
-        free = np.ones((rows, cols), bool)
-        for i in members:
-            rs, cs = tiles[i][3]
-            spot = next(((y, x) for y in range(rows - rs + 1) for x in range(cols - cs + 1) if free[y : y + rs, x : x + cs].all()), None)
-            if spot is None:
-                raise ValueError(f"--block {name!r}: no {rs} x {cs} cells left for {tiles[i][0]}")
-            y, x = spot
-            free[y : y + rs, x : x + cs] = False
-            places[i] = (x0 + x * (tw + gap), y0 + y * (th + gap), cs * tw + (cs - 1) * gap, rs * th + (rs - 1) * gap)
-        if free.any():
-            raise ValueError(f"--block {name!r}: its tiles leave {int(free.sum())} of its {rows * cols} cells empty")
+    for r, row in enumerate(rows_of):
+        x0, y0 = (W - widths[r]) // 2, r * (band + bh + block_gap) + band
+        for b in row:
+            name, cols, rows, members, (cw, ch) = blocks[b]
+            names.append((name, (x0 + sizes[b][0] / 2, y0 - band / 2)))
+            free = np.ones((rows, cols), bool)
+            for i in members:
+                rs, cs = tiles[i][3]
+                spot = next(((y, x) for y in range(rows - rs + 1) for x in range(cols - cs + 1) if free[y : y + rs, x : x + cs].all()), None)
+                if spot is None:
+                    raise ValueError(f"--block {name!r}: no {rs} x {cs} cells left for {tiles[i][0]}")
+                y, x = spot
+                free[y : y + rs, x : x + cs] = False
+                places[i] = (x0 + x * (cw + gap), y0 + y * (ch + gap), cs * cw + (cs - 1) * gap, rs * ch + (rs - 1) * gap)
+            if free.any():
+                raise ValueError(f"--block {name!r}: its tiles leave {int(free.sum())} of its {rows * cols} cells empty")
+            x0 += sizes[b][0] + block_gap
     return W, H, places, names
 
 
@@ -156,8 +159,9 @@ def main():
     p.add_argument("--clip", nargs="+", action=InOrder, required=True, metavar="ARG",
                    help="a tile, in order: PATH, or PATH START, or PATH START X Y W H (the box in the clip's pixels); in a block also "
                         "PATH START X Y W H ROWS COLS, the cells it spans")  # fmt: skip
-    p.add_argument("--block", nargs=3, action=InOrder, metavar=("NAME", "COLS", "ROWS"),
-                   help="a block of COLS x ROWS cells of --tile, its NAME above it; the clips that follow fill it")  # fmt: skip
+    p.add_argument("--block", nargs="+", action=InOrder, metavar="ARG",
+                   help="NAME COLS ROWS [W H]: a block of COLS x ROWS cells of --tile (or W x H), its NAME above it; "
+                        "the clips that follow fill it")  # fmt: skip
     p.add_argument("--columns", type=int, required=True, help="tiles per row, or with --block blocks per row")
     p.add_argument("--block_gap", type=int, default=16, help="pixels between blocks")
     p.add_argument("--tile", type=int, nargs=2, default=(320, 180), metavar=("W", "H"), help="a tile's size in pixels")
@@ -176,7 +180,9 @@ def main():
     tiles, blocks = [], []  # tiles: (path, start, box, (rows, cols) spanned); blocks: [name, cols, rows, its tiles]
     for kind, v in a.items:
         if kind == "block":
-            blocks.append((v[0], int(v[1]), int(v[2]), []))
+            if len(v) not in (3, 5):
+                p.error(f"--block {' '.join(v)}: give NAME COLS ROWS, or NAME COLS ROWS W H")
+            blocks.append((v[0], int(v[1]), int(v[2]), [], (int(v[3]), int(v[4])) if len(v) == 5 else tuple(a.tile)))
             continue
         if len(v) not in (1, 2, 6, 8) or (len(v) == 8 and not blocks):
             p.error(f"--clip {' '.join(v)}: give PATH, PATH START or PATH START X Y W H, and in a block ROWS COLS after the box")
@@ -200,11 +206,11 @@ def main():
         p.error("--mark goes in the band of names above the tiles: give --names, --col_labels or --block")
     look = LIGHT if a.light else DARK
     labels = [t.replace("\\n", "\n") for t in a.row_labels or ()]
-    s = ((blocks[0][2] * th + (blocks[0][2] - 1) * a.gap) if blocks else th) / 225 if a.light else 1.0  # names grow with a block or tile
+    s = ((blocks[0][2] * blocks[0][4][1] + (blocks[0][2] - 1) * a.gap) if blocks else th) / 225 if a.light else 1.0  # grow with a block or tile
     font = ImageFont.truetype(BOLD, round(15 * s)) if a.light else ImageFont.truetype(FONT, 13)
     if blocks:
         band = round(30 * s) if a.light else 24
-        W, H, places, top = place_blocks(blocks, tiles, tw, th, a.gap, a.block_gap, C, band)
+        W, H, places, top = place_blocks(blocks, tiles, a.gap, a.block_gap, C, band)
         left, row_y = 0, []
     else:
         band = (round(30 * s) if a.light else 24) if (a.names or a.col_labels) else 0
@@ -258,7 +264,7 @@ def main():
         os.remove(tmp)
         raise ValueError(f"{a.out}: {mb:.2f} MB at quality {a.quality}, above --max_mb {a.max_mb}: lower --quality, --fps or --tile")
     os.replace(tmp, a.out)
-    shape = f"{len(blocks)} blocks of {blocks[0][1]} x {blocks[0][2]} cells" if blocks else f"{R} x {C} tiles"
+    shape = f"{len(blocks)} blocks of {blocks[0][1]} x {blocks[0][2]} cells" if blocks else f"{R} x {C} tiles"  # the first block's
     print(f"{a.out}: {shape} of {tw} x {th}, {len(out)} frames at {a.fps:g} fps ({len(out) / a.fps:.2f} s), {W} x {H}, {mb:.2f} MB")
 
 
