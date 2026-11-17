@@ -76,7 +76,7 @@ within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results
 |  | 🎯 most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object position **2.6 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **Hand-object tracking**, Inspire hand, three clips | ⏱ time to the target, not engineered | `hand-supertrack-fast` | **2.4 / 1.5 / 3.1 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
-| **[Muscles](#muscle-actuated-character)**, MuscleVAE's character, MLP world model | 🎯 most accurate | `muscles-supertrack`, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm** (seeds 1-3) |
+| **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model not yet run in the planner, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
@@ -107,7 +107,8 @@ Each task's best settings, as measured here, are named configurations; both meth
 | | fast, not engineered | `hand-supertrack-fast --st_fail_w 5`: success 0.99 in 1.6 / 1.3 / 8.8 min | `hand-supermimic-fast`: 1.4 / - / 2.7 min |
 | **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
 | | fast, not engineered | `hand-supertrack-fast`: success 0.99 in 2.4 / 1.5 / 3.1 min | `hand-supermimic-fast --lr 2e-4`: 2.5 / 2.1 / 4.9 min |
-| **Muscles** (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
+| **Muscles**, MLP world model (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
+| **Muscles**, RigidFormer | | `muscles-supertrack-rf`: MPJPE 34.9 mm | `muscles-supermimic-rf`: 60.2 mm |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -569,13 +570,14 @@ files and weights of policies trained on them are not redistributed.
 
 | goal | configuration | result |
 |---|---|---|
-| most accurate, MLP world model | `--config muscles-supertrack` (`train_muscles`) | MPJPE 38.1 ± 1.0 mm in the root frame, episodes ended 0.011 ± 0.005 |
+| most accurate | `--config muscles-supertrack-rf` (`train_muscles`) | MPJPE 34.9 ± 0.7 mm in the root frame, episodes ended 0.0004 ± 0.0008 |
+| most accurate, MLP world model | `--config muscles-supertrack` | MPJPE 38.1 ± 1.0 mm, episodes ended 0.011 ± 0.005 |
 | fastest | not compared yet | |
 
-Seeds 1-3, up to 3 h on an A100 40GB.
+Seeds 1-3, at most 3 h on an A100 40GB PCIe.
 
-**In short:** `muscles-supertrack` for position tracking; `muscles-supermimic` has the lower joint error (9.7 against
-10.6 deg).
+**In short:** `muscles-supertrack-rf` for position tracking (`muscles-supertrack` with the MLP); `muscles-supermimic`
+and `muscles-supermimic-rf` have the lower joint error (9.7 and 8.7 deg against 10.6 and 10.1).
 
 <table>
 <tr>
@@ -630,9 +632,10 @@ RigidFormer: a token per body, width 128, 2 blocks, 4 heads, from nine rounds of
 | episodes ended (share) | 0.000 ± 0.001 | 0.009 ± 0.014 |
 | joint error (deg) | 10.1 ± 0.3 | 8.7 ± 0.4 |
 
-The two tables do not compare the world models at equal effort: nine rounds of tuning for the RigidFormer, four for the
-MLP. The RigidFormer's six runs all reached the 3 h limit, five with the last checkpoint as the best; the MLP's six
-stopped by the rule before 3 h ([details](benchmarks/musclevae/results.md#rigidformer-world-model)).
+With the RigidFormer, root-frame MPJPE is 3.2 mm lower for SuperTrack (RigidFormer minus MLP, Welch 95% interval
+[-5.2, -1.2]) and 5.4 mm lower for SuperMimic ([-24.1, 13.3], which includes 0). The RigidFormer runs trained to the 3 h
+cap, the MLP runs stopped by their progress rule after 0.9-2.0 h, and the RigidFormer had nine tuning rounds to the MLP's
+four ([details](benchmarks/musclevae/results.md#the-rigidformer-against-the-mlp)).
 
 ```bash
 MUSCLE_RF="--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 --wm_backbone rigidformer \

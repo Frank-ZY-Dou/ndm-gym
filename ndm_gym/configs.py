@@ -23,6 +23,8 @@ PAIRED = "--motions interhuman --paired"  # with --motion_dir: a two-person clip
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
 MUSCLE_SYS = "--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
+MUSCLE_RF = ("--wm_backbone rigidformer --rf_muscle_tokens body --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 9 --rf_fused_train "
+             "--rf_fused_features --wm_lr 5e-3")  # fmt: skip  # the body-token RigidFormer of the muscle 3 h runs
 HAND_SYSTEMS = "--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
 HOI_OPT = "--pi_opt muon --wm_opt muon --pi_ema 0.995 --pi_lr_mult 2 --lr_decay_ret 0.95 --lr_decay_by 1400 --lr_decay_len 300"  # HOI's optimizer options
 
@@ -87,6 +89,15 @@ CONFIGS = {
         "muscles-supermimic": (f"--algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 {MUSCLE_RECIPE} {MUSCLE_SYS} "
                                "--wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --iterations 1000000 --last_every_min 10 --max_hours 3",
                                "MuscleVAE's character, up to 3 h on an A100 40GB: MPJPE 65.6 +- 8.1 mm, episodes ended 0.053 (seeds 1-3)"),
+        "muscles-supertrack-rf": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {MUSCLE_RECIPE.replace(' --wm_hidden 1024 1024 1024', '')} --wm_batches 5 "
+                                  f"--pi_lr_mult 4 {MUSCLE_RF} {MUSCLE_SYS} --max_hours 3 --iterations 1000000 --ckpt_every 2000 --last_every_min 10",
+                                  "MuscleVAE's character, RigidFormer world model, 3 h on an A100 40GB PCIe: MPJPE 34.9 +- 0.7 mm, episodes ended 0.0004 "
+                                  "(seeds 1-3)"),
+        "muscles-supermimic-rf": ("--algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 --pi_ema 0.995 --lr 4e-4 --wm_batches 8 "
+                                  "--pi_opt muon --wm_only_iters 0 --pi_batch 2048 --pi_lr_mult 2 --lr_decay_len 300 --lr_decay_by 1400 "
+                                  f"{MUSCLE_RF} {MUSCLE_SYS} --max_hours 3 --iterations 1000000 --ckpt_every 2000 --last_every_min 10",
+                                  "MuscleVAE's character, RigidFormer world model (Adam), 3 h on an A100 40GB PCIe: MPJPE 60.2 +- 2.0 mm, episodes ended "
+                                  "0.009 (seeds 1-3)"),
     },
 }
 
