@@ -1,0 +1,45 @@
+{
+  "scope": "Failed first launch of the preregistered full-budget study only; excludes development, validation and historical experiments.",
+  "cause": "Exact-capacity warmup could not import ndm_gym because PYTHONPATH was missing; corrected in attempt2 before fresh training.",
+  "runs": [
+    {
+      "method": "supertrack",
+      "seed": 0,
+      "started": 1794803857.520818,
+      "finished": 1794803878.2798998,
+      "elapsed_seconds": 20.759081840515137,
+      "training_started": false
+    },
+    {
+      "method": "supertrack",
+      "seed": 1,
+      "started": 1794803857.5211813,
+      "finished": 1794803877.8885233,
+      "elapsed_seconds": 20.367341995239258,
+      "training_started": false
+    },
+    {
+      "method": "supertrack",
+      "seed": 2,
+      "started": 1794803857.5214434,
+      "finished": 1794803878.3164947,
+      "elapsed_seconds": 20.795051336288452,
+      "training_started": false
+    }
+  ],
+  "wall_seconds": 20.795676708221436,
+  "guarded_gpu_hours": 0.0172004097700119,
+  "training_transitions": 0,
+  "evidence_sha256": {
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed0-execution.json": "de2f65b72befdc52f114d236af5fc86e4f01edd822c960c53cf9af49033c33c0",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed0-guard/result.json": "c2f771daf3b4da962204830794c22052c7f9a439eac609028c40e84ca5d0c2eb",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed0-guard/warmup.log": "4bae811b12ede2ddc607c69ca1e3698957e0618e881f7edd2d9a92a3008172ba",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed1-execution.json": "6bd9a522a9ca5a73d88992e3264684db786bf3cdae9748fc88c4f975fccfc88c",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed1-guard/result.json": "c2f771daf3b4da962204830794c22052c7f9a439eac609028c40e84ca5d0c2eb",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed1-guard/warmup.log": "4bae811b12ede2ddc607c69ca1e3698957e0618e881f7edd2d9a92a3008172ba",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed2-execution.json": "bb6ec4be2df4801ede088041e7aba0da82027fc21d5689b3e6c843ddbbdc9cee",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed2-guard/result.json": "c2f771daf3b4da962204830794c22052c7f9a439eac609028c40e84ca5d0c2eb",
+    "/data/YifanKang/adroit-door/full-study-v1/supertrack-seed2-guard/warmup.log": "4bae811b12ede2ddc607c69ca1e3698957e0618e881f7edd2d9a92a3008172ba"
+  },
+  "cost_definition": "Elapsed guarded allocation including admission/import failure, not measured GPU busy time."
+}

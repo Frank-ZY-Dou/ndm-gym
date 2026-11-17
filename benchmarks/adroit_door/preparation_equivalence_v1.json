@@ -1,0 +1,68 @@
+{
+  "legacy": {
+    "qpos": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "fb211181fb24626228d00c6b04efd9fb31d5959031ce973c28618f05329bf60c",
+      "shape": [
+        227,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "qvel": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "f8d35fd857ee064cad39c43ed45ff2ea1653ec805be49c045e161c3667e16966",
+      "shape": [
+        227,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "actions": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "1a58efaba32795f912c7f8173ed5d6ace60c07ab76c833c2d5ea6f16200fd1c2",
+      "shape": [
+        226,
+        28
+      ],
+      "dtype": "float64"
+    }
+  },
+  "supported": {
+    "qpos": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "aa1670f9fa84347942e437cf2357cc0072f192db92cd1f5ad2177c2f7333e984",
+      "shape": [
+        227,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "qvel": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "dfc1d06f663ddbd0853c3086c88da3a03a1f40555f150fdea33440648d916173",
+      "shape": [
+        227,
+        30
+      ],
+      "dtype": "float64"
+    },
+    "actions": {
+      "bit_equal": true,
+      "max_abs": 0.0,
+      "array_sha256": "714afb9e30e6e9de7b7161b646f5d5a694647154288663936cb1f5f162555fd2",
+      "shape": [
+        226,
+        28
+      ],
+      "dtype": "float64"
+    }
+  },
+  "model_byte_equal": true,
+  "scope": "New public preparation chain reproduces legacy and supported physical arrays exactly and the supported XML byte for byte on the same asset paths. Archive metadata is regenerated, not inherited."
+}

@@ -1,0 +1,39 @@
+{
+  "reference_control_float64": {
+    "tracking_return": 9.035326009066392,
+    "translation_rmse_m": 0.0005789492704779229,
+    "hand_rmse_rad": 0.0038661315587165445,
+    "door_rmse_rad": 0.004201431406909543,
+    "latch_rmse_rad": 0.002513657629942385,
+    "final_door_rad": 1.5331358031400024,
+    "opened_final": 1.0,
+    "opened_ever": 1.0,
+    "finite": 1.0
+  },
+  "deployed_control_float32": {
+    "tracking_return": 9.035326011897517,
+    "translation_rmse_m": 0.0005789491132459711,
+    "hand_rmse_rad": 0.0038661320341217293,
+    "door_rmse_rad": 0.004201428932337815,
+    "latch_rmse_rad": 0.0025136580189505852,
+    "final_door_rad": 1.5331358140922628,
+    "opened_final": 1.0,
+    "opened_ever": 1.0,
+    "finite": 1.0
+  },
+  "same_starts": true,
+  "episodes": 256,
+  "all_finite": true,
+  "mean_difference_float32_minus_float64": {
+    "tracking_return": 2.83112555621301e-09,
+    "translation_rmse_m": -1.5723195174229682e-10,
+    "hand_rmse_rad": 4.754051848368523e-10,
+    "door_rmse_rad": -2.474571728083852e-09,
+    "latch_rmse_rad": 3.8900820021822713e-10,
+    "final_door_rad": 1.095226043190678e-08,
+    "opened_final": 0.0,
+    "opened_ever": 0.0,
+    "finite": 0.0
+  },
+  "scope": "Additional precision-matched control specified before final policy evaluations; original float64 control retained."
+}

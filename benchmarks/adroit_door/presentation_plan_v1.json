@@ -1,0 +1,15 @@
+{
+  "status": "fixed_before_any_full_budget_final_evaluation",
+  "purpose": "README preview selection only; does not change training, evaluation starts or reporting of all seeds",
+  "eligible_checkpoints": "Final iteration 20000 for both registered methods and all three seeds",
+  "configuration_selection": "Lowest normalized tracking RMSE across all 3 x 256 evaluation episodes",
+  "episode_squared_error": "mean([(translation_rmse_m/0.02)^2, (hand_rmse_rad/0.3)^2, (door_rmse_rad/0.2)^2, (latch_rmse_rad/0.3)^2])",
+  "configuration_error": "sqrt(mean(episode_squared_error over every evaluation episode and seed))",
+  "tie_break": "supertrack",
+  "preview_training_seed": 0,
+  "preview_evaluation_episode": 0,
+  "preview_window": "frames 0 through reference.frames-2 inclusive; excludes terminal frame",
+  "preview_stride": 2,
+  "caption": "Method, native Door adaptation, upstream config source, full budget, seed, nominal start and three-seed tracking errors",
+  "reporting": "Both methods, all seeds, shared zero-residual prior and negative results remain visible irrespective of preview selection"
+}

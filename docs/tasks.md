@@ -10,6 +10,7 @@ Six tasks share the pipeline. Scripts in `tools/` prepare the data; none of the 
 | [Muscle-actuated character](tasks/muscles.md) | MuscleVAE's character | Newton, MuJoCo-Warp | `tools/download_musclevae.sh`, `tools/convert_musclevae.py` | `python -m ndm_gym.train_muscles` |
 | [Hand-object tracking](tasks/hand.md), SPIDER's clips | XHand, Allegro hand or Inspire hand on a floating palm | MuJoCo-Warp | `tools/download_hand_clips.py` | `python -m ndm_gym.train_hand` |
 | [Quadrotor trajectory tracking](tasks/quadrotor.md), Race Against the Machine's flights | a 5-inch racing quadrotor | MuJoCo-Warp | `tools/download_drone_racing.py` | `python -m ndm_gym.train_quadrotor` |
+| [Adroit Door tracking](tasks/adroit_door.md), physical door-opening reference | native Adroit hand, passive door and latch | native MuJoCo CPU collection, CUDA learning | `tools/replay_adroit_door.py`, `tools/prepare_adroit_door.py` | `python -m ndm_gym.train_door_full` |
 
 The world models also stand in for simulators:
 

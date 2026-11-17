@@ -48,3 +48,11 @@ docs/media/robokit renders of its three examples (G1 box carrying tracks the OMO
 paragraph names. The Racing quadrotor block holds docs/media/quadrotor renders, under CC BY 4.0 as that paragraph says. The
 mbrl-lib planning block holds the docs/media/mbrl renders; no other part of it is covered by the MIT
 license in LICENSE.
+
+The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
+clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit
+9a1de23df6574e1b94e1da742e3326eb1f61c013; repository license: Apache-2.0). The native Adroit scene and visual assets
+come from Gymnasium-Robotics 1.3.1 (https://github.com/Farama-Foundation/Gymnasium-Robotics; MIT,
+Copyright (c) 2022 Farama Foundation). The demonstration archives, model XML, meshes and textures are obtained
+separately and are not redistributed in this repository. Their original notices and terms are not replaced by
+this repository's LICENSE.
