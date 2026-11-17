@@ -80,6 +80,8 @@ within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results
 |  | 🎯 most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object position **2.6 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **Hand-object tracking**, Inspire hand, three clips | ⏱ time to the target, not engineered | `hand-supertrack-fast` | **2.4 / 1.5 / 3.1 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
+| **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three flights | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the ellipse, the lemniscate and the race track (an H200, mean of seeds 0-2) |
+|  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights and **1.34 / 1.20 / 3.08 mm** on the pilots' at a success of 100 % (seeds 0-2, H200) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model not yet run in the planner, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -95,7 +97,7 @@ with its published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 m
 
 Each task's best settings, as measured here, are named configurations; both methods are on offer for every task.
 
-- `ndm-train --config NAME` runs one; `train_hand` and `train_muscles` take `--config` too.
+- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles` and `train_quadrotor` take `--config` too.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
 
@@ -114,6 +116,8 @@ Each task's best settings, as measured here, are named configurations; both meth
 | | fast, not engineered | `hand-supertrack-fast`: success 0.99 in 2.4 / 1.5 / 3.1 min | `hand-supermimic-fast --lr 2e-4`: 2.5 / 2.1 / 4.9 min |
 | **Muscles**, MLP world model (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
 | **Muscles**, RigidFormer | | `muscles-supertrack-rf`: MPJPE 34.9 mm | `muscles-supermimic-rf`: 60.2 mm |
+| **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.38 / 2.02 / 2.19 mm | `quadrotor-supermimic-accurate`: 6.55 / 4.96 / 5.08 mm |
+| | fast, not engineered | `quadrotor-supertrack-fast`: success 0.99 within 20 mm in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -128,7 +132,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] Tasks:** [human-object interaction](#human-object-interaction-hdmis-tasks) (HDMI's 13 tasks, policies on
   12), a [muscle-actuated character](#muscle-actuated-character) (MuscleVAE's), [two G1s](benchmarks/g1_boxing/results.md)
   on a two-person clip ([three training seeds](benchmarks/g1_boxing/results.md#training-seeds-0-2)),
-  [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand.
+  [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand,
+  [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; world models of MuJoCo models in generalized
   coordinates (`ndm_gym/worldmodels/mjcf.py`).
@@ -161,7 +166,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [RigidFormer](docs/rigidformer_backbone.md) backbone.
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
-  fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations.
+  fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
+  flown trajectories of up to 21.8 m/s.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics, with fused Triton inference kernels
   ([results](benchmarks/ndm_speed/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
@@ -306,6 +312,25 @@ benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
 # another hand of the task list (allegro, inspire), with the fast configurations
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
+```
+
+</details>
+
+<details>
+<summary><b>Quadrotor trajectory tracking</b></summary>
+
+```bash
+pip install -e '.[hand]'                               # MuJoCo-Warp
+python tools/download_drone_racing.py --set both       # Race Against the Machine's 18 autonomous and 18 piloted flights into data/drone_racing
+
+# one flight: train (SuperTrack, then SuperMimic), evaluate beside the reference's command flown open loop, render
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supertrack-accurate --log_dir logs/ellipse_st
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supermimic-accurate --log_dir logs/ellipse_sm
+python -m ndm_gym.evaluate_quadrotor --ckpt logs/ellipse_st/last.pt --out logs/ellipse_st/evaluation
+MUJOCO_GL=egl python tools/render_quadrotor.py --rollout logs/ellipse_st/evaluation/rollout_flight-01a-ellipse.npz --out ellipse_st.mp4
+
+# a task and seed of the benchmark (benchmarks/quadrotor_racing_tracking/tasks.json: ellipse, lemniscate, race_track, all)
+benchmarks/quadrotor_racing_tracking/run.sh ellipse 0 logs/quad_st --config quadrotor-supertrack-accurate
 ```
 
 </details>
@@ -697,6 +722,70 @@ python -m ndm_gym.train_hand --config hand-supermimic-fast --action_noise 0.2 --
        --log_dir logs/allegro/apple_sm_s0   # seeds 0-2
 ```
 
+### Quadrotor trajectory tracking
+
+A racing quadrotor tracks the motion-captured flights of
+[Race Against the Machine](https://github.com/tii-racing/drone-racing-dataset) on MuJoCo-Warp: one rigid body of 870 g
+commanded by a collective thrust and body rates at 100 Hz, an underactuated flying base without contacts, on the dataset's
+ellipse, lemniscate and seven-gate race track, each flown by its controller (the autonomous flights) and by human pilots
+(the piloted flights).
+
+| goal | configuration (`train_quadrotor`, add `--flight`) | result: ellipse / lemniscate / race track |
+|---|---|---|
+| most accurate | `--config quadrotor-supertrack-accurate` | position 3.38 / 2.02 / 2.19 mm on the autonomous flights, 1.34 / 1.20 / 3.08 mm on the pilots', at a success of 100 % |
+| time to the target, not engineered | `--config quadrotor-supertrack-fast` | 0.79 / 0.68 / 0.75 min, every run |
+
+Mean of training seeds 0-2, one H200 per run. Position: the error at the last of 6,000 iterations (5.6 to 7.3 min), over
+256 perturbed starts of the whole flight. Time: minutes to a success of 0.99 with the position within 20 mm.
+
+**In short:** SuperTrack for both, at about half SuperMimic's error (`quadrotor-supermimic-accurate`: 6.55 / 4.96 /
+5.08 mm; `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min) once its imagined window is 0.64 s; with the hand task's
+0.16 s it does not learn the task at all.
+
+<p align="center"><img src="docs/media/quadrotor/grid.webp" alt="SuperTrack and SuperMimic on the ellipse, the lemniscate and the race track, flown by the dataset's controller and by its human pilots" width="100%"/></p>
+<p align="center"><i>The ellipse, the lemniscate and the race track, each with SuperTrack and with SuperMimic, tracking the dataset's autonomous flights (its controller's smooth laps) and its piloted ones (a human pilot's laps, a line of their own on every one; on the race track a professional pilot's, at 9 g): the selected configurations' last checkpoints of seed 0, from the unperturbed start, in real time, with the flown reference drawn over them in blue (a translucent drone and its path), the dataset's gates where its motion capture placed them, the simulated drone's trail in orange. The single animations are on the <a href="docs/tasks/quadrotor.md">task's page</a>.</i></p>
+<p align="center"><sub>Renders of policies tracking flights of Race Against the Machine (TII Racing; CC BY 4.0), with a model of its drone written from the paper's specification (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
+- **Runs:** 6,000 iterations in 2,048 worlds on one H200; the last checkpoint plays 256 rollouts of the whole flight from
+  perturbed starts, a rollout succeeding if the position stays within 1 m of the reference. Every rollout of every run
+  succeeds; the reference's feedforward command alone, open loop, leaves the reference by 1 m after 1.5 s
+  ([results](benchmarks/quadrotor_racing_tracking/results.md), [task](docs/tasks/quadrotor.md)).
+- **Selection:** each algorithm starts from the hand task's selected options and is selected on the ellipse with seed 0
+  by one rule; the piloted flights run the selected configurations as they are.
+- **The imagined window:** a body rate moves the position only through the attitude and the acceleration, so within the
+  hand task's 16 steps (0.16 s here) correcting a position error costs more than it gains, and SuperTrack has no critic
+  to count what follows: no rollout succeeds. With 64 steps it tracks to 2 to 3.4 mm; SuperMimic's critic carries it with
+  16 steps, and 64 make it 2.4 to 3.3 times more accurate.
+- **All flights, and the pilots':** one policy on all 18 autonomous flights tracks them to 2.54 ± 0.02 mm (SuperTrack)
+  and 6.22 ± 0.34 mm (SuperMimic). The pilots' flights, ten or more laps with a line of their own on every one (the race
+  track a professional's at up to 20.9 m/s and 9 g), are tracked as closely with the same configurations; the policy of
+  the 18 autonomous flights flies them without a termination, zero-shot, at 5.9 / 5.5 / 22.3 mm (SuperTrack)
+  ([the piloted flights](benchmarks/quadrotor_racing_tracking/results.md#the-piloted-flights)).
+
+| | ellipse | lemniscate | race track |
+|---|---|---|---|
+| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
+| top speed, length | 21.7 m/s, 17.3 s | 10.0 m/s, 26.3 s | 21.2 m/s, 41.5 s |
+| success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
+| reference's command, open loop | in the air for 1.5 s | 1.5 s | 1.5 s |
+| position ↓, SuperTrack with the hand task's options | none succeeds | none succeeds | none succeeds |
+| position ↓, SuperTrack | 3.38 ± 0.03 mm | 2.02 ± 0.02 mm | 2.19 ± 0.02 mm |
+| position ↓, SuperMimic with the hand task's options | 15.90 ± 1.22 mm | 12.62 ± 1.25 mm | 16.92 ± 3.73 mm |
+| position ↓, SuperMimic | 6.55 ± 0.39 mm | 4.96 ± 0.03 mm | 5.08 ± 0.16 mm |
+| training to a success of 0.99 within 20 mm ↓, SuperTrack / SuperMimic | 0.79 / 0.93 min | 0.68 / 0.78 min | 0.75 / 0.89 min |
+| **piloted flight**: top speed, length | 8.3 m/s, 102.1 s | 8.3 m/s, 103.6 s | 19.3 m/s, 42.0 s |
+| success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
+| position ↓, SuperTrack | 1.34 ± 0.01 mm | 1.20 ± 0.00 mm | 3.08 ± 0.03 mm |
+| position ↓, SuperMimic | 5.51 ± 0.26 mm | 4.71 ± 0.11 mm | 8.13 ± 0.27 mm |
+| position ↓, the autonomous flights' policy, zero-shot, SuperTrack / SuperMimic | 5.90 / 12.40 mm | 5.46 / 13.24 mm | 22.33 / 38.14 mm |
+
+Reference's command, open loop: the same rollouts with the reference's feedforward thrust and body rates and no policy.
+
+```bash
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supertrack-accurate --seed 0 --log_dir logs/quad/ellipse_st_s0  # seeds 0-2
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supermimic-accurate --seed 0 --log_dir logs/quad/ellipse_sm_s0  # seeds 0-2
+```
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -874,6 +963,12 @@ Each task's results are in its section; these are the factors behind them.
    by about 45%. At 4,000 iterations its errors were higher with them in all three seeds, not significantly (p >= 0.19);
    at 3 h its MPJPE is 63.6 ± 4.1 mm with them, 68.0 ± 3.5 mm without
    ([details](benchmarks/musclevae/results.md#the-systems-options)).
+9. **The imagined window on the quadrotor:** a body rate moves the position only through the attitude and the acceleration,
+   so SuperTrack, without a critic, needs a window of 0.64 s (64 steps at 100 Hz): with the hand task's 0.16 s no rollout
+   succeeds, while SuperMimic's critic carries it (12.6 to 16.9 mm) and 64 steps make it 2.4 to 3.3 times more accurate.
+   The updates' time is in the number of small operations of an imagined step: the goal's frames in one batch of
+   operations, computed once per step, take SuperMimic's policy update from 45 to 32 ms
+   ([details](benchmarks/quadrotor_racing_tracking/results.md)).
 
 ## 🔬 Ablations
 
@@ -928,6 +1023,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/musclevae/results.md`](benchmarks/musclevae/results.md) | the muscle-actuated character: setup, tuning and results |
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics |
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand, the Allegro hand and the Inspire hand: tasks and results |
+| [`benchmarks/quadrotor_racing_tracking/`](benchmarks/quadrotor_racing_tracking/) | a racing quadrotor on Race Against the Machine's flights: tasks and results |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |
@@ -940,16 +1036,16 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands on a floating palm (`hands.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands on a floating palm (`hands.py`); a racing quadrotor (`quadrotor.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`, `drone_racing.py`) |
 | `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); a hand and an object on MuJoCo-Warp (`rigid/hand_sim.py`); Isaac Lab's launcher |
 | `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py` |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`; inference copies (`g1_infer.py`) |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`; inference copies (`g1_infer.py`) |
 | `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
 | `ndm_gym/policies/` | tracking policy and critic; HOI, muscle and hand policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`) |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py` |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py`; `train_quadrotor.py`, `evaluate_quadrotor.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
 | `benchmarks/` | studies run with the library: results, ablations, speed |
 | `docs/` | guides, the API reference and the design documents (`mkdocs.yml`) |
@@ -1011,6 +1107,10 @@ Data:
   Physics-Informed Dexterous Retargeting.* arXiv preprint, 2025. [arXiv:2511.09484](https://arxiv.org/abs/2511.09484) ·
   [code](https://github.com/facebookresearch/spider) · [data](https://huggingface.co/datasets/retarget/retarget_full) ·
   [examples](https://huggingface.co/datasets/retarget/retarget_example)
+- **Race Against the Machine** (the quadrotor's flights and its specification): M. Bosello, D. Aguiari, Y. Keuter,
+  E. Pallotta, S. Kiade, G. Caminati, F. Pinzarrone, J. Halepota, J. Panerati, G. Pau. *Race Against the Machine: a
+  Fully-annotated, Open-design Dataset of Autonomous and Piloted High-speed Flight.* IEEE Robotics and Automation Letters
+  9(4), 2024. [arXiv:2311.02667](https://arxiv.org/abs/2311.02667) · [data](https://github.com/tii-racing/drone-racing-dataset)
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,
@@ -1093,3 +1193,6 @@ MIT ([`LICENSE`](LICENSE)).
 - **MASS's bone meshes** (Apache-2.0) are downloaded by `tools/download_mass_meshes.sh`.
 - **InterHuman** (CC BY-NC-SA 4.0) is not redistributed; `tools/convert_interhuman.py` calls HoloMotion's HoloRetarget
   (Apache-2.0) from the user's own installation.
+- **Race Against the Machine** (TII Racing, CC BY 4.0): the flights are downloaded and converted by
+  `tools/download_drone_racing.py` and not redistributed; the quadrotor's model is written here from the paper's
+  specification.

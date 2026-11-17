@@ -35,16 +35,16 @@ See [installation options](installation.md) and the [Quickstart](quickstart.md) 
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands  (`hands.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands (`hands.py`); a racing quadrotor (`quadrotor.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`, `drone_racing.py`) |
 | `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator; HDMI's scenes; MuscleVAE on Newton; a hand and an object on MuJoCo-Warp; Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings; mbrl-lib's environments on a world model |
 | `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup); `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py` |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `mjcf.py` (any MuJoCo model) |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `mjcf.py` (any MuJoCo model) |
 | `ndm_gym/kernels/` | fused Triton kernels: the RigidFormer's blocks, the muscles' geometry |
 | `ndm_gym/policies/` | tracking policy and critic; the HOI, muscle and hand policies; MuscleVAE's released policy |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; HOI and muscle datasets, fits and throughput; RoboKit's and mbrl-lib's recordings, fits, timing and plans |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `train_muscles.py`, `train_hand.py` for the other tasks |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `train_muscles.py`, `train_hand.py`; `train_quadrotor.py`, `evaluate_quadrotor.py` for the other tasks |
 | `scripts/`, `tools/` | install and launch scripts; data download and conversion, rendering, plots |
 | `tests/` | equivalence tests against the upstream code, component tests |
 

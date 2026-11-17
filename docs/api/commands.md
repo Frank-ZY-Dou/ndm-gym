@@ -38,3 +38,11 @@ definitions import without it.
 ::: ndm_gym.evaluate_hand
     options:
       members: [main, rollout]
+
+::: ndm_gym.train_quadrotor
+    options:
+      members: [main, parse_args, build]
+
+::: ndm_gym.evaluate_quadrotor
+    options:
+      members: [main, rollout]
