@@ -15,3 +15,4 @@ The world models also stand in for simulators:
 | task | robots | simulator replaced | data | command |
 |---|---|---|---|---|
 | [RoboKit's planner on a world model](tasks/robokit.md), its MPC examples | Unitree G1, Go2 | MuJoCo Warp, in RoboKit's sampling MPC | recorded from the examples (`wmbench.collect_robokit`) | `python -m ndm_gym.wmbench.plan_robokit` |
+| [mbrl-lib's planner on a world model](tasks/mbrl.md), PETS' cart-pole and pusher | mbrl-lib's MuJoCo models | CPU MuJoCo and MuJoCo Warp, in mbrl-lib's CEM controller | recorded from the controller (`wmbench.collect_mbrl`) | `python -m ndm_gym.wmbench.plan_mbrl` |

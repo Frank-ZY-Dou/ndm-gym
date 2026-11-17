@@ -81,6 +81,7 @@ within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model not yet run in the planner, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
+| **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
@@ -132,8 +133,10 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] NDMs as simulators:** [throughput against physics](benchmarks/ndm_speed/results.md); the G1's MLP world
   model [against differentiable simulators](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models),
   its forward step 3.5-116x and its rollout gradient 2.4-183x faster (1,024-16,384 worlds, A100 40GB).
-- **[2026-11] NDMs in planners:** a world model scores the planner's candidates in place of the physics steps:
-  [RoboKit's](#ndms-in-robokits-planner) examples plan 1.8-3.0x faster than on MuJoCo Warp, on an A100.
+- **[2026-11] NDMs in planners:** a world model scores the planner's candidates in place of the physics steps. On an
+  A100, [RoboKit's](#ndms-in-robokits-planner) examples plan 1.8-3.0x faster than on MuJoCo Warp, and
+  [mbrl-lib's](#ndms-in-mbrl-libs-planner) cart-pole and pusher (PETS' settings) 20.8-20.9x and 9.9-10.5x faster on either
+  world model.
 - **[2026-11] Training speed:** what makes training fast, measured and offered as options: a recipe and systems options
   ([BlinkMimic's](#blinkmimics-options)), multi-GPU layouts ([XMimic's](docs/algorithms/xmimic.md));
   [time to return 0.82](#training-speed), with [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside.
@@ -783,6 +786,44 @@ SuperMimic's increment model (0.643 / 0.619 / 0.0297) has not been planned with 
 | G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) | 5 of 5 pass, as on MuJoCo Warp |
 | Go2 jumping | 0.59 → 0.26 ms (2.3x) | 65 → 31 s (2.1x) | 5 of 5 pass, as on MuJoCo Warp |
 
+### NDMs in mbrl-lib's planner
+
+A sampling planner scores hundreds of candidates at every step. On a simulator, each candidate's control step runs its
+physics steps, each with collision detection and a constraint solver. On a world model it is one network evaluation for
+all candidates at once, whose cost grows slowly with their number. At one world only that evaluation's latency is left,
+and a CPU core is as fast or faster. Here [mbrl-lib](https://github.com/facebookresearch/mbrl-lib)'s CEM controller plans
+PETS' cart-pole and pusher on the world model of each task's MuJoCo model.
+
+| goal | configuration | result |
+|---|---|---|
+| planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | 20.8x / 9.9x and 20.9x / 10.5x faster than on MuJoCo Warp, 103.8x / 31.3x and 104.3x / 33.2x faster than the CPU pool; 30 of 30 / 28 of 30 plans at the bar for each |
+
+Cart-pole / pusher; one A100 80GB SXM4, the median over planner seeds 0-2, both world models timed in one session
+([results](benchmarks/mbrl_lib/results.md)).
+
+**In short:** either world model; the two are level (their steps within 1.2 %, the pusher's planning times within one
+model's run-to-run spread).
+
+- **Controller:** mbrl-lib's true-dynamics controller (CEM, `mbrl/diagnostics/control_env.py`, at PETS' settings),
+  unmodified, scores its candidates on the world model instead of its pool of CPU processes; each plan executes on CPU
+  MuJoCo. These are results of its controller, not of PETS, whose models are learned ensembles.
+- **World models:** MLPs fitted on the same recordings by the same rule. Their steps share one code path and differ in the
+  last operation: an acceleration integrated, an increment applied.
+- **Measure:** seconds per executed step.
+
+| task | CPU MuJoCo, 16 processes | MuJoCo Warp | SuperTrack's model | SuperMimic's model | plans at the bar |
+|---|---|---|---|---|---|
+| cart-pole | 1.566 s | 0.314 s | **0.0151 s** (103.8x / 20.8x) | **0.0150 s** (104.3x / 20.9x) | 30 of 30 each |
+| pusher | 0.950 s | 0.300 s | **0.0303 s** (31.3x / 9.9x) | **0.0286 s** (33.2x / 10.5x) | 28 of 30 each |
+
+- In brackets: the speed-up over CPU MuJoCo / MuJoCo Warp.
+- **Plans at the bar:** three fits per model, planner seeds 10-19, each plan at least the simulators' lowest return less
+  5 % of their mean's size.
+- **The pusher's planning time,** each episode's median: SuperTrack's 30.2-30.4 ms, SuperMimic's 28.4-31.7 ms a step. The
+  slow plans are in mbrl-lib's CEM work on the CPU, not in the world models.
+- **The step alone** at 4,096 worlds is 17.7x (cart-pole) and 8.7x / 8.8x (pusher) faster than MuJoCo Warp's; at one
+  world it is no faster than one CPU process.
+
 ### Key findings
 
 Each task's results are in its section; these are the factors behind them.
@@ -999,6 +1040,12 @@ Simulation and planning:
 - **RoboKit** (the planner and examples of "NDMs in RoboKit's planner"): J. Ye, X. Peng, C. Mc Gartoll, C. Jing, L. Wei,
   J. Chen, X. Zou, X. Wang. *RoboKit: Accelerating Parallel Differentiable Optimization for Robot Learning.* CoRL 2026.
   [code](https://github.com/openrobokit/robokit) · [docs](https://openrobokit.com/docs/robokit/overview/)
+- **mbrl-lib** (the controller and tasks of "NDMs in mbrl-lib's planner"): L. Pineda, B. Amos, A. Zhang, N. O. Lambert,
+  R. Calandra. *MBRL-Lib: A Modular Library for Model-based Reinforcement Learning.* arXiv preprint, 2021.
+  [arXiv:2104.10159](https://arxiv.org/abs/2104.10159) · [code](https://github.com/facebookresearch/mbrl-lib)
+- **PETS** (the planner's settings of the cart-pole and the pusher): K. Chua, R. Calandra, R. McAllister, S. Levine. *Deep
+  Reinforcement Learning in a Handful of Trials using Probabilistic Dynamics Models.* NeurIPS 2018.
+  [arXiv:1805.12114](https://arxiv.org/abs/1805.12114)
 
 Tools:
 - **HoloMotion** (its HoloRetarget retargets InterHuman's clip to two G1s): M. Chen et al. *HoloMotion-1 Technical

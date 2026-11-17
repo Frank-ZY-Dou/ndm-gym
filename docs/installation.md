@@ -53,7 +53,9 @@ Fused GPU kernels (`ndm_gym.kernels`, the world models' inference copies) need a
 PyTorch's CUDA builds for Linux.
 
 RoboKit's examples run in RoboKit's own environment, with torch and this library importable
-(`pip install -e . --no-deps` there; see [RoboKit's planner on a world model](tasks/robokit.md#setup)).
+(`pip install -e . --no-deps` there; see [RoboKit's planner on a world model](tasks/robokit.md#setup)). mbrl-lib's
+controller runs in an environment of its own too, which `benchmarks/mbrl_lib/scripts/setup_env.sh` builds from its
+pinned versions ([mbrl-lib's planner on a world model](tasks/mbrl.md#setup)).
 
 Without the simulator, the modules and commands that need it raise `ndm_gym.sim.SimulatorNotInstalled`:
 

@@ -21,7 +21,7 @@ this repository yet.
 | MuscleVAE | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | its muscle-actuated character |
 | SPIDER | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object clips and scenes |
 | RoboKit | [openrobokit/robokit](https://github.com/openrobokit/robokit) | its planner on world models |
-| mbrl-lib | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | its controller on world models, at PETS' settings, and its algorithms (PETS, MBPO) *(ongoing)* |
+| mbrl-lib | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | its controller on world models, at PETS' settings; its algorithms (PETS, MBPO) *(ongoing)* |
 | MimicKit | [xbpeng/MimicKit](https://github.com/xbpeng/MimicKit) | the framework whose methods run on world models *(ongoing)* |
 | DeepMimic | [xbpeng/DeepMimic](https://github.com/xbpeng/DeepMimic) | MimicKit's tracking method *(ongoing)* |
 | AMP | [paper](https://doi.org/10.1145/3450626.3459670), in MimicKit | timed with the systems options; accelerated *(ongoing)* |

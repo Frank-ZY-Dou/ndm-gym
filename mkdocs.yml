@@ -102,6 +102,7 @@ nav:
           - Design: musclevae_design.md
       - Hand-object tracking: tasks/hand.md
       - RoboKit's planner on a world model: tasks/robokit.md
+      - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:
       - algorithms.md
       - SuperTrack: algorithms/supertrack.md
@@ -121,6 +122,7 @@ nav:
       - Muscles: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/musclevae/results.md
       - NDMs as simulators: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/ndm_speed/results.md
       - RoboKit: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md
+      - mbrl-lib: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/mbrl_lib/results.md
   - API reference:
       - api/index.md
       - Core: api/core.md

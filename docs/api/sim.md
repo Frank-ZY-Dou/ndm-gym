@@ -13,3 +13,10 @@ RoboKit's simulator subclasses need RoboKit and MuJoCo Warp, imported when they 
 ::: ndm_gym.sim.robokit_ndm
 
 ::: ndm_gym.sim.robokit_rec
+
+mbrl-lib's environments for its controller on batched simulators need mbrl-lib (at `3f93ccc`) with gymnasium 0.26,
+imported when they are built ([task](../tasks/mbrl.md)).
+
+::: ndm_gym.sim.mbrl_envs
+
+::: ndm_gym.sim.mbrl_ndm
