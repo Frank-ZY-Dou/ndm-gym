@@ -31,12 +31,14 @@ dynamics models (NDMs) also serve as simulators.
 ## 🏆 Leaderboard
 
 For each task, the fastest and the most accurate configuration in this repository, the leading one first; the commands
-are under [Recommended settings](#-recommended-settings) and [Results](#-results).
+are under [Recommended settings](#-recommended-settings) and [Results](#-results). In the four-GPU row, the times of the code
+its layout comes from, run here on the same GPUs, stand beside this library's and are not ranked with them.
 
 | Task | | Leading configuration | Its numbers, then the other algorithm's |
 |---|---|---|---|
 | **LAFAN1 tracking**, 40 clips, MLP world model | 🚀 fastest | SuperTrack and SuperMimic with [BlinkMimic's recipe](#blinkmimics-options), level within the seeds' spread | return 0.82 after **2.54 ± 0.11 min** (SuperTrack) and **2.68 ± 0.19 min** (SuperMimic) on an H100; 4.19 ± 0.16 and 4.38 ± 0.57 min on an A100 40GB SXM4 (seeds 0-5) |
-|  | 🎯 most accurate | SuperTrack with the speed options, 3 h on an A100 40GB | return **0.861**, MPJPE **14.5 mm**; SuperMimic, its best without them, 0.824 ± 0.013, 28.4 ± 0.5 mm (seeds 1-3) |
+|  | 🎯 most accurate | SuperTrack with the speed options, 3 h on an A100 40GB | return **0.861 ± 0.003**, MPJPE **14.5 ± 0.2 mm** (seeds 7-9); SuperMimic, its best without them, 0.824 ± 0.013, 28.4 ± 0.5 mm (seeds 1-3) |
+| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | the iteration's steps side by side: actor, world model, policy and probe sweeps on a GPU each (`--layout AWL --eprobe_gpu 3`, a probe sweep every 250 iterations; [XMimic](docs/algorithms/xmimic.md)'s layout) | return 0.82 after **2.30 ± 0.22 min** on four A100 40GB SXM4 with BlinkMimic's recipe, against 4.48 ± 0.37 min on one (seeds 0-2); XMimic's own code 1.81 ± 0.13 min on four, 3.53 ± 0.15 min on one (its evaluator; not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | SuperTrack, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm**; SuperMimic 0.804 ± 0.007, 33.1 ± 0.5 mm |
 | **Two G1s**, one two-person clip | 🚀 fastest | SuperMimic | return 0.88 after **0.10 h** on an A100 80GB (seed 0); SuperTrack 0.11 h |
 |  | 🎯 most accurate | SuperMimic by return, SuperTrack by root-relative MPJPE | return **0.904 ± 0.001** and 0.893 ± 0.001; MPJPE, global / root-relative, 47.5 / 16.1 mm and 46.2 / **14.1 mm** (MLP world model, seeds 0-2; with the RigidFormer 0.904 ± 0.001 and 0.894 ± 0.002, 45.8 / 17.0 mm and 47.2 / 14.7 mm) |
@@ -50,12 +52,14 @@ are under [Recommended settings](#-recommended-settings) and [Results](#-results
 | **NDM in RoboKit's planner**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model, not planned, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
 | **NDM as the simulator**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
 
-On the LAFAN1 task [XMimic](docs/algorithms/xmimic.md), BlinkMimic's trainer rebuilt in JAX, reports the first return of 0.82 after
-1.71 min on one H100 and 0.70 min on four, and 2.25 min for BlinkMimic's own code (its authors' runs and evaluator).
-Measured here with its own code and evaluator on an A100 40GB SXM4 (seeds 0-2): 3.53 ± 0.15 min on one GPU and
-1.81 ± 0.13 min on four, beside this library's recipe at 4.48 ± 0.37 min on one GPU and 2.41-2.89 min with XMimic's
-multi-GPU layouts on two to four ([why it is fast and what carries over](docs/algorithms/xmimic.md)); not ranked: the
-evaluators, the simulators and the clocks differ.
+**Several GPUs.** The iteration's steps (collection, world-model updates, policy update, probe sweeps) run side by side on
+two to four GPUs: 87 ms per iteration instead of 161. With BlinkMimic's recipe, return 0.82 comes after 2.30-2.89 min on two
+to four A100 40GB SXM4, against 4.48 ± 0.37 min on one, at 1.3-2.3 times the GPU-minutes
+([results](benchmarks/g1_lafan1_tracking/results.md#multi-gpu-layouts-and-the-learners-restructuring-timed)). The layouts are
+[XMimic](https://github.com/nico-bohlinger/xmimic)'s. Its own code (JAX, unmodified, its evaluator) reaches 0.82 after
+1.81 ± 0.13 min on four of these GPUs and 3.53 ± 0.15 min on one; its own target (no failed clip, three checkpoints in a
+row) after 2.44 ± 0.25 min on four, and 4.62 and 4.01 min on one (seeds 0 and 2; seed 1 not within its 6.2 min budget).
+Minutes from iteration 50 ([why it is fast](docs/algorithms/xmimic.md)).
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic), which trains through a differentiable simulator without a world model, first
 reaches return 0.82 after 14.48 ± 4.31 min with its published configuration on an A100 80GB SXM4 and after 18.48 ± 1.72 min
@@ -482,10 +486,12 @@ the marked GPU.
 
 </details>
 
-**Across GPUs.** [XMimic](docs/algorithms/xmimic.md)'s layouts run an iteration's steps side by side. With BlinkMimic's recipe, return 0.82
-comes after 2.89 ± 0.38 min on two A100 40GB SXM4 GPUs and 2.41-2.69 min on three, against 4.48 ± 0.37 min on one, at 1.3-2.3 times
-the GPU-minutes (seeds 0-2). On one GPU, what carries over from its restructured learner is the goal encoder run once per policy
-update, 6.6 % off an iteration ([why XMimic is fast and what carries over](docs/algorithms/xmimic.md)).
+**Across GPUs.** An iteration's steps run side by side on several GPUs (`--layout AL | AWL`, `--eprobe_gpu`; the layouts of
+[XMimic](docs/algorithms/xmimic.md)). With BlinkMimic's recipe, return 0.82 comes after 2.89 ± 0.38 min on two A100 40GB SXM4
+GPUs, 2.41-2.69 min on three and 2.30-2.57 min on four, against 4.48 ± 0.37 min on one, at 1.3-2.3 times the GPU-minutes
+(seeds 0-2; on four GPUs 2.30 ± 0.22 min with a probe sweep every 250 iterations,
+[results](benchmarks/g1_lafan1_tracking/results.md#multi-gpu-layouts-and-the-learners-restructuring-timed)). On one GPU, what
+carries over from XMimic's restructured learner is the goal encoder run once per policy update, 6.6 % off an iteration.
 
 ### Two G1s, one two-person clip
 

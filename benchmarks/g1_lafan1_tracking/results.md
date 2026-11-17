@@ -37,6 +37,84 @@ Its rounds were declared one at a time, each before its runs; the first rounds (
 | A100 40GB SXM4 | 4.00, 4.01, 4.36, 4.18, 4.31, 4.28 | 4.19 ± 0.16 | 5.38, 4.34, 3.99, 3.91, 4.68, 4.00 | 4.38 ± 0.57 |
 | A100 40GB PCIe | 3.69, 4.75, 4.43, 4.48, 4.43, 4.40 | 4.37 ± 0.35 | 3.62, 4.04, 4.01, 4.31, 3.95, 3.97 | 3.98 ± 0.22 |
 
+## Multi-GPU layouts and the learner's restructuring, timed
+
+BlinkMimic's recipe (`--algo blinkmimic`, the algorithm and hyperparameters XMimic runs) with the options taken from
+XMimic: the iteration's steps side by side on several GPUs (`--layout`), the probe sweeps on a GPU of their own
+(`--eprobe_gpu`) and the learner's restructuring ([the options](../../docs/algorithms/xmimic.md)). One node of A100 40GB
+SXM4 GPUs with nothing else running: training on four of its GPUs, the evaluators on the others; XMimic's own code ran on
+the same node (below). Every run's policy updated in every window read (the log's policy loss is nonzero).
+
+**Time per iteration** (seed 0, no evaluation; milliseconds per iteration from the training log's wall clock). The learner's
+options are added one group at a time, each row on top of the one above it:
+
+| options | GPUs | ms/it, iterations 200-1000 | 1000-1500 (four probe sweeps) |
+|---|---|---|---|
+| the recipe | 1 | 160.8 | 227.3 |
+| `--pi_encode_once` | 1 | 150.2 (-6.6 %) | |
+| and `--imag_hoist` | 1 | 150.0 | |
+| and `--pi_deferred_grads --wm_deferred_grads` | 1 | 163.8 | |
+| and `--muon_batched` | 1 | 163.4 | |
+| and `--wm_presample` | 1 | 161.3 | |
+| and `--gc_freeze`: the learner's set | 1 | 161.2 | 227.9 |
+| the set and `--njmax 256` | 1 | 159.2 (-1.2 % from the set) | |
+| the recipe, the probe worker on GPU 1 | 2 | 160.6 | 180.1 |
+| the set, the probe worker on GPU 1 | 2 | 161.1 | 180.5 |
+| the recipe again, last | 1 | 160.9 | 227.4 |
+
+The two runs of the recipe differ by 0.1 ms. `--pi_encode_once` alone takes 6.6 % off; the deferred gradients add 13.8 ms
+back, and the learner's whole set ends within 0.3 % of the recipe. The probe worker on a second GPU takes 47 ms per iteration
+off iterations 1000-1500 (227.3 to 180.1).
+
+**Time to return 0.82** (seeds 0-2; checkpoints every 100 iterations, evaluated during training with `ndm-eval --watch
+--group 18 --repeats 4 --graph`; minutes of training from iteration 50 to the first checkpoint whose four evaluations average
+at least 0.82; GPU-minutes are those minutes times the GPUs the run trains on; the layout runs train with `--gc_freeze`):
+
+| arm | GPUs | ms/it 200-1000 | ms/it 1000-1500 | iterations to 0.82 | minutes to 0.82 | GPU-minutes |
+|---|---|---|---|---|---|---|
+| the recipe | 1 | 160.81 ± 0.04 | 227.12 ± 0.81 | 1400, 1500, 1600 | 4.12, 4.45, 4.85 (4.48 ± 0.37) | 4.48 ± 0.37 |
+| the learner's set | 1 | 161.11 ± 0.07 | 227.66 ± 0.77 | 1500, 1600, 1500 | 4.46, 4.89, 4.45 (4.60 ± 0.25) | 4.60 ± 0.25 |
+| `--layout AL` | 2 | 86.84 ± 0.04 | 141.82 ± 1.61 | 1500, 1600, 1800 | 2.56, 2.81, 3.31 (2.89 ± 0.38) | 5.79 ± 0.77 |
+| `--layout AL --eprobe_gpu 2` | 3 | 86.86 ± 0.07 | 123.30 ± 1.21 | 1600, 1500, 1500 | 2.64, 2.39, 2.41 (2.48 ± 0.14) | 7.44 ± 0.41 |
+| `--layout AWL` | 3 | 87.08 ± 0.01 | 136.38 ± 1.74 | 1500, 1600, 1600 | 2.52, 2.76, 2.80 (2.69 ± 0.15) | 8.07 ± 0.46 |
+| `--layout AWL --eprobe_gpu 3` | 4 | 87.17 ± 0.04 | 124.80 ± 0.92 | 1600, 1400, 1700 | 2.63, 2.21, 2.88 (2.57 ± 0.34) | 10.29 ± 1.36 |
+| the same, a probe sweep every 250 iterations | 4 | 87.18 ± 0.05 | 87.32 ± 0.04 | 1500, 1600, 1800 | 2.11, 2.25, 2.54 (2.30 ± 0.22) | 9.21 ± 0.89 |
+| `--layout AL --eprobe_gpu 2 --pi_encode_once` | 3 | 80.39 ± 0.08 | 118.35 ± 1.23 | 1700, 1500, 1500 | 2.70, 2.25, 2.27 (2.41 ± 0.26) | 7.23 ± 0.77 |
+
+Arms within one standard deviation of each other are read as level:
+- The recipe and the learner's set are level.
+- Every layout arm reaches 0.82 1.5-1.9 times sooner than the recipe (2.3-2.9 against 4.5 minutes), at 1.3-2.3 times its
+  GPU-minutes.
+- AL with the probe worker, AWL with the probe worker, and the last two arms are level with each other.
+- AWL is level with AWL with the probe worker, and slower than AL with the probe worker and than the last two arms.
+- AL alone is level with AWL and AWL with the probe worker, and slower than AL with the probe worker and than the last two
+  arms.
+
+The last two arms:
+- A probe sweep every 250 iterations (`--eprobe_every 250 --eprobe_async 4`), as XMimic's four-GPU layout sweeps, removes the
+  four-GPU arm's wait for the sweeps: 87.3 ms per iteration over iterations 1000-1500, against 124.8.
+- `--pi_encode_once` on AL with the probe worker takes 7.4 % off its time per iteration (80.4 against 86.9 ms).
+
+`--njmax 256` was not timed to return 0.82: it takes 1.2 % off an iteration (above).
+
+**XMimic's own code** ([nico-bohlinger/xmimic](https://github.com/nico-bohlinger/xmimic) at `54860e1`, unmodified, with
+its published configuration and the training budget of its table, `--max_minutes 6.2`; scored after training by its own
+evaluator, `python -m xmimic.evaluate --reps 4 --group 18`, on another GPU; JAX at its `train.py`'s 0.9 of each GPU's
+memory). Minutes from iteration 50 as above, and on its own clock, which starts after compilation; its target is a return of
+at least 0.82 with no failed clip, held for three checkpoints in a row:
+
+| arm | GPUs | seeds | it/s 200-1000 | it/s 1100-3500 | first ≥ 0.82: iterations | minutes from iteration 50 | on its clock | its target, minutes from iteration 50 |
+|---|---|---|---|---|---|---|---|---|
+| its one-GPU trainer | 1 | 3 | 7.20 ± 0.00 | 5.59 ± 0.02 | 1400, 1400, 1500 | 3.45, 3.44, 3.70 (3.53 ± 0.15) | 3.63, 3.62, 3.88 | 4.62, not within the run, 4.01 |
+| `AWLP` | 4 | 3 | 13.48 ± 0.08 | 13.20 ± 0.01 | 1400, 1500, 1600 | 1.68, 1.82, 1.94 (1.81 ± 0.13) | 1.82, 1.96, 2.08 | 2.69, 2.45, 2.19 (2.44 ± 0.25) |
+| `FP` | 2 | 1 (seed 0) | 7.20 | 7.18 | 1300 | 2.91 | 3.09 | 3.37 |
+| `ALP` | 3 | 1 (seed 0) | 12.08 | 12.03 | 1400 | 1.86 | 2.01 | 2.28 |
+
+XMimic's rows stand beside this library's and are not ranked with them: the evaluators, the simulators, the constraint rows
+per world in training (256 against 500) and the clocks differ. During the compilation of its one-GPU run with seed 1, before
+its clock and its iteration 50 started, a copy of 1.6 GB of earlier runs' files read the node's disk; its measures begin
+after it (its minutes match seeds 0 and 2).
+
 ## NablaMimic's own code, timed
 
 [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) trains its policy through a differentiable simulator,
