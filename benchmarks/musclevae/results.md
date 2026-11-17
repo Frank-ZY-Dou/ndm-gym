@@ -98,11 +98,12 @@ systems options, which also change the random stream, 99.0 and 60.5 mm in round 
 
 **Runs outside the rounds.** Before round 1, each starting configuration trained once for 12 h with seed 0 as a development run; at about 3 h,
 SuperTrack 32.8 mm, ended 0.008, joint error 9.8 deg; SuperMimic 73.6 mm, ended 0.056, joint error 9.8 deg. Round 1's selections, up to 3 h with the
-default updates, seed 1: SuperTrack 79.2 mm, ended 0.096; SuperMimic 116.3 mm, ended 0.112. Round 2's, the same, seeds 1-3: SuperTrack 38.6, 105.4 and
+default updates, seed 1: SuperTrack 79.2 mm, ended 0.096; SuperMimic 116.3 mm, ended 0.112 (checkpoint 2,000; none ended 0.10 or less). Round 2's, the
+same, seeds 1-3: SuperTrack 38.6, 105.4 and
 78.6 mm (74.2 ± 33.7), ended 0.022 ± 0.019, joint error 16.1 ± 4.4 deg; SuperMimic 69.2, 64.1 and 70.9 mm (68.0 ± 3.5), ended 0.079 ± 0.026, joint
 error 10.0 ± 0.3 deg.
 
-**Round 3 was declared after those three SuperTrack runs had ended, while SuperMimic's three were ending.**
+**Round 3 was defined after those three SuperTrack runs had ended, while SuperMimic's three were ending.**
 
 **Round 3's selections at 3 h.** Up to 3 h, seeds 1-3, evaluated as above: SuperTrack at `--wm_lr` 1.6e-3 36.7 ± 1.0 mm, ended 0.008 ± 0.002, joint error 11.5 ± 0.8 deg; at 1.5e-3, the next value
 on the grid of published rates, 36.4 ± 1.9 mm, 0.014 ± 0.011, 10.9 ± 0.9 deg; SuperMimic at the recipe's 4e-4 63.6 ± 4.1 mm, 0.059 ± 0.027, 10.1 ± 0.6 deg. Round 4 selects by the same 1 h rule,

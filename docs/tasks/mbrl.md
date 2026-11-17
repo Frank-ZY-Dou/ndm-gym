@@ -18,8 +18,9 @@ are learned ensembles.
 PETS' cart-pole and pusher at `control_env.py`'s PETS settings: seconds per executed step, the median over planner seeds
 0-2, on one A100 80GB SXM4; in brackets the speed-up over CPU MuJoCo / MuJoCo Warp.
 
-- **World models:** SuperTrack's acceleration model and SuperMimic's increment model, MLPs fitted on the same recordings
-  by the same rule, as bf16 copies whose steps are one CUDA graph each, timed in one session.
+- **World models:** SuperTrack's acceleration model and SuperMimic's increment model, MLPs fitted by the same rule on the
+  same recordings (the pusher's fitted again after one round of four plans on each model's own first fit), as bf16 copies
+  whose steps are one CUDA graph each, timed in one session.
 - **Plans at the bar:** a plan returns at least the lowest of the 20 simulator plans less 5 % of their mean's size
   (planner seeds 10-19, which no recording used).
 - **Level:** the two models' steps are within 1.2 % at 4,096 worlds. On the pusher one model's planning time moves between

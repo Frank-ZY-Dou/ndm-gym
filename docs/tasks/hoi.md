@@ -22,8 +22,8 @@ Renders of policies tracking HDMI's reference motions, with the robot and object
 
 ```bash
 bash tools/download_hdmi.sh && python tools/convert_hdmi.py    # HDMI's clips and objects into data/hdmi/ (not redistributed)
-python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack --log_dir logs/hoi_st
-python -m ndm_gym.train_hoi --task move_suitcase --algo supermimic --log_dir logs/hoi_sm
+python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack --st_fail_w 5 --st_contact_force --log_dir logs/hoi_st
+python -m ndm_gym.train_hoi --task move_suitcase --algo supermimic --action_noise 0.3 --log_dir logs/hoi_sm
 python -m ndm_gym.train_ppo_hoi --task move_suitcase --log_dir logs/hoi_ppo
 python -m ndm_gym.evaluate_hoi --run_dir logs/hoi_st --watch
 ```
@@ -35,7 +35,10 @@ python -m ndm_gym.wmbench.collect_hoi --task move_suitcase --seed 0 --out hoi_s0
 python -m ndm_gym.wmbench.collect_hoi --task move_suitcase --seed 1 --out hoi_s1.pt
 python -m ndm_gym.wmbench.fit_hoi --task move_suitcase --kind accel --backbone rigidformer --train hoi_s0.pt --test held=hoi_s1.pt --out fit.csv
 python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode physics --num_envs 4096 --out speed.csv
-python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode ndm --backbone rigidformer --compile reduce-overhead --num_envs 4096 --out speed.csv
+python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode ndm --backbone mlp --kind accel --compile reduce-overhead \
+  --inference_copy bf16 --fused --num_envs 4096 --out speed.csv      # the MLP's bf16 copy
+python -m ndm_gym.wmbench.speed_hoi --task move_suitcase --mode ndm --backbone rigidformer --kind accel --compile reduce-overhead \
+  --inference_copy amp --rf_attention token --fused --rf_kernels blocks --num_envs 4096 --out speed.csv   # the RigidFormer, fused blocks
 ```
 
 The task as implemented, item by item: [design](../hoi_design.md), [HDMI task specification](../hdmi_task_spec.md). Simulation throughput:

@@ -1,6 +1,7 @@
 # Neural dynamics models as simulators: HDMI's scenes, and the G1 against differentiable simulators
 
-One otherwise idle H100 80GB. Env-steps per second use 20 ms control steps: HDMI's four 5 ms physics substeps in one
+HDMI's scenes: one otherwise idle H100 80GB. Env-steps per second use 20 ms control steps: HDMI's four 5 ms physics
+substeps in one
 Isaac Lab 3 / Newton/MuJoCo-Warp call, without task terms. Values are medians of three repeats of 200 steps after 20
 warm-up steps. Scenes start at the clip's first frame, without contacts between props. Scripts: `run_speed.sh`,
 `run_speed_rf.sh` (throughput), `run_fits.sh`, `run_score_rf.sh` (accuracy).
@@ -132,8 +133,10 @@ NablaEngine bundles); a control step is 20 ms of four 5 ms substeps with PD posi
 from standing states with smooth random targets near the default pose. Forward: control steps per second over 200 steps
 (four segments of 50, each from the standing states), the median of three repeats after a warm-up, compilation excluded.
 Gradient: the forward and reverse-mode gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms per
-control step and peak GPU memory. The world model is SuperTrack's MLP from the LAFAN1 study, `rfd_st_mlp_s7` (last
-checkpoint): its step from the clip's frame-0 reference states, as trained (bf16, compiled) and on its fastest inference
+control step and peak GPU memory. The world model is SuperTrack's MLP from the LAFAN1 study, the seed-7 run of
+`lafan1-supertrack-accurate`
+(its last checkpoint): its step from the clip's frame-0 reference states, as trained (bf16, compiled) and on its fastest
+inference
 path, and the gradient through the model as trained, the call one CUDA graph. Scripts: [`diffsim/`](diffsim/README.md) for
 the simulators, `ndm_gym.wmbench.speed_pair` for the world model (`--grad_horizon 32`: the gradient).
 
@@ -148,7 +151,7 @@ Forward, control steps per second (all worlds):
 | MJX, as published (every contact pair padded) | 0.016 M | 0.018 M | 0.019 M |
 | MJX, tuned (capacities calibrated on MuJoCo C) | 0.046 M | 0.074 M | 0.079 M |
 | MLP world model, as trained | 3.00 M | 5.74 M | 7.70 M |
-| MLP, fastest path | 3.40 M | 7.22 M | 9.18 M |
+| MLP, bf16 copy with the fused step | 3.40 M | 7.22 M | 9.18 M |
 
 Gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms per control step (peak GPU memory):
 
@@ -162,7 +165,8 @@ Gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms p
 | MJX, tuned, its solver as a fixed scan of 5 iterations | 113.45 (3.5 GiB) | 290.45 (13.1 GiB) | out of memory on the 40 GB card |
 | MLP world model | 0.69 (1.0 GiB) | 1.59 (2.3 GiB) | 4.84 (7.3 GiB) |
 
-Ratios at equal N (forward: the MLP's fastest path; gradient: as trained), against each simulator's faster setting:
+Ratios at equal N (forward: the MLP's bf16 copy with the fused step; gradient: as trained), against each simulator's
+faster setting:
 
 | | N = 1,024 | N = 4,096 | N = 16,384 |
 |---|---|---|---|
@@ -180,8 +184,9 @@ Ratios at equal N (forward: the MLP's fastest path; gradient: as trained), again
 - Tuning: NablaEngine's published setting already runs a control step as one compiled call, and 5 iterations change its
   times by 3% at most (its gradient at 1,024 worlds is 23% slower). MuJoCo Warp's tuned setting is 4% faster forward and
   10-11% faster in the gradient.
-- The simulators are exact and the world models are not: on the LAFAN1 study's offline benchmark the body-position error
-  after 32 open-loop steps on the SuperTrack policy's held-out set is 59.2 mm for the MLP
+- The simulators are exact and the world models are not: on the LAFAN1 study's offline benchmark an MLP fitted offline
+  (not the timed checkpoint) has a body-position error of 59.2 mm after 32 open-loop steps on the SuperTrack policy's
+  held-out set
   ([ablations](../g1_lafan1_tracking/ablations.md)).
 - NablaEngine's own timing kit on the same GPU (its scripts unmodified; `diffsim/run_paper_bench.sh`), 4,096 worlds, ms per control
   step: NablaEngine forward 3.17, forward with its tape plus the adjoint 4.90; MuJoCo Warp 3.17.0 forward 12.8; with pull

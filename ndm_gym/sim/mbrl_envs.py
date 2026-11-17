@@ -481,7 +481,8 @@ class Kinematics:
 
 # ---------------- the rewards and terminations ----------------
 def tolerance(x, lower=0.0, upper=0.0, margin=0.0, sigmoid="gaussian", value_at_margin=0.1):
-    """dm_control's rewards.tolerance (dm_control/utils/rewards.py) for the sigmoids the benchmark's tasks use."""
+    """dm_control's rewards.tolerance (dm_control/utils/rewards.py; Copyright 2017 The dm_control Authors, Apache License 2.0)
+    for the sigmoids the benchmark's tasks use."""
     inside = (lower <= x) & (x <= upper)
     if margin == 0:
         return torch.where(inside, 1.0, 0.0).to(x.dtype)
@@ -500,7 +501,8 @@ def tolerance(x, lower=0.0, upper=0.0, margin=0.0, sigmoid="gaussian", value_at_
 
 
 def _reacher_tip(q):
-    """pets_reacher's hand-written end effector (mbrl/env/pets_reacher.py, get_EE_pos) of qpos[:, :6]."""
+    """pets_reacher's hand-written end effector (mbrl/env/pets_reacher.py, get_EE_pos; Copyright (c) Facebook, Inc. and its
+    affiliates, MIT License) of qpos[:, :6]."""
     t1, t2, t3, t4, t5, t6 = (q[:, i : i + 1] for i in range(6))
     rot_axis = torch.cat((torch.cos(t2) * torch.cos(t1), torch.cos(t2) * torch.sin(t1), -torch.sin(t2)), 1)
     rot_perp = torch.cat((-torch.sin(t1), torch.cos(t1), torch.zeros_like(t1)), 1)

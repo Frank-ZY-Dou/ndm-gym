@@ -62,7 +62,7 @@ bf16 parameters and RigidFormer's token attention kernel. `fused` adds Triton ke
   of the muscle state from the 284 muscle targets; `kind` "accel" or "increment"; MLP or `MuscleRigidFormerNet`.
 - **Hand-object tracking**: `worldmodels.hand.HandWorldModel`, one control step of the hand's joints and the object;
   `kind` "accel" or "increment"; MLP ([task](tasks/hand.md)).
-- **Any MuJoCo model** (RoboKit's examples, mbrl-lib's tasks): `worldmodels.mjcf.MjcfWorldModel`, one step of a model's
+- **MuJoCo models without actuator activation** (RoboKit's examples, mbrl-lib's tasks): `worldmodels.mjcf.MjcfWorldModel`, one step of a model's
   generalized coordinates (qpos, qvel) from its controls, read from the `MjModel` by `MjcfLayout` (free, ball, hinge and
   slide joints; joint and fixed-tendon actuators with a fixed gain; joint equalities kept exact); `kind` "accel"
   (integrated as MuJoCo's semi-implicit Euler) or "increment"; MLP or a body-token RigidFormer (`MjcfRigidFormerNet`);

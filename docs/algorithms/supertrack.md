@@ -37,7 +37,8 @@ a RigidFormer backbone ([World models](../world_models.md)).
 | `--st_substeps` | 1 | world-model integration substeps (1 = paper, 4 = simulator) |
 | `--st_wm_loss` | `l1` | world-model window loss (`l1`, `l2`) |
 
-Options of both algorithms: [Algorithms](../algorithms.md#options). HOI training has its own: `python -m ndm_gym.train_hoi --help`.
+Options of both algorithms: [Algorithms](../algorithms.md#options). HOI, hand and muscle training add their own:
+`python -m ndm_gym.train_hoi --help`, `python -m ndm_gym.train_hand --help`, `python -m ndm_gym.train_muscles --help`.
 
 ## Configurations
 

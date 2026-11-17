@@ -43,7 +43,7 @@ def font(name, size):
 
 
 def fmt(x):
-    return f"{x:.1f}×" if x < 20 else f"{x:.0f}×"
+    return f"{x:.1f}×" if x < 30 else f"{x:.0f}×"
 
 
 def main(out):

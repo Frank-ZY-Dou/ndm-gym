@@ -17,7 +17,7 @@ PYEOF
 )
 RUN=$LOGS/$TASK/seed_$SEED
 $PY -m ndm_gym.train_hand --clip "$CLIP" --seed "$SEED" --log_dir "$RUN" "${@:5}"
-$PY -m ndm_gym.evaluate_hand --ckpt "$RUN/last.pt" --out "$RUN/evaluation" --seed "$SEED"
+$PY -m ndm_gym.evaluate_hand --ckpt "$RUN/last.pt" --out "$RUN/evaluation" --seed 0   # the results' evaluation seed, whatever the training seed
 for source in policy reference; do
     $PY tools/render_hand.py --clip "$CLIP" --rollout "$RUN/evaluation/rollout.npz" --source $source --out "$RUN/evaluation/$source.mp4"
 done

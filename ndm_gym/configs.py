@@ -56,12 +56,13 @@ CONFIGS = {
         "two-g1-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {SYSTEMS} {PAIRED} "
                               "--ckpt_every 1000 --max_hours 0.5",
                               "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.893 +- 0.001, MPJPE 46.2 / 14.1 mm global / root-relative "
-                              "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
+                              "(seeds 0-2: seed 0 on an A100 80GB for 0.5 h, seeds 1-2 on an A100 40GB to its iteration count)"),
         "two-g1-supermimic": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 "
                               f"--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured {SYSTEMS} {PAIRED} --ckpt_every 1000 "
                               "--max_hours 0.3",
                               "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.904 +- 0.001, MPJPE 47.5 / 16.1 mm global / root-relative "
-                              "(seeds 0-2: seed 0 on an A100 80GB, seeds 1-2 on an A100 40GB to its iteration count)"),
+                              "(seeds 0-2: seed 0 on an A100 80GB for 0.3 h, its best checkpoint its last, so not an equal-budget comparison "
+                              "with two-g1-supertrack's 0.5 h; seeds 1-2 on an A100 40GB to its iteration count)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "
@@ -74,25 +75,26 @@ CONFIGS = {
     },
     "train_hand": {
         "hand-supertrack-accurate": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HAND_SYSTEMS}",
-                                     "XHand, 20,000 iterations: object 2.4 / 1.6 / 2.3 mm on the apple, the spray bottle and the can (seeds 0-2)"),
+                                     "XHand, 20,000 iterations: object 2.4 / 1.6 / 2.3 mm on the apple, the spray bottle and the can (A100 40GB, seeds 0-2)"),
         "hand-supermimic-accurate": (f"--algo supermimic {HAND_SYSTEMS}",
-                                     "XHand, 20,000 iterations: object 3.5 / 2.9 / 3.2 mm on the apple, the spray bottle and the can (seeds 0-2)"),
+                                     "XHand, 20,000 iterations: object 3.5 / 2.9 / 3.2 mm on the apple, the spray bottle and the can; Inspire hand "
+                                     "5.2 / 2.5 / 11.2 mm (A100 40GB, seeds 0-2)"),
         "hand-supertrack-fast": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 0.9 / 1.5 / 2.4 min (A100 40GB, mean of seeds 0-2; "
-                                 "not engineered)"),
+                                 "XHand: a success of 0.99 with the object within 10 mm after 0.9 / 1.5 / 2.4 min; Inspire hand 2.4 / 1.5 / 3.1 min "
+                                 "(A100 40GB, mean of seeds 0-2; not engineered)"),
         "hand-supermimic-fast": (f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 1.3 / 1.6 / 1.6 min (A100 40GB, mean of seeds 0-2; "
-                                 "not engineered)"),
+                                 "XHand: a success of 0.99 with the object within 10 mm after 1.3 / 1.6 / 1.6 min (mean of seeds 0-2); Allegro hand "
+                                 "1.4 / - / 2.7 min (the 6 of 9 runs that reach it); A100 40GB, not engineered"),
     },
     "train_muscles": {
         "muscles-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {MUSCLE_RECIPE} {MUSCLE_SYS} --wm_batches 8 --pi_lr_mult 4 --wm_lr 2.5e-3 "
                                "--iterations 1000000 --last_every_min 10 --max_hours 3",
-                               "MuscleVAE's character, up to 3 h on an A100 40GB: MPJPE 38.1 +- 1.0 mm, episodes ended 0.011 (seeds 1-3)"),
+                               "MuscleVAE's character, up to 3 h on an A100 40GB PCIe: MPJPE 38.1 +- 1.0 mm (root frame), episodes ended 0.011 (seeds 1-3)"),
         "muscles-supermimic": (f"--algo supermimic --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3 {MUSCLE_RECIPE} {MUSCLE_SYS} "
                                "--wm_batches 5 --pi_lr_mult 2 --wm_lr 2.5e-3 --iterations 1000000 --last_every_min 10 --max_hours 3",
-                               "MuscleVAE's character, up to 3 h on an A100 40GB: MPJPE 65.6 +- 8.1 mm, episodes ended 0.053 (seeds 1-3)"),
+                               "MuscleVAE's character, up to 3 h on an A100 40GB PCIe: MPJPE 65.6 +- 8.1 mm (root frame), episodes ended 0.053 (seeds 1-3)"),
         "muscles-supertrack-rf": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {MUSCLE_RECIPE.replace(' --wm_hidden 1024 1024 1024', '')} --wm_batches 5 "
                                   f"--pi_lr_mult 4 {MUSCLE_RF} {MUSCLE_SYS} --max_hours 3 --iterations 1000000 --ckpt_every 2000 --last_every_min 10",
                                   "MuscleVAE's character, RigidFormer world model, 3 h on an A100 40GB PCIe: MPJPE 34.9 +- 0.7 mm, episodes ended 0.0004 "

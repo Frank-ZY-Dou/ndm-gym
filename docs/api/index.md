@@ -11,12 +11,12 @@ Dependency layers: `core` → `robots` → `motion` → `sim` → `tasks` → `w
 | [Robots and state](robots.md) | the G1's specification; the state layout |
 | [Motion](motion.md) | the motion library and its sources |
 | [Tasks](tasks.md) | LAFAN1 tracking, hand-object tracking, HDMI's tasks, the muscle-actuated character, quadrotor tracking: observations, rewards, terminations |
-| [World models](worldmodels.md) | SuperTrack's, SuperMimic's, BlinkMimic's; the RigidFormer; inference copies; HOI, muscles, the hand and the quadrotor |
+| [World models](worldmodels.md) | SuperTrack's, SuperMimic's, BlinkMimic's; the RigidFormer; inference copies; HOI, muscles, the hand, the quadrotor and MuJoCo models (`mjcf`) |
 | [Policies](policies.md) | the tracking policy and critic; the HOI, muscle, hand and quadrotor policies |
 | [Algorithms](algos.md) | the algorithm interface and the replay buffer, SuperTrack, SuperMimic, BlinkMimic's and XMimic's options, the other tasks' algorithms |
 | [Commands](commands.md) | the training and evaluation commands and their arguments; named configurations |
-| [World-model benchmark](wmbench.md) | offline fits and scores on collected datasets |
-| [Simulator](sim.md) | `SimulatorNotInstalled`; Isaac Lab's launcher |
+| [World-model benchmark](wmbench.md) | offline fits and scores on collected datasets; RoboKit's and mbrl-lib's recordings, fits, timing and plans |
+| [Simulator](sim.md) | `SimulatorNotInstalled`; Isaac Lab's launcher; RoboKit's and mbrl-lib's simulators on a world model |
 
 ## What each module needs
 

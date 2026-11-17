@@ -11,7 +11,8 @@ SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift cli
 - **Training:** `ndm_gym.train_hand`, 20,000 iterations in 2,048 worlds, 16 imagined steps, on one A100 40GB, with the
   systems options (`--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs`).
 - **Evaluation:** `ndm_gym.evaluate_hand` on the last checkpoint: 256 rollouts of the whole clip from perturbed starts
-  (evaluation seed 0), without exploration noise. A rollout succeeds if it never terminates (the object or the palm
+  (evaluation seed 0 for every run, whatever its training seed), without exploration noise. A rollout succeeds if it never
+  terminates (the object or the palm
   15 cm from the reference) and the object ends within 5 cm of the reference. Errors are means over the clip's frames
   and the rollouts; mean ± SD over three training seeds. Reference targets: the same rollouts with the reference's joint
   positions as the position targets (the values of SuperTrack's seed-0 evaluation).
@@ -70,9 +71,10 @@ it gives the same indices, kinematics, task outputs and training updates bit for
 
 - **Training:** both algorithms with the XHand's named configurations, `hand-supertrack-fast` and `hand-supermimic-fast`
   (6,000 iterations, with HOI's optimizer options) and `hand-supertrack-accurate` and `hand-supermimic-accurate` (20,000
-  iterations); 2,048 worlds, training seeds 0-2, one A100 40GB per run. Then, per hand and algorithm, four single changes
+  iterations); 2,048 worlds, training seeds 0-2, on A100 40GB GPUs. Then, per hand and algorithm, four single changes
   of its fast configuration on training seed 0, the same kinds for both, and three-seed runs of the changes chosen by the
-  same rules ([below](#how-the-two-hands-configurations-were-chosen)): timed at 6,000 iterations, and at 20,000.
+  same rules ([below](#how-the-two-hands-configurations-were-chosen)): timed at 6,000 iterations, and trained to 20,000
+  (untimed).
 - **Evaluation:** as above, on the last checkpoint. The 6,000-iteration runs trained alone on a GPU; their checkpoints,
   every 200 iterations, were evaluated after training, as in [training time](#training-time).
 
@@ -98,7 +100,8 @@ ROBOT=inspire benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/in
 ### Accuracy, 20,000 iterations
 
 The last checkpoint over 256 perturbed starts, mean ± SD over training seeds 0-2. Per hand and algorithm two
-configurations trained for 20,000 iterations: its accurate preset and the change its screen chose. The one with the
+configurations trained for 20,000 iterations: its accurate preset and the arm its screen chose (its fast preset or one of
+its four changes). The one with the
 lower object error over the three clips is its most accurate configuration: Allegro, SuperTrack 2.24 mm (preset) and
 1.97 mm, SuperMimic 7.89 and 6.28 mm; Inspire, SuperTrack 2.56 and 1.92 mm, SuperMimic 6.31 and 46.88 mm. Trained on to
 20,000 iterations, SuperMimic's fast configuration loses the Inspire hand's can in all three seeds (a success of 2.0,
@@ -147,13 +150,13 @@ lower object error over the three clips is its most accurate configuration: Alle
 
 ### Time to the target, 6,000 iterations
 
-These times are not engineered: the hand trainer has no per-phase time table yet (collection, the world model's and the
-policy's updates, evaluation, host time), so no configuration here is called the fastest.
+These times are not engineered, so no configuration here is called the fastest.
 
 Each run trained alone on a GPU. Minutes: the training wall clock at the first of the run's checkpoints (every 200
 iterations) from which every later one has a success of 0.99 or more with the object within 10 mm (-: none within 6,000
 iterations); iterations/s are with policy updates (the log's rows 1,000-3,000). Per hand and algorithm two
-configurations: its fast preset and its change with the fewest iterations to the target in the screen. The one with the
+configurations: its fast preset and its change with the fewest mean iterations to the target among those reaching it on
+all three clips (a tie: the lower object error at 6,000). The one with the
 lower mean time over its nine runs (a run without the target counted at its whole training time) is its fast
 configuration: Allegro, SuperTrack 4.21 min (preset) and 3.90 min, SuperMimic 5.31 and 5.32 min; Inspire, SuperTrack
 2.34 and 3.26 min, SuperMimic 4.13 and 3.81 min.
@@ -278,14 +281,14 @@ configuration the rules chose then trained on A100 40GB with three seeds.
 
 Object errors in brackets: a success below 0.99 on that clip, so the arm was not a candidate for the most accurate
 configuration. Each algorithm's fast configuration on a hand is the faster, by the mean minutes over nine timed runs,
-of its preset and its change with the fewest mean iterations to the target; its most accurate one is the lower, by the
-object error over the three clips and three seeds at 20,000 iterations, of its accurate preset and its change with the
-lowest object error at 6,000 trained for 20,000 iterations.
+of its preset and its change with the fewest mean iterations to the target among those reaching it on all three clips (a
+tie: the lower object error at 6,000); its most accurate one is the lower, by the object error over the three clips and
+three seeds at 20,000 iterations, of its accurate preset and the arm (its fast preset or one of its four changes) with the
+lowest object error at 6,000, trained for 20,000 iterations.
 
 ## Training time
 
-These times are not engineered: the hand trainer has no per-phase time table yet (collection, the world model's and the
-policy's updates, evaluation, host time), so no configuration here is called the fastest.
+These times are not engineered, so no configuration here is called the fastest.
 
 Each run trains alone on an A100 40GB for 6,000 iterations with the systems options, three training seeds per
 configuration; its checkpoints, every 200 iterations, are evaluated after training as above. A run's time is its

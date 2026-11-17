@@ -1,6 +1,6 @@
 # What NDM Gym covers
 
-Every method, simulator, dataset and robot model this library implements, runs, accelerates or builds on, by name with its
+Every method, simulator, dataset, robot model and tool this library implements, runs, accelerates or builds on, by name with its
 link, one line each; the papers are under "Papers and repositories" in the README. Entries marked *(ongoing)* are not in
 this repository yet.
 
@@ -16,11 +16,13 @@ this repository yet.
 | ∇Mimic (NablaMimic) | [sailab-ai/NablaMimic](https://github.com/sailab-ai/NablaMimic) | its own code timed |
 | RWM | [leggedrobotics/rsl_rl_rwm](https://github.com/leggedrobotics/rsl_rl_rwm), [robotic_world_model](https://github.com/leggedrobotics/robotic_world_model), [robotic_world_model_lite](https://github.com/leggedrobotics/robotic_world_model_lite) | its code through `--algo rwm` *(ongoing)* |
 | RigidFormer | [paper](https://arxiv.org/abs/2605.09196) | world-model backbone |
+| DiffMimic | [paper](https://arxiv.org/abs/2304.03274) | its demonstration replay as an option (`--st_ref_replay`) |
 | NeRD | [NVlabs/neural-robot-dynamics](https://github.com/NVlabs/neural-robot-dynamics) | NeRD-style world model *(ongoing)* |
 | HDMI | [LeCAR-Lab/HDMI](https://github.com/LeCAR-Lab/HDMI) | its 13 human-object interaction tasks |
 | MuscleVAE | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | its muscle-actuated character |
 | SPIDER | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object clips and scenes |
 | RoboKit | [openrobokit/robokit](https://github.com/openrobokit/robokit) | its planner on world models |
+| PETS | [paper](https://arxiv.org/abs/1805.12114) | its planner settings of the cart-pole and the pusher, in mbrl-lib's controller |
 | mbrl-lib | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | its controller on world models, at PETS' settings; its algorithms (PETS, MBPO) *(ongoing)* |
 | MimicKit | [xbpeng/MimicKit](https://github.com/xbpeng/MimicKit) | the framework whose methods run on world models *(ongoing)* |
 | DeepMimic | [xbpeng/DeepMimic](https://github.com/xbpeng/DeepMimic) | MimicKit's tracking method *(ongoing)* |
@@ -38,11 +40,11 @@ this repository yet.
 | Simulator | Link | Here |
 |---|---|---|
 | Isaac Lab | [isaac-sim/IsaacLab](https://github.com/isaac-sim/IsaacLab) | tracking simulator |
-| MuJoCo | [google-deepmind/mujoco](https://github.com/google-deepmind/mujoco) | models, CPU simulation |
+| MuJoCo | [google-deepmind/mujoco](https://github.com/google-deepmind/mujoco) | models, CPU simulation; MJX in the differentiable-simulator comparison |
 | MuJoCo Warp | [google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp) | GPU simulation; the baseline of the speed comparisons |
 | Newton | [newton-physics/newton](https://github.com/newton-physics/newton) | MuscleVAE's simulation; MimicKit's *(ongoing)* |
 | NablaEngine | [sailab-ai/NablaEngine](https://github.com/sailab-ai/NablaEngine) | differentiable simulator in the speed comparison |
-| Genesis | [Genesis-Embodied-AI/genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) | Eden's simulator *(ongoing)* |
+| Genesis | [Genesis-Embodied-AI/genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) | timed beside the differentiable simulators; Eden's simulator *(ongoing)* |
 | SPlisHSPlasH | [InteractiveComputerGraphics/SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH) | fluid ground truth for CFC *(ongoing)* |
 
 ## Data
@@ -50,9 +52,14 @@ this repository yet.
 | Data | Link | Here |
 |---|---|---|
 | LAFAN1 | [ubisoft/ubisoft-laforge-animation-dataset](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | the G1's 40 tracking clips |
+| LAFAN1 Retargeting Dataset | [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset) | LAFAN1 on the G1, and the G1's URDF |
 | InterHuman (InterGen) | [tr3e/InterGen](https://github.com/tr3e/InterGen) | the two-person clip |
+| SMPL | [paper](https://doi.org/10.1145/2816795.2818013) | InterHuman's body model, read from the user's licensed copy |
 | OMOMO | [lijiaman/omomo_release](https://github.com/lijiaman/omomo_release) | RoboKit's G1 box carrying |
+| InterMimic | [project page](https://sirui-xu.github.io/InterMimic/) | OMOMO's clip as it processed it |
 | OmniRetarget (holosoma) | [amazon-far/holosoma](https://github.com/amazon-far/holosoma) | RoboKit's G1 climbing |
+| SPIDER's retargets | [retarget/retarget_full](https://huggingface.co/datasets/retarget/retarget_full) | the hands' clips |
+| HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
 | Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset) | the quadrotor's flights, autonomous and piloted |
 
 ## Robots and hands
@@ -60,6 +67,7 @@ this repository yet.
 | Robot | Type | Model from | Here |
 |---|---|---|---|
 | Unitree G1 | humanoid, 29 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros) | tracking, two G1s, human-object interaction, RoboKit's G1 tasks |
+| Unitree G1, mjlab's model | humanoid, primitive colliders | [mujocolab/mjlab](https://github.com/mujocolab/mjlab) | the differentiable-simulator comparison |
 | Unitree Go2 | quadruped | [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie) | RoboKit's Go2 jumping |
 | LimX TRON 1 | wheel-legged biped | [limxdynamics/tron1-robot-description](https://github.com/limxdynamics/tron1-robot-description) | driving and a ramp, planned on world models *(ongoing)* |
 | XHand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
@@ -70,6 +78,7 @@ this repository yet.
 | Adroit hand | dexterous hand, 28 actuators | [the contributed pull request](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3) | door opening *(ongoing)* |
 | Race Against the Machine's racer | 5-inch racing quadrotor | written here from the paper's specification (`ndm_gym/robots/quadrotor.py`) | trajectory tracking |
 | MuscleVAE's character | muscle-actuated humanoid | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | tracking with muscles |
+| Cart-pole, pusher | PETS' MuJoCo models | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | mbrl-lib's planner on world models |
 | ASE's humanoid | sword-and-shield character | [xbpeng/MimicKit](https://github.com/xbpeng/MimicKit) | MimicKit's methods *(ongoing)* |
 
 ## Tools
@@ -78,3 +87,4 @@ this repository yet.
 |---|---|---|
 | HoloMotion | [HorizonRobotics/HoloMotion](https://github.com/HorizonRobotics/HoloMotion) | retargets the two-person clip |
 | supermimic_vibed | [zita-ch/supermimic_vibed](https://github.com/zita-ch/supermimic_vibed) | the code this library started from |
+| MASS | [lsw9021/MASS](https://github.com/lsw9021/MASS) | the bone meshes of the muscle renders |

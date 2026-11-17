@@ -34,7 +34,8 @@ site and the fingertip sites it has. The task, the world model, the policy and t
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire      # default: every hand of the task list
-ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast
+# each algorithm's time configuration on the Allegro hand
+ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
 
@@ -42,7 +43,7 @@ ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_
 
 | | |
 |---|---|
-| state | the hand's joint positions and velocities (6 of the palm, then the fingers': 18 on the XHand and the Inspire hand, 22 on the Allegro hand); the object's position, rotation, linear and angular velocity |
+| state | the hand's joint positions and velocities (the palm's 6, then the fingers'; 18 joints in all on the XHand and the Inspire hand, 22 on the Allegro hand); the object's position, rotation, linear and angular velocity |
 | action | one offset per joint in [-1, 1] about the next reference frame's pose (3 cm palm translation, 0.3 rad palm rotation, 0.4 rad fingers), as position targets |
 | observation | the joints, the fingertips and the object in the palm's frame, the previous action |
 | goal | the next 5 reference frames about the state: joint offsets, the object's offset and relative rotation |

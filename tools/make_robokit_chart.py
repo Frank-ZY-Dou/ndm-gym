@@ -4,7 +4,7 @@ the world models against as it is, with the outcomes over those seeds. From ``be
 every task in it, or only those of ``--tasks`` (the entries' ``task``, e.g. ``g1_climb go2_jump``), in the json's order. Drawn
 at twice the display size.
 
-Usage: python tools/make_robokit_chart.py results/summary.json docs/media/robokit_speedups.webp [--tasks g1_climb go2_jump]
+Usage: python tools/make_robokit_chart.py results/summary.json docs/media/robokit_speedups.webp [--tasks g1_climb go2_jump] [--no_outcomes]
 """
 
 import argparse
@@ -17,6 +17,7 @@ NAMES = {"g1_carry": "G1 box carrying", "g1_climb": "G1 climbing", "go2_jump": "
          "sharpa_pen": "Sharpa pen spinning"}  # fmt: skip
 S = 2
 W, ROW_H, PAD = 940 * S, 122 * S, 18 * S
+ROW_H_BARS = 98 * S  # --no_outcomes: a row of the bars alone (they and their labels span y + 16 to y + 80)
 BLUE0, BLUE1, GREY, INK, MUTED, LINE, RED = (13, 90, 158), (52, 150, 214), (226, 226, 226), (26, 28, 32), (90, 96, 104), (232, 232, 232), (176, 48, 48)
 
 
@@ -75,16 +76,17 @@ def bar(im, x0, x1, y, speed, h):
     im.paste(b, (x0, y), mask)
 
 
-def main(src, out, only=None):
+def main(src, out, only=None, outcomes=True):
     data = rows(json.load(open(src)), only)
-    H = PAD * 2 + ROW_H * len(data)
+    row_h = ROW_H if outcomes else ROW_H_BARS
+    H = PAD * 2 + row_h * len(data)
     im = Image.new("RGB", (W, H), (255, 255, 255))
     d = ImageDraw.Draw(im)
     d.rounded_rectangle((S, S, W - 2 * S, H - 2 * S), radius=16 * S, outline=(218, 220, 224), width=S, fill=(255, 255, 255))
     lab, big, small = font("DejaVuSansMono.ttf", 13), font("DejaVuSans-Bold.ttf", 21), font("DejaVuSans.ttf", 12)
     x0, x1 = 250 * S, 600 * S
     for i, (name, n, steps, plan, note, short) in enumerate(data):
-        y = PAD + i * ROW_H
+        y = PAD + i * row_h
         if i:
             d.line((PAD, y, W - PAD, y), fill=LINE, width=S)
         d.text((PAD + 14 * S, y + 26 * S), name, font=lab, fill=INK)
@@ -99,7 +101,7 @@ def main(src, out, only=None):
             label = fmt(speed) if speed is not None else "-"
             d.text((x1 + 24 * S, by - 6 * S), label, font=big, fill=BLUE0)
             d.text((x1 + 24 * S + d.textlength(label, font=big) + 10 * S, by + 2 * S), what, font=small, fill=MUTED)
-        for k, line in enumerate(note):
+        for k, line in enumerate(note if outcomes else []):  # --no_outcomes: the bars only
             d.text((x1 + 24 * S, y + (82 + 16 * k) * S), line, font=small, fill=RED if short else INK)
     im.save(out, lossless=True) if out.endswith(".webp") else im.save(out)
     print(out, im.size)
@@ -110,5 +112,6 @@ if __name__ == "__main__":
     p.add_argument("summary", help="benchmarks/robokit_ndm/summarize.py's json")
     p.add_argument("out", help="the chart (.webp: lossless)")
     p.add_argument("--tasks", nargs="+", default=None, help="only these tasks, the entries' task (e.g. g1_climb go2_jump; default: every task)")
+    p.add_argument("--no_outcomes", action="store_true", help="leave out the outcome lines over the seeds (the bars only)")
     a = p.parse_args()
-    main(a.summary, a.out, a.tasks)
+    main(a.summary, a.out, a.tasks, outcomes=not a.no_outcomes)

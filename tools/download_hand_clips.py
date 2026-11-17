@@ -4,7 +4,8 @@
     python tools/download_hand_clips.py [--out data/spider] [--robots xhand allegro]
 
 Per task and hand: the scene and its kinematic reference, the object's meshes, and the hand's meshes of that source dataset.
-The clips keep their upstream terms (github.com/facebookresearch/spider, CC BY-NC 4.0) and stay out of Git.
+The clips keep their terms (the dataset card at the pinned revision, Apache-2.0, and their source datasets' and assets' own;
+SPIDER's code, github.com/facebookresearch/spider, is CC BY-NC 4.0) and stay out of Git.
 """
 
 from __future__ import annotations
