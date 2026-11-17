@@ -30,9 +30,14 @@ Apache-2.0). The G1 box carrying render (g1_carry.webp, and its tile in grid.web
 (https://github.com/lijiaman/omomo_release, whose data terms are not stated) that RoboKit retargets; it is for non-commercial
 illustration only and is not covered by the MIT license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in six blocks. The LAFAN1 tracking block is under the terms of the
+docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch/mbrl-lib; MIT, Copyright (c) Facebook, Inc. and
+its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans
+made on this library's world model, drawn with this library's lights, floor and sky.
+
+docs/media/teaser.webp puts 6 s of such renders in seven blocks. The LAFAN1 tracking block is under the terms of the
 docs/media/final paragraph, the Two G1s block under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles block under those of
 docs/media/musclevae and the Hand-object block under those of docs/media/hand. The Human-object interaction block, renders
 of four of HDMI's tasks, is under the terms of the docs/media/hoi paragraph, and the RoboKit planning block, the
 docs/media/robokit renders of its three examples (G1 box carrying tracks the OMOMO clip), under the sources and terms that
-paragraph names. No part of it is covered by the MIT license in LICENSE.
+paragraph names. The mbrl-lib planning block holds the docs/media/mbrl renders; no other part of it is covered by the MIT
+license in LICENSE.

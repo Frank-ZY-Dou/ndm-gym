@@ -25,8 +25,8 @@ The algorithms share one pipeline within each task:
 - **Muscles:** MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp).
 - **Hands:** hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp).
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Six tasks with several cases each: four LAFAN1 clips, two G1s, a muscle-actuated character walking and running, three robot hands with their objects, four of HDMI's human-object interaction tasks, and RoboKit's three examples planned on a world model" width="100%"/></p>
-<p align="center"><i>SuperTrack on four LAFAN1 clips, two G1s, the muscles' walk and run, and three hands with their objects (half speed).<br>Four HDMI tasks trained in the world model (1.5x speed); RoboKit's three examples, planned on a world model.</i></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Seven tasks with several cases each: four LAFAN1 clips, two G1s, a muscle-actuated character walking and running, three robot hands with their objects, four of HDMI's human-object interaction tasks, RoboKit's three examples and mbrl-lib's cart-pole and pusher planned on a world model" width="100%"/></p>
+<p align="center"><i>SuperTrack on four LAFAN1 clips, two G1s, the muscles' walk and run, and three hands with their objects (half speed).<br>Four HDMI tasks trained in the world model (1.5x speed); RoboKit and mbrl-lib (half speed) planning on a world model.</i></p>
 <p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), MuscleVAE, InterHuman (CC BY-NC-SA 4.0), SPIDER's hand retargets, HDMI and RoboKit (with an OMOMO clip), for non-commercial illustration only; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 <details>
@@ -39,6 +39,7 @@ The algorithms share one pipeline within each task:
 | Hand-object | SuperTrack's runs in its section's grid ([which](benchmarks/xhand_tracking/results.md#the-readmes-animations)): the XHand on the spray bottle and the apple, the Allegro hand on the spray bottle, the Inspire hand on the can; half speed, last frames held | |
 | Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
 | RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
+| mbrl-lib planning | its CEM controller planning on SuperTrack's acceleration model, each plan executed in MuJoCo: the cart-pole (planner seed 10) and the pusher (seed 17), recorded again on a CPU in fp32 with the A100 runs' fits; half speed | returns 175.96 and -65.89 (175.77 and -62.53 in the A100 runs) |
 
 </details>
 
@@ -804,6 +805,10 @@ Cart-pole / pusher; one A100 80GB SXM4, the median over planner seeds 0-2, both 
 
 **In short:** either world model; the two are level (their steps within 1.2 %, the pusher's planning times within one
 model's run-to-run spread).
+
+<p align="center"><img src="docs/media/mbrl/grid.webp" alt="mbrl-lib's controller planning on a world model: the cart-pole swinging up and balancing, the pusher pushing the puck onto its goal" width="804"/></p>
+<p align="center"><i>mbrl-lib's CEM controller planning on a world model, each plan executed in MuJoCo, at half speed; the pusher's goal in red.<br>One episode per task (planner seeds 10 and 17), recorded on a CPU.</i></p>
+<p align="center"><sub>Renders of mbrl-lib's cartpole.xml and pusher.xml (MIT) in this library's look (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 - **Controller:** mbrl-lib's true-dynamics controller (CEM, `mbrl/diagnostics/control_env.py`, at PETS' settings),
   unmodified, scores its candidates on the world model instead of its pool of CPU processes; each plan executes on CPU
