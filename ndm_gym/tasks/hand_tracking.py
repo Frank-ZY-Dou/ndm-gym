@@ -1,6 +1,7 @@
-"""Hand-object motion tracking: a dexterous hand follows a kinematic reference of a hand and the object it handles.
+"""Hand-object motion tracking: one or two dexterous hands follow a kinematic reference of the hands and the object
+they handle.
 
-State tuple ``S = (q, qd, p, R, v, w)``: the hand's joint positions and velocities (ndm_gym.robots.hands), and the
+State tuple ``S = (q, qd, p, R, v, w)``: the hands' joint positions and velocities (ndm_gym.robots.hands), and the
 object's position, rotation matrix and world linear and angular velocity. Observation, goal, reward and termination are
 analytic functions of the state, its forward kinematics ``fk`` (HandKinematics.forward of the joint positions, computed
 once per state) and the reference frame, shared by the simulator's transitions and the world model's imagined rollouts.
@@ -17,7 +18,7 @@ import torch
 
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq
 from ..motion.library import _angular_velocity, _gradient
-from ..robots.hands import NUM_PALM, HandKinematics
+from ..robots.hands import HandKinematics
 from ..state import CONTROL_DT, OBJ_DIM, flatten_object, unflatten_object
 
 HOLD = 25  # frames of the last pose appended to a clip (0.5 s)
@@ -33,7 +34,7 @@ def unflatten_state(x: torch.Tensor):
 
 
 class HandReference(NamedTuple):
-    """A clip at the control rate, (T, ...) per field: the state's components, the keypoints and the palm's rotation."""
+    """A clip at the control rate, (T, ...) per field: the state's components, the keypoints and the palms' rotations."""
 
     q: torch.Tensor
     qd: torch.Tensor
@@ -79,7 +80,7 @@ class RewardCfg:
     w_object_ori: float = 1.0
     w_action_rate: float = -0.05
     term_object: float = 0.15  # m, the object's distance from its reference
-    term_palm: float = 0.15  # m, the palm's
+    term_palm: float = 0.15  # m, a palm's
 
     def scaled(self, k: float) -> RewardCfg:
         """The tracking kernels' widths scaled by ``k`` (training's --reward_std_scale)."""
@@ -91,9 +92,9 @@ class HandTask:
     def __init__(self, kin: HandKinematics, ref: HandReference, cfg: RewardCfg = RewardCfg()):
         self.kin, self.ref, self.cfg = kin, ref, cfg
         self.scale = kin.action_scale
-        joints, fingertips = kin.num_joints, kin.num_keypoints - 1
+        joints, fingertips = kin.num_joints, kin.num_keypoints - kin.num_hands
         self.state_dim = 2 * joints + OBJ_DIM
-        self.obs_dim = joints + joints + 3 * fingertips + 6 + 3 + 6 + 3 + 3 + joints
+        self.obs_dim = joints + joints + 3 * fingertips + kin.num_hands * (6 + 3 + 6 + 3 + 3) + joints
         self.goal_frame_dim = joints + 3 + 6
         self.max_step_reward = (cfg.w_keypoint + cfg.w_finger + cfg.w_palm_ori + cfg.w_object_pos + cfg.w_object_ori) * CONTROL_DT
 
@@ -102,14 +103,18 @@ class HandTask:
         return torch.clamp(self.ref.q[self.ref.next_frame(f)] + self.scale * a, self.kin.q_lo, self.kin.q_hi)
 
     def obs(self, S, fk, a_prev: torch.Tensor) -> torch.Tensor:
-        """The hand's joints, and the fingertips and the object about the palm in the palm's frame."""
+        """The hands' joints, and per hand its fingertips and the object about its palm in the palm's frame."""
         q, qd, p, R, v, w = S
         keypoints, palm_R = fk
-        Rt = palm_R.transpose(-1, -2)
-        local = lambda x: (Rt @ x.unsqueeze(-1)).squeeze(-1)  # noqa: E731
-        tips = (keypoints[..., 1:, :] - keypoints[..., :1, :]) @ palm_R  # rows x^T R = (R^T x)^T
-        return torch.cat((q, 0.1 * qd, tips.flatten(-2), mat_to_6d(palm_R), local(p - keypoints[..., 0, :]), mat_to_6d(Rt @ R), local(v),
-                          0.1 * local(w), a_prev), -1)  # fmt: skip
+        tips = self.kin.fingertips_about_palms(keypoints, palm_R)
+        parts = [q, 0.1 * qd]
+        for hand, (start, stop) in enumerate(self.kin.hand_keypoints):
+            Rh = palm_R[..., hand, :, :]
+            Rt = Rh.transpose(-1, -2)
+            local = lambda x, Rt=Rt: (Rt @ x.unsqueeze(-1)).squeeze(-1)  # noqa: E731
+            parts += [tips[..., start - hand : stop - hand - 1, :].flatten(-2), mat_to_6d(Rh), local(p - keypoints[..., start, :]),
+                      mat_to_6d(Rt @ R), local(v), 0.1 * local(w)]  # fmt: skip
+        return torch.cat((*parts, a_prev), -1)
 
     def goal(self, S, f: torch.Tensor, goal_frames: int) -> torch.Tensor:
         """The next ``goal_frames`` reference frames about the state: joint offsets, the object's offset and relative rotation."""
@@ -123,13 +128,13 @@ class HandTask:
 
     def errors(self, S, fk, f: torch.Tensor) -> dict[str, torch.Tensor]:
         """Tracking errors against frame ``f``: keypoints (..., num_keypoints) and object position (m), finger joints (rad, RMS),
-        and the squared rotation angles of the palm and the object."""
+        and the squared rotation angles of the palms (their mean) and the object."""
         q, _, p, R, _, _ = S
         keypoints, palm_R = fk
         return {
             "keypoint": torch.linalg.vector_norm(keypoints - self.ref.keypoints[f], dim=-1),
-            "finger": (q[..., NUM_PALM:] - self.ref.q[f][..., NUM_PALM:]).pow(2).mean(-1).sqrt(),
-            "palm_ori_sq": rot_angle_sq(palm_R, self.ref.palm_R[f]),
+            "finger": (q - self.ref.q[f])[..., self.kin.finger_joints].pow(2).mean(-1).sqrt(),
+            "palm_ori_sq": rot_angle_sq(palm_R, self.ref.palm_R[f]).mean(-1),
             "object_pos": torch.linalg.vector_norm(p - self.ref.p[f], dim=-1),
             "object_ori_sq": rot_angle_sq(R, self.ref.R[f]),
         }
@@ -149,14 +154,13 @@ class HandTask:
 
     def termination(self, S, fk, f: torch.Tensor) -> torch.Tensor:
         e = self.errors(S, fk, f)
-        return (e["object_pos"] > self.cfg.term_object) | (e["keypoint"][..., 0] > self.cfg.term_palm)
+        return (e["object_pos"] > self.cfg.term_object) | (e["keypoint"][..., self.kin.palm_keypoints] > self.cfg.term_palm).any(-1)
 
     def soft_termination(self, S, fk, f: torch.Tensor, width: float = 0.015) -> torch.Tensor:
         """The termination's probability with the thresholds as sigmoids, differentiable in the state."""
         e = self.errors(S, fk, f)
-        alive = (1 - torch.sigmoid((e["object_pos"] - self.cfg.term_object) / width)) * (
-            1 - torch.sigmoid((e["keypoint"][..., 0] - self.cfg.term_palm) / width))  # fmt: skip
-        return 1 - alive
+        palms = 1 - torch.sigmoid((e["keypoint"][..., self.kin.palm_keypoints] - self.cfg.term_palm) / width)
+        return 1 - (1 - torch.sigmoid((e["object_pos"] - self.cfg.term_object) / width)) * palms.prod(-1)
 
     def critic_features(self, S, fk, f: torch.Tensor, a_prev: torch.Tensor, goal_frames: int) -> torch.Tensor:
         return torch.cat((self.obs(S, fk, a_prev), self.goal(S, f, goal_frames)), -1)
