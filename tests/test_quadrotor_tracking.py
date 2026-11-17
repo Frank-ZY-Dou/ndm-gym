@@ -275,6 +275,25 @@ def test_training_arguments():
     assert (st.algo, st.st_fail_w, st.st_task_weights, st.goal_stride, st.episode) == ("supertrack", 2, True, 3, 200)
 
 
+def test_download_checks_the_release_parts(tmp_path):
+    """tools/download_drone_racing.check: a part of the release whose SHA-256 is not the release's is refused, and so is
+    another file unless --unverified."""
+    sys.path.insert(0, "tools")
+    try:
+        tool = importlib.import_module("download_drone_racing")
+    finally:
+        sys.path.remove("tools")
+    assert set(tool.SHA256) == {part for parts in tool.PARTS.values() for part in parts}
+    part, other = tmp_path / "autonomous_zipchunk01", tmp_path / "autonomous.zip"
+    part.write_bytes(b"not the release's part")
+    other.write_bytes(b"")
+    with pytest.raises(ValueError, match="SHA-256"):
+        tool.check([str(part)], unverified=False)
+    with pytest.raises(ValueError, match="not a part of the release"):
+        tool.check([str(other)], unverified=False)
+    tool.check([str(other)], unverified=True)
+
+
 CUDA = "cuda:0"
 HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("mujoco_warp") is not None
 GPU = pytest.mark.skipif(not HAVE_SIM, reason="needs a GPU and MuJoCo-Warp")
