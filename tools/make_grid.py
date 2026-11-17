@@ -32,9 +32,12 @@ The README's grids, from the repository's root:
       $(for t in $T; do echo --clip $M/hoi/policies/$t.webp; done)
   python tools/make_grid.py $M/robokit/grid.webp --columns 3 --tile 320 208 --hold 0.5 --col_labels "G1 box carrying" "G1 climbing" "Go2 jumping" \\
       --clip $M/robokit/g1_carry.webp --clip $M/robokit/g1_climb.webp --clip $M/robokit/go2_jump.webp
+  python tools/make_grid.py $M/mbrl/grid.webp --columns 2 --tile 400 300 --col_labels cart-pole pusher --clip cartpole.mp4 --clip pusher.mp4
+      (tools/render_mbrl.py's renders)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
-renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips at half speed) in boxes that leave their marks out:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 3 --tile 256 192 --seconds 6 --quality 70 --max_mb 9 \\
+renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
+marks out (mbrl-lib's: tools/render_mbrl.py --no_mark):
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --tile 256 192 --seconds 6 --quality 70 --max_mb 9 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -46,7 +49,8 @@ renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips at half sp
       --clip open_foldchair-sit.mp4 0 344 98 1152 864 --clip roll_ball-hand.mp4 0 414 118 1152 864 \\
       --clip topple_wood_board_and_cross.mp4 0 400 130 1120 840 \\
       --block "RoboKit planning" 2 2 --clip $M/robokit/g1_carry.webp 0.2 375 100 343 520 2 1 \\
-      --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480
+      --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
+      --block "mbrl-lib planning" 2 2 --clip cartpole_strip.mp4 0 0 0 1376 512 1 2 --clip pusher_strip.mp4 0 0 0 1376 512 1 2
 """
 
 import argparse
