@@ -77,6 +77,7 @@ within 10 mm. Commands: [Recommended settings](#-recommended-settings), [Results
 | **Hand-object tracking**, Inspire hand, three clips | ⏱ time to the target, not engineered | `hand-supertrack-fast` | **2.4 / 1.5 / 3.1 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character, MLP world model | 🎯 most accurate | `muscles-supertrack`, up to 3 h on an A100 40GB | episodes ended **0.011 ± 0.005**, MPJPE **38.1 ± 1.0 mm** (seeds 1-3) |
+|  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s), every seed passing as there; SuperMimic's increment model not yet run in the planner, held-out errors 0.643 / 0.619 / 0.0297 against 0.555 / 0.531 / 0.0283 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | 🚀 fastest | the MLP model's bf16 copy | **16.3 M env-steps/s**, 46 times the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5 times ([results](benchmarks/ndm_speed/results.md)) |
 
@@ -314,32 +315,7 @@ SuperTrack and SuperMimic share each task's simulator, data, networks and evalua
 - **Not reported here:** tracking on HDMI's human-object interaction tasks, and the RigidFormer's time to a target return.
 - **Return:** the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
-<table>
-<thead>
-<tr><th>Task</th><th>Measure</th><th>SuperTrack</th><th>SuperMimic</th></tr>
-</thead>
-<tbody>
-<tr><td rowspan="3"><b>LAFAN1 tracking</b><br><sub>MLP world model, 40 clips</sub></td><td>return ↑, 3 h<br><sub>A100 40GB, seeds 1-3</sub></td><td>0.832 ± 0.009</td><td>0.824 ± 0.013</td></tr>
-<tr><td>MPJPE, root-relative ↓, 3 h</td><td>20.0 ± 0.7 mm</td><td>28.4 ± 0.5 mm</td></tr>
-<tr><td>training to return 0.82 ↓<br><sub>fastest configurations, seeds 0-5; H100 / A100 40GB SXM4 / A100 40GB PCIe</sub></td><td>2.54 / 4.19 / 4.37 min</td><td>2.68 / 4.38 / 3.98 min</td></tr>
-<tr><td rowspan="5"><b>Two G1s</b><br><sub>a two-person clip, seeds 0-2<br>seed 0 on an A100 80GB,<br>seeds 1-2 on an A100 40GB</sub></td><td>return ↑, best checkpoint, MLP world model</td><td>0.893 ± 0.001</td><td>0.904 ± 0.001</td></tr>
-<tr><td>return ↑, best checkpoint, RigidFormer</td><td>0.894 ± 0.002</td><td>0.904 ± 0.001</td></tr>
-<tr><td>MPJPE, global / root-relative ↓, MLP world model</td><td>46.2 ± 7.5 / 14.1 ± 0.2 mm</td><td>47.5 ± 8.6 / 16.1 ± 0.4 mm</td></tr>
-<tr><td>MPJPE, global / root-relative ↓, RigidFormer</td><td>47.2 ± 5.2 / 14.7 ± 0.2 mm</td><td>45.8 ± 2.5 / 17.0 ± 0.7 mm</td></tr>
-<tr><td>training to return 0.88 ↓<br><sub>seed 0, A100 80GB, MLP world model</sub></td><td>0.11 h</td><td>0.10 h</td></tr>
-<tr><td rowspan="4"><b>Muscles</b><br><sub>MuscleVAE's character, MLP world model<br>A100 40GB, seeds 1-3</sub></td><td>MPJPE, root frame ↓, best checkpoint within 3 h</td><td>38.1 ± 1.0 mm</td><td>65.6 ± 8.1 mm</td></tr>
-<tr><td>MPJPE, heading frame ↓</td><td>38.5 ± 1.1 mm</td><td>45.7 ± 2.5 mm</td></tr>
-<tr><td>episodes ended ↓</td><td>0.011 ± 0.005</td><td>0.053 ± 0.014</td></tr>
-<tr><td>joint error ↓</td><td>10.6 ± 1.1°</td><td>9.7 ± 0.4°</td></tr>
-<tr><td rowspan="3"><b>Hand-object tracking</b><br><sub>XHand: apple / spray bottle / can, MLP world model<br>A100 40GB, seeds 0-2</sub></td><td>success ↑, 256 perturbed starts</td><td>100.0 / 100.0 / 99.9 %</td><td>100.0 / 100.0 / 100.0 %</td></tr>
-<tr><td>object position ↓</td><td>2.4 ± 0.0 / 1.6 ± 0.1 / 2.3 ± 0.3 mm</td><td>3.5 ± 0.1 / 2.9 ± 0.4 / 3.2 ± 0.1 mm</td></tr>
-<tr><td>fingertips ↓</td><td>4.8 ± 0.1 / 5.8 ± 0.1 / 6.4 ± 0.2 mm</td><td>6.8 ± 1.7 / 6.6 ± 0.7 / 6.6 ± 0.6 mm</td></tr>
-<tr><td rowspan="4"><b>Hand-object tracking</b><br><sub>Allegro and Inspire hands:<br>apple / spray bottle / can,<br>each algorithm's most accurate<br>configuration, A100 40GB, seeds 0-2</sub></td><td>success ↑, Allegro hand</td><td>100.0 / 100.0 / 99.7 %</td><td>100.0 / 82.7 / 99.6 %</td></tr>
-<tr><td>object position ↓, Allegro hand</td><td>2.6 ± 0.1 / 1.3 ± 0.0 / 2.0 ± 0.7 mm</td><td>3.7 ± 0.2 / 11.7 ± 5.1 / 3.4 ± 0.2 mm</td></tr>
-<tr><td>success ↑, Inspire hand</td><td>99.7 / 100.0 / 99.9 %</td><td>99.9 / 100.0 / 93.8 %</td></tr>
-<tr><td>object position ↓, Inspire hand</td><td>2.4 ± 0.1 / 1.3 ± 0.0 / 2.0 ± 0.5 mm</td><td>5.2 ± 0.7 / 2.5 ± 0.1 / 11.2 ± 13.7 mm</td></tr>
-</tbody>
-</table>
+Each task below opens with its settings table and a one-line conclusion; both algorithms' results follow.
 
 ### LAFAN1 motion tracking
 
@@ -594,8 +570,9 @@ files and weights of policies trained on them are not redistributed.
 | goal | configuration | result |
 |---|---|---|
 | most accurate, MLP world model | `--config muscles-supertrack` (`train_muscles`) | MPJPE 38.1 ± 1.0 mm in the root frame, episodes ended 0.011 ± 0.005 |
+| fastest | not compared yet | |
 
-Seeds 1-3, up to 3 h on an A100 40GB; no time to a target is measured on this task yet.
+Seeds 1-3, up to 3 h on an A100 40GB.
 
 **In short:** `muscles-supertrack` for position tracking; `muscles-supermimic` has the lower joint error (9.7 against
 10.6 deg).
