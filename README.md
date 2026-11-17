@@ -875,6 +875,9 @@ python -m pytest tests          # CPU; the equivalence tests compare against thi
 
 ## 📄 Papers and repositories
 
+Everything the library covers (methods, simulators, data, robot models, tools), one line each with its link:
+[`docs/coverage.md`](docs/coverage.md).
+
 Implemented:
 - **SuperTrack:** L. Fussell, K. Bergamin, D. Holden. *SuperTrack: Motion Tracking for Physically Simulated Characters
   using Supervised Learning.* ACM Transactions on Graphics 40(6), 2021. [DOI](https://doi.org/10.1145/3478513.3480527)

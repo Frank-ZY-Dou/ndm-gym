@@ -114,6 +114,7 @@ nav:
       - RigidFormer backbone: rigidformer_backbone.md
   - Results:
       - Leaderboard: leaderboard.md
+      - Coverage: coverage.md
       - LAFAN1: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/results.md
       - Ablations: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/ablations.md
       - Two G1s: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_boxing/results.md

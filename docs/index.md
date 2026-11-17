@@ -15,6 +15,7 @@ for instance in RoboKit's MPC planner.
 - [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks, MuscleVAE's character, hand-object
   tracking, and [RoboKit's planner on a world model](tasks/robokit.md).
 - [Evaluation](quickstart.md): tracking errors, push robustness, held-out clips, videos and offline world-model fits.
+- [Coverage](coverage.md): every method, simulator, dataset and robot model the library covers, with its link.
 
 ## Install
 
