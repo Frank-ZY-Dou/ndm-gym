@@ -73,10 +73,12 @@ CONFIGS = {
                                      "XHand, 20,000 iterations: object 3.5 / 2.9 / 3.2 mm on the apple, the spray bottle and the can (seeds 0-2)"),
         "hand-supertrack-fast": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 0.9 / 1.5 / 2.4 min (A100 40GB, mean of seeds 0-2)"),
+                                 "XHand: a success of 0.99 with the object within 10 mm after 0.9 / 1.5 / 2.4 min (A100 40GB, mean of seeds 0-2; "
+                                 "not engineered)"),
         "hand-supermimic-fast": (f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 1.3 / 1.6 / 1.6 min (A100 40GB, mean of seeds 0-2)"),
+                                 "XHand: a success of 0.99 with the object within 10 mm after 1.3 / 1.6 / 1.6 min (A100 40GB, mean of seeds 0-2; "
+                                 "not engineered)"),
     },
     "train_muscles": {
         "muscles-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {MUSCLE_RECIPE} {MUSCLE_SYS} --wm_batches 8 --pi_lr_mult 4 --wm_lr 2.5e-3 "
