@@ -12,13 +12,14 @@ The world model in the planner, MuJoCo Warp executing; in translucent blue, the 
 the box's) and Go2's foot targets. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (see the
 repository's NOTICE).
 
-| example | simulation step | planning time |
-|---|---|---|
-| G1 box carrying | 1.81 → 0.19 ms (9.8x) | 9 → 3 s (3.0x) |
-| G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) |
-| Go2 jumping | 0.59 → 0.26 ms (2.3x) | 65 → 31 s (2.1x) |
+| example | simulation step | planning time | plans that pass |
+|---|---|---|---|
+| G1 box carrying | 1.81 → 0.18 ms (10.0x) | 9 → 3 s (3.0x) | 20 of 20 (MuJoCo Warp 10 of 10) |
+| G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) | 20 of 20 (MuJoCo Warp 10 of 10) |
+| Go2 jumping | 0.69 → 0.21 ms (3.2x) | 65 → 31 s (2.1x) | 20 of 20 (MuJoCo Warp 10 of 10) |
 
-One A100 40GB SXM4, the planner's own worlds (2,047 for the G1s, 1,228 for Go2), the median over the planner's seeds;
+One A100 40GB SXM4, the planner's own worlds (2,047 for the G1s, 1,228 for Go2), the median over twenty plans (the planner's
+seeds 0-9, twice); each plan read by the example's own check;
 SuperTrack's acceleration model, one fit per task (fit seed 0). The method and every command are in the
 [results](https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md).
 
@@ -51,7 +52,7 @@ python -m ndm_gym.wmbench.fit_mjcf --model data/g1_climb_s0_planner0.mjb \
 python -m ndm_gym.wmbench.speed_mjcf --meta data/g1_climb_s0.json --states data/g1_climb_s2_executed0.npz --nworld 2047 8192 \
   --what physics ndm ndmsim --dtype bf16 --ckpt fits/rfit_g1_climb_dt20_acc_ln.pt --derived kinematics sensor_pos \
   --reset_every 40 --out speed.csv
-# 4. plan on the world model (planner seeds 0-4); the plan executes on MuJoCo Warp
+# 4. plan on the world model (planner seeds 0-9); the plan executes on MuJoCo Warp
 python -m ndm_gym.wmbench.plan_robokit --example $EX/03_g1_climb.py --seed 0 --ndm 0.02=fits/rfit_g1_climb_dt20_acc_ln.pt \
   --dtype bf16 --derived kinematics sensor_pos --save_executed runs/g1_climb.npz --out runs/g1_climb.json
 # 5. the example's reference (no planning), then a render of the executed motion with it in blue

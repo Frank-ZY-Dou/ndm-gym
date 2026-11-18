@@ -3,7 +3,8 @@
 [RoboKit](https://github.com/openrobokit/robokit) (at `736f112`, MIT) plans with sampling MPC over batched MuJoCo Warp
 rollouts. Here its planner's simulator is this library's world model of the same MuJoCo model
 (`ndm_gym/worldmodels/mjcf.py`); every plan still executes on MuJoCo Warp. On G1 box carrying, G1 climbing and Go2 jumping,
-planning is 1.8-3.0 times faster. One A100 40GB SXM4 with nothing else running.
+planning is 1.8-3.0 times faster, and every plan passes the example's own check: 20 of 20 per task, as MuJoCo Warp's planner
+passes 10 of 10. One A100 40GB SXM4 with nothing else running.
 
 <table>
 <tr>
@@ -17,11 +18,11 @@ planning is 1.8-3.0 times faster. One A100 40GB SXM4 with nothing else running.
 <p align="center"><img src="../../docs/media/robokit_speedups.webp" alt="The world model's simulation step and planning time against MuJoCo Warp's" width="760"/></p>
 <p align="center"><sub>Bars: time against MuJoCo Warp's at full width, at the planner's own worlds. Made by <code>tools/make_robokit_chart.py --tasks g1_carry g1_climb go2_jump --no_outcomes</code> from <code>benchmarks/robokit_ndm/summarize.py</code>'s json.</sub></p>
 
-| Task | Simulation step, MuJoCo Warp → world model | Planning time, MuJoCo Warp → world model |
-|---|---|---|
-| G1 box carrying | 1.81 → 0.19 ms (9.8x), 2,047 worlds | 9 → 3 s (3.0x) |
-| G1 climbing | 1.32 → 0.35 ms (3.8x), 2,047 worlds | 7 → 4 s (1.8x) |
-| Go2 jumping | 0.59 → 0.26 ms (2.3x), 1,228 worlds | 65 → 31 s (2.1x) |
+| Task | Simulation step, MuJoCo Warp → world model | Planning time, MuJoCo Warp → world model | Plans that pass, world model (MuJoCo Warp) |
+|---|---|---|---|
+| G1 box carrying | 1.81 → 0.18 ms (10.0x), 2,047 worlds | 9 → 3 s (3.0x) | 20 of 20 (10 of 10) |
+| G1 climbing | 1.32 → 0.35 ms (3.8x), 2,047 worlds | 7 → 4 s (1.8x) | 20 of 20 (10 of 10) |
+| Go2 jumping | 0.69 → 0.21 ms (3.2x), 1,228 worlds | 65 → 31 s (2.1x) | 20 of 20 (10 of 10) |
 
 ## Setup
 
@@ -37,13 +38,33 @@ planning is 1.8-3.0 times faster. One A100 40GB SXM4 with nothing else running.
   the planner's simulator (`NdmSim`: the world model in bf16 as one CUDA graph, plus the MuJoCo Warp stages the task's costs
   read: none for G1 box carrying; kinematics and sensor positions for G1 climbing, and also collisions for Go2). Both start
   from the held-out run's executed states, copied back every horizon as the planner restarts its rollouts; 20 warm-up and 200
-  timed steps, the median of three. G1 box carrying's step was timed with the same network fitted on two of its recordings
-  (seeds 0 and 1); a network's time does not depend on its weights.
-  - At 8,192 worlds: G1 box carrying 4.53 → 0.47 ms (9.7x), G1 climbing 3.13 → 0.64 ms (4.9x), Go2 jumping 1.38 → 0.60 ms (2.3x).
-  - The network alone takes 0.21 ms (G1 climbing, 2,047 worlds) and 0.15 ms (Go2 jumping, 1,228 worlds).
-- **Planning.** The example's own planning time for its whole motion, the median over the planner's seeds 0-4 (each seed
-  within 1 s of it). With a simulator whose step does nothing, planning takes 2 s (G1 box carrying and G1 climbing) and 9 s
-  (Go2 jumping), and the plans fail: the planner's own share, which no simulator removes.
+  timed steps, the median of three; each task's planning fit.
+  - At 8,192 worlds: G1 box carrying 4.52 → 0.47 ms (9.5x), G1 climbing 3.14 → 0.64 ms (4.9x), Go2 jumping 1.38 → 0.60 ms (2.3x).
+  - The network alone takes 0.18 ms (G1 box carrying) and 0.21 ms (G1 climbing), at 2,047 worlds, and 0.15 ms (Go2 jumping,
+    1,228 worlds).
+- **Planning.** The example's own planning time for its whole motion, the median over twenty plans (the planner's seeds 0-9,
+  twice; each within 1 s of it); MuJoCo Warp's planner with seeds 0-9 once. With a simulator whose step does nothing,
+  planning takes 2 s (G1 box carrying and G1 climbing) and 9 s (Go2 jumping), and the plans fail: the planner's own share,
+  which no simulator removes.
+- **Plans that pass.** Each plan is read by the example's own check:
+  - G1 box carrying: the pelvis within 10 cm of the reference on average, no fall, and the box set down within 10 cm of its
+    goal;
+  - G1 climbing: the pelvis within 10 cm and 0.5 rad on average, no fall, and standing on the box at the end;
+  - Go2 jumping: every landing on its target (a landing score of at least 0.99 of 1) with the torso upright.
+
+## Plans
+
+Planner seeds 0-9, twice (20 plans) on the world model; MuJoCo Warp's planner, seeds 0-9 once.
+
+| Task | World model | MuJoCo Warp |
+|---|---|---|
+| G1 box carrying | 20 of 20; the box 1.8-9.2 cm from its goal | 10 of 10; 0.6-3.3 cm |
+| G1 climbing | 20 of 20; the final pelvis at 1.47 m, the lowest at 0.89 m | 10 of 10; the same |
+| Go2 jumping | 20 of 20; landing score 1.00, the torso tilted at most 17 degrees | 10 of 10; 1.00, at most 13 degrees |
+
+On G1 box carrying, a second fit was also read. It was fitted from this one on one round of its own planner's draws: sixteen
+runs of the planner on this fit, whose candidates were recorded in MuJoCo Warp, then 10,000 updates on those runs and the
+eight seeds. It passes 20 of 20 too, every box within 2.8 cm of its goal.
 
 ## Reproducing
 
