@@ -79,15 +79,15 @@ it gives the same indices, kinematics, task outputs and training updates bit for
   every 200 iterations, were evaluated after training, as in [training time](#training-time).
 
 Each algorithm's configurations of record, on `apple` / `oakink_a01002` / `can` (mean of training seeds 0-2; most
-accurate: object position at 20,000 iterations; time: minutes to a success of 0.99 with the object within 10 mm, over the
-seeds that reach it, not engineered):
+accurate: object position at 20,000 iterations; fastest: minutes to a success of 0.99 with the object within 10 mm, over
+the seeds that reach it, on one A100 40GB with the [speed options](#training-time-with-the-speed-options)):
 
 | hand | | SuperTrack | SuperMimic |
 |---|---|---|---|
-| Allegro | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm at a success of 100.0 / 100.0 / 99.7 % | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm at 100.0 / 82.7 / 99.6 % |
-| | time to the target, not engineered | `hand-supertrack-fast --st_fail_w 5`: 1.6 / 1.3 / 8.8 min, 9 of its 9 runs at the target | `hand-supermimic-fast`: 1.4 / - / 2.7 min, 6 of 9 |
 | Inspire | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm at a success of 99.7 / 100.0 / 99.9 % | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm at 99.9 / 100.0 / 93.8 % |
-| | time to the target, not engineered | `hand-supertrack-fast`: 2.4 / 1.5 / 3.1 min, 9 of its 9 runs at the target | `hand-supermimic-fast --lr 2e-4`: 2.5 / 2.1 / 4.9 min, 8 of 9 |
+| | fastest, one GPU | `hand-supertrack-fast`: 1.0 / 0.8 / 2.0 min, 9 of its 9 runs at the target, mean 1.30 min | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min, 8 of 9, mean 2.19 min |
+| Allegro | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm at a success of 100.0 / 100.0 / 99.7 % | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm at 100.0 / 82.7 / 99.6 % |
+| | fastest, one GPU | `hand-supertrack-fast --st_fail_w 5`: 1.1 / 0.8 / 3.9 min, 9 of its 9 runs at the target, mean 1.96 min | `hand-supermimic-fast`: 1.0 / 3.7 / 1.1 min, 9 of 9, mean 1.96 min |
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire
@@ -150,7 +150,7 @@ lower object error over the three clips is its most accurate configuration: Alle
 
 ### Time to the target, 6,000 iterations
 
-These times are not engineered, so no configuration here is called the fastest.
+These times are before the speed options; with them, see [below](#training-time-with-the-speed-options).
 
 Each run trained alone on a GPU. Minutes: the training wall clock at the first of the run's checkpoints (every 200
 iterations) from which every later one has a success of 0.99 or more with the object within 10 mm (-: none within 6,000
@@ -286,9 +286,59 @@ tie: the lower object error at 6,000); its most accurate one is the lower, by th
 three seeds at 20,000 iterations, of its accurate preset and the arm (its fast preset or one of its four changes) with the
 lowest object error at 6,000, trained for 20,000 iterations.
 
+## Training time with the speed options
+
+The six fast configurations with the speed options (`--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk
+--compile_collect --autotune_gemm`, SuperMimic also `--sm_reuse_input`), each run alone on an A100 40GB for 6,000
+iterations, three training seeds per configuration, the other GPUs of the node idle. Each configuration first ran untimed
+on each clip past its first policy updates, so the timed runs found every compiled kernel in the cache; a configuration's
+first run on a machine compiles for about 3 minutes more. Minutes: the training wall clock at the first checkpoint (every
+200 iterations) from which every later one has a success of 0.99 or more with the object within 10 mm (-: none within
+6,000 iterations); iterations/s with policy updates (the log's rows 1,000-3,000).
+
+Mean minutes over the nine runs of a configuration (a run without the target counted at its whole training time), before
+and with the speed options: Inspire 2.34 and 1.30 (SuperTrack), 3.81 and 2.19 (SuperMimic); Allegro 3.90 and 1.96, 5.31 and
+1.96; XHand 1.60 and 1.16, 1.49 and 1.03. On the Allegro hand `hand-supertrack-fast --st_fail_w 5` stays the faster of
+SuperTrack's two candidates (`--lr_decay_iters 6000 --st_fail_w 5`: 2.29 min).
+
+| task | | seeds | minutes to a success of 0.99 with the object within 10 mm ↓ | iterations/s ↑ | object position at 6,000 ↓ |
+|---|---|---|---|---|---|
+| `apple` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 1.2, 0.9, 1.0 | 17.7 | 2.8 ± 0.0 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 1.0, 1.0, 1.0 | 15.4 | 4.7 ± 0.1 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 1.3, 1.1, 0.9 | 17.5 | 2.4 ± 0.1 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 1.0, 1.0, 1.0 | 14.7 | 3.7 ± 0.1 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 0.7, 0.7, 0.7 | 18.1 | 2.5 ± 0.1 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 0.8, 0.8, 0.8 | 15.2 | 3.4 ± 0.0 mm |
+| `oakink_a01002` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 0.8, 0.8, 0.8 | 18.6 | 1.7 ± 0.0 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 0.9, 0.7, 0.7 | 15.9 | 2.9 ± 0.2 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 0.9, 0.9, 0.7 | 18.0 | 1.4 ± 0.0 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 5.6, 4.2, 1.4 | 15.4 | 3.7 ± 0.3 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 1.0, 0.9, 0.9 | 18.5 | 1.5 ± 0.0 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 1.2, 1.0, 1.2 | 15.9 | 2.4 ± 0.1 mm |
+| `can` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 1.0, 2.8, 2.3 | 18.6 | 2.2 ± 0.1 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 6.5, 1.6, - | 15.9 | 7.1 ± 5.3 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 3.5, 3.9, 4.4 | 18.0 | 2.8 ± 0.4 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 1.2, 1.2, 1.0 | 15.4 | 2.7 ± 0.4 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 1.8, 1.9, 1.8 | 18.5 | 2.3 ± 0.3 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 1.2, 1.2, 1.2 | 15.9 | 3.3 ± 0.2 mm |
+
+Per iteration, the phases on the Allegro hand's apple (training seed 0, 3,000 iterations, ms, means over iterations
+1,001-3,000, the device synchronized at every boundary):
+
+| phase | SuperTrack | SuperTrack, speed options | SuperMimic | SuperMimic, speed options |
+|---|---|---|---|---|
+| collection | 9.0 | 7.8 | 10.8 | 8.3 |
+| world model's updates | 42.7 | 24.7 | 42.9 | 25.2 |
+| policy's update (SuperMimic's with the critic's) | 41.2 | 24.8 | 61.8 | 33.9 |
+| iterations/s | 10.6 | 17.2 | 8.6 | 14.7 |
+
+The two update graphs are about 90 % of an iteration. Their kernels' number, not their arithmetic, makes most of their
+time outside the matrix products; compiling the remaining eager parts and the collection, launching small kernels
+together and choosing each matrix product's kernel by timing removes most of it.
+
 ## Training time
 
-These times are not engineered, so no configuration here is called the fastest.
+These times are before the speed options ([with them](#training-time-with-the-speed-options)).
 
 Each run trains alone on an A100 40GB for 6,000 iterations with the systems options, three training seeds per
 configuration; its checkpoints, every 200 iterations, are evaluated after training as above. A run's time is its
