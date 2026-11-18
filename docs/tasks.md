@@ -13,6 +13,7 @@ These tasks share the pipeline. Scripts in `tools/` prepare the data; none of th
 | [Adroit Door tracking](tasks/adroit_door.md), a DAPG door-opening demonstration | the Adroit hand, a passive door and latch | MuJoCo on the CPU | `tools/replay_adroit_door.py`, `tools/prepare_adroit_door.py` | `python -m ndm_gym.train_door_full` |
 | [Adroit Pen, Hammer and Relocate](tasks/adroit_suite.md) | native Adroit hand, passive manipulated objects | native MuJoCo CPU collection, CUDA learning | `tools/replay_adroit.py`, `tools/prepare_adroit.py` | `python -m ndm_gym.train_adroit` |
 | [Quadruped motion tracking](tasks/quadruped.md), the Lifelike Labrador motion capture | Unitree Go2 | MuJoCo-Warp | `tools/download_lifelike.sh`, `tools/convert_lifelike.py` | `python -m ndm_gym.train_quadruped` |
+| [Animal motion tracking](tasks/animals.md), MIMIC-MJX's clips | MIMIC-MJX's rat, fruit fly and stick insect | MuJoCo-Warp | `tools/download_mimic_mjx.py` | `python -m ndm_gym.train_animal` |
 
 The world models also stand in for simulators:
 

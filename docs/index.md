@@ -40,16 +40,16 @@ See [installation options](installation.md) and the [Quickstart](quickstart.md) 
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`); the Unitree Go2 (`go2.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`, `drone_racing.py`, `lifelike.py`) |
-| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator; HDMI's scenes; MuscleVAE on Newton; a hand and an object on MuJoCo-Warp; a quadrotor on MuJoCo-Warp; the Go2 on MuJoCo-Warp; Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings; mbrl-lib's environments on a world model |
-| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py`; `quadrotor_tracking.py`; `quadruped_tracking.py` |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `mjcf.py` (MuJoCo models in generalized coordinates) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`); the Unitree Go2 (`go2.py`); MIMIC-MJX's animals (`animals.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`, `drone_racing.py`, `lifelike.py`, `mimic_mjx.py`) |
+| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator; HDMI's scenes; MuscleVAE on Newton; a hand and an object on MuJoCo-Warp; a quadrotor on MuJoCo-Warp; the Go2 on MuJoCo-Warp; MIMIC-MJX's animals on MuJoCo-Warp; Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings; mbrl-lib's environments on a world model |
+| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py`; `quadrotor_tracking.py`; `quadruped_tracking.py`; `animal_tracking.py` |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `animal.py`, `mjcf.py` (MuJoCo models in generalized coordinates) |
 | `ndm_gym/kernels/` | fused Triton kernels: the RigidFormer's blocks, the muscles' geometry |
 | `ndm_gym/policies/` | tracking policy and critic; the HOI, muscle, hand and quadruped policies; MuscleVAE's released policy |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `quadruped_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `quadruped_algos.py`, `animal_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; HOI and muscle datasets, fits and throughput; RoboKit's and mbrl-lib's recordings, fits, timing and plans |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`, `train_muscles.py`, `train_hand.py`, `evaluate_hand.py`, `train_quadrotor.py`, `evaluate_quadrotor.py`, `train_quadruped.py`, `evaluate_quadruped.py` for the other tasks |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`, `train_muscles.py`, `train_hand.py`, `evaluate_hand.py`, `train_quadrotor.py`, `evaluate_quadrotor.py`, `train_quadruped.py`, `evaluate_quadruped.py`, `train_animal.py`, `evaluate_animal.py` for the other tasks |
 | `scripts/`, `tools/` | install and launch scripts; data download and conversion, rendering, plots |
 | `tests/` | equivalence tests against the upstream code, component tests |
 
