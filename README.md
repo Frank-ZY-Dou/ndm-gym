@@ -831,6 +831,8 @@ time to the target on all three flights (SuperMimic's: 6.55 / 4.96 / 5.08 mm, 5.
   acceleration model at 64.6 M world-steps/s, 19.8x MuJoCo Warp, and SuperMimic's increment model at 63.9 M, 19.6x; 29.1x /
   30.6x at 1,024 worlds, and 6.8x at 65,536, where a layer's fp32 activations outgrow the GPU's 40 MB L2 cache
   ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)).
+- **On an A100:** every run again on A100 40GB SXM4 GPUs gives the same success and position errors within 5 % of the
+  H200's, for both algorithms; training takes 1.6 to 1.8 times as long ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-runs-again-on-an-a100)).
 
 | | ellipse | lemniscate | race track |
 |---|---|---|---|

@@ -1,6 +1,7 @@
 # Quadrotor trajectory tracking: results on A100 40GB
 
 The task and the contributed study on an H200: [README](../../README.md#quadrotor-trajectory-tracking), [results](results.md).
+On an A100: [the world model as the simulator](#the-world-model-as-the-simulator), [the runs again](#the-runs-again-on-an-a100).
 
 ## The world model as the simulator
 
@@ -53,3 +54,40 @@ within 0.01 ms):
 - **bf16:** with the network in bf16 the step runs 33.4 / 81.5 / 147 / 169 M world-steps/s (SuperTrack's model), but the
   position error after 100 steps grows to 14.3 ± 2.9 mm (SuperTrack's model, from 8.25) and 23.7 ± 0.5 mm (SuperMimic's,
   from 20.4); the rows above stay in fp32.
+
+## The runs again on an A100
+
+Every run of the study trained and evaluated again on A100 40GB SXM4 GPUs: the same configurations, seeds, flights and
+evaluations. The selected configurations, mean ± SD over seeds 0-2; position over 256 perturbed starts of the whole flight:
+
+| task | position, SuperTrack: A100 / H200 | SuperMimic: A100 / H200 | training, SuperTrack: A100 / H200 | SuperMimic: A100 / H200 |
+|---|---|---|---|---|
+| ellipse | 3.44 ± 0.01 / 3.38 ± 0.03 mm | 6.82 ± 0.28 / 6.55 ± 0.39 mm | 9.6 / 5.6 min | 12.5 / 7.0 min |
+| lemniscate | 2.04 ± 0.01 / 2.02 ± 0.02 mm | 4.94 ± 0.30 / 4.96 ± 0.03 mm | 9.3 / 5.8 min | 12.2 / 7.1 min |
+| race track | 2.23 ± 0.02 / 2.19 ± 0.02 mm | 5.22 ± 0.12 / 5.08 ± 0.16 mm | 9.3 / 5.9 min | 12.2 / 7.3 min |
+| all 18 autonomous flights | 2.55 ± 0.02 / 2.54 ± 0.02 mm | 6.27 ± 0.27 / 6.22 ± 0.34 mm | 9.3 / 5.8 min | 12.3 / 7.2 min |
+| ellipse, piloted | 1.36 ± 0.02 / 1.34 ± 0.01 mm | 5.56 ± 0.07 / 5.51 ± 0.26 mm | 9.3 / 5.9 min | 12.2 / 7.3 min |
+| lemniscate, piloted | 1.22 ± 0.01 / 1.20 ± 0.00 mm | 4.76 ± 0.16 / 4.71 ± 0.11 mm | 9.2 / 5.8 min | 12.1 / 7.2 min |
+| race track, piloted | 3.16 ± 0.02 / 3.08 ± 0.03 mm | 8.03 ± 0.16 / 8.13 ± 0.27 mm | 9.3 / 5.9 min | 12.2 / 7.2 min |
+
+- **The same accuracy:** a success of 100 % on every row, as on the H200, and every position error within 5 % of the H200's
+  (SuperTrack +0.4 to +2.6 %, SuperMimic -1.2 to +4.1 %). With the hand task's options SuperTrack again does not learn the
+  task, and SuperMimic tracks to 14.5 to 16.1 mm (12.6 to 16.9 on the H200).
+- **The time scales with the GPU:** training takes 1.6 to 1.8 times the H200's for both algorithms (10.5-10.7 and 8.0-8.1
+  iterations per second). Time to a success of 0.99 within 20 mm: SuperTrack 1.20 / 0.94 / 1.07 min (ellipse / lemniscate /
+  race track), SuperMimic 1.52 / 0.99 / 1.16 min; every run reaches it by iteration 1,000, as on the H200.
+- **Zero-shot on the pilots' flights:** the policy of the 18 autonomous flights tracks the piloted ellipse, lemniscate and
+  race track to 6.55 / 5.77 / 23.06 mm (SuperTrack) and 12.80 / 13.00 / 38.41 mm (SuperMimic), within the seeds' spread of
+  the H200's 5.90 / 5.46 / 22.33 and 12.40 / 13.24 / 38.14 mm.
+
+The ellipse's policies on drones with other values than the model they trained on (mean ± SD over seeds 0-2; no rollout
+terminates):
+
+| the simulated drone | SuperTrack, A100 | SuperTrack, H200 | SuperMimic, A100 |
+|---|---|---|---|
+| as trained | 3.44 ± 0.02 mm | 3.38 ± 0.03 mm | 6.82 ± 0.28 mm |
+| half the inertia | 4.06 ± 0.11 mm | 3.94 ± 0.16 mm | 7.45 ± 0.51 mm |
+| twice the inertia | 9.52 ± 1.74 mm | 7.93 ± 1.77 mm | 17.70 ± 6.76 mm |
+| no drag | 28.75 ± 0.47 mm | 28.78 ± 0.87 mm | 47.56 ± 1.50 mm |
+| twice the drag | 25.69 ± 0.25 mm | 25.60 ± 0.42 mm | 45.25 ± 1.49 mm |
+| 1.2 times the mass, the same largest thrust | 7.95 ± 0.06 mm | 7.78 ± 0.13 mm | 14.47 ± 0.34 mm |
