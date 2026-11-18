@@ -75,7 +75,8 @@ other policy's data costs 22% on the first policy's test set.
 
 ## Training efficiency (final round, seeds 1-3)
 
-Both algorithms use the same simulator steps per iteration (about 10300), so equal iterations are equal samples.
+Both algorithms use the same simulator steps per iteration (10,240: 2.5 steps of 4,096 environments), so equal iterations
+are equal samples.
 
 | | ST | SM |
 |---|---|---|
@@ -88,7 +89,7 @@ Both algorithms use the same simulator steps per iteration (about 10300), so equ
 | 2000 (21 M) | 0.557 / 16.0 / 62.4 mm | 0.559 / 12.3 / 59.2 mm |
 | 6000 (62 M) | 0.765 / 2.7 / 34.1 mm | 0.782 / 2.3 / 36.0 mm |
 | 8000 (82 M) | 0.806 / 1.3 / 27.1 mm | 0.803 / 1.3 / 32.9 mm |
-| 12000 (124 M) | 0.836 / 0.0 / 21.6 mm | 0.825 / 0.3 / 29.9 mm |
+| 12000 (123 M) | 0.836 / 0.0 / 21.6 mm | 0.825 / 0.3 / 29.9 mm |
 
 Training time to first reach a level (mean over seeds): return 0.80 ST 1.84 h, SM 1.69 h; return 0.82 ST 2.26 h, SM
 2.39 h; at most 3 failed clips ST 1.59 h, SM 1.18 h; at most 1 failed clip ST 1.90 h, SM 1.93 h; MPJPE-local 30 mm ST

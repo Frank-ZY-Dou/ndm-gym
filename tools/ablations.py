@@ -829,12 +829,14 @@ def rf_online_markdown(rows, missing):
 def readme_markdown(rows):
     """The README's verdict table: the leave-one-out study's rows and the offline world-model rows (the preliminary
     single-seed rows stay in ablations.md)."""
-    out = ["✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. Policy rows: leave-one-out study, seeds 1-3, 3 h; RigidFormer "
-           "rows: the tuned configurations at equal iterations (seeds 1-3) and the final ones at 3 h against the MLP with the same "
-           "speed options (seeds 7-9). An effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed "
-           "clips under 1 and 2 m/s pushes). World-model rows: open-loop 32-step error of offline fits, three per variant "
-           "(bold: significant). Preliminary single-seed runs and all numbers: "
+    out = ["✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. All numbers, and the preliminary single-seed runs: "
            "[`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).", "",
+           "- **Policy rows:** the leave-one-out study, seeds 1-3, 3 h.",
+           "- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3), and the final ones at 3 h against the MLP "
+           "with the same speed options (seeds 7-9).",
+           "- In these rows an effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed clips under 1 "
+           "and 2 m/s pushes).",
+           "- **World-model rows:** the open-loop 32-step error of offline fits, three per variant (bold: significant).", "",
            "| | | factor | effect |", "|---|---|---|---|"]
     out += [f"| {VERDICT_MARK[r['verdict']]} | {r['group'].removesuffix(', seeds 1-3')} | {r['factor']} | {r['effect']} |" for r in rows]
     return "\n".join(out)

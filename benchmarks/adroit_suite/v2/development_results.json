@@ -1,0 +1,58 @@
+{
+  "rows": [
+    {
+      "name": "baseline_10mm",
+      "width": 0.01,
+      "means": {
+        "tracking_return": 24.838494796577507,
+        "normalized_tracking_rmse": 0.06981724775209021,
+        "hand_rotation_joint_rmse_rad": 0.02718024475798969,
+        "nail_rmse_m": 0.0003617737479403205,
+        "object_translation_rmse_m": 0.0017800450791718718,
+        "object_rotation_joint_rmse_rad": 0.013593014998598413,
+        "native_success_final": 0.06640625,
+        "native_success_ever": 0.06640625,
+        "native_success_frame_fraction": 0.012238331330128206,
+        "finite": 1.0
+      },
+      "seconds": 2392.8253372637555
+    },
+    {
+      "name": "precision_1mm",
+      "width": 0.001,
+      "means": {
+        "tracking_return": 24.723408334692877,
+        "normalized_tracking_rmse": 0.09784321510447763,
+        "hand_rotation_joint_rmse_rad": 0.043979021517837585,
+        "nail_rmse_m": 0.0004181599900325945,
+        "object_translation_rmse_m": 0.001968899839218716,
+        "object_rotation_joint_rmse_rad": 0.02187353997632674,
+        "native_success_final": 1.0,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.24861653645833337,
+        "finite": 1.0
+      },
+      "seconds": 2394.5366784371436
+    },
+    {
+      "name": "precision_05mm",
+      "width": 0.0005,
+      "means": {
+        "tracking_return": 24.434334821068205,
+        "normalized_tracking_rmse": 0.1475577204376045,
+        "hand_rotation_joint_rmse_rad": 0.055499328795615824,
+        "nail_rmse_m": 0.0006669797247639851,
+        "object_translation_rmse_m": 0.0034156696479263017,
+        "object_rotation_joint_rmse_rad": 0.04139903178726154,
+        "native_success_final": 0.4296875,
+        "native_success_ever": 0.4296875,
+        "native_success_frame_fraction": 0.10027293669871795,
+        "finite": 1.0
+      },
+      "seconds": 2322.046867937781
+    }
+  ],
+  "selected": "precision_1mm",
+  "selected_width": 0.001,
+  "scope": "6000-iteration development only; fixed v1 metrics; no formal seed claim"
+}

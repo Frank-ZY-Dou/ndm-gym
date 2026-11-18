@@ -183,7 +183,8 @@ off by default. Each trainer rejects unsupported options; HOI training (`ndm_gym
 
 Milliseconds per iteration, synchronized profiles after the world-model-only iterations (collection / model update /
 policy update), A100 40GB unless noted; the muscle rows are the starting configurations, before the character's tuning (on
-SuperMimic's selected configuration the options cut the time by about 45%, [results](../benchmarks/musclevae/results.md#the-systems-options)):
+SuperMimic's round-2 selection, `--wm_lr 4e-4`, the options cut the time by about 45%,
+[results](../benchmarks/musclevae/results.md#the-systems-options)):
 
 | loop | as before | systems options |
 |---|---|---|

@@ -1,8 +1,10 @@
-# Native Adroit manipulation tracking: single-seed study
+# Native Adroit manipulation tracking
 
 This extension adds Pen, Hammer and Relocate on the shared native Adroit infrastructure. Door remains in its independent contribution and its existing three-seed report is unchanged. These are demonstration-tracking adaptations with online physical transition collection, not D4RL offline-RL benchmark results.
 
 The [protocol](protocol_v1.json) was fixed before training. Each task runs SuperTrack and SuperMimic from fresh seed 0, with the full 20,000-iteration, 2,048-world schedule inherited from the Hand accurate configuration adaptation. This first study intentionally has one seed per method; it cannot estimate training-seed variance and does not satisfy a later three-seed claim.
+
+The [Hammer repair and three-seed follow-up](v2/README.md) retains this first study as historical evidence. Its controlled development is complete; fresh full-budget seeds are in progress. Development outcomes are not formal three-seed results.
 
 ## Reference selection and task interpretation
 

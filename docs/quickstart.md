@@ -20,6 +20,15 @@ ndm-eval --run_dir logs/st --ckpt <ckpt> --record st.npz      # and the same for
 MUJOCO_GL=egl python tools/compare_videos.py st.npz sm.npz --labels SuperTrack SuperMimic --out videos/
 ```
 
+Each task's best settings are named configurations (`ndm_gym/configs.py`): `--config NAME` runs one, options given
+beside it take precedence, and `--config list` prints the names with what each measured
+([Recommended settings](leaderboard.md#recommended-settings)).
+
+```bash
+ndm-train --config lafan1-supertrack-fast --log_dir logs/st_fast
+python -m ndm_gym.train_hand --config hand-supertrack-accurate --clip <clip> --log_dir logs/hand_st
+```
+
 `ndm-train --help` lists all options. Other [tasks](tasks.md) use:
 `python -m ndm_gym.train_hoi --task move_suitcase --algo supertrack`, `python -m ndm_gym.train_muscles --algo supertrack`,
 `python -m ndm_gym.train_hand --clip <clip> --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`.

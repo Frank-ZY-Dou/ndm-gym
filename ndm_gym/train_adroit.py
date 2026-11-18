@@ -6,12 +6,15 @@ and checkpoint schemas remain unchanged.
 """
 from .motion.adroit import AdroitReference
 from .sim.rigid.adroit import AdroitPhysics
-from .tasks.adroit import AdroitTask
+from functools import partial
+
+from .tasks.adroit import AdroitTask, training_arguments, TRAINING_HELP
 from .train_door_full import main as train
 
 
 def main(argv=None):
-    return train(argv, reference_cls=AdroitReference, task_cls=AdroitTask, physics_cls=AdroitPhysics)
+    cfg, remaining = training_arguments(argv)
+    return train(remaining, reference_cls=AdroitReference, task_cls=partial(AdroitTask, cfg=cfg), physics_cls=AdroitPhysics, extra_help=TRAINING_HELP)
 
 
 if __name__ == '__main__':

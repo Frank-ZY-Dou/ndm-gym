@@ -173,3 +173,49 @@ def test_physics_rejects_scene_and_object_actuation_changes():
     model.actuator_trnid[-1, 0] = model.nu  # would actuate the passive nail
     with pytest.raises(ValueError, match='hand-only'):
         AdroitPhysics(model, ref)
+
+
+def test_precision_is_opt_in_and_checkpoint_bound():
+    from ndm_gym.tasks.adroit import AdroitRewardCfg, training_arguments
+    cfg, remaining = training_arguments(['--nail-tracking-std', '.001', '--seed', '12'])
+    assert cfg.nail_std == .001 and remaining == ['--seed', '12']
+    assert training_arguments([])[0] == AdroitRewardCfg()
+    model, ref = fixture('hammer')
+    default = AdroitTask(ref, model.actuator_ctrlrange)
+    precise = AdroitTask(ref, model.actuator_ctrlrange, cfg=cfg)
+    kwargs = dict(hidden=(16,), wm_hidden=(16,), horizon=2)
+    layout = replace(MjcfLayout.from_model(model), dt=default.dt)
+    old = DoorSuperMimic(default, layout, ref.actions, **kwargs)
+    new = DoorSuperMimic(precise, layout, ref.actions, **kwargs)
+    with pytest.raises(ValueError, match='task identity'):
+        new.load_state_dict(old.state_dict())
+    restored = DoorSuperMimic(precise, layout, ref.actions, **kwargs)
+    restored.load_state_dict(copy.deepcopy(new.state_dict()))
+    q = torch.zeros(1, model.nq)
+    q[:, 26] = .0002
+    frame = torch.zeros(1, dtype=torch.long)
+    act = torch.zeros(1, model.nu)
+    grad = []
+    for task in (default, precise):
+        state = q.clone().requires_grad_()
+        task.reward((state, state*0), frame, act, act).sum().backward()
+        grad.append(state.grad[0, 26])
+    assert grad[0] < 0 and grad[1] < 0 and abs(grad[1]/grad[0]) > 90
+
+
+@pytest.mark.parametrize('task_name', ['pen', 'relocate'])
+def test_nail_precision_rejected_for_other_tasks(task_name):
+    from ndm_gym.tasks.adroit import AdroitRewardCfg
+    model, ref = fixture(task_name)
+    with pytest.raises(ValueError, match='Hammer-only'):
+        AdroitTask(ref, model.actuator_ctrlrange, cfg=AdroitRewardCfg(nail_std=.001))
+
+
+def test_evaluation_starts_are_independent_of_precision():
+    from ndm_gym.eval_adroit import evaluation_offsets
+    _, ref = fixture('hammer')
+    a, b = evaluation_offsets(ref), evaluation_offsets(ref, seed=3065)
+    for x, y in zip(a, evaluation_offsets(ref)):
+        np.testing.assert_array_equal(x, y)
+    assert not np.array_equal(a[0][1:], b[0][1:])
+    np.testing.assert_array_equal(a[0][:, 26:], b[0][:, 26:])

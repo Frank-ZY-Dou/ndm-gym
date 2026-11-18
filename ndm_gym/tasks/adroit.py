@@ -37,6 +37,8 @@ class AdroitTask(DoorTask):
         self.obs_dim = self.nq + self.nv + self.action_dim
         self.goal_frame_dim = self.nq+self.nv
         self.goal_frames, self.cfg = goal_frames, cfg or AdroitRewardCfg()
+        if self.name != 'hammer' and self.cfg.nail_std != AdroitRewardCfg().nail_std:
+            raise ValueError('Nail tracking precision is Hammer-only')
         self.q = torch.tensor(reference.qpos, dtype=torch.float32, device=device)
         self.v = torch.tensor(reference.qvel, dtype=torch.float32, device=device)
         self.dt, self.frames = reference.metadata['control_dt'], reference.frames
@@ -91,3 +93,16 @@ class AdroitTask(DoorTask):
 
     def opened(self, state):
         raise NotImplementedError('Adroit success requires the native task-specific physical predicate')
+
+
+TRAINING_HELP = '--nail-tracking-std METRES: Hammer-only reward width; changes training objective; default .01 preserves v1. Evaluation uses fixed v1 widths.'
+
+
+def training_arguments(argv=None):
+    """Opt-in reward precision; leave all shared runner arguments untouched."""
+    import argparse
+    p = argparse.ArgumentParser(add_help=False)
+    p.add_argument('--nail-tracking-std', type=float, default=.01,
+                   help='Hammer nail tracking width in metres; changes training reward, default .01 preserves v1')
+    a, remaining = p.parse_known_args(argv)
+    return AdroitRewardCfg(nail_std=a.nail_tracking_std), remaining

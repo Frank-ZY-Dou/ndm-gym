@@ -2,7 +2,8 @@
 
 Two G1s track InterHuman 1566 (11 s at 50 Hz) in one simulation with robot-robot contacts. The runs train on one
 A100-SXM4-80GB, apart from the second and third training seeds of the selected configurations (A100-SXM4-40GB,
-[below](#training-seeds-0-2)). Each checkpoint is evaluated five times from the clip's first frame, both robots at once. Success means
+[below](#training-seeds-0-2)). A run's best checkpoint on its learning curve (one evaluation per checkpoint) is evaluated five
+times from the clip's first frame, both robots at once. Success means
 neither robot terminates; returns and errors average both robots. Global MPJPE uses the world frame; root-relative MPJPE
 measures each body relative to its robot's root.
 
@@ -36,12 +37,13 @@ the ranking. Learning curves use one evaluation per checkpoint to select that ch
 | normalized return | 0.893 | 0.905 |
 | global MPJPE (mm) | 39 | 40 |
 | root-relative MPJPE (mm) | 14.2 | 16.4 |
-| training to return 0.88 (h) | 0.11 (2,000 iterations) | 0.10 (2,000 iterations) |
+| training to return 0.88 (h), not engineered | 0.11 (2,000 iterations) | 0.10 (2,000 iterations) |
 | last checkpoint: return, global, root-relative MPJPE (mm) | 0.892, 57, 14.3 | 0.905, 40, 16.4 |
 
 On the learning curves, the selected SuperTrack run holds 0.889-0.894 from 2,000 iterations on; the selected SuperMimic run reaches
 0.905 at its end. Round 1's SuperTrack holds 0.888-0.895 from 3,000 iterations to 1 h; round 1's SuperMimic holds 0.901-0.906 from 4,000
 to 14,000 iterations and falls to 0.83 at 1 h. Ranking uses each run's best checkpoint because BlinkMimic's preset trains for 3,500 iterations.
+Times to return 0.88 are seed 0's, on one evaluation per 1,000 iterations: time to the target, not engineered.
 
 Best-checkpoint return, global and root-relative MPJPE (mm); selections in bold:
 
@@ -61,8 +63,9 @@ selection.
 
 The two selections and their RigidFormer counterparts, SuperTrack-RF and SuperMimic-RF, three training seeds each. The
 RigidFormer configurations start from round 1's selections without the MLP's options, use a small RigidFormer (`--rf_merge
-joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2`) and were chosen on the clip with seed 0 in further rounds by
-the rule above. The four are named configurations: `ndm-train --config two-g1-supertrack`, `two-g1-supertrack-rf`,
+joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2`) and were chosen on the clip with seed 0 in six further rounds
+of two 0.5 h runs per algorithm, by the rule above (the MLP: the two rounds above). The four are named configurations:
+`ndm-train --config two-g1-supertrack`, `two-g1-supertrack-rf`,
 `two-g1-supermimic`, `two-g1-supermimic-rf`. All pairs succeed in every evaluation.
 
 | configuration | return, seeds 0 / 1 / 2 | mean ± sd | global MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd | root-relative MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd |
@@ -74,7 +77,8 @@ the rule above. The four are named configurations: `ndm-train --config two-g1-su
 
 How it was read: a run's best checkpoint on its learning curve (one checkpoint per 1,000 iterations and the last one, one
 evaluation each) is evaluated five times from the clip's first frame; a cell is the mean of the five, and ± is the standard
-deviation over the three seeds. Seed 0 trained on an A100-SXM4-80GB for 0.5 h (SuperMimic with the MLP 0.3 h). Seeds 1 and 2
+deviation over the three seeds. Seed 0 trained on an A100-SXM4-80GB for 0.5 h (SuperMimic with the MLP 0.3 h, its best
+checkpoint its last, so the MLP rows are not an equal-budget comparison). Seeds 1 and 2
 trained on A100-SXM4-40GB GPUs to seed 0's iteration counts (9,396, 4,373, 6,264 and 5,718, in the table's order), so
 training times are not compared across the seeds.
 
@@ -82,10 +86,10 @@ training times are not compared across the seeds.
 
 Last checkpoints, evaluated five times:
 
-| configuration | iterations in 3 h | it/s (world model only, then) | pair success | normalized return | global MPJPE (m) | root-relative MPJPE (mm) |
+| configuration | iterations in 3 h | it/s (world model only, then) | pair success | normalized return | global MPJPE (mm) | root-relative MPJPE (mm) |
 |---|---|---|---|---|---|---|
-| SuperTrack, MLP | 31,428 | 4.90, 3.09 | 5 / 5 | 0.887 (0.885-0.888) | 0.106 (0.103-0.109) | 12.5 (12.5-12.5) |
-| SuperMimic, MLP | 29,768 | 5.19, 2.90 | 5 / 5 | 0.886 (0.885-0.886) | 0.096 (0.094-0.101) | 20.0 (19.9-20.1) |
+| SuperTrack, MLP | 31,428 | 4.90, 3.09 | 5 / 5 | 0.887 (0.885-0.888) | 106 (103-109) | 12.5 (12.5-12.5) |
+| SuperMimic, MLP | 29,768 | 5.19, 2.90 | 5 / 5 | 0.886 (0.885-0.886) | 96 (94-101) | 20.0 (19.9-20.1) |
 
 Means over the five evaluations, their range in parentheses. Per robot (normalized return): SuperTrack-MLP 0.881 and
 0.892, SuperMimic-MLP 0.879 and 0.892. SuperTrack-MLP's evaluation ran on an A100 40GB, SuperMimic-MLP's on the A100 80GB

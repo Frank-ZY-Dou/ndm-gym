@@ -17,8 +17,8 @@ import torch.nn as nn
 from ..buffer import ReplayBuffer
 from ..policies.critic import Critic
 from ..policies.hand_policy import HandPolicy
-from ..robots.xhand import NUM_J, NUM_PALM, HandKinematics
-from ..tasks.hand_tracking import GOAL_FRAME_DIM, OBS_DIM, STATE_DIM, HandTask, unflatten_state
+from ..robots.hands import NUM_PALM, HandKinematics
+from ..tasks.hand_tracking import HandTask, unflatten_state
 from ..tasks.hdmi import relative_rot, rot_angle
 from ..worldmodels.hand import HandWorldModel
 from .common import set_requires_grad
@@ -28,13 +28,13 @@ from .supertrack import LossBalancer
 WINDOW_KEYS = ("s", "s1", "u", "done")
 
 
-def replay_fields() -> dict:
+def replay_fields(task: HandTask) -> dict:
     """A transition: the state, the position targets ``u``, the next state, the action before this step's, the frame."""
     return {
-        "s": (STATE_DIM, torch.float32),
-        "s1": (STATE_DIM, torch.float32),
-        "u": (NUM_J, torch.float32),
-        "a_prev": (NUM_J, torch.float32),
+        "s": (task.state_dim, torch.float32),
+        "s1": (task.state_dim, torch.float32),
+        "u": (task.kin.num_joints, torch.float32),
+        "a_prev": (task.kin.num_joints, torch.float32),
         "f": ((), torch.long),
         "done": ((), torch.bool),
     }
@@ -49,10 +49,10 @@ class HandSuperMimic:
         self.bptt_decay = float(getattr(args, "bptt_decay", 1.0))
         if not 0 < self.bptt_decay <= 1:
             raise ValueError(f"--bptt_decay must be in (0, 1], got {self.bptt_decay}")
-        goal_dim = GOAL_FRAME_DIM * self.goal_frames
-        self.wm = HandWorldModel(hidden=args.wm_hidden, act=args.wm_act, layer_norm=not args.wm_no_ln, kind=self.kind).to(dev)
-        self.pi = HandPolicy(OBS_DIM, goal_dim).to(dev)
-        self.critic = Critic(OBS_DIM + goal_dim).to(dev)
+        goal_dim = task.goal_frame_dim * self.goal_frames
+        self.wm = HandWorldModel(kin.num_joints, hidden=args.wm_hidden, act=args.wm_act, layer_norm=not args.wm_no_ln, kind=self.kind).to(dev)
+        self.pi = HandPolicy(task.obs_dim, goal_dim, kin.num_joints).to(dev)
+        self.critic = Critic(task.obs_dim + goal_dim).to(dev)
         # Adam at --lr, the policy's with betas (0.9, 0.95), unless a systems option says otherwise (algos.hand_fast)
         self.opt_wm = optimizer(args, dev, self.wm, "wm")
         self.opt_pi = optimizer(args, dev, self.pi, "pi")
@@ -284,7 +284,7 @@ class HandSuperTrack(HandSuperMimic):
         fk = self.kin.forward(S[0])
         errs, dones, acts, rews = [], [], [], []
         for _ in range(horizon):
-            noise = self.imag_noise * torch.randn(B, NUM_J, device=self.dev) if self.imag_noise else torch.zeros(B, NUM_J, device=self.dev)
+            noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)
             S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
             errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
         E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)

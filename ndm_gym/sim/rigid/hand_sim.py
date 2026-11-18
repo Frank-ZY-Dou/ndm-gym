@@ -26,7 +26,7 @@ import mujoco_warp as mjw
 import warp as wp
 
 from ...core.rotations import mat_to_quat, quat_to_mat
-from ...robots.xhand import NUM_J, scene_indices
+from ...robots.hands import scene_indices
 from ...state import CONTROL_DT
 from ...tasks.hand_tracking import HandTask, unflatten_state
 
@@ -66,7 +66,7 @@ class HandSim:
         n = int(mask.sum())
         if n == 0:
             return
-        q = self.ref.q[0] + self.joint_noise * torch.randn(n, NUM_J, device=self.device)
+        q = self.ref.q[0] + self.joint_noise * torch.randn(n, self.task.kin.num_joints, device=self.device)
         q = torch.clamp(q, self.task.kin.q_lo, self.task.kin.q_hi)
         p = self.ref.p[0].repeat(n, 1)
         p[:, :2] += self.object_noise * (2 * torch.rand(n, 2, device=self.device) - 1)
@@ -88,7 +88,7 @@ class HandSim:
         shapes, the random draws made for every world (another random stream than ``reset``'s, which draws for the worlds
         it resets)."""
         N, o, m = self.N, self.object_qpos, mask.unsqueeze(-1)
-        q = self.ref.q[0] + self.joint_noise * torch.randn(N, NUM_J, device=self.device)
+        q = self.ref.q[0] + self.joint_noise * torch.randn(N, self.task.kin.num_joints, device=self.device)
         q = torch.clamp(q, self.task.kin.q_lo, self.task.kin.q_hi)
         p = self.ref.p[0].repeat(N, 1)
         p[:, :2] += self.object_noise * (2 * torch.rand(N, 2, device=self.device) - 1)
@@ -135,7 +135,7 @@ class HandSim:
 
     @torch.no_grad()
     def state(self) -> torch.Tensor:
-        """The flat state (N, STATE_DIM); MuJoCo keeps a free joint's angular velocity in the body's frame."""
+        """The flat state (N, state_dim); MuJoCo keeps a free joint's angular velocity in the body's frame."""
         quat = self.qpos[:, self.object_qpos + 3 : self.object_qpos + 7]
         w = (quat_to_mat(quat) @ self.qvel[:, self.object_qvel + 3 : self.object_qvel + 6].unsqueeze(-1)).squeeze(-1)
         return torch.cat((self.qpos[:, self.qpos_idx], self.qvel[:, self.qvel_idx], self.qpos[:, self.object_qpos : self.object_qpos + 3], quat,
@@ -143,7 +143,7 @@ class HandSim:
 
     @torch.no_grad()
     def step(self, u: torch.Tensor, reset: bool = True) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """Hold the position targets ``u`` (N, NUM_J) for one control step. Returns the next state, whether the episode
+        """Hold the position targets ``u`` (N, num_joints) for one control step. Returns the next state, whether the episode
         terminated (also for a non-finite state, returned as the state before the step) and whether it ended; ended
         worlds are reset unless ``reset`` is False."""
         s = self.state()

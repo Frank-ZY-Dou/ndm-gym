@@ -26,17 +26,17 @@ def identical(a, b, path='root'):
         assert a == b, path
 
 
-def main(*, training_module='ndm_gym.train_door_full'):
+def main(argv=None, *, training_module='ndm_gym.train_door_full', training_args=()):
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('model', 'reference', 'native-library', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
-    a = p.parse_args()
+    a = p.parse_args(argv)
     a.output.mkdir(parents=True, exist_ok=False)
     results = []
     for method in ('supertrack', 'supermimic'):
         base = [sys.executable, '-m', training_module, '--model', str(a.model),
                 '--reference', str(a.reference), '--native-library', str(a.native_library),
-                '--method', method, '--seed', '3065', '--workers', '8']
+                '--method', method, '--seed', '3065', '--workers', '8', *training_args]
         for stage, steps in [('prefix', 301), ('resumed', 320), ('continuous', 320)]:
             output = a.output/f'{method}-{stage}'
             cmd = base + ['--output', str(output), '--development-steps', str(steps)]

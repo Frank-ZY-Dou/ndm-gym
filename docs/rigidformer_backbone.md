@@ -245,7 +245,8 @@ values than the model under bf16 autocast (the bf16 copy: twice its mean and fou
 
 ## 7. Validation
 
-`python -m pytest tests/test_rigidformer_backbone.py` runs 30 CPU tests (`-m "not slow"` skips the two slow ones).
+`python -m pytest tests/test_rigidformer_backbone.py` runs 36 tests, 35 on a CPU (the token-attention kernel's test needs CUDA; `-m "not slow"`
+skips the two slow ones).
 They need G1 assets and LAFAN1 motions in `data/` and check:
 
 - features: forward kinematics and offset scale, shapes, pelvis token, absolute heights, each body's own joint, PD error

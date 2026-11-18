@@ -19,7 +19,7 @@ import numpy as np
 import torch
 
 from ...core.rotations import quat_slerp
-from ...robots.xhand import scene_indices
+from ...robots.hands import scene_indices
 
 SIM_DT = 0.01  # the scenes' physics step in SPIDER
 
@@ -34,7 +34,7 @@ def load_scene(trial_dir: str) -> mujoco.MjModel:
 
 
 def load_reference(trial_dir: str, model: mujoco.MjModel, dt: float) -> dict[str, torch.Tensor]:
-    """The clip's kinematic reference resampled every ``dt`` seconds: the hand's joint positions ``q`` (T, 18) and the
+    """The clip's kinematic reference resampled every ``dt`` seconds: the hand's joint positions ``q`` (T, num_joints) and the
     object's position ``p`` (T, 3) and quaternion ``quat`` (T, 4), linearly (the quaternion spherically) interpolated."""
     task_dir = os.path.dirname(os.path.normpath(trial_dir))
     with open(os.path.join(task_dir, "task_info.json")) as f:

@@ -1,0 +1,50 @@
+{
+  "status": "fixed_before_development_runs",
+  "task": "hammer",
+  "hypothesis": "10 mm nail reward width under-penalizes sub-mm reference error; reference success margin is only 0.0872 mm and learned-model 16-step nail RMSE about 0.189 mm",
+  "unchanged": [
+    "reference and native dynamics",
+    "native success predicate below 10 mm",
+    "network sizes, update schedule, data collection and 20k cosine schedule",
+    "fixed v1 tracking metric for all evaluations"
+  ],
+  "candidates": [
+    {
+      "name": "baseline_10mm",
+      "nail_tracking_std": 0.01
+    },
+    {
+      "name": "precision_1mm",
+      "nail_tracking_std": 0.001
+    },
+    {
+      "name": "precision_05mm",
+      "nail_tracking_std": 0.0005
+    }
+  ],
+  "training_seed": 3065,
+  "evaluation_seed": 3065,
+  "development_iterations": 6000,
+  "worlds": 2048,
+  "methods": [
+    "supermimic"
+  ],
+  "selection": "Eligible non-baseline: native final success >= .95, finite 256/256 and v1 normalized tracking RMSE <= .1. Among eligible candidates maximize native final success, then minimize fixed v1 tracking RMSE. All outcomes retained. If none eligible, diagnose and register another experiment before running it; no claim of repair.",
+  "formal_followup": "Only after repair validation: freeze selected config, fresh 20k seeds 0,1,2 for both methods; Pen/Relocate retain default .01 nail width. Three-seed final results and all checks before separate PR. Door PR unchanged.",
+  "preview_selection": "Latest CONTRIBUTING: lowest fixed tracking-error final run per case; caption actual method and seed; fixed nominal nonterminal window; failed outcomes not hidden.",
+  "resource_budget": {
+    "gpus": [
+      0,
+      1,
+      2
+    ],
+    "physical_cpu_cores_per_job": 8,
+    "ram_gib_per_job": 16,
+    "vram_gib_per_job": 16,
+    "disk_gib_per_job": 30,
+    "max_seconds_per_job": 7200,
+    "shared_memory_custom_kernel_bytes": 0,
+    "data_root": "/data/YifanKang/adroit-suite-v2",
+    "other_tasks": "Leave GPUs 3-7 and 64 physical cores available; resource admission before every launch"
+  }
+}

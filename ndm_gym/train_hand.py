@@ -100,7 +100,7 @@ def parse_args(argv: list[str] | None = None):
 def build(clip: str, device: str, reward_std_scale: float = 1.0):
     """The scene, kinematics and task of a clip."""
     from ndm_gym.motion.sources.spider import load_reference, load_scene
-    from ndm_gym.robots.xhand import HandKinematics
+    from ndm_gym.robots.hands import HandKinematics
     from ndm_gym.state import CONTROL_DT
     from ndm_gym.tasks.hand_tracking import HandTask, RewardCfg, build_reference
 
@@ -156,12 +156,12 @@ def main():
         pi_lr.load_state_dict(resume_ck)
         start_it, wall_offset = resume_ck["iteration"], resume_ck["wall_time"]
         del resume_ck
-    buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev, fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev, fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     if args.collect_graph or args.update_graphs:  # the graphs read the replay's write head and fill level on the device
         buffer.use_device_ptr(device_size=True)
     N = args.num_envs
-    a_prev = torch.zeros(N, kin.q_lo.shape[0], device=dev)
+    a_prev = torch.zeros(N, kin.num_joints, device=dev)
     ep_len = torch.zeros(N, device=dev)
     acc = {k: torch.zeros((), device=dev) for k in ("r", "steps", "done", "term", "ep_len", "object_err")}
 

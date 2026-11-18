@@ -276,7 +276,7 @@ class Collector:
         self.graphed = bool(args.collect_graph)
         if self.graphed and buffer.size_t is None:
             raise ValueError("--collect_graph writes at the replay's device-side head (ReplayBuffer.use_device_ptr(device_size=True))")
-        self.a_prev = torch.zeros(sim.N, task.kin.q_lo.shape[0], device=sim.device)
+        self.a_prev = torch.zeros(sim.N, task.kin.num_joints, device=sim.device)
         self.ep_len = torch.zeros(sim.N, device=sim.device)
         self.acc = {k: torch.zeros((), device=sim.device) for k in ACC_KEYS}
         self.fk = task.kin.forward

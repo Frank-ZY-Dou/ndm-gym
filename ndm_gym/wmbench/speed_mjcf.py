@@ -22,11 +22,15 @@ import time
 
 import numpy as np
 
+from ndm_gym.wmbench.warm import keep_busy
+
 NDMSIM_COMPILE = "max-autotune-no-cudagraphs"  # sim.robokit_ndm.COMPILE_MODE, named here without importing Warp
 COLUMNS = "what,model,nworld,substeps,dt,dtype,compile,steps,seconds,world_steps_per_s,ms_per_step,device,detail"
 
 
 def parse_args(argv=None):
+    from ndm_gym.worldmodels.mjcf import RF_DEFAULTS
+
     p = argparse.ArgumentParser()
     p.add_argument("--meta", required=True, help="collect_robokit's <out>.json (the planner's model and settings)")
     p.add_argument("--planner", type=int, default=0, help="which of the run's planners")
@@ -38,13 +42,20 @@ def parse_args(argv=None):
     p.add_argument("--reset_every", type=int, default=0,
                    help="copy the start states back every this many steps, as a planner restarts its rollouts (0: never; every simulator alike)")
     p.add_argument("--dtype", default="bf16", choices=["bf16", "fp16", "fp32"], help="ndm: the network's parameters")
+    p.add_argument("--fused", action="store_true",
+                   help="ndm: the world model's kinematics and contact gaps on the fused path (worldmodels.mjcf.MjcfWorldModel.fused)")
     p.add_argument("--compile", default="max-autotune-no-cudagraphs", help="ndm: torch.compile's mode, or none")
     p.add_argument("--hidden", type=int, nargs="+", default=[1024, 1024, 1024], help="ndm without --ckpt")
     p.add_argument("--wm_param", default="accel", choices=["accel", "increment"], help="ndm without --ckpt (fit_mjcf's option)")
     p.add_argument("--no_ln", action="store_true", help="ndm without --ckpt: no LayerNorm (fit_mjcf's option)")
+    p.add_argument("--backbone", default="mlp", choices=["mlp", "rigidformer"], help="ndm without --ckpt (fit_mjcf's option)")
+    for k, v in RF_DEFAULTS.items():  # ndm without --ckpt: the RigidFormer's options, as fit_mjcf's
+        p.add_argument(f"--rf_{k}", type=type(v), default=v, help="ndm without --ckpt (fit_mjcf's option)")
     p.add_argument("--ckpt", default=None, help="ndm: a fit_mjcf --save file")
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--warmup", type=int, default=20)
+    p.add_argument("--warm_seconds", type=float, default=0.0,
+                   help="after --warmup, keep calling this many seconds before the first timed run (wmbench/warm.py: an idle GPU's clock)")
     p.add_argument("--repeats", type=int, default=3)
     p.add_argument("--out", required=True, help="csv; one row per measurement is appended")
     return p.parse_args(argv)
@@ -58,9 +69,10 @@ def start_states(path: str, n: int, seed: int = 0) -> tuple[np.ndarray, np.ndarr
     return q[idx], v[idx], u[idx]
 
 
-def timed(step, sync, warmup: int, steps: int, repeats: int, reset=None, every: int = 0) -> list[float]:
-    """Seconds for ``steps`` calls of ``step`` between two syncs, ``repeats`` times, after ``warmup`` calls; with ``every``,
-    ``reset()`` (the start states copied back on the device) before every ``every``-th call, inside the timed loop too."""
+def timed(step, sync, warmup: int, steps: int, repeats: int, reset=None, every: int = 0, warm_seconds: float = 0.0) -> list[float]:
+    """Seconds for ``steps`` calls of ``step`` between two syncs, ``repeats`` times, after ``warmup`` calls and then
+    ``warm_seconds`` of calls (wmbench/warm.py); with ``every``, ``reset()`` (the start states copied back on the device)
+    before every ``every``-th call, inside the timed loop too."""
     calls = 0
 
     def one():
@@ -73,6 +85,7 @@ def timed(step, sync, warmup: int, steps: int, repeats: int, reset=None, every: 
     for _ in range(warmup):
         one()
     sync()
+    keep_busy(one, sync, warm_seconds)
     out = []
     for _ in range(repeats):
         t0 = time.perf_counter()
@@ -104,7 +117,7 @@ def physics(model, planner: dict, n: int, states, args) -> tuple[list[float], st
         wp.copy(sim.data.qpos, q0)
         wp.copy(sim.data.qvel, v0)
 
-    runs = timed(sim.step, wp.synchronize_device, args.warmup, args.steps, args.repeats, reset, args.reset_every)
+    runs = timed(sim.step, wp.synchronize_device, args.warmup, args.steps, args.repeats, reset, args.reset_every, args.warm_seconds)
     return runs, f"MjWarpSim, njmax {planner['njmax']}, nconmax {planner['nconmax']}, reset every {args.reset_every}, warp {wp.config.version}"
 
 
@@ -148,21 +161,24 @@ def ndmsim(model, planner: dict, n: int, states, args) -> tuple[list[float], str
     with wp.ScopedDevice(sim.device):
         with wp.ScopedCapture() as capture:  # as SimMPC captures a step
             sim.step()
-    runs = timed(lambda: wp.capture_launch(capture.graph), wp.synchronize_device, args.warmup, args.steps, args.repeats, reset, args.reset_every)
+    runs = timed(lambda: wp.capture_launch(capture.graph), wp.synchronize_device, args.warmup, args.steps, args.repeats, reset, args.reset_every, args.warm_seconds)
     sim.check()
-    return runs, (f"NdmSim (derived {'+'.join(args.derived) or 'none'}), MjcfWorldModel({wm.kind}) in {args.dtype}, reset every {args.reset_every}, "
-                  f"warp {wp.config.version}")
+    net = "" if wm.backbone == "mlp" else f", {wm.net.describe()}"
+    return runs, (f"NdmSim (derived {'+'.join(args.derived) or 'none'}), MjcfWorldModel({wm.kind}{net}) in {args.dtype}, "
+                  f"reset every {args.reset_every}, warp {wp.config.version}")
 
 
 def ndm(model, n: int, states, args) -> tuple[list[float], str]:
     import torch
 
-    from ndm_gym.worldmodels.mjcf import MjcfLayout, inference_copy
+    from ndm_gym.worldmodels.mjcf import MjcfLayout, fused_compile, inference_copy
 
     dev = torch.device("cuda")
     wm = load_ndm(MjcfLayout.from_model(model), args, dev)
     dtype = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": None}[args.dtype]
     m = inference_copy(wm, dtype)
+    if args.fused:  # the same values to rounding in fewer kernels; off: the path the fit ran
+        m.fused = True
     q, v, u = (torch.tensor(x, dtype=torch.float32, device=dev) for x in states)
     q0, v0 = q.clone(), v.clone()
     fn = m.step if args.compile == "none" else torch.compile(m.step, mode=args.compile, dynamic=False)
@@ -175,28 +191,33 @@ def ndm(model, n: int, states, args) -> tuple[list[float], str]:
     with torch.no_grad():
         s = torch.cuda.Stream()
         s.wait_stream(torch.cuda.current_stream())
-        with torch.cuda.stream(s):
+        with torch.cuda.stream(s), fused_compile(m):
             for _ in range(3):  # compilation and the allocator's warm-up, outside the capture
                 body()
         torch.cuda.current_stream().wait_stream(s)
         g = torch.cuda.CUDAGraph()
         with torch.cuda.graph(g):
             body()
-        runs = timed(g.replay, torch.cuda.synchronize, args.warmup, args.steps, args.repeats, lambda: (q.copy_(q0), v.copy_(v0)), args.reset_every)
-    return runs, f"MjcfWorldModel({wm.kind}) {list(wm.net[0].weight.shape)[::-1]} in {args.dtype}, reset every {args.reset_every}, torch {torch.__version__}"
+        runs = timed(g.replay, torch.cuda.synchronize, args.warmup, args.steps, args.repeats, lambda: (q.copy_(q0), v.copy_(v0)), args.reset_every, args.warm_seconds)
+    net = list(wm.net[0].weight.shape)[::-1] if wm.backbone == "mlp" else wm.net.describe()
+    return runs, f"MjcfWorldModel({wm.kind}) {net} in {args.dtype}{' fused' if args.fused else ''}, reset every {args.reset_every}, torch {torch.__version__}"
 
 
 def load_ndm(lay, args, device):
-    """The world model to time: a fit_mjcf --save file's (its parameterization, widths, activation, LayerNorm and step), or one
-    of random weights with this script's options. A checkpoint written before fit_mjcf had --wm_param is an acceleration model.
-    A checkpoint fitted on another layout (its state's sizes, its anchor or its objects, as with fit_mjcf --anchor) is refused."""
+    """The world model to time: a fit_mjcf --save file's (its parameterization, backbone and its options, widths, activation,
+    LayerNorm, step and planar root), or one of random weights with this script's options. A checkpoint written before fit_mjcf had
+    --wm_param is an acceleration model, one written before --geometry has no contact geometry inputs, and one written before
+    --backbone is an MLP. A checkpoint fitted on another layout (its state's sizes, its anchor or its objects, as with fit_mjcf
+    --anchor) is refused, and so is one with contact inputs against static geoms that does not carry this code's revision of
+    their gaps (worldmodels.mjcf.check_gaps_revision)."""
     import torch
 
-    from ndm_gym.worldmodels.mjcf import MjcfWorldModel
+    from ndm_gym.worldmodels.mjcf import MjcfWorldModel, backbone_kwargs, check_gaps_revision
 
     if not args.ckpt:
-        return MjcfWorldModel(lay, hidden=tuple(args.hidden), layer_norm=not args.no_ln, kind=args.wm_param).to(device)
+        return MjcfWorldModel(lay, hidden=tuple(args.hidden), layer_norm=not args.no_ln, kind=args.wm_param, **backbone_kwargs(vars(args))).to(device)
     ck = torch.load(args.ckpt, map_location=device, weights_only=False)
+    check_gaps_revision(ck, f"load_ndm: {args.ckpt}")
     a = ck["args"]
     saved = json.loads(ck["layout"])
     for k in ("nq", "nv", "nu", "anchor", "objects"):  # the frame and the state the network was fitted in (fit_mjcf --anchor)
@@ -204,7 +225,15 @@ def load_ndm(lay, args, device):
             raise ValueError(f"load_ndm: {args.ckpt} was fitted on a layout with {k} {saved[k]}, this model's is {getattr(lay, k)}")
     if a.get("dt") is not None:  # fitted to a coarse stage's longer step
         lay = dataclasses.replace(lay, dt=a["dt"])
-    wm = MjcfWorldModel(lay, hidden=tuple(a["hidden"]), act=a["act"], layer_norm=not a["no_ln"], kind=a.get("wm_param", "accel")).to(device)
+    if a.get("planar_root"):  # the root's horizontal slides left out of the inputs, as in the fit
+        lay = dataclasses.replace(lay, planar=tuple(saved["planar"]))
+    contacts = {k: ck["state"][f"cs_{k}"] for k in ("center", "radius", "body", "margin")} if a.get("contacts") else None  # the fit's spheres
+    if contacts is not None:  # a fit from before --contact_basis has none
+        contacts["basis"] = bool(ck["state"].setdefault("cs_basis", torch.tensor(False, device=device)))
+        contacts |= {k: ck["state"][f"cs_{k}"] for k in ("tb", "tg", "sg") if f"cs_{k}" in ck["state"]}  # --contact_objects, --contact_static
+    lead = {"pos_lead": float(ck["state"]["pos_lead"])} if "pos_lead" in ck["state"] else {}  # fit_mjcf --accel_mean_velocity: the fit's own
+    wm = MjcfWorldModel(lay, hidden=tuple(a["hidden"]), act=a["act"], layer_norm=not a["no_ln"], kind=a.get("wm_param", "accel"),
+                        geometry=a.get("geometry", False), contacts=contacts, **backbone_kwargs(a), **lead).to(device)  # fmt: skip
     wm.load_state_dict(ck["state"])
     return wm
 

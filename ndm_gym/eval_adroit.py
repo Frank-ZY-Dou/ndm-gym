@@ -4,6 +4,8 @@ Reports tracking errors and native success separately. Single-seed results do
 not estimate training-seed variance. No states are overwritten after reset.
 """
 import argparse
+from dataclasses import asdict
+from functools import partial
 import json
 from pathlib import Path
 import time
@@ -15,7 +17,7 @@ from .door_schedule import FullHandSchedule
 from .motion.adroit import AdroitReference
 from .sim.rigid.adroit import AdroitPhysics, success
 from .sim.rigid.door_collector import ParallelNativeDoorCollector
-from .tasks.adroit import AdroitTask
+from .tasks.adroit import AdroitTask, AdroitRewardCfg
 from .train_door_full import make_algorithm
 from .train_door_online import fingerprint, optimizer_counts
 
@@ -96,6 +98,7 @@ def main(argv=None):
     p.add_argument('--allow-development', action='store_true')
     p.add_argument('--device', default='cuda:0', choices=('cpu', 'cuda:0'))
     p.add_argument('--workers', type=int, default=8)
+    p.add_argument('--evaluation-seed', type=int, default=20261117)
     a = p.parse_args(argv)
     import mujoco
     torch.set_num_threads(1)
@@ -105,7 +108,8 @@ def main(argv=None):
     model = mujoco.MjModel.from_xml_path(str(a.model.resolve()))
     checkpoint = torch.load(a.checkpoint, map_location='cpu', weights_only=False) if a.checkpoint else None
     method = checkpoint['protocol']['method'] if checkpoint else 'supertrack'
-    algo, _ = make_algorithm(method, model, ref, a.device, task_cls=AdroitTask)
+    cfg = AdroitRewardCfg(**checkpoint['protocol'].get('task_reward', {})) if checkpoint else AdroitRewardCfg()
+    algo, _ = make_algorithm(method, model, ref, a.device, task_cls=partial(AdroitTask, cfg=cfg))
     if checkpoint:
         for key in ('model', 'reference', 'native_library'):
             if fingerprint(getattr(a, key)) != checkpoint['protocol']['input_hashes'][key]:
@@ -121,7 +125,7 @@ def main(argv=None):
             if actual.get(key, 0) != expected[field]:
                 raise ValueError('Incomplete optimizer budget')
     a.output.mkdir(parents=True, exist_ok=False)
-    offsets = evaluation_offsets(ref)
+    offsets = evaluation_offsets(ref, seed=a.evaluation_seed)
     np.savez_compressed(a.output/'starts.npz', qpos=offsets[0], qvel=offsets[1])
     started = time.perf_counter()
     with ParallelNativeDoorCollector(model, ref, 256, a.workers, a.native_library.resolve(), physics_cls=AdroitPhysics) as collector:
@@ -135,11 +139,14 @@ def main(argv=None):
             data.qpos[:], data.qvel[:] = q[f+1, i], v[f+1, i]
             mujoco.mj_forward(model, data)
             successes[f, i] = success(model, data, ref.metadata['task'])
-    results = score(q, v, actions, ref, algo.task, successes)
+    # Fixed v1 reporting widths make different training objectives comparable.
+    reporting_task = AdroitTask(ref, model.actuator_ctrlrange)
+    results = score(q, v, actions, ref, reporting_task, successes)
     np.savez_compressed(a.output/'physical-rollouts.npz', native_success=successes,
                         **{f'episode{i}_{k}': array[:, i] for i in range(256)
                            for k, array in [('qpos', q), ('qvel', v), ('actions', actions)]})
-    report = dict(task=ref.metadata['task'], clip=ref.metadata['clip'], prior=a.prior,
+    report = dict(evaluation_seed=a.evaluation_seed, training_reward=asdict(cfg),
+                  reporting_reward=asdict(reporting_task.cfg), task=ref.metadata['task'], clip=ref.metadata['clip'], prior=a.prior,
                   method=method if checkpoint else None, seed=checkpoint['protocol']['seed'] if checkpoint else None,
                   iteration=checkpoint['iteration'] if checkpoint else None,
                   checkpoint_sha256=fingerprint(a.checkpoint) if checkpoint else None,

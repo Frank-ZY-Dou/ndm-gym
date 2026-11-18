@@ -14,7 +14,7 @@ import torch
 os.environ.setdefault("MUJOCO_GL", "disable")
 mujoco = pytest.importorskip("mujoco")
 
-from ndm_gym.worldmodels.mjcf import MjcfLayout, MjcfWorldModel, differentiate_pos, integrate_pos, quat_mul  # noqa: E402
+from ndm_gym.worldmodels.mjcf import MjcfLayout, MjcfWorldModel, differentiate_pos, integrate_pos, quat_mul, signed_distance  # noqa: E402
 
 XML = """
 <mujoco>
@@ -172,10 +172,11 @@ def test_servo_forces_match_mujoco():
         np.testing.assert_allclose(offset[i, 0].item(), np.clip(ctrl[i, 0], -1, 1) - d.actuator_length[0], atol=1e-9)
 
 
-def test_inputs_ignore_the_anchors_heading_and_horizontal_position():
+@pytest.mark.parametrize("geometry", [False, True])
+def test_inputs_ignore_the_anchors_heading_and_horizontal_position(geometry):
     m, rng = model(), np.random.default_rng(2)
     lay = MjcfLayout.from_model(m)
-    wm = MjcfWorldModel(lay, hidden=(8,)).double()
+    wm = MjcfWorldModel(lay, hidden=(8,), geometry=geometry).double()
     qpos, qvel = (torch.tensor(x) for x in random_state(m, 6, rng))
     ctrl = torch.tensor(rng.standard_normal((6, m.nu)))
     phi, shift = 0.9, torch.tensor([0.7, -1.3, 0.0], dtype=torch.float64)
@@ -293,6 +294,144 @@ def test_a_short_fit_lowers_the_open_loop_error(kind):
     assert after < 0.5 * before, (before, after)
 
 
+def test_window_loss_weights():
+    """Weights of ones give the plain mean; a heavier weight on the object's components moves the loss from the plain mean
+    toward the object's error alone."""
+    m, rng = model(), np.random.default_rng(6)
+    torch.manual_seed(0)
+    qpos, qvel, ctrl = simulate(m, 8, 6, rng)
+    lay = MjcfLayout.from_model(m)
+    wm = MjcfWorldModel(lay, hidden=(32,))
+    wm.update_norms(qpos[:-1], qvel[:-1], ctrl, qpos[1:], qvel[1:])
+    with torch.no_grad():
+        wm.net[-1].weight.normal_(0, 0.1)  # a nonzero prediction, so every component has an error
+        plain = wm.window_loss(qpos, qvel, ctrl)
+        torch.testing.assert_close(wm.window_loss(qpos, qvel, ctrl, weights=torch.ones(2 * lay.nv)), plain)
+        (_, d), = lay.objects
+        obj = torch.zeros(2 * lay.nv)
+        obj[d : d + 6] = obj[lay.nv + d : lay.nv + d + 6] = 1.0
+        only, mid, far = (wm.window_loss(qpos, qvel, ctrl, weights=w).item() for w in (obj, 1.0 + 4.0 * obj, 1.0 + 1e9 * obj))
+    plain = plain.item()
+    assert abs(only - plain) > 1e-3 * plain and min(plain, only) < mid < max(plain, only) and abs(far - only) < 1e-4 * abs(plain - only)
+
+
+KIN_XML = """
+<mujoco>
+  <option timestep="0.01"/>
+  <worldbody>
+    <geom type="plane" size="5 5 0.1"/>
+    <body name="mount" pos="0.1 -0.2 0.5" quat="0.9 0.1 0.3 -0.2">
+      <geom type="box" size="0.05 0.05 0.02" contype="0" conaffinity="0"/>
+      <body name="palm" pos="0 0 0.03" euler="0.3 -0.2 0.5">
+        <geom type="box" size="0.04 0.04 0.01"/>
+        <body name="finger" pos="0.05 0 0">
+          <joint name="knuckle" type="hinge" axis="0 0.6 0.8" pos="0.01 0.02 0" range="-1 1"/>
+          <joint name="reach" type="slide" axis="1 0 0" range="-0.02 0.02"/>
+          <geom type="capsule" fromto="0 0 0 0.04 0 0" size="0.008"/>
+          <body name="tip" pos="0.045 0 0" quat="0.7 0 0.7 0.1">
+            <joint name="tipball" type="ball" pos="0 0.01 0.005"/>
+            <geom type="sphere" size="0.01" pos="0.01 0.003 0"/>
+            <geom type="sphere" size="0.004" pos="0.02 0 0" contype="0" conaffinity="0"/>
+          </body>
+        </body>
+        <body name="thumb" pos="0 0.05 0">
+          <joint name="thumb" type="hinge" axis="0 0 1" ref="0.4" range="-1 1"/>
+          <geom type="cylinder" size="0.008 0.02" pos="0 0.02 0"/>
+        </body>
+      </body>
+    </body>
+    <body name="cube" pos="0.15 0 0.6">
+      <freejoint name="cube"/>
+      <geom type="box" size="0.02 0.03 0.025"/>
+      <geom type="capsule" size="0.005 0.03" pos="0 0 0.03" quat="0.7 0.7 0 0"/>
+      <geom type="box" size="0.03 0.03 0.001" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+  <actuator>
+    <position joint="knuckle" kp="10"/>
+    <position joint="thumb" kp="10"/>
+  </actuator>
+</mujoco>
+"""
+
+
+def test_body_poses_match_mj_kinematics():
+    """Forward kinematics in MuJoCo's convention: a fixed base turned in the world, a body with a hinge about an off-centre
+    anchor and a slide, a ball about an off-centre anchor, a hinge with a reference angle, a free object; and the layout's robot
+    and object collision geoms."""
+    m = mujoco.MjModel.from_xml_string(KIN_XML)
+    d = mujoco.MjData(m)
+    lay = MjcfLayout.from_model(m)
+    assert lay.anchor is None and len(lay.objects) == 1 and [b for b, _ in lay.robot_geoms] == [2, 3, 4, 5]  # palm, finger, tip, thumb
+    assert [g[0] for g in lay.object_geoms[0]] == [6, 3]  # the cube's box and capsule; its thin visual box does not collide
+    wm = MjcfWorldModel(lay, hidden=(8,), geometry=True).double()  # its kinematic constants are float32, as the model runs
+    rng = np.random.default_rng(7)
+    qpos, _ = random_state(m, 5, rng)
+    P, R = wm.body_poses(torch.tensor(qpos))
+    for i in range(5):
+        d.qpos[:] = qpos[i]
+        mujoco.mj_kinematics(m, d)
+        np.testing.assert_allclose(P[i].numpy(), d.xpos, atol=1e-6, rtol=0)
+        np.testing.assert_allclose(R[i].numpy().reshape(m.nbody, 9), d.xmat, atol=1e-6, rtol=0)
+        feats = wm.contact_geometry(torch.tensor(qpos[i : i + 1]))[0].numpy()
+        rel, dist = feats[:12].reshape(4, 3), feats[12:]
+        cube = m.body("cube").id
+        for k, g in enumerate(gid for gid in range(m.ngeom) if m.geom_bodyid[gid] in (2, 3, 4, 5) and m.geom_contype[gid]):
+            np.testing.assert_allclose(rel[k], d.xmat[cube].reshape(3, 3).T @ (d.geom_xpos[g] - d.xpos[cube]), atol=1e-6, rtol=0)
+            pt = d.geom_xpos[g]
+            ds = []
+            for c in (gid for gid in range(m.ngeom) if m.geom_bodyid[gid] == cube and m.geom_contype[gid]):
+                x = d.geom_xmat[c].reshape(3, 3).T @ (pt - d.geom_xpos[c])
+                ds.append(signed_distance(int(m.geom_type[c]), torch.tensor(x), torch.tensor(m.geom_size[c])).item())
+            assert abs(dist[k] - min(ds)) < 1e-6
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("device", ["cpu", pytest.param("cuda", marks=pytest.mark.skipif(not torch.cuda.is_available(), reason="no GPU"))])
+def test_body_poses_under_torch_compile(device):
+    """The compiled forward kinematics and contact geometry equal the eager ones. torch 2.11's Inductor miscompiled the chain of
+    index_copy into the expanded identity of every body's rotation: each compiled pose below the world was wrong (on this model by
+    up to 0.68 m, and 2.0 in a rotation's entry), and with it a compiled fit's contact geometry inputs."""
+    m = mujoco.MjModel.from_xml_string(KIN_XML)
+    wm = MjcfWorldModel(MjcfLayout.from_model(m), hidden=(8,), geometry=True).to(device)
+    qpos = torch.tensor(random_state(m, 16, np.random.default_rng(17))[0], dtype=torch.float32, device=device)
+    with torch.no_grad():
+        for a, b in zip(torch.compile(wm.body_poses, dynamic=False)(qpos), wm.body_poses(qpos)):
+            torch.testing.assert_close(a, b, atol=1e-5, rtol=0)
+        torch.testing.assert_close(torch.compile(wm.contact_geometry, dynamic=False)(qpos), wm.contact_geometry(qpos), atol=1e-5, rtol=0)
+
+
+@pytest.mark.parametrize(
+    "kind, size, point, want",
+    [(2, (0.1, 0, 0), (0.3, 0, 0), 0.2), (2, (0.1, 0, 0), (0, 0, 0), -0.1), (3, (0.1, 0.5, 0), (0.4, 0, 0.3), 0.3),
+     (3, (0.1, 0.5, 0), (0, 0, 0.9), 0.3), (5, (0.1, 0.5, 0), (0, 0, 0.8), 0.3), (5, (0.1, 0.5, 0), (0.4, 0, 0.9), 0.5),
+     (5, (0.1, 0.5, 0), (0.05, 0, 0), -0.05), (6, (0.1, 0.2, 0.3), (0.5, 0, 0), 0.4), (6, (0.1, 0.2, 0.3), (0.4, 0.6, 0), 0.5),
+     (6, (0.1, 0.2, 0.3), (0.05, 0, 0), -0.05)],
+)  # fmt: skip
+def test_signed_distance(kind, size, point, want):
+    assert abs(signed_distance(kind, torch.tensor(point, dtype=torch.float64), torch.tensor(size, dtype=torch.float64)).item() - want) < 1e-9
+
+
+def test_geometry_inputs():
+    """The contact geometry adds four inputs per robot collision geom and object, keeps the inputs' invariance to the anchor's
+    heading and horizontal position, and is refused where it would not hold."""
+    m = model()
+    lay = MjcfLayout.from_model(m)
+    plain, geo = MjcfWorldModel(lay, hidden=(8,)), MjcfWorldModel(lay, hidden=(8,), geometry=True)
+    assert geo.n_in == plain.n_in + 4 * len(lay.robot_geoms) and len(lay.robot_geoms) == 5
+    alone = XML.replace('''    <body name="box" pos="1 0 0.2">
+      <freejoint name="box"/>
+      <geom type="box" size="0.1 0.1 0.1"/>
+    </body>
+''', "")
+    with pytest.raises(ValueError, match="no object"):
+        MjcfWorldModel(MjcfLayout.from_model(mujoco.MjModel.from_xml_string(alone)), hidden=(8,), geometry=True)
+    no_geoms = mujoco.MjModel.from_xml_string(XML.replace('<default><joint armature="0.02"/></default>',
+                                                          '<default><joint armature="0.02"/><geom contype="0" conaffinity="0"/></default>'))  # fmt: skip
+    with pytest.raises(ValueError, match="no collision geom"):
+        MjcfWorldModel(MjcfLayout.from_model(no_geoms), hidden=(8,), geometry=True)
+
+
 def test_fit_windows_never_cross_a_reset():
     from ndm_gym.wmbench.fit_mjcf import starts
 
@@ -300,6 +439,47 @@ def test_fit_windows_never_cross_a_reset():
     reset[2, 0] = True  # env 0: the state after step 2 does not follow from it
     got = {tuple(x) for x in starts({"reset": reset}, 3).tolist()}
     assert got == {(3, 0), (0, 1), (1, 1), (2, 1), (3, 1)}  # env 0's windows 0-2, 1-3 and 2-4 hold step 2
+
+
+def test_fit_mjcf_until_flat_keeps_the_best_and_init_starts_from_it(tmp_path):
+    from ndm_gym.wmbench.fit_mjcf import SCORE_COLUMNS, main
+
+    m, rng = model(), np.random.default_rng(5)
+    xml = tmp_path / "scene.xml"
+    xml.write_text(XML)
+    for name, n in (("train", 8), ("test", 4)):
+        qpos, qvel, ctrl = simulate(m, n, 30, rng)
+        np.savez(tmp_path / f"{name}.npz", qpos=qpos.numpy(), qvel=qvel.numpy(), ctrl=ctrl.numpy(), reset=np.zeros((30, n), dtype=bool), dt=m.opt.timestep)
+    common = ["--model", str(xml), "--train", str(tmp_path / "train.npz"), "--test", f"held={tmp_path / 'test.npz'}", "--batch", "16", "--window", "4",
+              "--hidden", "32", "--amp", "none", "--eval_k", "1", "4", "--eval_windows", "16"]  # fmt: skip
+    main([*common, "--steps", "400", "--eval_every", "10", "--until_flat", "0.3", "2", "--out", str(tmp_path / "a.csv"), "--save", str(tmp_path / "a.pt")])
+
+    def rows(name):
+        lines = (tmp_path / name).read_text().strip().splitlines()
+        return [dict(zip(lines[0].split(","), x.split(","))) for x in lines[1:]]
+
+    a = rows("a.csv")
+    best, best_step, waited, step = float("inf"), 0, 0, 0
+    for r in a:  # the rule again, on the csv's held-out norm at the largest k
+        if r["k"] != "4":
+            continue
+        step = int(r["step"])
+        if float(r["norm"]) < 0.7 * best:
+            best, best_step, waited = float(r["norm"]), step, 0
+        else:
+            waited += 1
+        if waited >= 2:
+            break
+    info = torch.load(tmp_path / "a.pt", map_location="cpu", weights_only=False)["until_flat"]
+    assert int(a[-1]["step"]) == step < 400 and waited == 2  # it stopped there, before the cap, and wrote nothing after
+    assert (info["stopped"], info["best_step"], info["cap"], info["test"], info["k"]) == (step, best_step, 400, "held", 4) and best_step < step
+    assert info["best"] == pytest.approx(best, abs=1e-4)
+    # --init: the state kept is the best evaluation's, network and normalizers; with a learning rate of 0 its scores are that evaluation's
+    main([*common, "--init", str(tmp_path / "a.pt"), "--lr", "0", "--steps", "1", "--eval_every", "1", "--out", str(tmp_path / "b.csv")])
+    scores = lambda r: [r[c] for c in SCORE_COLUMNS.split(",")]  # noqa: E731
+    assert [scores(r) for r in rows("b.csv")] == [scores(r) for r in a if int(r["step"]) == best_step]
+    with pytest.raises(ValueError, match="another layout"):
+        main([*common, "--anchor", "box", "--init", str(tmp_path / "a.pt"), "--steps", "1", "--out", str(tmp_path / "c.csv")])
 
 
 def test_fit_mjcf_runs_and_scores(tmp_path):
@@ -324,6 +504,19 @@ def test_fit_mjcf_runs_and_scores(tmp_path):
     assert (tmp_path / "wm.pt").exists()
     main(["--model", str(xml), "--train", str(tmp_path / "train.npz"), "--test", f"held={tmp_path / 'test.npz'}", "--steps", "20",
           "--batch", "16", "--window", "4", "--hidden", "32", "--amp", "none", "--eval_every", "20", "--eval_k", "4",
+          "--eval_windows", "16", "--obj_w", "4", "--out", str(tmp_path / "objw.csv")])  # fmt: skip
+    assert len((tmp_path / "objw.csv").read_text().strip().splitlines()) == 2
+    main(["--model", str(xml), "--train", str(tmp_path / "train.npz"), "--test", f"held={tmp_path / 'test.npz'}", "--steps", "20",
+          "--batch", "16", "--window", "4", "--hidden", "32", "--amp", "none", "--eval_every", "20", "--eval_k", "4",
+          "--eval_windows", "16", "--geometry", "--out", str(tmp_path / "geo.csv"), "--save", str(tmp_path / "geo.pt")])  # fmt: skip
+    from types import SimpleNamespace as NS
+
+    from ndm_gym.wmbench.speed_mjcf import load_ndm
+
+    geo = load_ndm(MjcfLayout.from_model(model()), NS(ckpt=str(tmp_path / "geo.pt")), torch.device("cpu"))
+    assert geo.geometry and geo.n_in == MjcfWorldModel(MjcfLayout.from_model(model()), hidden=(8,), geometry=True).n_in
+    main(["--model", str(xml), "--train", str(tmp_path / "train.npz"), "--test", f"held={tmp_path / 'test.npz'}", "--steps", "20",
+          "--batch", "16", "--window", "4", "--hidden", "32", "--amp", "none", "--eval_every", "20", "--eval_k", "4",
           "--eval_windows", "16", "--wm_param", "increment", "--no_ln", "--out", str(tmp_path / "inc.csv"),
           "--save", str(tmp_path / "inc.pt")])  # fmt: skip
     from types import SimpleNamespace
@@ -334,7 +527,7 @@ def test_fit_mjcf_runs_and_scores(tmp_path):
     for path, kind, ln in (("wm.pt", "accel", True), ("inc.pt", "increment", False)):  # the timed model is the fitted one
         wm = load_ndm(lay, SimpleNamespace(ckpt=str(tmp_path / path)), "cpu")
         assert wm.kind == kind and any(isinstance(x, torch.nn.LayerNorm) for x in wm.net) == ln
-        saved = torch.load(tmp_path / path, weights_only=False)["state"]
+        saved = torch.load(tmp_path / path, map_location="cpu", weights_only=False)["state"]
         assert all(torch.equal(v, saved[k]) for k, v in wm.state_dict().items())
     with pytest.raises(ValueError, match="fitted on a layout with anchor"):  # the box as the anchor: another frame
         load_ndm(MjcfLayout.from_model(m, anchor="box"), SimpleNamespace(ckpt=str(tmp_path / "wm.pt")), "cpu")
@@ -404,3 +597,132 @@ def test_cut_blowups_cuts_a_rollout_from_its_first_outlier_to_its_reset():
     one["qpos"][6:, 0, 2] = qpos[6:, 1, 2]  # a long trajectory with one fast step, no blow-up at the scale of other recordings
     wide = median_increments([{"qpos": qpos * 100, "qvel": qvel * 100, "reset": torch.zeros(12, 2, dtype=torch.bool)}], lay)
     assert cut_blowups(one, lay, 300.0, wide) == 0.0  # judged by the given (training) medians, not by its own
+
+
+PLANAR = """
+<mujoco>
+  <option timestep="0.01"/>
+  <worldbody>
+    <geom type="plane" size="5 5 0.1"/>
+    <body name="torso" pos="0 0 1">
+      <joint name="rootx" type="slide" axis="1 0 0"/>
+      <joint name="rootz" type="slide" axis="0 0 1"/>
+      <joint name="rooty" type="hinge" axis="0 1 0"/>
+      <geom type="capsule" fromto="-0.2 0 0 0.2 0 0" size="0.05"/>
+      <body name="leg" pos="0 0 -0.05">
+        <joint name="hip" type="hinge" axis="0 1 0" range="-1 1"/>
+        <geom type="capsule" fromto="0 0 0 0 0 -0.5" size="0.04"/>
+        <body name="shin" pos="0 0 -0.5">
+          <joint name="knee" type="slide" axis="0 0 1" range="-0.1 0.1"/>
+          <geom type="sphere" size="0.05"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator><motor joint="hip" gear="10" ctrlrange="-1 1"/><position joint="knee" kp="100"/></actuator>
+</mujoco>
+"""
+
+
+def test_planar_root_default_is_the_per_joint_loop():
+    """Without the flag a planar model's layout and features are as before: rootx's position is an input, the scalar features
+    bit for bit those of a loop over the joints."""
+    m, rng = mujoco.MjModel.from_xml_string(PLANAR), np.random.default_rng(12)
+    lay = MjcfLayout.from_model(m)
+    assert lay.planar == () and lay == MjcfLayout.from_model(m, planar_root=False)
+    wm = MjcfWorldModel(lay, hidden=(8,))
+    qpos, qvel = (torch.tensor(x, dtype=torch.float32) for x in random_state(m, 5, rng))
+    parts = []
+    for qa, da, wrap in lay.scalars:
+        q = qpos[..., qa : qa + 1]
+        parts += [torch.sin(q), torch.cos(q)] if wrap else [q]
+        parts.append(qvel[..., da : da + 1])
+    want = torch.cat(parts, -1)
+    got = wm.inputs(qpos, qvel, torch.zeros(5, m.nu))
+    assert torch.equal(got[..., : want.shape[-1]], want) and wm.n_in == want.shape[-1] + 2 * m.nu
+
+
+def test_planar_root_leaves_the_horizontal_slide_out():
+    m, rng = mujoco.MjModel.from_xml_string(PLANAR), np.random.default_rng(13)
+    lay, flat = MjcfLayout.from_model(m), MjcfLayout.from_model(m, planar_root=True)
+    assert flat.planar == (0,) and flat.scalars == lay.scalars  # rootx; rootz moves the root up and down, the knee is driven
+    wm, wp = MjcfWorldModel(lay, hidden=(8,)), MjcfWorldModel(flat, hidden=(8,))
+    assert wp.n_in == wm.n_in - 1
+    qpos, qvel = (torch.tensor(x) for x in random_state(m, 6, rng))
+    ctrl = torch.tensor(rng.standard_normal((6, m.nu)))
+    full, mine = wm.double().inputs(qpos, qvel, ctrl), wp.double().inputs(qpos, qvel, ctrl)
+    assert torch.equal(mine, full[..., 1:])  # rootx's position is the first feature; everything else bit for bit
+    moved = qpos.clone()
+    moved[:, 0] += 37.5
+    assert torch.equal(wp.inputs(moved, qvel, ctrl), mine)  # invariant to shifting rootx
+    assert not torch.equal(wm.inputs(moved, qvel, ctrl), full)
+    walker = PLANAR.replace('<joint name="rootx" type="slide" axis="1 0 0"/>\n      <joint name="rootz" type="slide" axis="0 0 1"/>',
+                            '<joint name="rootz" type="slide" axis="0 0 1"/>\n      <joint name="rootx" type="slide" axis="1 0 0"/>')  # fmt: skip
+    assert MjcfLayout.from_model(mujoco.MjModel.from_xml_string(walker), planar_root=True).planar == (1,)  # dm_control's walker's order
+
+
+@pytest.mark.parametrize(
+    "xml, match",
+    [
+        (XML, "free anchor"),
+        (PLANAR.replace('type="slide" axis="1 0 0"/>', 'type="slide" axis="1 0 0" range="-1 1"/>'), "limited"),
+        (PLANAR.replace('<motor joint="hip"', '<motor joint="rootx"'), "driven"),
+        (PLANAR.replace('<joint name="rootx" type="slide" axis="1 0 0"/>', ""), "no horizontal slide"),
+        (PLANAR.replace('<joint name="rooty" type="hinge" axis="0 1 0"/>', "").replace('<joint name="rootx"',
+                        '<joint name="rooty" type="hinge" axis="0 1 0"/><joint name="rootx"'), "turned by a hinge"),  # fmt: skip
+    ],
+)
+def test_planar_root_refuses(xml, match):
+    with pytest.raises(ValueError, match=match):
+        MjcfLayout.from_model(mujoco.MjModel.from_xml_string(xml), planar_root=True)
+
+
+def test_fit_mjcf_planar_root_round_trip(tmp_path):
+    from types import SimpleNamespace
+
+    from ndm_gym.wmbench.fit_mjcf import main
+    from ndm_gym.wmbench.speed_mjcf import load_ndm
+
+    m, rng = mujoco.MjModel.from_xml_string(PLANAR), np.random.default_rng(14)
+    xml = tmp_path / "planar.xml"
+    xml.write_text(PLANAR)
+    d = mujoco.MjData(m)
+    qpos, qvel, ctrl = np.zeros((21, 4, m.nq)), np.zeros((21, 4, m.nv)), rng.uniform(-1, 1, (20, 4, m.nu))
+    for i in range(4):
+        mujoco.mj_resetData(m, d)
+        d.qpos[0] = 3.0 * i  # the root anywhere along x
+        for t in range(20):
+            qpos[t, i], qvel[t, i] = d.qpos, d.qvel
+            d.ctrl[:] = ctrl[t, i]
+            mujoco.mj_step(m, d)
+        qpos[20, i], qvel[20, i] = d.qpos, d.qvel
+    np.savez(tmp_path / "r.npz", qpos=qpos, qvel=qvel, ctrl=ctrl, reset=np.zeros((20, 4), bool), dt=m.opt.timestep)
+    main(["--model", str(xml), "--train", str(tmp_path / "r.npz"), "--test", f"held={tmp_path / 'r.npz'}", "--steps", "4", "--batch", "8",
+          "--window", "2", "--hidden", "16", "--amp", "none", "--eval_k", "1", "--eval_windows", "8", "--planar_root",
+          "--out", str(tmp_path / "fit.csv"), "--save", str(tmp_path / "wm.pt")])  # fmt: skip
+    wm = load_ndm(MjcfLayout.from_model(m), SimpleNamespace(ckpt=str(tmp_path / "wm.pt")), "cpu")
+    assert wm.lay.planar == (0,) and wm.n_in == MjcfWorldModel(MjcfLayout.from_model(m), hidden=(8,)).n_in - 1
+    saved = torch.load(tmp_path / "wm.pt", map_location="cpu", weights_only=False)["state"]
+    assert all(torch.equal(v, saved[k]) for k, v in wm.state_dict().items())
+
+
+def test_fit_mjcf_substeps_is_the_models_timestep_times_n(tmp_path):
+    """--substeps N: the step learned is N model timesteps (a dm_control control step), the recordings' dt checked against it."""
+    from types import SimpleNamespace
+
+    from ndm_gym.wmbench.fit_mjcf import main
+    from ndm_gym.wmbench.speed_mjcf import load_ndm
+
+    m, rng = model(), np.random.default_rng(15)
+    xml = tmp_path / "scene.xml"
+    xml.write_text(XML)
+    qpos, qvel, ctrl = simulate(m, 4, 10, rng)
+    np.savez(tmp_path / "r.npz", qpos=qpos.numpy(), qvel=qvel.numpy(), ctrl=ctrl.numpy(), reset=np.zeros((10, 4), bool), dt=2 * m.opt.timestep)
+    args = ["--model", str(xml), "--train", str(tmp_path / "r.npz"), "--test", f"held={tmp_path / 'r.npz'}", "--steps", "2", "--batch", "4",
+            "--window", "2", "--hidden", "8", "--amp", "none", "--eval_k", "1", "--eval_windows", "4", "--out", str(tmp_path / "f.csv")]  # fmt: skip
+    main(args + ["--substeps", "2", "--save", str(tmp_path / "wm.pt")])
+    assert load_ndm(MjcfLayout.from_model(m), SimpleNamespace(ckpt=str(tmp_path / "wm.pt")), "cpu").lay.dt == 2 * m.opt.timestep
+    with pytest.raises(ValueError, match="the world model's are"):
+        main(args + ["--substeps", "3"])
+    with pytest.raises(ValueError, match="not both"):
+        main(args + ["--substeps", "2", "--dt", "0.02"])

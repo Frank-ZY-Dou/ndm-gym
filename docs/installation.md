@@ -43,9 +43,11 @@ Optional dependencies:
 
 | extra | installs | for |
 |---|---|---|
+| `ndm_gym[hand]` | MuJoCo-Warp, Warp and MuJoCo at the tested versions | the hand-object task's simulator (`train_hand`) |
 | `ndm_gym[render]` | Pillow, matplotlib | the rendering and plotting scripts in `tools/` (they also call ffmpeg) |
 | `ndm_gym[sim]` | MuJoCo-Warp, Warp, Newton and MuJoCo at the versions of Isaac Lab's lock | the simulator's packages that pip can install; Isaac Lab 3 itself comes from `scripts/setup.sh` |
-| `ndm_gym[test]` | pytest, Pillow, PyYAML | `tests/` |
+| `ndm_gym[contacts]` | SciPy | the MuJoCo world models' contact inputs (`fit_mjcf --contacts`) |
+| `ndm_gym[test]` | pytest, Pillow, PyYAML, SciPy | `tests/` |
 | `ndm_gym[docs]` | MkDocs Material, mkdocstrings | this site: `mkdocs serve` |
 | `ndm_gym[dev]` | test, docs, ruff, pre-commit | development |
 
@@ -53,7 +55,9 @@ Fused GPU kernels (`ndm_gym.kernels`, the world models' inference copies) need a
 PyTorch's CUDA builds for Linux.
 
 RoboKit's examples run in RoboKit's own environment, with torch and this library importable
-(`pip install -e . --no-deps` there; see [RoboKit's planner on a world model](tasks/robokit.md#setup)).
+(`pip install -e . --no-deps` there; see [RoboKit's planner on a world model](tasks/robokit.md#setup)). mbrl-lib's
+controller runs in an environment of its own too, which `benchmarks/mbrl_lib/scripts/setup_env.sh` builds from its
+pinned versions ([mbrl-lib's planner on a world model](tasks/mbrl.md#setup)).
 
 Without the simulator, the modules and commands that need it raise `ndm_gym.sim.SimulatorNotInstalled`:
 

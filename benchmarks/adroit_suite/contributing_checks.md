@@ -1,4 +1,6 @@
-# Contribution review checklist
+# Historical v1 contribution review checklist
+
+This record describes the original single-seed candidate, not the current three-seed follow-up. Current repair evidence and progress are in [v2](v2/README.md).
 
 This record covers Pen, Hammer and Relocate only. Door's independent PR and three-seed report are unchanged. The requested scope is one fresh full-budget seed per new task and method; a three-seed study remains separate work.
 

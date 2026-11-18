@@ -11,13 +11,20 @@ from PIL import Image, ImageDraw, ImageFont
 FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # (label, second line, speedup, baseline): 4,096 parallel worlds in every row (benchmarks/ndm_speed/results.md, benchmarks/g1_boxing/results.md)
 # but RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds, the median over five planner
-# seeds, with the simulation step's speedup in the second line (benchmarks/robokit_ndm/results.md)
+# seeds, with the simulation step's speedup in the second line (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
+# are the planner's time per executed step on the acceleration and on the increment model (timed in one session), the median
+# over three planner seeds, with the step's speedup at 4,096 worlds in the second line and the model in a third, after a
+# newline (benchmarks/mbrl_lib/results.md)
 ROWS = [
     ("NDM simulation", "HDMI's scenes", 45.3, "vs Isaac Lab + MuJoCo-Warp"),
     ("NDM simulation", "two G1s", 27.0, "vs Isaac Lab + MuJoCo-Warp"),
     ("RoboKit planning", "G1 carrying; step 9.8×", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 climbing; step 3.8×", 1.8, "vs MuJoCo Warp"),
     ("RoboKit planning", "Go2 jumping; step 2.3×", 2.1, "vs MuJoCo Warp"),
+    ("mbrl-lib planning", "cart-pole; step 17.7×\nacceleration model", 20.8, "vs MuJoCo Warp"),
+    ("mbrl-lib planning", "cart-pole; step 17.7×\nincrement model", 20.9, "vs MuJoCo Warp"),
+    ("mbrl-lib planning", "pusher; step 8.7×\nacceleration model", 9.9, "vs MuJoCo Warp"),
+    ("mbrl-lib planning", "pusher; step 8.8×\nincrement model", 10.5, "vs MuJoCo Warp"),
     ("G1 forward step", "", 6.2, "vs NablaEngine"),
     ("G1 forward step", "", 23.2, "vs MuJoCo Warp"),
     ("G1 forward step", "", 98.0, "vs MJX"),
@@ -36,7 +43,7 @@ def font(name, size):
 
 
 def fmt(x):
-    return f"{x:.1f}×" if x < 10 else f"{x:.0f}×"
+    return f"{x:.1f}×" if x < 30 else f"{x:.0f}×"
 
 
 def main(out):
@@ -50,10 +57,10 @@ def main(out):
         y = PAD + i * ROW_H
         if i:
             d.line((PAD, y, W - PAD, y), fill=LINE, width=S)
-        ty = y + (22 if l2 else 33) * S
-        d.text((PAD + 14 * S, ty), l1, font=lab, fill=INK)
-        if l2:
-            d.text((PAD + 14 * S, ty + 21 * S), l2, font=lab, fill=INK)
+        lines = [l1, *l2.split("\n")] if l2 else [l1]  # the label, and one or two lines below it
+        ty = y + (33, 22, 12)[len(lines) - 1] * S
+        for k, text in enumerate(lines):
+            d.text((PAD + 14 * S, ty + 21 * k * S), text, font=lab, fill=INK)
         by = y + 33 * S
         d.rounded_rectangle((x0, by + 16 * S, x1, by + 22 * S), radius=3 * S, fill=GREY)  # the baseline: full width
         bw, bh = max(round((x1 - x0) / speed), 12 * S), 8 * S

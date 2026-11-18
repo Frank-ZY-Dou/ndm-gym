@@ -1,0 +1,58 @@
+{
+  "status": "fixed_before_formal_runs",
+  "tasks": [
+    "hammer",
+    "pen",
+    "relocate"
+  ],
+  "methods": [
+    "supertrack",
+    "supermimic"
+  ],
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "fresh_runs": 18,
+  "iterations": 20000,
+  "worlds": 2048,
+  "source": "Frozen development-source based on upstream 7e1c17d plus opt-in nail precision; no v1 runs pooled",
+  "training_rewards": "Hammer SuperMimic nail_std .001 selected by development seed3065; SuperTrack retains its original .01 width. Pen and Relocate retain default task rewards for both methods. All other named Hand accurate adaptation settings unchanged.",
+  "evaluation": {
+    "seed": 20261117,
+    "episodes": 256,
+    "checkpoint": "final only",
+    "reporting": "Fixed v1 widths, tracking return and normalized error, native final/ever/frame success, all failures retained; float32 deployed prior on identical starts"
+  },
+  "gate": "Run all six Hammer seeds first. Proceed to Pen/Relocate only if every Hammer SuperMimic seed is finite, native final success >= .95 and fixed normalized tracking RMSE <= .1. A failed gate triggers diagnosis, not omission or relabelling of runs.",
+  "selection": "Preview per task: final run with lowest fixed tracking RMSE among all six method/seed combinations; fixed nominal episode0, full nonterminal window. Report mean and sample SD of three seed means separately from preview selection.",
+  "resources": {
+    "gpus": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "physical_cores_per_job": 8,
+    "ram_gib_per_job": 16,
+    "vram_gib_per_job": 16,
+    "disk_gib_per_job": 40,
+    "max_job_seconds": 18000,
+    "root": "/data/YifanKang/adroit-suite-v2",
+    "shared_memory_custom_kernel_bytes": 0,
+    "warmup": "Exact method/task/width/full network and batches before each full run",
+    "headroom": "Leave GPUs6-7 and 40 physical cores available; CPU checks occupy four separate cores only; admission and continuous resource monitoring; no unrelated jobs stopped"
+  },
+  "publication": "Separate PR only after completed results, checks and previews; never update Door PR3. It remains an independent prerequisite if unmerged.",
+  "reward_widths": {
+    "pen/supertrack": 0.01,
+    "pen/supermimic": 0.01,
+    "hammer/supertrack": 0.01,
+    "hammer/supermimic": 0.001,
+    "relocate/supertrack": 0.01,
+    "relocate/supermimic": 0.01
+  }
+}

@@ -20,9 +20,9 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def check_run(train, evaluation, *, task, method, manifest, checkpoint_sha):
+def check_run(train, evaluation, *, task, method, manifest, checkpoint_sha, seed=0):
     p = train["protocol"]
-    if train["status"] != "trained_full_budget" or p["task"] != task or p["method"] != method or p["seed"] != 0:
+    if train["status"] != "trained_full_budget" or p["task"] != task or p["method"] != method or p["seed"] != seed:
         raise ValueError("Incomplete or mismatched formal run")
     if p["source_sha256"] != manifest["source_sha256"]:
         raise ValueError("Training source differs from frozen manifest")
@@ -32,7 +32,7 @@ def check_run(train, evaluation, *, task, method, manifest, checkpoint_sha):
     if (evaluation["task"], evaluation["method"], evaluation["seed"], evaluation["iteration"], evaluation["prior"]) != (
         task,
         method,
-        0,
+        seed,
         20000,
         False,
     ):

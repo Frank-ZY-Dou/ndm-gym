@@ -7,8 +7,8 @@ character's state and the muscles' fatigue; the RigidFormer has a token per body
 
 ```bash
 bash tools/download_musclevae.sh && python tools/convert_musclevae.py   # character, muscles, motions (not redistributed)
-python -m ndm_gym.train_muscles --algo supertrack --log_dir logs/mus_st
-python -m ndm_gym.train_muscles --algo supermimic --log_dir logs/mus_sm
+python -m ndm_gym.train_muscles --config muscles-supertrack --log_dir logs/mus_st   # the RigidFormer: muscles-supertrack-rf
+python -m ndm_gym.train_muscles --config muscles-supermimic --log_dir logs/mus_sm   # the RigidFormer: muscles-supermimic-rf
 
 # MuscleVAE's released policy in this simulator, rendered in their look (bash tools/download_mass_meshes.sh for the bones)
 bash tools/download_musclevae_pretrained.sh

@@ -92,8 +92,8 @@ def restore(checkpoint, algo, collector, ring, protocol):
     return checkpoint['iteration'], checkpoint['timing']
 
 
-def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics):
-    p = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics, extra_help=None):
+    p = argparse.ArgumentParser(description=__doc__, epilog=extra_help)
     for name in ('model', 'reference', 'native-library', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--method', choices=tuple(k for k in DOOR_METHODS if k != 'residual'), required=True)
@@ -127,6 +127,7 @@ def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_c
                     input_hashes={key: fingerprint(getattr(a, key)) for key in ('model', 'reference', 'native_library')})
     if reference_cls is not DoorReference:
         protocol['task'] = reference.metadata['task']
+        protocol['task_reward'] = asdict(algo.task.cfg)
         protocol['reference_schema'] = reference.metadata['kind']
     source = Path(__file__).parent
     protocol['source_sha256'] = hashlib.sha256(b''.join(

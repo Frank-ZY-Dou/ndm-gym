@@ -103,7 +103,9 @@ nav:
       - Hand-object tracking: tasks/hand.md
       - Adroit Door tracking: tasks/adroit_door.md
       - Adroit manipulation suite: tasks/adroit_suite.md
+      - Quadrotor trajectory tracking: tasks/quadrotor.md
       - RoboKit's planner on a world model: tasks/robokit.md
+      - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:
       - algorithms.md
       - SuperTrack: algorithms/supertrack.md
@@ -115,12 +117,17 @@ nav:
       - world_models.md
       - RigidFormer backbone: rigidformer_backbone.md
   - Results:
+      - Leaderboard: leaderboard.md
+      - Coverage: coverage.md
       - LAFAN1: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/results.md
       - Ablations: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_lafan1_tracking/ablations.md
       - Two G1s: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/g1_boxing/results.md
+      - Hands: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/xhand_tracking/results.md
       - Muscles: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/musclevae/results.md
+      - Quadrotor: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/quadrotor_racing_tracking/results.md
       - NDMs as simulators: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/ndm_speed/results.md
       - RoboKit: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md
+      - mbrl-lib: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/mbrl_lib/results.md
   - API reference:
       - api/index.md
       - Core: api/core.md
@@ -130,5 +137,6 @@ nav:
       - World models: api/worldmodels.md
       - Policies: api/policies.md
       - Algorithms: api/algos.md
+      - Commands: api/commands.md
       - World-model benchmark: api/wmbench.md
       - Simulator: api/sim.md

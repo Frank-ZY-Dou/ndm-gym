@@ -19,22 +19,35 @@ MIT license in LICENSE.
 
 docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
 (https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk and DexYCB,
-with the retargets drawn over it, those datasets' object meshes and the XHand's model. They are for non-commercial
+with the retargets drawn over it, those datasets' object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand. They are for non-commercial
 illustration only and are not covered by the MIT license in LICENSE.
 
 docs/media/robokit holds renders of RoboKit's (https://github.com/openrobokit/robokit; MIT) G1 box carrying, G1 climbing and
 Go2 jumping examples, planned on this library's world model and executed in MuJoCo Warp, with Unitree's G1 model
 (BSD-3-Clause) and MuJoCo Menagerie's Unitree Go2 (https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause). The G1
 climbing render tracks a climbing motion capture of OmniRetarget / Holosoma (https://github.com/amazon-far/holosoma;
-Apache-2.0). The G1 box carrying render (g1_carry.webp) tracks a clip of OMOMO (https://github.com/lijiaman/omomo_release, whose
-data terms are not stated) that RoboKit retargets; it is for non-commercial illustration only and is not covered by the MIT
-license in LICENSE.
+Apache-2.0). The G1 box carrying render (g1_carry.webp, and its tile in grid.webp) tracks a clip of OMOMO
+(https://github.com/lijiaman/omomo_release, whose data terms are not stated) that RoboKit retargets; it is for non-commercial
+illustration only and is not covered by the MIT license in LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in three rows. In the first, the LAFAN1 tracking tile is under the terms of
-the docs/media/final paragraph, the Two G1s tile under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles tile under those of
-docs/media/musclevae and the Hand-object tile under those of docs/media/hand. The second row's four tiles are renders of
-HDMI's tasks, under the terms of the docs/media/hoi paragraph, and the third row's are the docs/media/robokit renders, with
-the sources and terms that paragraph names. No part of it is covered by the MIT license in LICENSE.
+docs/media/quadrotor holds renders (and a grid of them) of policies tracking flights of Race Against the Machine
+(https://github.com/tii-racing/drone-racing-dataset; Bosello et al., IEEE Robotics and Automation Letters 2024, and its piloted
+race-track flights of release v3.0.0, Bosello et al., IEEE Robotics and Automation Letters 2026; the dataset by TII Racing, CC BY
+4.0), the flown path and the gates drawn from its motion capture, with a model of its drone written in this repository from the
+paper's specification. They are shared under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch/mbrl-lib; MIT, Copyright (c) Facebook, Inc. and
+its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans
+made on this library's world model, drawn with this library's lights, floor and sky.
+
+docs/media/teaser.webp puts 6 s of such renders in eight blocks. The LAFAN1 tracking block is under the terms of the
+docs/media/final paragraph, the Two G1s block under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles block under those of
+docs/media/musclevae and the Hand-object block under those of docs/media/hand. The Human-object interaction block, renders
+of four of HDMI's tasks, is under the terms of the docs/media/hoi paragraph, and the RoboKit planning block, the
+docs/media/robokit renders of its three examples (G1 box carrying tracks the OMOMO clip), under the sources and terms that
+paragraph names. The Racing quadrotor block holds docs/media/quadrotor renders, under CC BY 4.0 as that paragraph says. The
+mbrl-lib planning block holds the docs/media/mbrl renders; no other part of it is covered by the MIT
+license in LICENSE.
 
 The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
 clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit

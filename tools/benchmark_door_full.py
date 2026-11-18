@@ -22,15 +22,15 @@ from ndm_gym.train_door_full import collect, make_algorithm, save
 from ndm_gym.train_door_online import optimizer_counts, updates
 
 
-def main(*, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics):
-    p = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics, extra_help=None):
+    p = argparse.ArgumentParser(description=__doc__, epilog=extra_help)
     for name in ('model', 'reference', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--native-library', type=Path, help='Omit to time Python stepping as the control')
     p.add_argument('--workers', type=int, default=8)
     p.add_argument('--steps', type=int, default=10)
     p.add_argument('--method', choices=('supertrack', 'supermimic'), required=True)
-    a = p.parse_args()
+    a = p.parse_args(argv)
     if a.steps < 1 or not 1 <= a.workers <= 2048:
         p.error('Invalid timing budget')
     import mujoco

@@ -14,6 +14,21 @@ The git submodule `third_party/supermimic` ([zita-ch/supermimic_vibed](https://g
 [RoboKit](https://github.com/openrobokit/robokit) (MIT, Copyright (c) 2025 OpenRoboKit). This library's RoboKit modules
 (`ndm_gym/sim/robokit_*.py`, `ndm_gym/wmbench/*robokit*.py`) patch RoboKit's classes at run time and copy none of its files.
 
+## mbrl-lib, Gymnasium and dm_control
+
+This library's mbrl-lib modules (`ndm_gym/sim/mbrl_*.py`, `ndm_gym/wmbench/*mbrl*.py`) run
+[mbrl-lib](https://github.com/facebookresearch/mbrl-lib) at `3f93ccc` from its own checkout and patch its classes at run
+time; they copy none of its files. `ndm_gym/sim/mbrl_envs.py` ports a few functions to batched torch:
+
+- pets_reacher's end-effector position (`mbrl/env/pets_reacher.py`, `get_EE_pos`) and the rewards and terminations of
+  mbrl-lib's environments: mbrl-lib, MIT License, Copyright (c) Facebook, Inc. and its affiliates (text below);
+- the rewards and healthy checks of Hopper, Walker2d and InvertedPendulum:
+  [Gymnasium](https://github.com/Farama-Foundation/Gymnasium) 0.26.3, MIT
+  License, Copyright (c) 2016 OpenAI and Copyright (c) 2022 Farama Foundation;
+- `rewards.tolerance` and the cart-pole, cheetah, cup, finger and walker rewards of the DeepMind Control Suite:
+  [dm_control](https://github.com/google-deepmind/dm_control), Copyright 2017 The dm_control Authors, under the Apache
+  License 2.0 ([text](https://www.apache.org/licenses/LICENSE-2.0)).
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from
@@ -57,6 +72,32 @@ SOFTWARE.
 MIT License
 
 Copyright (c) 2026 Huy-Quang-Dao
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## mbrl-lib
+
+```
+MIT License
+
+Copyright (c) Facebook, Inc. and its affiliates.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
