@@ -9,7 +9,8 @@ world to its own demonstration's last frame. A rollout succeeds if it never term
 the demonstration's last frame. The errors are means over the frames of the rollouts that do not terminate;
 ``object_final_mm`` the tracked objects' mean error at the last frame; ``policy`` and ``reference_targets`` at the top level are
 the means over the demonstrations. One rollout from each demonstration's unperturbed first frame is saved as
-``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets). ``--demo``:
+``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets; the step of its
+termination, -1 without one, and whether it succeeds: tools/render_robomimic.py renders it). ``--demo``:
 other demonstrations of the task than the checkpoint's (held-out ones, of its scene).
 """
 
@@ -123,9 +124,11 @@ def main():
             if key in runs:
                 m[key] = summarize(runs[key], torch.nonzero(group == d).squeeze(-1), start)
         n = end - start
+        _, _, failed, until, success = runs["nominal"]
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
                  reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
-                 control_dt=CONTROL_DT)  # fmt: skip
+                 control_dt=CONTROL_DT, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,
+                 success=bool(success[d]))  # fmt: skip
         metrics["per_demo"][str(name)] = m
     for key in ("policy", "reference_targets"):  # the means over the demonstrations
         rows = [m[key] for m in metrics["per_demo"].values() if key in m]
