@@ -4,10 +4,11 @@
 
 Per demonstration: ``--num_envs`` rollouts of the whole demonstration from perturbed starts (training's reset noise on the
 arms' joints at its first frame), without exploration noise and without resets, and as many with the reference's joint positions
-as the servos' targets in the policy's place (zero actions, open loop). A rollout succeeds if it never terminates and meets
-robosuite's success test at the demonstration's last frame. The errors are means over the frames of the rollouts that do not
-terminate; ``object_final_mm`` the tracked objects' mean error at the last frame; ``policy`` and ``reference_targets`` at the
-top level are the means over the demonstrations. One rollout from each demonstration's unperturbed first frame is saved as
+as the servos' targets in the policy's place (zero actions, open loop); every demonstration's rollouts run side by side, each
+world to its own demonstration's last frame. A rollout succeeds if it never terminates and meets robosuite's success test at
+the demonstration's last frame. The errors are means over the frames of the rollouts that do not terminate;
+``object_final_mm`` the tracked objects' mean error at the last frame; ``policy`` and ``reference_targets`` at the top level are
+the means over the demonstrations. One rollout from each demonstration's unperturbed first frame is saved as
 ``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets). ``--demo``:
 other demonstrations of the task than the checkpoint's (held-out ones, of its scene).
 """
@@ -20,38 +21,42 @@ import math
 import os
 
 
-def rollout(sim, algo, task, start: int, policy: bool = True):
-    """Every world from the frame ``start`` (perturbed as the simulator's noise says) to its demonstration's last, under the
-    policy or, without it, under the reference's targets. Returns the states (T, N, D), whether each world terminated, the step of its
-    termination (T - 1 without one) and whether it succeeds at the end."""
+def rollout(sim, algo, task, starts, policy: bool = True):
+    """Every world from its frame of ``starts`` (N,) (perturbed as the simulator's noise says) to its demonstration's last,
+    under the policy or, without it, under the reference's targets; the worlds whose demonstration ends earlier hold its last
+    frame until the longest ends. Returns the states (T, N, D), each world's number of steps, whether it terminated within
+    them, the step of its termination (its number of steps without one) and whether it succeeds at its last frame."""
     import torch
 
     from ndm_gym.tasks.robomimic_tracking import unflatten_state
 
     every = torch.ones(sim.N, dtype=torch.bool, device=sim.device)
-    sim.reset(every, torch.full((sim.N,), start, dtype=torch.long, device=sim.device))
-    steps = int(task.ref.end[start]) - start
+    sim.reset(every, starts)
+    lens = task.ref.end[starts] - starts
     a_prev = torch.zeros(sim.N, task.nu, device=sim.device)
     failed = torch.zeros(sim.N, dtype=torch.bool, device=sim.device)
-    until = torch.full((sim.N,), steps, dtype=torch.long, device=sim.device)
+    until = lens.clone()
     states = [sim.state()]
-    for t in range(steps):
+    for t in range(int(lens.max())):
         f = sim.f.clone()
         a = algo.act(unflatten_state(states[-1], task.nq), a_prev, f) if policy else a_prev
         s1, term, _ = sim.step(task.setpoint(a, f), reset=False)
+        term = term & (t < lens)  # (a world past its last frame holds it)
         until = torch.where(term & ~failed, t + 1, until)
         failed |= term
         a_prev = a
         states.append(s1)
-    success = task.success(unflatten_state(states[-1], task.nq)) & ~failed
-    return torch.stack(states), failed, until, success
+    states = torch.stack(states)
+    last = states[lens, torch.arange(sim.N, device=sim.device)]
+    success = task.success(unflatten_state(last, task.nq)) & ~failed
+    return states, lens, failed, until, success
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--out", type=str, required=True)
-    parser.add_argument("--num_envs", type=int, default=256, help="rollouts from perturbed starts")
+    parser.add_argument("--num_envs", type=int, default=256, help="rollouts per demonstration from perturbed starts")
     parser.add_argument("--demo", type=int, nargs="+", default=None, help="the demonstrations to evaluate on (default: the checkpoint's)")
     parser.add_argument("--data_dir", type=str, default=None, help="the demonstrations' directory (default: the checkpoint's)")
     parser.add_argument("--seed", type=int, default=0)
@@ -75,22 +80,27 @@ def main():
     ck = torch.load(args.ckpt, map_location=dev, weights_only=False)
     targs = argparse.Namespace(**ck["args"])
     demo = targs.demo if args.demo is None else args.demo
+    demos = demo if isinstance(demo, list) else [demo]
     if args.solver_iterations < 0:  # the physics trained in
         solver = (getattr(targs, "solver_iterations", 0), getattr(targs, "solver_ls_iterations", 0))
     else:
         solver = (args.solver_iterations, args.solver_ls_iterations if args.solver_iterations else 0)
-    model, task, (nconmax, njmax) = build(targs.task, demo, args.data_dir or targs.data_dir, dev, solver_iterations=solver[0],
+    model, task, (nconmax, njmax) = build(targs.task, demos, args.data_dir or targs.data_dir, dev, solver_iterations=solver[0],
                                           solver_ls_iterations=solver[1])  # fmt: skip
     targs.update_graphs = False  # (plain optimizers: none is stepped here)
-    sim = RobomimicSim(model, task, args.num_envs, dev, nconmax=nconmax, njmax=njmax)
-    nominal = RobomimicSim(model, task, 1, dev, nconmax=nconmax, njmax=njmax, joint_noise=0.0)
+    ref, D = task.ref, len(demos)
+    firsts = torch.unique(ref.start)  # each demonstration's first frame, in --demo's order
+    sim = RobomimicSim(model, task, args.num_envs * D, dev, nconmax=nconmax, njmax=njmax)
+    nominal = RobomimicSim(model, task, D, dev, nconmax=nconmax, njmax=njmax, joint_noise=0.0)
     algo = ROBOMIMIC_ALGOS[targs.algo](targs, model, task, dev, substeps=sim.substeps)
     algo.wm.load_state_dict(ck["wm"]), algo.pi.load_state_dict(ck["pi"])
 
-    def summarize(states, failed, until, success, start: int) -> dict:
-        frames = torch.arange(start, start + states.shape[0], device=dev).unsqueeze(-1)
-        S = unflatten_state(states, task.nq)
-        e = task.errors(S, task.fk(S[0]), frames)
+    def summarize(out, worlds: torch.Tensor, start: int) -> dict:
+        """The metrics of the ``worlds`` (all of one demonstration, starting at ``start``) of a rollout's output."""
+        states, lens, failed, until, success = (x[:, worlds] if x.dim() > 1 else x[worlds] for x in out)
+        n = int(lens[0])
+        S = unflatten_state(states[: n + 1], task.nq)
+        e = task.errors(S, task.fk(S[0]), torch.arange(start, start + n + 1, device=dev).unsqueeze(-1))
         ok = ~failed
         mean = lambda x: float(x[:, ok].mean()) if bool(ok.any()) else math.nan  # noqa: E731
         return {"success_rate": float(success.float().mean()), "terminated": float(failed.float().mean()),
@@ -99,21 +109,23 @@ def main():
                 "keypoint_mm": 1000 * mean(e["keypoint"].mean(-1)), "joint_rad": mean(e["joint"]), "finger_mm": 1000 * mean(e["finger"])}  # fmt: skip
 
     os.makedirs(args.out, exist_ok=True)
-    demos = demo if isinstance(demo, list) else [demo]
     metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": CONTROL_DT,
                "num_envs": args.num_envs, "solver_iterations": [int(model.opt.iterations), int(model.opt.ls_iterations)], "per_demo": {}}  # fmt: skip
-    ref = task.ref
-    for name, start in zip(demos, torch.unique(ref.start).tolist(), strict=True):
-        end, m = int(ref.end[start]), {}
-        m["frames"] = end - start + 1
-        states, *rest = rollout(nominal, algo, task, start)
-        m["nominal"] = summarize(states, *rest, start)
-        open_loop = rollout(nominal, algo, task, start, policy=False)[0]
-        np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=states[:, 0].cpu().numpy(), reference_qpos=ref.qpos[start : end + 1].cpu().numpy(),
-                 reference_targets_state=open_loop[:, 0].cpu().numpy(), nq=task.nq, control_dt=CONTROL_DT)  # fmt: skip
-        m["policy"] = summarize(*rollout(sim, algo, task, start), start)
-        if not args.no_reference:
-            m["reference_targets"] = summarize(*rollout(sim, algo, task, start, policy=False), start)
+    group = torch.arange(args.num_envs * D, device=dev) // args.num_envs  # each world's demonstration
+    runs = {"nominal": rollout(nominal, algo, task, firsts), "policy": rollout(sim, algo, task, firsts[group])}
+    open_loop = rollout(nominal, algo, task, firsts, policy=False)[0]
+    if not args.no_reference:
+        runs["reference_targets"] = rollout(sim, algo, task, firsts[group], policy=False)
+    for d, (name, start) in enumerate(zip(demos, firsts.tolist(), strict=True)):
+        end = int(ref.end[start])
+        m = {"frames": end - start + 1, "nominal": summarize(runs["nominal"], torch.tensor([d], device=dev), start)}
+        for key in ("policy", "reference_targets"):
+            if key in runs:
+                m[key] = summarize(runs[key], torch.nonzero(group == d).squeeze(-1), start)
+        n = end - start
+        np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
+                 reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
+                 control_dt=CONTROL_DT)  # fmt: skip
         metrics["per_demo"][str(name)] = m
     for key in ("policy", "reference_targets"):  # the means over the demonstrations
         rows = [m[key] for m in metrics["per_demo"].values() if key in m]
