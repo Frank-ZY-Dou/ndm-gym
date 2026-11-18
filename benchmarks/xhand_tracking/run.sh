@@ -1,14 +1,14 @@
 #!/bin/bash
-# Train, evaluate and render one task and seed of the hand tracking benchmark (tasks.json), with the hand of ROBOT
-# (one of the task list's robots; default xhand).
-# Usage: [ROBOT=<robot>] benchmarks/xhand_tracking/run.sh <task id> <seed> [data dir] [log dir] [extra ndm_gym.train_hand arguments]
+# Train, evaluate and render one task and seed of a hand tracking task list (TASKS; default tasks.json), with the hand
+# of ROBOT (one of the task list's robots; default xhand).
+# Usage: [ROBOT=<robot>] [TASKS=<task list>] benchmarks/xhand_tracking/run.sh <task id> <seed> [data dir] [log dir] [extra ndm_gym.train_hand arguments]
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 TASK=$1 SEED=$2 DATA=${3:-data/spider} LOGS=${4:-logs/xhand_tracking}
-PY=${PY:-python} ROBOT=${ROBOT:-xhand}
-CLIP=$DATA/$($PY - "$TASK" "$ROBOT" <<'PYEOF'
+PY=${PY:-python} ROBOT=${ROBOT:-xhand} TASKS=${TASKS:-benchmarks/xhand_tracking/tasks.json}
+CLIP=$DATA/$($PY - "$TASK" "$ROBOT" "$TASKS" <<'PYEOF'
 import json, sys
-suite = json.load(open("benchmarks/xhand_tracking/tasks.json"))
+suite = json.load(open(sys.argv[3]))
 if sys.argv[2] not in suite["robots"]:
     sys.exit(f"ROBOT must be one of {suite['robots']}")
 t = next(t for t in suite["tasks"] if t["id"] == sys.argv[1])
