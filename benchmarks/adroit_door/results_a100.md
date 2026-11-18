@@ -67,3 +67,45 @@ another GPU not included.
 
 These times are the contributed implementation's, not engineered: its updates take about 0.24 s (SuperTrack) and
 0.33 s (SuperMimic) an iteration and its CPU physics about 0.1 s.
+
+## The world model as the simulator
+
+The world models of the most accurate configurations with the door and latch started open (SuperTrack
+`--residual-scale 0.2`, SuperMimic the contributed configuration; `--door-latch-offset 0.3`), training seed 0, iteration
+20,000, step the door in place of its physics. A world-step is one 10 ms control step; every world starts from a state of
+the model's evaluation rollouts, holding that frame's control. One A100 40GB SXM4 with no other process on any GPU and
+eight physical cores; the median of five timed runs. MuJoCo on the CPU runs the contributed native collector on the eight
+cores, MuJoCo Warp runs in float32 with its five physics steps as one CUDA graph, and the world model runs in fp32 as
+trained (one CUDA graph) and as a bf16 inference copy (compiled, one CUDA graph).
+
+World-steps per second, SuperTrack's model (an acceleration MLP, 3 × 1,024) / SuperMimic's (an increment MLP, 3 × 1,024);
+MuJoCo Warp measured beside each, the CPU once:
+
+| worlds | MuJoCo, CPU (8 cores) | MuJoCo Warp | NDM fp32 | NDM bf16 | bf16 / MuJoCo Warp | bf16 / CPU |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1,024 | 15,733 | 119,676 / 122,565 | 1.89 M / 1.99 M | 9.29 M / 11.95 M | 77.6 / 97.5 | 590 / 760 |
+| 4,096 | 16,955 | 274,901 / 284,868 | 2.87 M / 2.84 M | 20.85 M / 21.55 M | 75.8 / 75.7 | 1,230 / 1,271 |
+| 16,384 | 16,962 | 396,344 / 422,031 | 3.41 M / 3.38 M | 27.62 M / 27.14 M | 69.7 / 64.3 | 1,629 / 1,600 |
+| 65,536 | - | 440,309 / 470,236 | 3.50 M / 3.45 M | 28.47 M / 27.99 M | 64.6 / 59.5 | - |
+
+Where the bf16 step's time goes (kernel time, SuperTrack / SuperMimic): at 16,384 worlds matrix products 0.386 / 0.404 ms
+and the rest (normalization, the integration or the increment, casts) 0.217 / 0.206 ms, 64 % / 66 % products; at 1,024
+worlds 60 % / 57 %, at 65,536 worlds 64 % / 66 %. The step is mostly the network's products; about a third stays in
+compiled elementwise kernels. The fp32 step takes 4.8 ms at 16,384 worlds, eight times the bf16 one.
+
+Open-loop error, fp32 → bf16: 2,816 starts (every 16th frame of the 256 evaluation episodes) under the recorded controls;
+the hand's joint RMSE and the door's and the latch's absolute error in rad, the root's translation error in mm.
+
+| steps | SuperTrack hand | door | latch | root | SuperMimic hand | door | latch | root |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.00624 → 0.00626 | 0.00071 → 0.00072 | 0.00216 → 0.00218 | 0.325 → 0.328 | 0.00679 → 0.00678 | 0.00095 → 0.00095 | 0.00201 → 0.00202 | 0.310 → 0.307 |
+| 8 | 0.02411 → 0.02416 | 0.00315 → 0.00313 | 0.00875 → 0.00873 | 1.943 → 1.951 | 0.02849 → 0.02853 | 0.00320 → 0.00323 | 0.00920 → 0.00921 | 1.272 → 1.294 |
+| 16 | 0.03174 → 0.03244 | 0.00585 → 0.00578 | 0.01540 → 0.01534 | 3.182 → 3.206 | 0.03900 → 0.03911 | 0.00551 → 0.00554 | 0.01824 → 0.01817 | 2.151 → 2.204 |
+| 32 | 0.05667 → 0.05756 | 0.01181 → 0.01168 | 0.02578 → 0.02585 | 4.583 → 4.554 | 0.04942 → 0.04933 | 0.00966 → 0.00975 | 0.02504 → 0.02529 | 3.214 → 3.165 |
+| 64 | 0.07044 → 0.07144 | 0.02322 → 0.02350 | 0.04232 → 0.04288 | 7.373 → 7.541 | 0.05618 → 0.05563 | 0.00991 → 0.00985 | 0.03528 → 0.03548 | 4.261 → 4.220 |
+
+The bf16 copies stay within 2.5 % of fp32 (the largest difference: SuperMimic's root at 16 steps; SuperTrack's, 2.3 %, its
+root at 64 steps).
+
+MuJoCo Warp without no-slip and without multi-contact or native CCD, which it refuses with this model's margins; the CPU
+collector and the world models' training data keep no-slip.

@@ -55,7 +55,7 @@ MuJoCo model.
 ## ⚡ Speed
 
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators, and of RoboKit's and mbrl-lib's planning on them" width="760"/></p>
-<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds; the planners' rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
+<p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds (the Adroit door's: 16,384); the planners' rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
 <details>
 <summary>The chart's rows</summary>
@@ -63,9 +63,13 @@ MuJoCo model.
 | rows | measure | GPU |
 |---|---|---|
 | NDM simulation: HDMI's scenes ([details](benchmarks/ndm_speed/results.md)), two G1s ([details](benchmarks/g1_boxing/results.md#speed)); the RigidFormer on HDMI's scenes | time per step at 4,096 worlds (two G1s: 4,096 pairs), the MLP world model's bf16 copy and the RigidFormer with fused Triton blocks; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
+| NDM simulation: the Adroit door ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 16,384 worlds: SuperTrack's acceleration model as a bf16 copy, 27.62 M against MuJoCo Warp's 0.396 M (69.7x); SuperMimic's increment model 27.14 M against 0.422 M (64.3x); 1,629x / 1,600x the contributed native MuJoCo collector on eight CPU cores (16,962 world-steps/s). The bf16 step is 64 % / 66 % matrix products, the rest compiled elementwise kernels | one A100 40GB SXM4 |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | SuperTrack's MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
 | RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds, the median over five planner seeds; the simulation step's speedup beside the task | one A100 40GB SXM4 |
 | mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
+
+The Adroit door: MuJoCo Warp without no-slip and without multi-contact or native CCD, which it refuses with this model's
+margins; the CPU collector and the world models' training data keep no-slip.
 
 </details>
 
@@ -100,6 +104,7 @@ the position within 20 mm. Commands: [Recommended settings](#-recommended-settin
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s) ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
+| **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | **27.62 M world-steps/s**, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed collector on eight CPU cores; SuperMimic's increment model 27.14 M, 64.3x ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | ⏱ throughput, not engineered | the MLP world model (acceleration parameterization) as a bf16 copy | **16.28 M env-steps/s**, 45.9x the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5x ([results](benchmarks/ndm_speed/results.md)) |
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
@@ -877,6 +882,15 @@ the starts against 65 % (SuperMimic's: 99.5 %, return 7.927; SuperTrack with `--
   0.2 instead of 0.1 opened 99.8 % of the starts in its screen instead of 87.3 %.
 - **Why the time is not engineered:** the contributed trainer collects with MuJoCo on the CPU (about 0.1 s an iteration)
   and learns in eager fp32 (0.24-0.33 s); the times are that implementation's.
+- **Why the world model simulates faster:** one batched network step stands in for five physics steps with contacts; in
+  bf16 it is mostly matrix products (64 % / 66 % of the step for SuperTrack's / SuperMimic's model), the rest compiled
+  elementwise kernels. At 16,384 worlds on one A100 40GB SXM4, SuperTrack's acceleration model steps 27.62 M world-steps
+  per second, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed native collector on eight CPU cores (16,962);
+  SuperMimic's increment model 27.14 M (64.3x against 0.422 M; 1,600x). The bf16 copies stay within 2.5 % of fp32 in
+  open-loop error (the door at 16 steps: 0.0058 / 0.0055 rad)
+  ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)). MuJoCo Warp runs without no-slip
+  and without multi-contact or native CCD, which it refuses with this model's margins; the CPU collector and the world
+  models' training data keep no-slip.
 
 All seeds and the screen of each algorithm's settings: [results](benchmarks/adroit_door/results_a100.md); the
 contributed study on an L40S: [full results](benchmarks/adroit_door/full_results_v1.md); preparation and commands:
