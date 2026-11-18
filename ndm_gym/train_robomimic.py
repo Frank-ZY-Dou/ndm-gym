@@ -1,4 +1,4 @@
-"""Training loop for manipulation demonstration tracking on one robomimic demonstration (docs/tasks/robomimic.md): collect in
+"""Training loop for manipulation demonstration tracking on robomimic demonstrations of one scene (docs/tasks/robomimic.md): collect in
 RobomimicSim -> fit the world model on replay windows -> policy update through imagined rollouts
 (ndm_gym.algos.robomimic_algos). The loop, the schedule and the systems options are hand-object tracking's (ndm_gym.train_hand,
 ndm_gym.algos.hand_fast) with the defaults of ROBOMIMIC_DEFAULTS; ndm_gym.train's arguments that this training does not
@@ -41,9 +41,14 @@ def parse_args(argv: list[str] | None = None):
     add_train_args(parser)
     add_hand_fast_args(parser)  # the systems options
     parser.add_argument("--task", type=str, required=True, choices=["lift", "square", "transport"])
-    parser.add_argument("--demo", type=int, default=0, help="the demonstration (demo_<i>) of the task's file")
+    parser.add_argument("--demo", type=int, nargs="+", default=[0],
+                        help="the demonstrations (demo_<i>) of the task's file; several: one policy on all of them, whose scenes must be one")  # fmt: skip
     parser.add_argument("--data_dir", type=str, default=os.path.join(REPO, "data", "robomimic"), help="tools/download_robomimic.py's output")
     parser.add_argument("--episode", type=int, default=200, help="an episode's longest length in control steps (20 Hz)")
+    parser.add_argument("--solver_iterations", type=int, default=0,
+                        help="the constraint solver's iterations, in place of the scene's (robosuite's: MuJoCo's 100); a GPU step lasts as "
+                        "long as its slowest world, so a cap shortens the collection (changes the physics; 0: the scene's)")  # fmt: skip
+    parser.add_argument("--solver_ls_iterations", type=int, default=0, help="the solver's line-search iterations with --solver_iterations (0: the scene's)")
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each tracked quantity weighs, per unit of error, the task's reward weight over its "
                         "kernel's width")  # fmt: skip
@@ -77,6 +82,8 @@ def parse_args(argv: list[str] | None = None):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that robomimic training does not implement")
     if args.episode < 2:
         parser.error("--episode >= 2")
+    if args.solver_iterations < 0 or args.solver_ls_iterations < 0 or (args.solver_ls_iterations and not args.solver_iterations):
+        parser.error("--solver_iterations >= 0, --solver_ls_iterations >= 0 and only with --solver_iterations")
     try:
         check_hand_fast_args(args)
     except ValueError as e:
@@ -84,21 +91,32 @@ def parse_args(argv: list[str] | None = None):
     return args
 
 
-def build(task_name: str, demo: int, data_dir: str, device: str, reward_std_scale: float = 1.0):
-    """The scene with its servos, its layout for the task and the task of a demonstration, and MuJoCo-Warp's per-world contact
-    and constraint capacities for it."""
+def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: float = 1.0, solver_iterations: int = 0,
+          solver_ls_iterations: int = 0):  # fmt: skip
+    """The scene with its servos, its layout for the task and the task of demonstrations (``demo``: an index or a list of them,
+    whose recorded scenes must be the same: robosuite draws Lift's cube and Transport's hammer per demonstration), and
+    MuJoCo-Warp's per-world contact and constraint capacities for them. ``solver_iterations``, ``solver_ls_iterations``: the constraint solver's caps (0: the
+    scene's)."""
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo, split_states
     from ndm_gym.robots.robomimic_scenes import RobomimicScene, contact_capacity, load_scene
     from ndm_gym.tasks.robomimic_tracking import RewardCfg, RobomimicTask, SceneKinematics, build_reference
     from ndm_gym.worldmodels.mjcf import MjcfLayout
 
-    d = load_demo(demo_path(data_dir, task_name), demo)
+    demos = [load_demo(demo_path(data_dir, task_name), i) for i in ([demo] if isinstance(demo, int) else demo)]
+    if any(x["xml"] != demos[0]["xml"] for x in demos[1:]):
+        raise ValueError(f"{task_name}: the demonstrations {demo} were recorded in different scenes (one policy on several needs one scene)")
+    d = demos[0]
     model = load_scene(d["xml"], os.path.abspath(os.path.join(data_dir, "robosuite_assets")))
+    if solver_iterations:
+        model.opt.iterations = solver_iterations
+        model.opt.ls_iterations = solver_ls_iterations or model.opt.ls_iterations
     scene = RobomimicScene.from_model(model, task_name)
-    qpos, qvel = split_states(d["states"], model.nq, model.nv)
+    states = [split_states(x["states"], model.nq, model.nv) for x in demos]
     kin = SceneKinematics(MjcfLayout.from_model(model), scene.keypoint_bodies).to(device)
-    task = RobomimicTask(scene, kin, build_reference(qpos, qvel, scene, kin, device), RewardCfg().scaled(reward_std_scale))
-    return model, task, contact_capacity(model, qpos, qvel)
+    ref = build_reference([q for q, _ in states], [v for _, v in states], scene, kin, device)
+    task = RobomimicTask(scene, kin, ref, RewardCfg().scaled(reward_std_scale))
+    caps = [contact_capacity(model, q, v) for q, v in states]
+    return model, task, (max(c[0] for c in caps), max(c[1] for c in caps))
 
 
 def main():
@@ -137,7 +155,8 @@ def main():
     with open(os.path.join(args.log_dir, "args.json"), "w") as f:
         json.dump(vars(args), f, indent=2)
 
-    model, task, (nconmax, njmax) = build(args.task, args.demo, args.data_dir, dev, args.reward_std_scale)
+    model, task, (nconmax, njmax) = build(args.task, args.demo, args.data_dir, dev, args.reward_std_scale, args.solver_iterations,
+                                          args.solver_ls_iterations)  # fmt: skip
     sim = RobomimicSim(model, task, args.num_envs, dev, nconmax=nconmax, njmax=njmax, episode=args.episode, stagger=True)
     algo = ROBOMIMIC_ALGOS[args.algo](args, model, task, dev, substeps=sim.substeps)
     average = hand_fast.PolicyAverage(algo.pi, args.pi_ema) if args.pi_ema > 0 else None  # --pi_ema

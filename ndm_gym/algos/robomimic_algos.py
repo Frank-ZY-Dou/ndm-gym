@@ -310,7 +310,7 @@ def collect_step(sim, task, algo, buffer, args, a_prev: torch.Tensor, ep_len: to
     ep_len.add_(1)
     acc["r"] += task.reward(S1, fk1, f1, a, a_prev).sum() / task.max_step_reward
     acc["object_err"] += task.errors(S1, fk1, f1)["object_pos"].mean(-1).sum()
-    acc["success"] += (task.success(S1) & (f1 == task.ref.frames - 1)).sum()  # at the reference's last frame
+    acc["success"] += (task.success(S1) & (f1 == task.ref.end[f1])).sum()  # at its demonstration's last frame
     acc["steps"] += sim.N
     acc["done"] += done.sum()
     acc["term"] += term.sum()

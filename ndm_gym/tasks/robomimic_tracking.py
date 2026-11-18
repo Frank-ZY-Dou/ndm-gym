@@ -7,8 +7,9 @@ goal, reward and termination are analytic functions of the state, its forward ki
 ``SceneKinematics``, computed once per state) and the reference frame, shared by the simulator's transitions and the world
 model's imagined rollouts. The arms stand on fixed bases, so world-frame positions are what the policy reads.
 
-The reference is a demonstration at its control rate (20 Hz) with its last state held for ``HOLD`` frames (at rest): a step
-taken at frame ``f`` tracks frame ``f + 1``, and imagined rollouts stay on the last frame once they reach it. The action is an
+The reference is one or more demonstrations of one scene at their control rate (20 Hz), one after the other, each with its
+last state held for ``HOLD`` frames (at rest): a step taken at frame ``f`` tracks frame ``f + 1`` of the same demonstration,
+and imagined rollouts stay on a demonstration's last frame once they reach it (``RobomimicReference.end``). The action is an
 offset of each actuator's position target about the reference's joint position at the next frame.
 """
 
@@ -57,8 +58,9 @@ class SceneKinematics(nn.Module):
 
 
 class RobomimicReference(NamedTuple):
-    """A demonstration at the control rate, (T, ...) per field: the state, the actuators' joint positions (the servos'
-    reference targets), the keypoints, and the tracked objects' positions and rotations."""
+    """Demonstrations at the control rate, (T, ...) per field: the state, the actuators' joint positions (the servos'
+    reference targets), the keypoints, the tracked objects' positions and rotations, and the first and the last frame of each
+    frame's demonstration."""
 
     qpos: torch.Tensor
     qvel: torch.Tensor
@@ -66,13 +68,19 @@ class RobomimicReference(NamedTuple):
     keypoints: torch.Tensor
     obj_p: torch.Tensor
     obj_R: torch.Tensor
+    start: torch.Tensor
+    end: torch.Tensor
 
     @property
     def frames(self) -> int:
         return self.qpos.shape[0]
 
     def next_frame(self, f: torch.Tensor) -> torch.Tensor:
-        return (f + 1).clamp(max=self.frames - 1)
+        return torch.minimum(f + 1, self.end[f])
+
+    def ahead(self, f: torch.Tensor, k: int) -> torch.Tensor:
+        """The frame ``k`` steps after ``f``, at most its demonstration's last."""
+        return torch.minimum(f + k, self.end[f])
 
 
 def object_poses(scene: RobomimicScene, qpos: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -83,16 +91,24 @@ def object_poses(scene: RobomimicScene, qpos: torch.Tensor) -> tuple[torch.Tenso
 
 
 def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, device: str) -> RobomimicReference:
-    """The reference of a demonstration's states (T, nq), (T, nv), its last state held for ``HOLD`` frames at rest."""
-    qpos = torch.as_tensor(qpos, dtype=torch.float32)
-    qvel = torch.as_tensor(qvel, dtype=torch.float32)
-    qpos = torch.cat((qpos, qpos[-1:].expand(HOLD, -1)), 0).to(device)
-    qvel = torch.cat((qvel, torch.zeros(HOLD, qvel.shape[-1])), 0).to(device)
+    """The reference of demonstrations' states, (T, nq) and (T, nv) arrays or lists of them (one per demonstration, one after
+    the other), each demonstration's last state held for ``HOLD`` frames at rest."""
+    if not isinstance(qpos, (list, tuple)):
+        qpos, qvel = [qpos], [qvel]
+    qs, vs, starts, ends, offset = [], [], [], [], 0
+    for q, v in zip(qpos, qvel, strict=True):
+        q, v = torch.as_tensor(q, dtype=torch.float32), torch.as_tensor(v, dtype=torch.float32)
+        qs.append(torch.cat((q, q[-1:].expand(HOLD, -1)), 0))
+        vs.append(torch.cat((v, torch.zeros(HOLD, v.shape[-1])), 0))
+        n = len(qs[-1])
+        starts.append(torch.full((n,), offset)), ends.append(torch.full((n,), offset + n - 1))
+        offset += n
+    qpos, qvel = torch.cat(qs).to(device), torch.cat(vs).to(device)
     ctrl = qpos[:, list(scene.act_q)]
     obj_p, obj_R = object_poses(scene, qpos)
     with torch.no_grad():
         keypoints = kin(qpos)
-    return RobomimicReference(qpos, qvel, ctrl, keypoints, obj_p, obj_R)
+    return RobomimicReference(qpos, qvel, ctrl, keypoints, obj_p, obj_R, torch.cat(starts).to(device), torch.cat(ends).to(device))
 
 
 @dataclass
@@ -168,7 +184,7 @@ class RobomimicTask:
         Rt, q, ref = R.transpose(-1, -2), qpos[..., self.act_q], self.ref
         parts = []
         for k in range(1, goal_frames + 1):
-            g = (f + k).clamp(max=ref.frames - 1)
+            g = ref.ahead(f, k)
             parts += [ref.ctrl[g] - q, (ref.obj_p[g] - p).flatten(-2), mat_to_6d(Rt @ ref.obj_R[g]).flatten(-2), (ref.keypoints[g] - fk).flatten(-2)]
         return torch.cat(parts, -1)
 

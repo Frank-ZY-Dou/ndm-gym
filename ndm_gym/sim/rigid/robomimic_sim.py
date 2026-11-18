@@ -2,11 +2,11 @@
 
 The scene is stepped by MuJoCo-Warp directly, as the hand's is (sim.rigid.hand_sim). A control step (20 Hz) holds the
 actuators' position targets for the physics steps of CONTROL_DT (25 at robosuite's 2 ms), replayed as one CUDA graph, then
-advances every world's reference frame. An episode starts at a random frame of the demonstration (but its last), at the
+advances every world's reference frame. An episode starts at a random frame of the reference (but a demonstration's last), at the
 reference's state there with noise on the arms' joints (the objects and the grippers as recorded, so that a grasp stays a
-grasp), and ends at a termination (tasks.robomimic_tracking), after ``episode`` control steps or at the reference's last
-frame; ended worlds are reset in the same step. With ``stagger``, the first episodes end early, after random numbers of steps.
-``reset(mask, frame)`` starts worlds at given frames with the reference's end as the episodes' (evaluation).
+grasp), and ends at a termination (tasks.robomimic_tracking), after ``episode`` control steps or at its demonstration's
+last frame; ended worlds are reset in the same step. With ``stagger``, the first episodes end early, after random numbers of steps.
+``reset(mask, frame)`` starts worlds at given frames with their demonstrations' ends as the episodes' (evaluation).
 
 ``step_nosync`` (train_robomimic --no_sync, --collect_graph) is ``step`` without host synchronization, as HandSim's: on Warp's
 stream (``torch_stream``) or inside a capture with the physics as kernels (``physics``); the ended worlds are reset by mask
@@ -38,10 +38,14 @@ class RobomimicSim:
         if (model.nq, model.nv, model.nu) != (task.nq, task.nv, task.nu):
             raise ValueError("the model is not the task's scene")
         self.arm_q = task.act_q[task.arm]  # the arms' joints, which the starts perturb
+        # the frames an episode may start at: every frame but a demonstration's last
+        self.starts = torch.nonzero(torch.arange(self.ref.frames, device=device) < self.ref.end).squeeze(-1)
         wp.config.quiet = True
         wp.init()
         with wp.ScopedDevice(device):
             self.model = mjw.put_model(model)
+            if hasattr(mjw, "OverflowType") and hasattr(self.model.opt, "warn_overflow"):  # a capped line search ends early by design
+                self.model.opt.warn_overflow &= ~int(mjw.OverflowType.LS_ITERATIONS)
             self.data = mjw.put_data(model, mujoco.MjData(model), nworld=num_envs, nconmax=nconmax, njmax=njmax)
             with wp.ScopedCapture() as capture:  # a control step's physics as one CUDA graph
                 for _ in range(self.substeps):
@@ -53,21 +57,21 @@ class RobomimicSim:
         self.last = torch.zeros(num_envs, dtype=torch.long, device=device)  # the frame each world's episode ends at
         self.reset(torch.ones(num_envs, dtype=torch.bool, device=device))
         if stagger:  # the first episodes end after random numbers of steps, so that the worlds do not reset in step
-            self.last = torch.minimum(self.f + torch.randint(1, episode + 1, (num_envs,), device=device), self.last)
+            self.last = torch.minimum(self.f + torch.randint(1, episode + 1, (num_envs,), device=device), self.ref.end[self.f])
 
     def _starts(self, n: int, frame: torch.Tensor | None = None):
-        """``n`` episode starts: the frames (random ones but the last, or ``frame``), the reference's state there with noise on
-        the arms' joints (qpos, qvel), the servos' targets there, and the frames the episodes end at."""
-        ref, end = self.ref, self.ref.frames - 1
-        f = torch.randint(0, end, (n,), device=self.device) if frame is None else frame
+        """``n`` episode starts: the frames (random ones but a demonstration's last, or ``frame``), the reference's state there
+        with noise on the arms' joints (qpos, qvel), the servos' targets there, and the frames the episodes end at."""
+        ref = self.ref
+        f = self.starts[torch.randint(0, self.starts.shape[0], (n,), device=self.device)] if frame is None else frame
         qpos = ref.qpos[f].clone()
         qpos[:, self.arm_q] += self.joint_noise * torch.randn(n, len(self.arm_q), device=self.device)
-        last = torch.clamp(f + self.episode, max=end) if frame is None else torch.full_like(f, end)
+        last = torch.minimum(f + self.episode, ref.end[f]) if frame is None else ref.end[f]
         return f, qpos, ref.qvel[f], ref.ctrl[f], last
 
     @torch.no_grad()
     def reset(self, mask: torch.Tensor, frame: torch.Tensor | None = None):
-        """Start the worlds of ``mask`` (``frame``: at these frames, one per world of the mask, to the reference's end)."""
+        """Start the worlds of ``mask`` (``frame``: at these frames, one per world of the mask, to their demonstrations' ends)."""
         n = int(mask.sum())
         if n == 0:
             return

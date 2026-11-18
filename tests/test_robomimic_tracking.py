@@ -159,6 +159,28 @@ def test_kinematics_and_the_task_at_the_reference(setup):
     assert task.termination((moved, ref.qvel), task.fk(moved), f).all()
 
 
+def test_several_demonstrations(setup):
+    """Demonstrations one after the other: each holds its last state, a step and the goal's frames stay within their own
+    demonstration, and the task is at its best on each."""
+    model, scene, qpos, qvel, kin, _ = setup
+    q2, v2 = demonstration(model, 12, 3)
+    ref = build_reference([qpos, q2], [qvel, v2], scene, kin, "cpu")
+    n1, n2 = len(qpos) + HOLD, len(q2) + HOLD
+    assert ref.frames == n1 + n2 and torch.equal(torch.unique(ref.start), torch.tensor([0, n1]))
+    assert torch.equal(ref.end[:n1], torch.full((n1,), n1 - 1)) and torch.equal(ref.end[n1:], torch.full((n2,), n1 + n2 - 1))
+    f = torch.tensor([0, n1 - 2, n1 - 1, n1, n1 + n2 - 1])
+    assert ref.next_frame(f).tolist() == [1, n1 - 1, n1 - 1, n1 + 1, n1 + n2 - 1]
+    assert ref.ahead(f, 5).tolist() == [5, n1 - 1, n1 - 1, n1 + 5, n1 + n2 - 1]
+    assert torch.allclose(ref.qpos[n1 : n1 + len(q2)], torch.tensor(q2, dtype=torch.float32))
+    task = RobomimicTask(scene, kin, ref)
+    S, g = (ref.qpos, ref.qvel), torch.arange(ref.frames)
+    fk, a0 = task.fk(ref.qpos), torch.zeros(ref.frames, task.nu)
+    assert torch.allclose(task.reward(S, fk, g, a0, a0), torch.full((ref.frames,), task.max_step_reward), atol=1e-6)
+    goal = task.goal(S, fk, g, 3).reshape(ref.frames, 3, task.goal_frame_dim)
+    assert torch.equal(goal[n1 - 1, 0], goal[n1 - 1, 2])  # at the first demonstration's last frame, every goal frame is that frame
+    assert not torch.equal(goal[len(qpos) - 5, 0], goal[len(qpos) - 5, 2])  # (before the held last state)
+
+
 @pytest.mark.parametrize("kind", ["accel", "increment"])
 def test_world_model_steps_a_control_step(setup, kind):
     """The world model's step is of one control step: its targets are the control step's, and a model fit to them (the
@@ -222,15 +244,17 @@ def test_training_arguments():
     assert names == set(SUPPORTED) | set(UNSUPPORTED) and not set(SUPPORTED) & set(UNSUPPORTED)
     assert set(ROBOMIMIC_DEFAULTS) <= set(SUPPORTED)
     args = parse_args(["--task", "square"])
-    assert all(getattr(args, name) == value for name, value in ROBOMIMIC_DEFAULTS.items()) and (args.task, args.demo, args.episode) == ("square", 0, 200)
+    assert all(getattr(args, name) == value for name, value in ROBOMIMIC_DEFAULTS.items()) and (args.task, args.demo, args.episode) == ("square", [0], 200)
     for refused in (["--algo", "blinkmimic"], ["--wm_backbone", "rigidformer"], ["--st_fail_w", "2"], ["--st_task_weights"],
-                    ["--algo", "supertrack", "--gamma", "0.995"], ["--episode", "1"], ["--no_sync"], ["--collect_graph"]):  # fmt: skip
+                    ["--algo", "supertrack", "--gamma", "0.995"], ["--episode", "1"], ["--no_sync"], ["--collect_graph"],
+                    ["--solver_ls_iterations", "10"], ["--solver_iterations", "-1"]):  # fmt: skip
         with pytest.raises(SystemExit):
             parse_args(["--task", "lift"] + refused)
     with pytest.raises(SystemExit):
         parse_args(["--task", "stack"])
-    st = parse_args(["--task", "lift", "--algo", "supertrack", "--st_fail_w", "2", "--st_task_weights", "--demo", "7"])
-    assert (st.algo, st.st_fail_w, st.st_task_weights, st.demo) == ("supertrack", 2, True, 7)
+    st = parse_args(["--task", "lift", "--algo", "supertrack", "--st_fail_w", "2", "--st_task_weights", "--demo", "7", "--solver_iterations", "20",
+                     "--solver_ls_iterations", "10"])  # fmt: skip
+    assert (st.algo, st.st_fail_w, st.st_task_weights, st.demo, st.solver_iterations, st.solver_ls_iterations) == ("supertrack", 2, True, [7], 20, 10)
 
 
 CUDA = "cuda:0"
