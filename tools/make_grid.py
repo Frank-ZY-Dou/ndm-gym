@@ -41,9 +41,11 @@ The README's grids, from the repository's root:
       (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
-marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the racing quadrotor's a row of its own, four of its renders (the
-piloted race track's from its grid) in cells as wide as the blocks above:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 --tile 256 192 --seconds 6 --quality 60 --max_mb 11 \\
+marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third row in cells as wide as the blocks above: three
+tools/render_quadrotor.py renders (the chase camera at 1.25 m, --lens_clear 0.4, 6 s windows of the flights at 20 fps,
+1050 x 776; their marks left out) and the Adroit door's rollout of SuperTrack with the door and latch started open
+(--door-latch-offset 0.3, seed 0, the nominal start), drawn brighter at half speed:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 2 --tile 256 192 --seconds 6 --quality 60 --max_mb 11 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -57,9 +59,8 @@ piloted race track's from its grid) in cells as wide as the blocks above:
       --block "RoboKit planning" 2 2 --clip $M/robokit/g1_carry.webp 0.2 375 100 343 520 2 1 \\
       --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
       --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4 \\
-      --block "Racing quadrotor" 4 1 525 388 --clip $M/quadrotor/race_track.webp 0 60 0 731 540 \\
-      --clip $M/quadrotor/grid.webp 3 770 392 244 180 --clip $M/quadrotor/ellipse.webp 0 60 0 731 540 \\
-      --clip $M/quadrotor/lemniscate.webp 0 60 0 731 540
+      --block "Racing quadrotor" 3 1 522 388 --clip race_track.mp4 0 44 0 961 714 --clip race_track_piloted.mp4 0 44 0 961 714 \\
+      --clip ellipse.mp4 0 44 0 961 714 --block "Adroit door" 1 1 522 388 --clip door.mkv 0 0 2 525 390
 """
 
 import argparse
