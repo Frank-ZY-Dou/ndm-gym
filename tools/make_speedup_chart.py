@@ -13,8 +13,9 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # but the Adroit door's, at 16,384 worlds, SuperTrack's model as a bf16 copy against MuJoCo Warp (benchmarks/adroit_door/results_a100.md),
 # the racing quadrotor's: the fused step in fp32 with the network as one kernel, on the acceleration and on the increment model, against MuJoCo Warp
 # (benchmarks/quadrotor_racing_tracking/results_a100.md),
-# RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds, the median over twenty plans
-# (planner seeds 0-9, twice), with the simulation step's speedup in the second line (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
+# RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds on the acceleration and on the
+# increment model, the median over twenty plans (planner seeds 0-9, twice), with the simulation step's speedup in the second
+# line and the model in a third (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
 # are the planner's time per executed step on the acceleration and on the increment model (timed in one session), the median
 # over three planner seeds, with the step's speedup at 4,096 worlds in the second line and the model in a third, after a
 # newline (benchmarks/mbrl_lib/results.md)
@@ -24,9 +25,12 @@ ROWS = [
     ("NDM simulation", "Adroit door", 69.7, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nacceleration model", 22.8, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nincrement model", 22.6, "vs MuJoCo Warp"),
-    ("RoboKit planning", "G1 carrying; step 10.0×", 3.0, "vs MuJoCo Warp"),
-    ("RoboKit planning", "G1 climbing; step 3.8×", 1.8, "vs MuJoCo Warp"),
-    ("RoboKit planning", "Go2 jumping; step 3.2×", 2.1, "vs MuJoCo Warp"),
+    ("RoboKit planning", "G1 carrying; step 10.0×\nacceleration model", 3.0, "vs MuJoCo Warp"),
+    ("RoboKit planning", "G1 carrying; step 8.7×\nincrement model", 3.0, "vs MuJoCo Warp"),
+    ("RoboKit planning", "G1 climbing; step 3.8×\nacceleration model", 1.8, "vs MuJoCo Warp"),
+    ("RoboKit planning", "G1 climbing; step 4.8×\nincrement model", 1.8, "vs MuJoCo Warp"),
+    ("RoboKit planning", "Go2 jumping; step 3.2×\nacceleration model", 2.1, "vs MuJoCo Warp"),
+    ("RoboKit planning", "Go2 jumping; step 3.3×\nincrement model", 2.2, "vs MuJoCo Warp"),
     ("mbrl-lib planning", "cart-pole; step 17.7×\nacceleration model", 20.8, "vs MuJoCo Warp"),
     ("mbrl-lib planning", "cart-pole; step 17.7×\nincrement model", 20.9, "vs MuJoCo Warp"),
     ("mbrl-lib planning", "pusher; step 8.7×\nacceleration model", 9.9, "vs MuJoCo Warp"),

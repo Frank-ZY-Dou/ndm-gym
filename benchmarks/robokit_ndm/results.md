@@ -2,9 +2,10 @@
 
 [RoboKit](https://github.com/openrobokit/robokit) (at `736f112`, MIT) plans with sampling MPC over batched MuJoCo Warp
 rollouts. Here its planner's simulator is this library's world model of the same MuJoCo model
-(`ndm_gym/worldmodels/mjcf.py`); every plan still executes on MuJoCo Warp. On G1 box carrying, G1 climbing and Go2 jumping,
-planning is 1.8-3.0 times faster, and every plan passes the example's own check: 20 of 20 per task, as MuJoCo Warp's planner
-passes 10 of 10. One A100 40GB SXM4 with nothing else running.
+(`ndm_gym/worldmodels/mjcf.py`), SuperTrack's acceleration model or SuperMimic's increment model, fitted alike; every plan
+still executes on MuJoCo Warp. On G1 box carrying, G1 climbing and Go2 jumping, planning is 1.8-3.0 times faster on either,
+and every plan passes the example's own check: 20 of 20 per task for each, as MuJoCo Warp's planner passes 10 of 10. One
+A100 40GB SXM4 with nothing else running.
 
 <table>
 <tr>
@@ -16,13 +17,13 @@ passes 10 of 10. One A100 40GB SXM4 with nothing else running.
 <p align="center"><sub>The world model in the planner, MuJoCo Warp executing; planner seed 0; in translucent blue, the example's reference and Go2's foot targets.<br>G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="../../NOTICE">see NOTICE</a>).</sub></p>
 
 <p align="center"><img src="../../docs/media/robokit_speedups.webp" alt="The world model's simulation step and planning time against MuJoCo Warp's" width="760"/></p>
-<p align="center"><sub>Bars: time against MuJoCo Warp's at full width, at the planner's own worlds. Made by <code>tools/make_robokit_chart.py --tasks g1_carry g1_climb go2_jump --no_outcomes</code> from <code>benchmarks/robokit_ndm/summarize.py</code>'s json.</sub></p>
+<p align="center"><sub>Bars: SuperTrack's model's time against MuJoCo Warp's at full width, at the planner's own worlds (SuperMimic's in the table). Made by <code>tools/make_robokit_chart.py --tasks g1_carry g1_climb go2_jump --no_outcomes</code> from <code>benchmarks/robokit_ndm/summarize.py</code>'s json.</sub></p>
 
-| Task | Simulation step, MuJoCo Warp → world model | Planning time, MuJoCo Warp → world model | Plans that pass, world model (MuJoCo Warp) |
+| Task | Simulation step, MuJoCo Warp → SuperTrack's / SuperMimic's model | Planning time, MuJoCo Warp → SuperTrack's / SuperMimic's model | Plans that pass, SuperTrack's / SuperMimic's model (MuJoCo Warp) |
 |---|---|---|---|
-| G1 box carrying | 1.81 → 0.18 ms (10.0x), 2,047 worlds | 9 → 3 s (3.0x) | 20 of 20 (10 of 10) |
-| G1 climbing | 1.32 → 0.35 ms (3.8x), 2,047 worlds | 7 → 4 s (1.8x) | 20 of 20 (10 of 10) |
-| Go2 jumping | 0.69 → 0.21 ms (3.2x), 1,228 worlds | 65 → 31 s (2.1x) | 20 of 20 (10 of 10) |
+| G1 box carrying | 1.81 → 0.18 / 0.21 ms (10.0x / 8.7x), 2,047 worlds | 9 → 3 / 3 s (3.0x / 3.0x) | 20 of 20 / 20 of 20 (10 of 10) |
+| G1 climbing | 1.32 → 0.35 / 0.28 ms (3.8x / 4.8x), 2,047 worlds | 7 → 4 / 4 s (1.8x / 1.8x) | 20 of 20 / 20 of 20 (10 of 10) |
+| Go2 jumping | 0.69 / 0.68 → 0.21 / 0.21 ms (3.2x / 3.3x), 1,228 worlds | 65 → 31 / 30 s (2.1x / 2.2x) | 20 of 20 / 20 of 20 (10 of 10) |
 
 ## Setup
 
@@ -30,18 +31,20 @@ passes 10 of 10. One A100 40GB SXM4 with nothing else running.
 - **Data.** Each example ran with its simulator recording 64 of its rollout worlds and the executed trajectory: G1 climbing and
   Go2 jumping three times (planner seeds 0-2), seeds 0 and 1 training; G1 box carrying nine times (seeds 0-8), all but seed 2
   training. Seed 2 is held out.
-- **World model.** SuperTrack's acceleration model with LayerNorm: an MLP of 3 x 1024, 20,000 updates of 512 windows of 8
-  steps, one fit per task (fit seed 0). Its held-out error at the planning horizon (40 steps of 20 ms for the G1s, 20 for
-  Go2), in units of one true step's spread (`fit_mjcf`'s `norm`): 0.555 (G1 box carrying), 0.531 (G1 climbing), 0.0283
-  (Go2 jumping).
+- **World models.** SuperTrack's acceleration model and SuperMimic's increment model, each with LayerNorm: an MLP of
+  3 x 1024, 20,000 updates of 512 windows of 8 steps on the same recordings, one fit per task and model (fit seed 0). Their
+  held-out errors at the planning horizon (40 steps of 20 ms for the G1s, 20 for Go2), in units of one true step's spread
+  (`fit_mjcf`'s `norm`), SuperTrack's / SuperMimic's: 0.555 / 0.643 (G1 box carrying), 0.531 / 0.619 (G1 climbing), 0.0283 /
+  0.0297 (Go2 jumping).
 - **Simulation step.** MuJoCo Warp's step as RoboKit runs it (replayed as a CUDA graph) against the world model's step inside
   the planner's simulator (`NdmSim`: the world model in bf16 as one CUDA graph, plus the MuJoCo Warp stages the task's costs
   read: none for G1 box carrying; kinematics and sensor positions for G1 climbing, and also collisions for Go2). Both start
   from the held-out run's executed states, copied back every horizon as the planner restarts its rollouts; 20 warm-up and 200
-  timed steps, the median of three; each task's planning fit.
-  - At 8,192 worlds: G1 box carrying 4.52 → 0.47 ms (9.5x), G1 climbing 3.14 → 0.64 ms (4.9x), Go2 jumping 1.38 → 0.60 ms (2.3x).
-  - The network alone takes 0.18 ms (G1 box carrying) and 0.21 ms (G1 climbing), at 2,047 worlds, and 0.15 ms (Go2 jumping,
-    1,228 worlds).
+  timed steps, the median of three; each task's planning fits, with MuJoCo Warp's step timed again beside each model's.
+  - At 8,192 worlds, SuperTrack's / SuperMimic's model: G1 box carrying 4.52 → 0.47 / 4.53 → 0.48 ms (9.5x / 9.3x), G1
+    climbing 3.14 → 0.64 / 3.13 → 0.65 ms (4.9x / 4.8x), Go2 jumping 1.38 → 0.60 / 0.60 ms (2.3x / 2.3x).
+  - The network alone, SuperTrack's / SuperMimic's: 0.18 / 0.23 ms (G1 box carrying) and 0.21 / 0.17 ms (G1 climbing), at
+    2,047 worlds, and 0.15 / 0.12 ms (Go2 jumping, 1,228 worlds).
 - **Planning.** The example's own planning time for its whole motion, the median over twenty plans (the planner's seeds 0-9,
   twice; each within 1 s of it); MuJoCo Warp's planner with seeds 0-9 once. With a simulator whose step does nothing,
   planning takes 2 s (G1 box carrying and G1 climbing) and 9 s (Go2 jumping), and the plans fail: the planner's own share,
@@ -56,15 +59,20 @@ passes 10 of 10. One A100 40GB SXM4 with nothing else running.
 
 Planner seeds 0-9, twice (20 plans) on the world model; MuJoCo Warp's planner, seeds 0-9 once.
 
-| Task | World model | MuJoCo Warp |
-|---|---|---|
-| G1 box carrying | 20 of 20; the box 1.8-9.2 cm from its goal | 10 of 10; 0.6-3.3 cm |
-| G1 climbing | 20 of 20; the final pelvis at 1.47 m, the lowest at 0.89 m | 10 of 10; the same |
-| Go2 jumping | 20 of 20; landing score 1.00, the torso tilted at most 17 degrees | 10 of 10; 1.00, at most 13 degrees |
+| Task | SuperTrack's model | SuperMimic's model | MuJoCo Warp |
+|---|---|---|---|
+| G1 box carrying | 20 of 20; the box 1.8-9.2 cm from its goal | 20 of 20; 1.1-8.5 cm | 10 of 10; 0.6-3.3 cm |
+| G1 climbing | 20 of 20; the final pelvis at 1.47 m, the lowest at 0.89 m | 20 of 20; the same | 10 of 10; the same |
+| Go2 jumping | 20 of 20; landing score 1.00, the torso tilted at most 17 degrees | 20 of 20; 1.00, at most 18 degrees | 10 of 10; 1.00, at most 13 degrees |
 
-On G1 box carrying, a second fit was also read. It was fitted from this one on one round of its own planner's draws: sixteen
-runs of the planner on this fit, whose candidates were recorded in MuJoCo Warp, then 10,000 updates on those runs and the
-eight seeds. It passes 20 of 20 too, every box within 2.8 cm of its goal.
+On G1 box carrying, a second fit of each model was also read. Each was fitted from its model's fit on one round of its own
+planner's draws: sixteen runs of the planner on the fit, whose candidates were recorded in MuJoCo Warp, then 10,000 updates
+on those runs and the eight seeds. On this code both pass 20 of 20: SuperTrack's boxes within 2.8 cm of the goal,
+SuperMimic's 0.7-9.3 cm.
+
+The same fits were also planned on a development revision of the planner code, which this repository does not hold. The
+eight-seed fits passed 20 of 20 each (boxes within 9.8 and 9.0 cm). The second fits passed 20 of 20 (SuperTrack's, within
+3.6 cm) and 17 of 20 (SuperMimic's: three boxes 11.3-13.7 cm from the goal).
 
 ## Reproducing
 

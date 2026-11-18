@@ -66,7 +66,7 @@ MuJoCo model.
 | NDM simulation: the Adroit door ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 16,384 worlds: SuperTrack's acceleration model as a bf16 copy, 27.62 M against MuJoCo Warp's 0.396 M (69.7x); SuperMimic's increment model 27.14 M against 0.422 M (64.3x); 1,629x / 1,600x the contributed native MuJoCo collector on eight CPU cores (16,962 world-steps/s). The bf16 step is 64 % / 66 % matrix products, the rest compiled elementwise kernels | one A100 40GB SXM4 |
 | NDM simulation: the racing quadrotor ([details](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds, the fused step in fp32 (TF32 products) with the network as one kernel: SuperTrack's acceleration model 74.3 M against MuJoCo Warp's 3.26 M (22.8x); SuperMimic's increment model 73.7 M against 3.27 M (22.6x); with the network compiled layer by layer 19.6x / 19.0x. The network is 85 % of the step | one A100 40GB SXM4 |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | SuperTrack's MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
-| RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds, the median over twenty plans (planner seeds 0-9, twice); the simulation step's speedup beside the task | one A100 40GB SXM4 |
+| RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds on the acceleration and on the increment model, the median over twenty plans (planner seeds 0-9, twice); the simulation step's speedup beside the task | one A100 40GB SXM4 |
 | mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
 
 The Adroit door: MuJoCo Warp without no-slip and without multi-contact or native CCD, which it refuses with this model's
@@ -103,7 +103,7 @@ the position within 20 mm. Commands: [Recommended settings](#-recommended-settin
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
-| **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning **3.0x / 1.8x / 2.1x** faster than on MuJoCo Warp (9 → 3, 7 → 4, 65 → 31 s); **20 of 20** plans pass on each task, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
+| **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
 | **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | **27.62 M world-steps/s**, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed collector on eight CPU cores; SuperMimic's increment model 27.14 M, 64.3x ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#quadrotor-trajectory-tracking)**, the racing quadrotor, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs, the fused step in fp32, the network as one kernel | **74.3 M** and **73.7 M world-steps/s**, 22.8x and 22.6x MuJoCo Warp's 3.26 M / 3.27 M; 34.2x / 34.1x at 1,024 worlds, 11.5x at 65,536 ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) |
@@ -170,7 +170,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] NDMs in planners:** a world model scores the planner's candidates in place of the physics steps. On an
   A100, three of [RoboKit's](#ndms-in-robokits-planner) examples (G1 box carrying, G1 climbing, Go2 jumping) plan
   1.8-3.0x faster than on MuJoCo Warp, every plan passing, and [mbrl-lib's](#ndms-in-mbrl-libs-planner) cart-pole and
-  pusher (PETS' settings) 20.8-20.9x and 9.9-10.5x faster on either world model.
+  pusher (PETS' settings) 20.8-20.9x and 9.9-10.5x faster, on either world model.
 - **[2026-11] Training speed:** what makes training fast, measured and offered as options: a recipe and systems options
   ([BlinkMimic's](#blinkmimics-options)), multi-GPU layouts ([XMimic's](docs/algorithms/xmimic.md));
   [time to return 0.82](#training-speed), with [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside.
@@ -981,22 +981,22 @@ and each plan executes on MuJoCo Warp. Planning time is the simulator's steps pl
 
 | goal | configuration | result |
 |---|---|---|
-| planning time, not engineered | SuperTrack's acceleration model, MLP, as a bf16 copy | planning 3.0x / 1.8x / 2.1x faster than on MuJoCo Warp; 20 of 20 plans pass on each task |
+| planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning 3.0x / 1.8x / 2.1x and 3.0x / 1.8x / 2.2x faster than on MuJoCo Warp; 20 of 20 plans pass on each task for each |
 
 G1 box carrying / G1 climbing / Go2 jumping; one A100 40GB SXM4, the median over the planner's seeds 0-9 run twice, one fit
-of the world model per task (fit seed 0) ([details](benchmarks/robokit_ndm/results.md)).
+of each world model per task (fit seed 0) ([details](benchmarks/robokit_ndm/results.md)).
 
-**In short:** on SuperTrack's acceleration model the three examples plan 1.8-3.0x faster than on MuJoCo Warp, and every
-plan passes the example's own check.
+**In short:** on either world model the three examples plan 1.8-3.0x faster than on MuJoCo Warp, and every plan passes the
+example's own check; the two are level (their planning times within 1 s).
 
 <p align="center"><img src="docs/media/robokit/grid.webp" alt="RoboKit's G1 box carrying, G1 climbing and Go2 jumping, planned on the world model" width="100%"/></p>
 <p align="center"><sub>In translucent blue, the example's reference: the motion the G1 tracks and the box's, and Go2's foot targets. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
-| task | simulation step | planning time | plans that pass |
+| task | simulation step, SuperTrack's / SuperMimic's model | planning time, SuperTrack's / SuperMimic's model | plans that pass, SuperTrack's / SuperMimic's model |
 |---|---|---|---|
-| G1 box carrying | 1.81 → 0.18 ms (10.0x) | 9 → 3 s (3.0x) | 20 of 20 (MuJoCo Warp 10 of 10) |
-| G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) | 20 of 20 (MuJoCo Warp 10 of 10) |
-| Go2 jumping | 0.69 → 0.21 ms (3.2x) | 65 → 31 s (2.1x) | 20 of 20 (MuJoCo Warp 10 of 10) |
+| G1 box carrying | 1.81 → 0.18 / 0.21 ms (10.0x / 8.7x) | 9 → 3 / 3 s (3.0x / 3.0x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
+| G1 climbing | 1.32 → 0.35 / 0.28 ms (3.8x / 4.8x) | 7 → 4 / 4 s (1.8x / 1.8x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
+| Go2 jumping | 0.69 / 0.68 → 0.21 / 0.21 ms (3.2x / 3.3x) | 65 → 31 / 30 s (2.1x / 2.2x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
 
 ### NDMs in mbrl-lib's planner
 

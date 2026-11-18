@@ -12,15 +12,15 @@ The world model in the planner, MuJoCo Warp executing; in translucent blue, the 
 the box's) and Go2's foot targets. G1 box carrying tracks an OMOMO clip: for non-commercial illustration only (see the
 repository's NOTICE).
 
-| example | simulation step | planning time | plans that pass |
+| example | simulation step, SuperTrack's / SuperMimic's model | planning time, SuperTrack's / SuperMimic's model | plans that pass, SuperTrack's / SuperMimic's model |
 |---|---|---|---|
-| G1 box carrying | 1.81 → 0.18 ms (10.0x) | 9 → 3 s (3.0x) | 20 of 20 (MuJoCo Warp 10 of 10) |
-| G1 climbing | 1.32 → 0.35 ms (3.8x) | 7 → 4 s (1.8x) | 20 of 20 (MuJoCo Warp 10 of 10) |
-| Go2 jumping | 0.69 → 0.21 ms (3.2x) | 65 → 31 s (2.1x) | 20 of 20 (MuJoCo Warp 10 of 10) |
+| G1 box carrying | 1.81 → 0.18 / 0.21 ms (10.0x / 8.7x) | 9 → 3 / 3 s (3.0x / 3.0x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
+| G1 climbing | 1.32 → 0.35 / 0.28 ms (3.8x / 4.8x) | 7 → 4 / 4 s (1.8x / 1.8x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
+| Go2 jumping | 0.69 / 0.68 → 0.21 / 0.21 ms (3.2x / 3.3x) | 65 → 31 / 30 s (2.1x / 2.2x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
 
 One A100 40GB SXM4, the planner's own worlds (2,047 for the G1s, 1,228 for Go2), the median over twenty plans (the planner's
 seeds 0-9, twice); each plan read by the example's own check;
-SuperTrack's acceleration model, one fit per task (fit seed 0). The method and every command are in the
+SuperTrack's acceleration model and SuperMimic's increment model, one fit per task and model (fit seed 0). The method and every command are in the
 [results](https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md).
 
 ## Setup
