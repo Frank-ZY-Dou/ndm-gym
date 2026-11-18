@@ -31,5 +31,34 @@ MuJoCo-Warp, with SuperTrack and SuperMimic. First round: the development config
 targets alone succeed at 0 and 5-7 %; on Transport, two arms and a 36 s demonstration, SuperTrack succeeds in 90 % of the
 perturbed rollouts and SuperMimic in 37 %, with large differences between its seeds.
 
+## Time to the target
+
+The target is the hand task's: a success of at least 0.99 with the tracked objects within 10 mm. `time_to.py` evaluates
+every kept checkpoint (every 500 iterations) as the last one is, without the reference's targets, and reports the wall time
+of the first checkpoint from which every later one meets the target. The times are the runs' own wall clock with three runs
+sharing the GPU, and the checkpoints are 500 iterations apart, so they are upper bounds.
+
+```bash
+python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s?
+```
+
+| task | algorithm | minutes to the target ↓ | iteration | seeds 0 / 1 / 2 (min) |
+|---|---|---|---|---|
+| Lift | SuperTrack | 2.5 ± 0.0 | 500, every run | 2.4 / 2.5 / 2.4 |
+| | SuperMimic | 6.0 ± 4.8 | 500-1,500 | 11.0 / 5.4 / 1.4 |
+| Square | SuperTrack | 4.9 ± 2.6 | 500, every run | 7.4 / 2.3 / 4.9 |
+| | SuperMimic | 10.8 ± 4.9 | 1,000-1,500 | 7.8 / 16.4 / 8.3 |
+| Transport | SuperTrack | not reached | | best checkpoint 95.7 % success, 6.8 mm |
+| | SuperMimic | not reached | | best checkpoint 66.4 % success, 10.4 mm |
+
+SuperTrack meets the target at its first checkpoint in every Lift and Square run and keeps it; SuperMimic's checkpoints
+are not monotone (Lift seed 0 at 1,000 iterations: 10.9 % success, Square seed 1 at 1,000: 94.1 %).
+
+## Renders
+
+`tools/render_robomimic.py` renders a rollout recorded by `evaluate_robomimic`; `docs/media/robomimic/` holds each case's
+best run (Lift SuperTrack and SuperMimic seed 0, Square seed 1, Transport SuperTrack seed 2 and SuperMimic seed 1) from the
+unperturbed start, Transport at four times real time, and the grid of the six (`tools/make_grid.py`).
+
 Open: one policy on several demonstrations (Square's ten in development reach a success of 100 %; Lift's cubes differ in
-size between demonstrations), the time to a target, and the speed options of the G1 path.
+size between demonstrations), Transport to the target, and the speed options of the G1 path.
