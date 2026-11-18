@@ -45,7 +45,8 @@ def main():
     clip_ids = parse_clips(args.clip_ids or run.clip_ids)
     data_dir = args.data_dir or run.data_dir
     spec = ANIMALS[run.animal]
-    model, _, _, task = build(run.animal, clip_ids, data_dir, dev, run.reward_std_scale, run.action_scale, run.goal_stride)
+    model, _, _, task = build(run.animal, clip_ids, data_dir, dev, run.reward_std_scale, run.action_scale, run.goal_stride,
+                             fused_fk=getattr(run, "fused_fk", False))
     ref = task.ref
     starts = torch.unique(ref.start)
     reps = 1 + args.repeats

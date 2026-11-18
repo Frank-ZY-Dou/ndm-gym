@@ -36,7 +36,7 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
                "st_late_w", "st_fail_margin", "utd", "hist", "wm_input_noise", "wm_smooth_w", "wm_smooth_eps", "wm_smooth_dirs",
                "wm_backbone", "rf_dim", "rf_layers", "rf_heads", "rf_registers", "rf_no_tree_bias", "rf_no_rope", "rf_rope_detach",
                "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center", "rf_merge", "wm_sample", "wm_prio_alpha",
-               "wm_fail_windows", "wm_fail_window", "st_wm_loss", "wm_lr", "no_critic", "pi_updates", "lr_decay_hours", "ckpt_hours",
+               "wm_fail_windows", "wm_fail_window", "st_wm_loss", "no_critic", "pi_updates", "lr_decay_hours", "ckpt_hours",
                "motion_dir", "motions", "paired", "clips")  # fmt: skip
 # the options a resumed run must share with its checkpoint
 RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
@@ -63,6 +63,9 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--goal_stride", type=int, default=1, help="the goal's frames are 1, 1 + stride, 1 + 2 stride, ... control steps ahead")
     parser.add_argument("--episode", type=int, default=1000, help="an episode's longest length in control steps")
     parser.add_argument("--action_scale", type=float, default=0.5, help="a position servo's offset from the reference's joint at action 1 (rad)")
+    parser.add_argument("--fused_fk", action="store_true",
+                        help="the bodies' forward kinematics body by body with elementwise 3 x 3 products and no scatter (MjcfWorldModel.fused's "
+                        "path): far fewer kernels once compiled (changes results by rounding)")  # fmt: skip
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each tracked quantity weighs, per unit of error, the task's reward weight over its "
                         "kernel's width")  # fmt: skip
@@ -104,7 +107,7 @@ def parse_args(argv: list[str] | None = None):
 
 
 def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_std_scale: float = 1.0, action_scale: float = 0.5,
-          goal_stride: int = 1):  # fmt: skip
+          goal_stride: int = 1, fused_fk: bool = False):  # fmt: skip
     """The body's MjModel, the world model's layout and its position lead, and the task of the clips."""
     import dataclasses
 
@@ -125,6 +128,7 @@ def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_s
     bodies = [i for i in range(1, model.nbody) if model.body_rootid[i] == root]  # the animal's tree
     ee = [bodies.index(names.index(n + spec.suffix)) for n in spec.end_effectors]
     kin = AnimalKinematics(lay, bodies).to(device)
+    kin.fused = fused_fk  # --fused_fk
     data = load_clips(data_dir, animal, clip_ids)
     quat = [lay.anchor[0] + 3]
     clips = [resample(torch.from_numpy(q), torch.from_numpy(v), spec.mocap_hz, spec.ctrl_dt, quat) for q, v in zip(data["qpos"], data["qvel"], strict=True)]
@@ -173,7 +177,7 @@ def main():
 
     spec = ANIMALS[args.animal]
     model, wm_lay, pos_lead, task = build(args.animal, parse_clips(args.clip_ids), args.data_dir, dev, args.reward_std_scale, args.action_scale,
-                                          args.goal_stride)  # fmt: skip
+                                          args.goal_stride, args.fused_fk)  # fmt: skip
     print(f"{args.animal}: {task.ref.frames} reference frames, {task.nq} qpos, {task.nu} actuators, {task.na} activations, size {task.length:.4g}, "
           f"obs {task.obs_dim}, goal {task.goal_frame_dim} x {args.goal_frames}", flush=True)  # fmt: skip
     sim = AnimalSim(model, task, args.num_envs, dev, spec.ctrl_dt, episode=args.episode, stagger=True, nconmax=spec.nconmax, njmax=spec.njmax)
@@ -240,6 +244,8 @@ def main():
         lr = lr_at(it, args.lr, args.lr_decay_iters)
         for opt in algo.optimizers:
             set_lr(opt, lr)
+        if args.wm_lr is not None:  # --wm_lr: the world model's own rate on the same schedule (LAFAN1 training's)
+            set_lr(algo.opt_wm, lr * args.wm_lr / args.lr)
         if pi_lr.on:  # --pi_lr_mult
             set_lr(algo.opt_pi, lr * pi_lr.at(it - 1))
         collect()

@@ -27,7 +27,7 @@ from ndm_gym.worldmodels.mjcf import MjcfLayout
 SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_frames", "wm_window", "wm_hidden", "wm_act", "wm_no_ln", "wm_batches",
              "wm_batch", "pi_batch", "lr", "gamma", "reward_std_scale", "lam", "action_noise", "critic_epochs", "critic_minibatches", "warmup_steps",
              "wm_only_iters", "lr_decay_iters", "ckpt_every", "max_hours", "log_every", "log_dir", "seed", "resume", "amp", "bptt_decay",
-             "st_reg", "st_imag_noise", "st_fail_w")  # fmt: skip
+             "st_reg", "st_imag_noise", "st_fail_w", "wm_lr")  # fmt: skip
 DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "mimic_mjx")
 CTRL_DT, SUBSTEPS = 0.01, 5
 
@@ -212,7 +212,8 @@ def test_training_arguments():
     with pytest.raises(SystemExit):
         parse_args(["--animal", "rat", "--clip_ids", "0", "--algo", "supermimic", "--st_fail_w", "2"])
     with pytest.raises(SystemExit):
-        parse_args(["--animal", "rat", "--clip_ids", "0", "--wm_lr", "1e-3"])
+        parse_args(["--animal", "rat", "--clip_ids", "0", "--wm_backbone", "rigidformer"])
+    assert parse_args(["--animal", "rat", "--clip_ids", "0", "--wm_lr", "2e-3"]).wm_lr == 2e-3
 
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(DATA, "rat", "reference.h5")), reason="MIMIC-MJX's data not downloaded")
@@ -229,3 +230,11 @@ def test_bodies_match_their_clips(animal):
         assert f["qpos"].shape[1] == m.nq and f["qvel"].shape[1] == m.nv
     lay = MjcfLayout.from_model(build_model(animal, DATA, activation=False))
     assert lay.anchor == (0, 0) and m.opt.noslip_iterations == 0
+
+
+def test_fused_kinematics_match():
+    model, lay, task = make_task()
+    fused = AnimalKinematics(lay, [1, 2, 3])
+    fused.fused = True
+    q = task.ref.qpos[::7]
+    assert torch.allclose(task.kin(q), fused(q), atol=1e-5)
