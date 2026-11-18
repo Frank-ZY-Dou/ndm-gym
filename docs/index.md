@@ -5,8 +5,9 @@
 NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1
 motion tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with
 29 DoF), MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp), hand-object tracking with the XHand, the Allegro hand
-and the Inspire hand, a racing quadrotor tracking flown trajectories, and a Unitree Go2 tracking a dog's motion capture
-(all three MuJoCo-Warp). The neural dynamics models (NDMs)
+and the Inspire hand, a racing quadrotor tracking flown trajectories and a Unitree Go2 tracking a dog's motion capture
+(all three MuJoCo-Warp), and the Adroit hand tracking DAPG's door, pen, hammer and relocate demonstrations (MuJoCo on the
+CPU). The neural dynamics models (NDMs)
 also serve as simulators, for instance in RoboKit's MPC planner and mbrl-lib's CEM planner.
 
 - [Leaderboard](leaderboard.md): each task's fastest and most accurate configuration, and the named configurations.
@@ -15,7 +16,8 @@ also serve as simulators, for instance in RoboKit's MPC planner and mbrl-lib's C
   timed beside.
 - [World models](world_models.md): acceleration and increment models, MLP and RigidFormer backbones, inference copies.
 - [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks, MuscleVAE's character, hand-object
-  tracking, [quadrotor trajectory tracking](tasks/quadrotor.md), [quadruped motion tracking](tasks/quadruped.md), and [RoboKit's](tasks/robokit.md) and
+  tracking, [quadrotor trajectory tracking](tasks/quadrotor.md), [quadruped motion tracking](tasks/quadruped.md), the Adroit
+  [door](tasks/adroit_door.md) and [pen, hammer and relocate](tasks/adroit_suite.md), and [RoboKit's](tasks/robokit.md) and
   [mbrl-lib's](tasks/mbrl.md) planners on a world model.
 - [Evaluation](quickstart.md): tracking errors, push robustness, held-out clips, videos and offline world-model fits.
 - [Coverage](coverage.md): every method, simulator, dataset and robot model the library covers, with its link.
