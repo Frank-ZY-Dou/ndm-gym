@@ -42,6 +42,11 @@ README: for research purposes only), retargeted to the Unitree Go2 with supermim
 (https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause), the retarget laid over it in translucent blue. They are for
 research and non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
+docs/media/animals holds renders (and a grid of them) of policies tracking reference clips of MIMIC-MJX
+(https://huggingface.co/datasets/talmolab/MIMIC-MJX; MIT; Zhang, Yang et al., arXiv 2511.20532), drawn with the rat, stick
+insect and fruit fly bodies and arenas of vnl-playground (https://github.com/talmolab/vnl-playground; BSD-3-Clause; its fly
+is flybody's, https://github.com/TuragaLab/flybody, Apache-2.0), the reference laid over each in translucent blue.
+
 docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch/mbrl-lib; MIT, Copyright (c) Facebook, Inc. and
 its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans
 made on this library's world model, drawn with this library's lights, floor and sky.
