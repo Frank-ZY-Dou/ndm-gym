@@ -14,7 +14,10 @@ map shows the whole flight either way). ``--hud`` draws over the
 frame the simulated drone's speed, its distance from the reference and a map of the path from above with the two drones on
 it (``--title``: a title too). ``--look sky`` (the default): tools/render_musclevae.py's sky and checker floor, with its
 lights; ``--look noir``: a dark stage, as tools/render_hand.py's, with the path and the gates glowing; ``--look studio``:
-tools/render.py's light studio. ``--preview``: also an animated WebP in the format of the
+tools/render.py's light studio. ``--lens_clear R``: the path's, the trail's and the gates' capsules nearer than R metres to the
+camera are not drawn in that frame, the path and the trail fading in over the next R / 2 (the gates are opaque: a gate at R is drawn
+whole, as a camera would see it pass); a chase camera close behind the drone would otherwise sweep through the path it flies along
+and clip the gates it passes (0, the default: everything drawn). ``--preview``: also an animated WebP in the format of the
 README's hand-object animations (960 pixels wide, 30 frames per second, at most ``--preview_mb``). Needs ffmpeg (or the
 imageio-ffmpeg package's).
 """
@@ -236,14 +239,26 @@ def interpolate(pose: np.ndarray, x: np.ndarray) -> np.ndarray:
     return out
 
 
-def add_trail(scene: mujoco.MjvScene, points: np.ndarray, width: float):
-    """``points`` (n, 3), oldest first, as capsules that fade toward the oldest, added to the scene of the frame."""
+def lens_fade(cam: np.ndarray, a: np.ndarray, b: np.ndarray, radius, clear: float) -> np.ndarray:
+    """For capsules from ``a`` to ``b`` (n, 3) of ``radius``: 0 where their surface is nearer than ``clear`` to the camera at ``cam``,
+    1 from 1.5 ``clear`` on, linear between (``--lens_clear``)."""
+    ab = b - a
+    t = np.clip(((cam - a) * ab).sum(-1) / np.maximum((ab * ab).sum(-1), 1e-12), 0.0, 1.0)
+    d = np.linalg.norm(a + t[:, None] * ab - cam, axis=-1) - radius
+    return np.clip((d - clear) / (0.5 * clear), 0.0, 1.0)
+
+
+def add_trail(scene: mujoco.MjvScene, points: np.ndarray, width: float, cam: np.ndarray | None = None, clear: float = 0.0):
+    """``points`` (n, 3), oldest first, as capsules that fade toward the oldest, added to the scene of the frame; with ``clear`` > 0,
+    those near the camera at ``cam`` faded or left out (``lens_fade``)."""
     n = len(points) - 1
+    fade = lens_fade(cam, points[:-1], points[1:], width, clear) if clear > 0 and n > 0 else np.ones(max(n, 0))
     for i in range(n):
-        if scene.ngeom >= scene.maxgeom or np.linalg.norm(points[i + 1] - points[i]) < 1e-6:
+        if scene.ngeom >= scene.maxgeom or np.linalg.norm(points[i + 1] - points[i]) < 1e-6 or fade[i] == 0:
             continue
         g = scene.geoms[scene.ngeom]
-        mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3), np.zeros(9), np.array((*ORANGE, 0.85 * (i + 1) / n), dtype=np.float32))
+        alpha = 0.85 * (i + 1) / n * fade[i]
+        mujoco.mjv_initGeom(g, mujoco.mjtGeom.mjGEOM_CAPSULE, np.zeros(3), np.zeros(3), np.zeros(9), np.array((*ORANGE, alpha), dtype=np.float32))
         mujoco.mjv_connector(g, mujoco.mjtGeom.mjGEOM_CAPSULE, width, points[i], points[i + 1])
         g.emission = 0.8
         scene.ngeom += 1
@@ -339,6 +354,8 @@ def main():
     parser.add_argument("--hud", action="store_true", help="the simulated drone's speed and distance from the reference and a map of the path, over the frame")
     parser.add_argument("--title", type=str, default=None, help="with --hud: a title at the top left")
     parser.add_argument("--no_mark", action="store_true", help="frames without the NDM Gym mark")
+    parser.add_argument("--lens_clear", type=float, default=0.0,
+                        help="the path's, trail's and gates' capsules nearer than this to the camera (m) not drawn, the path and trail faded in over the next half (0: off)")  # fmt: skip
     parser.add_argument("--preview", type=str, default=None, help="also an animated WebP preview at this path, 960 pixels wide at 30 fps")
     parser.add_argument("--preview_mb", type=float, default=1.5, help="the preview's largest size (its quality steps down from 50 to fit)")
     args = parser.parse_args()
@@ -397,6 +414,15 @@ def main():
         stdin=subprocess.PIPE,
     )  # fmt: skip
     data, bold = mujoco.MjData(model), _font(0, round(20 * args.height / 432))
+    if args.lens_clear > 0:  # the path's and the gates' capsules (static): their axes, radii, alphas and groups, faded by the camera's distance
+        mujoco.mj_forward(model, data)
+        names = [model.body(int(model.geom_bodyid[g])).name for g in range(model.ngeom)]
+        near = np.array([g for g in range(model.ngeom) if model.geom_type[g] == mujoco.mjtGeom.mjGEOM_CAPSULE
+                         and (model.geom_bodyid[g] == 0 or names[g].startswith("gate"))], dtype=int)  # fmt: skip
+        half = data.geom_xmat[near].reshape(-1, 3, 3)[:, :, 2] * model.geom_size[near, 1:2]
+        near_a, near_b, near_r = data.geom_xpos[near] - half, data.geom_xpos[near] + half, model.geom_size[near, 0]
+        near_alpha, near_group = model.geom_rgba[near, 3].copy(), model.geom_group[near].copy()
+        near_gate = model.geom_bodyid[near] != 0  # the gates' bars and legs: drawn whole or not at all
     with mujoco.Renderer(model, args.height, args.width) as renderer:
         for i, (a, b) in enumerate(zip(solid, ghost, strict=True)):
             for d, pose in (("drone", a), ("ref", b)):
@@ -416,11 +442,19 @@ def main():
                 model.light("rim").dir[:] = (-np.cos(az), -np.sin(az), -0.35)
             elif args.look == "sky":  # the horizon's light from the camera's side
                 model.light("rim").dir[:] = (np.cos(az), np.sin(az), 0.0)
+            cam = None
+            if args.lens_clear > 0:  # MuJoCo's free camera: the lookat less the distance along the view
+                el = np.radians(camera.elevation)
+                cam = look - camera.distance * np.array((np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)))
+                fade = lens_fade(cam, near_a, near_b, near_r, args.lens_clear)
+                fade[near_gate] = fade[near_gate] > 0
+                model.geom_rgba[near, 3] = near_alpha * fade
+                model.geom_group[near] = np.where(fade == 0, 3, near_group)  # (group 3 is not drawn)
             renderer.update_scene(data, camera, option)
             renderer.scene.flags[mujoco.mjtRndFlag.mjRND_SHADOW] = 0
             renderer.scene.flags[mujoco.mjtRndFlag.mjRND_HAZE] = not arena  # (the arena's far side would fade)
             add_blob_shadow(renderer.scene, a[:3], 0.14 * scale, 0.55 if noir else 0.35)  # (on the light floors a grey of the squares')
-            add_trail(renderer.scene, solid[max(0, i - trail) : i + 1, :3], 0.012 * max(scale, 1.0) ** 0.5)
+            add_trail(renderer.scene, solid[max(0, i - trail) : i + 1, :3], 0.012 * max(scale, 1.0) ** 0.5, cam, args.lens_clear)
             image = renderer.render()
             if hud is not None:
                 image = hud.draw(image, int(round(steps[i])) // stride, a[:3], b[:3], float(speeds[i]), float(np.linalg.norm(a[:3] - b[:3])),
