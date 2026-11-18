@@ -17,7 +17,9 @@ a mismatch), with its own open-loop errors on the model's course. ``--fused``: t
 kernels around the network, the state kept as four tensors (p, R, v, w) in two buffers and each step one CUDA graph from one buffer
 into the other (nothing packed or copied); without it, the copy's step and the copy of the next state into the state as one graph.
 ``--compile``: torch.compile's modes for the fused path's network or the whole step otherwise (compiled outside the capture), each
-copy timed in each. ``--warm_seconds``: every path keeps stepping this long before its timed runs (``wmbench/warm.py``).
+copy timed in each; ``kernel`` (with ``--fused``): the fused path's network as one Triton kernel (``kernels.mlp_fused``, the fp32 copy's
+with TF32 products, the bf16 copy's in bf16), checked on the copy's first inputs against its reference (``mlp_fused.check``: TF32
+products emulated in fp64, torch's bf16 run) and refused on a mismatch, its distances reported, with its own open-loop errors. ``--warm_seconds``: every path keeps stepping this long before its timed runs (``wmbench/warm.py``).
 ``--profile``: each part of a step as its own CUDA graph, timed alone, in milliseconds per step at ``--num_envs``: for the step above
 the state's unpacking (quaternion to matrix), the world model's step, and the packing (matrix to quaternion, the copy into the
 state); for the fused copies the state's packing into the network's input (the features with the input's normalization), the
@@ -35,6 +37,7 @@ import json
 import math
 import statistics
 import time
+import types
 
 
 def main():
@@ -50,8 +53,9 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--copy", type=str, nargs="*", default=[], choices=["fp32", "bf16"], help="also time the world model's inference copies")
     p.add_argument("--fused", action="store_true", help="with --copy: the features and the integration as Triton kernels")
-    p.add_argument("--compile", type=str, nargs="+", default=["none"], choices=["none", "default", "max-autotune-no-cudagraphs"],
-                   help="with --copy: torch.compile's modes for the copies' network (--fused) or their whole step, each timed")  # fmt: skip
+    p.add_argument("--compile", type=str, nargs="+", default=["none"], choices=["none", "default", "max-autotune-no-cudagraphs", "kernel"],
+                   help="with --copy: torch.compile's modes for the copies' network (--fused) or their whole step, each timed; kernel: "
+                        "the network as one Triton kernel (--fused)")  # fmt: skip
     p.add_argument("--data_dir", type=str, default=None, help="the flights' directory (default: the checkpoint's)")
     p.add_argument("--warm_seconds", type=float, default=0.0,
                    help="before each path's timed runs, keep stepping this many seconds (wmbench/warm.py: an idle GPU's clock)")  # fmt: skip
@@ -59,6 +63,8 @@ def main():
     args = p.parse_args()
     if not args.copy and (args.fused or args.compile != ["none"]):
         p.error("--fused and --compile build the inference copies: give --copy fp32 and/or bf16")
+    if "kernel" in args.compile and not args.fused:
+        p.error("--compile kernel runs the fused path's network as one kernel: give --fused")
 
     import torch
 
@@ -200,11 +206,19 @@ def main():
 
     for kind, mode in itertools.product(args.copy, args.compile):
         cp = inference_copy(wm, torch.bfloat16 if kind == "bf16" else None, fused=args.fused)
-        name = f"copy_{kind}" + ("_fused" if args.fused else "") + ("" if mode == "none" else "_compiled")
+        name = f"copy_{kind}" + ("_fused" if args.fused else "") + {"none": "", "kernel": "_kernel"}.get(mode, "_compiled")
         with torch.no_grad():
             start()
-            if args.fused:  # two graphs, each a step from one buffer into the other: nothing is copied
+            if args.fused and mode == "kernel":  # the network as one kernel, checked on the copy's inputs at the start
+                from ndm_gym.kernels.mlp_fused import FusedMLP, check
+
+                seq = cp.wm.net.net if cp.bf16 else cp.wm.net
+                net = FusedMLP(seq, "bf16" if cp.bf16 else "tf32")
+                out[name + "_check"] = check(seq, net, cp.features(Sb[0], u))
+                out[name + "_config"] = dict(zip(("bm", "ch"), net.config(N), strict=True))
+            elif args.fused:
                 net = cp.wm.net if mode == "none" else torch.compile(cp.wm.net, mode=mode, dynamic=False)
+            if args.fused:  # two graphs, each a step from one buffer into the other: nothing is copied
                 graphs = [graphed(lambda: cp.step_into(Sb[0], u, Sb[1], net)), graphed(lambda: cp.step_into(Sb[1], u, Sb[0], net))]  # noqa: B023
             else:  # one graph: the step and the copy of the next state into the state
 
@@ -230,9 +244,11 @@ def main():
                          "integration (de-normalization, next state)": lambda: cp.integrate_into(y, Sb[0], Sb[1])}  # noqa: B023  # fmt: skip
                 out[f"profile_{name}_ms"] = {k: ms(graphed(f)) for k, f in parts.items()}
                 out[f"profile_{name}_ms"]["whole step"] = ms(replay)
-        # the copy's open-loop errors on the course the model's were measured on (the compiled network is not used there)
+        # the copy's open-loop errors on the course the model's were measured on (the compiled network is not used there; the kernel is)
         if mode == args.compile[0]:
             out[f"open_loop_copy_{kind}" + ("_fused" if args.fused else "")] = open_loop(cp)
+        if mode == "kernel":
+            out[f"open_loop_copy_{kind}_fused_kernel"] = open_loop(types.SimpleNamespace(step=lambda S, u_: cp.integrate(net(cp.features(S, u_)), S)))  # noqa: B023
     print(json.dumps(out, indent=2))
     if args.out:
         with open(args.out, "w") as f:
