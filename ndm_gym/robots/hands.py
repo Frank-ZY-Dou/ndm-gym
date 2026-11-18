@@ -72,6 +72,11 @@ class HandKinematics:
         self.body_pos = tensor(model.body_pos[order])
         self.body_rot = quat_to_mat(tensor(model.body_quat[order]))
         self.site_body = [local[int(model.site_bodyid[s])] for s in site_ids]
+        palm_chain, b = [], self.site_body[0]  # the bodies from the world to the palm's site, parents first (``palm``)
+        while b >= 0:
+            palm_chain.append(b)
+            b = self.steps[b]["parent"]
+        self.palm_chain = palm_chain[::-1]
         self.site_pos = tensor(model.site_pos[site_ids])
         lo, hi = model.jnt_range[joint_ids].T
         self.q_lo, self.q_hi = tensor(lo), tensor(hi)
@@ -104,6 +109,13 @@ class HandKinematics:
         pos, rot = self._bodies(q, range(len(self.steps)))
         keypoints = torch.stack([pos[b] + mat_vec(rot[b], self.site_pos[k]) for k, b in enumerate(self.site_body)], -2)
         return keypoints, rot[self.site_body[0]]
+
+    def palm(self, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """``forward``'s palm alone: its keypoint (..., 1, 3) and rotation (..., 3, 3), from the bodies of the palm's chain
+        (the same operations, so the same values); what the world model reads (train_hand --wm_palm_fk)."""
+        pos, rot = self._bodies(q, self.palm_chain)
+        b = self.site_body[0]
+        return (pos[b] + mat_vec(rot[b], self.site_pos[0])).unsqueeze(-2), rot[b]
 
 
 def scene_indices(model: mujoco.MjModel) -> dict[str, np.ndarray | int]:

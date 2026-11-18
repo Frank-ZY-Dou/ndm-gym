@@ -11,6 +11,8 @@ maximizes the imagined tracking return with a soft survival weight and a critic 
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn as nn
 
@@ -25,7 +27,14 @@ from .common import set_requires_grad
 from .hand_fast import finite_step, optimizer, survive
 from .supertrack import LossBalancer
 
+if TYPE_CHECKING:
+    import argparse
+
+    from ..core.muon import MuonAdam
+    from ..worldmodels.hand import HandState
+
 WINDOW_KEYS = ("s", "s1", "u", "done")
+START_KEYS = ("s", "a_prev", "f")  # an imagination start's fields (sample_valid_starts_nosync; train_hand --layout: algos.hand_layout)
 
 
 def replay_fields(task: HandTask) -> dict:
@@ -43,7 +52,7 @@ def replay_fields(task: HandTask) -> dict:
 class HandSuperMimic:
     kind = "increment"  # the world model's parameterization
 
-    def __init__(self, args, kin: HandKinematics, task: HandTask, dev: str):
+    def __init__(self, args: argparse.Namespace, kin: HandKinematics, task: HandTask, dev: str) -> None:
         self.args, self.kin, self.task, self.dev = args, kin, task, dev
         self.goal_frames, self.horizon = args.goal_frames, args.horizon
         self.bptt_decay = float(getattr(args, "bptt_decay", 1.0))
@@ -58,35 +67,50 @@ class HandSuperMimic:
         self.opt_pi = optimizer(args, dev, self.pi, "pi")
         self.opt_v = optimizer(args, dev, self.critic, "critic")
         self.no_sync = bool(getattr(args, "no_sync", False))  # train_hand --no_sync: the policy update without host reads
+        self.lap = None  # train_hand --phase_times without --update_graphs: hand_fast.PhaseTimes.lap, for the critic's update timed apart
         self.fk = kin.forward  # the collection's forward kinematics, run eagerly; train_hand --compile_eager compiles them
+        self.wm_fk = kin.palm if getattr(args, "wm_palm_fk", False) else kin.forward  # the world model's fit: --wm_palm_fk, the palm's alone
         self.wm_rollout = torch.compile(self._wm_rollout)
         self.imag_step = torch.compile(self._imag_step)
         self.start_features = torch.compile(self._start_features)
+        # train_hand --compile_updates: the updates' parts that run eagerly otherwise, compiled (algos.hand_fast)
+        self.compile_updates = bool(getattr(args, "compile_updates", False))
+        self.reuse_input = bool(getattr(args, "sm_reuse_input", False))  # train_hand --sm_reuse_input (SuperMimic's imagined steps)
+        self.sm_objective, self.critic_targets, self.critic_loss = self._sm_objective, self._critic_targets, self._critic_loss
+        if self.compile_updates:
+            self.sm_objective, self.critic_targets, self.critic_loss = (torch.compile(f) for f in (self._sm_objective, self._critic_targets,
+                                                                                                    self._critic_loss))  # fmt: skip
+        # train_hand --compile_rollout: the policy update's imagined rollout (the start's kinematics and the horizon's steps) as one
+        # compiled function, whose backward is one graph (the agent's ``_rollout``; algos.hand_fast)
+        self.rollout = torch.compile(self._rollout) if getattr(args, "compile_rollout", False) else None
 
     @property
-    def optimizers(self):
+    def optimizers(self) -> tuple[torch.optim.Adam | MuonAdam, ...]:
         return self.opt_wm, self.opt_pi, self.opt_v
 
     def state_dict(self) -> dict:
         return {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "critic": self.critic.state_dict(),
                 "opt_wm": self.opt_wm.state_dict(), "opt_pi": self.opt_pi.state_dict(), "opt_v": self.opt_v.state_dict()}  # fmt: skip
 
-    def load_state_dict(self, ck: dict):
+    def load_state_dict(self, ck: dict) -> None:
         self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"]), self.critic.load_state_dict(ck["critic"])
         self.opt_wm.load_state_dict(ck["opt_wm"]), self.opt_pi.load_state_dict(ck["opt_pi"]), self.opt_v.load_state_dict(ck["opt_v"])
 
     # ------------------------------------------------------------------ collection
     @torch.no_grad()
-    def act(self, S, a_prev: torch.Tensor, f: torch.Tensor, noise: float = 0.0) -> torch.Tensor:
-        """The policy's action in the simulator, with Gaussian exploration noise; fits the policy's input normalizer."""
+    def act(self, S: HandState, a_prev: torch.Tensor, f: torch.Tensor, noise: float = 0.0, z: torch.Tensor | None = None) -> torch.Tensor:
+        """The policy's action in the simulator, with Gaussian exploration noise; fits the policy's input normalizer.
+        ``z``: the noise's standard normal draw, made before (train_hand --compile_collect); None: drawn here."""
         x = self.task.obs(S, self.fk(S[0]), a_prev), self.task.goal(S, f, self.goal_frames)
         if noise > 0:
             self.pi.norm.update(torch.cat(x, -1))
         a = self.pi(*x)
-        return (a + noise * torch.randn_like(a)).clamp(-1, 1) if noise > 0 else a
+        if noise > 0 and z is None:
+            z = torch.randn_like(a)
+        return (a + noise * z).clamp(-1, 1) if noise > 0 else a
 
     @torch.no_grad()
-    def update_wm_norms(self, S, S1, u: torch.Tensor):
+    def update_wm_norms(self, S: HandState, S1: HandState, u: torch.Tensor) -> None:
         self.wm.in_norm.update(self.wm.inputs(S, self.fk(S[0]), u))
         self.wm.out_norm.update(self.wm.targets(S, S1))
         if self.wm.err_norm is not None:  # the acceleration model: the increments' spread, the error's units
@@ -98,7 +122,7 @@ class HandSuperMimic:
         error summed over the valid steps, mean over windows."""
         S, loss = unflatten_state(s0), 0.0
         for j in range(u.shape[1]):
-            S = self.wm.step(S, self.kin.forward(S[0]), u[:, j])
+            S = self.wm.step(S, self.wm_fk(S[0]), u[:, j])
             e = self.wm.error(S, unflatten_state(s1[:, j])).pow(2).mean(-1)
             loss = loss + (e * mask[:, j]).sum() / s0.shape[0]
         return loss
@@ -115,41 +139,116 @@ class HandSuperMimic:
             self.opt_wm.step()
         return loss.detach()
 
+    # ------------------------------------------------------------------ train_hand --layout (algos.layouts.Split, algos.hand_layout)
+    average = None  # with --pi_ema: the policy average of this object's policy (hand_fast.PolicyAverage), on the policy learner
+
+    @property
+    def pi_avg(self) -> torch.nn.Module | None:
+        """The policy average's model (layouts.Split reads its count of steps), or None."""
+        return None if self.average is None else self.average.avg
+
+    def sample_valid_starts_nosync(self, buffer: ReplayBuffer, B: int) -> tuple[dict, dict]:
+        """The policy update's draw of ``B`` imagination starts from the replay, without a host read: each the state, the
+        frame and the action before it (``START_KEYS``; every replayed state is a start, the reference holding its last
+        frame), without a history. Under --layout the policy learner's draw is the batch the actor drew (layouts.GivenStarts)."""
+        age, env = buffer.sample_start_points(B)
+        return {"s": buffer.at("s", age, env), "f": buffer.at("f", age, env), "a_prev": buffer.at("a_prev", age, env)}, {}
+
+    def wm_update_graphable(self, buffer: ReplayBuffer) -> tuple:
+        """--layout: the iteration's world-model updates (``wm_update``), the last loss in a tuple (layouts.Split's graph)."""
+        return (self.wm_update(buffer),)
+
+    def policy_update_graphable(self, buffer: ReplayBuffer) -> tuple:
+        """--layout: the policy update and the policy average's step, as hand_fast.update_functions calls them, in one
+        function for the policy learner's CUDA graph; the loop counts the average's steps."""
+        out = self.policy_update(buffer)
+        if self.average is not None:
+            self.average.step()
+        return out
+
     # ------------------------------------------------------------------ policy (Eq. 2) and critic (Eq. 3)
     def _start_features(self, S, f: torch.Tensor, a_prev: torch.Tensor):
         fk = self.kin.forward(S[0])
         return fk, self.task.critic_features(S, fk, f, a_prev, self.goal_frames)
 
-    def _imag_step(self, S, fk, f: torch.Tensor, a_prev: torch.Tensor):
+    def _imag_step(self, S, fk, f: torch.Tensor, a_prev: torch.Tensor, x: torch.Tensor | None = None):
         """One imagined step: the policy's action, the world model's next state and its forward kinematics, the reward,
-        the termination probability and the critic's input there."""
+        the termination probability and the critic's input there. ``x`` (--sm_reuse_input): the policy's input at ``S``,
+        the critic's input the step before returned (the same observation and goal of the same state; None: computed)."""
         task = self.task
-        a = self.pi(task.obs(S, fk, a_prev), task.goal(S, f, self.goal_frames))
+        if x is None:
+            a = self.pi(task.obs(S, fk, a_prev), task.goal(S, f, self.goal_frames))
+        else:
+            a = self.pi.from_input(x)
         S = self.wm.step(S, fk, task.setpoint(a, f))
         if self.bptt_decay != 1.0:  # --bptt_decay: the gradient through the imagined state, scaled at every step
             S = tuple(self.bptt_decay * x + (1 - self.bptt_decay) * x.detach() for x in S)
         fk, f = self.kin.forward(S[0]), task.ref.next_frame(f)
         return S, fk, f, a, task.reward(S, fk, f, a, a_prev), task.soft_termination(S, fk, f), task.critic_features(S, fk, f, a, self.goal_frames)
 
+    def _rollout(self, S, f: torch.Tensor, a_prev: torch.Tensor):
+        """--compile_rollout: ``policy_update``'s imagined rollout from the start ``S`` at frame ``f`` after ``a_prev``, the
+        start's features and ``horizon`` imagined steps, as one function. Returns the critic's inputs (horizon + 1 of them),
+        the rewards and the termination probabilities (horizon each)."""
+        fk, x = self._start_features(S, f, a_prev)
+        X, rews, dones = [x], [], []
+        for _ in range(self.horizon):
+            if self.reuse_input:
+                S, fk, f, a_prev, r, d, x = self._imag_step(S, fk, f, a_prev, x)
+            else:
+                S, fk, f, a_prev, r, d, x = self._imag_step(S, fk, f, a_prev)
+            rews.append(r), dones.append(d), X.append(x)
+        return X, rews, dones
+
+    def _sm_objective(self, rews: list, dones: list, x_last: torch.Tensor):
+        """The policy's loss from the imagined rewards and termination probabilities (``horizon`` of (B,) each) and the
+        critic's input at the window's end: minus the mean discounted return with the soft survival and the critic's value
+        beyond the horizon (Eq. 2). Also returns the rewards, the termination probabilities, the survival and its weights."""
+        args, horizon = self.args, self.horizon
+        r, d = torch.stack(rews), torch.stack(dones)
+        alive = survive(d, self.no_sync)  # c_{t+1}: cumprod(1 - d, 0)
+        c_t = torch.cat((torch.ones(1, r.shape[1], device=self.dev), alive[:-1]), 0)
+        disc = args.gamma ** torch.arange(horizon, device=self.dev, dtype=torch.float32).unsqueeze(-1)
+        J = (disc * c_t * r).sum(0) + args.gamma**horizon * alive[-1] * self.critic(x_last)
+        return -J.mean(), r, d, alive, c_t
+
+    def _critic_targets(self, X: torch.Tensor, r: torch.Tensor, d: torch.Tensor) -> torch.Tensor:
+        """The critic's normalizer fit to the imagined window's inputs ``X`` (horizon + 1, B, D), then the lambda-returns of
+        the rewards ``r`` and termination probabilities ``d`` (horizon, B) on its values, flattened (Eq. 3)."""
+        args = self.args
+        self.critic.norm.update(X)
+        with torch.no_grad():
+            V = self.critic(X)
+            R, targets = V[-1], []
+            for t in range(self.horizon - 1, -1, -1):
+                R = r[t] + args.gamma * (1 - d[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
+                targets.append(R)
+            return torch.stack(targets[::-1]).reshape(-1)
+
+    def _critic_loss(self, inputs: torch.Tensor, targets: torch.Tensor, idx: torch.Tensor) -> torch.Tensor:
+        """The critic's squared error on the minibatch ``idx`` of its inputs and targets."""
+        return (self.critic(inputs[idx]) - targets[idx]).pow(2).mean()
+
     def policy_update(self, buffer: ReplayBuffer) -> tuple:
         """One policy step on imagined rollouts from replayed states, then the critic's on their lambda-returns. Returns
         (policy loss, value loss, imagined reward as a share of the maximum, gradient norm, imagined survival)."""
         args, horizon, B = self.args, self.horizon, self.args.pi_batch
-        age, env = buffer.sample_start_points(B)
-        S, f, a_prev = unflatten_state(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
+        s, _ = self.sample_valid_starts_nosync(buffer, B)  # under --layout: the batch the actor drew
+        S, f, a_prev = unflatten_state(s["s"]), s["f"], s["a_prev"]
         set_requires_grad(self.wm, False)
         set_requires_grad(self.critic, False)
-        fk, x = self.start_features(S, f, a_prev)
-        X, rews, dones = [x], [], []
-        for _ in range(horizon):
-            S, fk, f, a_prev, r, d, x = self.imag_step(S, fk, f, a_prev)
-            rews.append(r), dones.append(d), X.append(x)
-        r, d = torch.stack(rews), torch.stack(dones)
-        alive = survive(d, self.no_sync)  # c_{t+1}: cumprod(1 - d, 0)
-        c_t = torch.cat((torch.ones(1, B, device=self.dev), alive[:-1]), 0)
-        disc = args.gamma ** torch.arange(horizon, device=self.dev, dtype=torch.float32).unsqueeze(-1)
-        J = (disc * c_t * r).sum(0) + args.gamma**horizon * alive[-1] * self.critic(X[-1])
-        loss = -J.mean()
+        if self.rollout is not None:  # --compile_rollout: the rollout below as one compiled function
+            X, rews, dones = self.rollout(S, f, a_prev)
+        else:
+            fk, x = self.start_features(S, f, a_prev)
+            X, rews, dones = [x], [], []
+            for _ in range(horizon):
+                if self.reuse_input:  # the policy's input is the critic's input of the step before (start_features' at the start)
+                    S, fk, f, a_prev, r, d, x = self.imag_step(S, fk, f, a_prev, x)
+                else:
+                    S, fk, f, a_prev, r, d, x = self.imag_step(S, fk, f, a_prev)
+                rews.append(r), dones.append(d), X.append(x)
+        loss, r, d, alive, c_t = self.sm_objective(rews, dones, X[-1])  # --compile_updates: compiled
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
         grad_norm = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
@@ -157,28 +256,25 @@ class HandSuperMimic:
         finite_step(self.opt_pi, self.pi.parameters(), grad_norm, self.no_sync)  # the step, unless the gradient is non-finite
         set_requires_grad(self.wm, True)
         set_requires_grad(self.critic, True)
+        if self.lap is not None:  # --phase_times: the policy's step up to here, the critic's update from here
+            self.lap("policy")
 
         X = torch.stack(X).detach()  # (horizon + 1, B, D)
         r, d, c_t = r.detach(), d.detach(), c_t.detach()
-        self.critic.norm.update(X)
-        with torch.no_grad():
-            V = self.critic(X)
-            R, targets = V[-1], []
-            for t in range(horizon - 1, -1, -1):
-                R = r[t] + args.gamma * (1 - d[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
-                targets.append(R)
-            targets = torch.stack(targets[::-1]).reshape(-1)
+        targets = self.critic_targets(X, r, d)  # --compile_updates: compiled
         inputs = X[:-1].reshape(-1, X.shape[-1])
         minibatch = inputs.shape[0] // args.critic_minibatches
         for _ in range(args.critic_epochs):
             perm = torch.randperm(inputs.shape[0], device=self.dev)
             for i in range(args.critic_minibatches):
                 idx = perm[i * minibatch : (i + 1) * minibatch]
-                v_loss = (self.critic(inputs[idx]) - targets[idx]).pow(2).mean()
+                v_loss = self.critic_loss(inputs, targets, idx)  # --compile_updates: compiled
                 self.opt_v.zero_grad(set_to_none=True)
                 v_loss.backward()
                 nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
                 self.opt_v.step()
+        if self.lap is not None:
+            self.lap("critic")
         imag_r = (c_t * r).sum(0).mean() / (horizon * self.task.max_step_reward)
         return loss.detach(), v_loss.detach(), imag_r, grad_norm.detach(), alive[-1].mean().detach()
 
@@ -207,7 +303,7 @@ class HandSuperTrack(HandSuperMimic):
     OBJECT_TERMS = ("object_pos", "object_ori")
     UNIT_OF = {"keypoint_pos_local": "keypoint_pos", "object_pos": "keypoint_pos", "object_ori": "palm_ori"}  # --st_unit_scales
 
-    def __init__(self, args, kin: HandKinematics, task: HandTask, dev: str):
+    def __init__(self, args: argparse.Namespace, kin: HandKinematics, task: HandTask, dev: str) -> None:
         super().__init__(args, kin, task, dev)
         if self.bptt_decay != 1.0:
             raise ValueError("--bptt_decay is SuperMimic's option here")
@@ -239,16 +335,20 @@ class HandSuperTrack(HandSuperMimic):
         ref = task.ref
         self.ref_local = (ref.keypoints[:, 1:] - ref.keypoints[:, :1]) @ ref.palm_R  # the fingertips about the palm, the palm's frame
         self.st_step = torch.compile(self._st_step)
+        # --compile_updates: the start states' kinematics (SuperMimic's start_features compile them) and the objective compiled
+        self.start_fk, self.st_objective = kin.forward, self._st_objective
+        if self.compile_updates:
+            self.start_fk, self.st_objective = torch.compile(kin.forward), torch.compile(self._st_objective)
 
     @property
-    def optimizers(self):
+    def optimizers(self) -> tuple[torch.optim.Adam | MuonAdam, ...]:
         return self.opt_wm, self.opt_pi
 
     def state_dict(self) -> dict:
         return {"wm": self.wm.state_dict(), "pi": self.pi.state_dict(), "bal": self.bal.state_dict(),
                 "opt_wm": self.opt_wm.state_dict(), "opt_pi": self.opt_pi.state_dict()}  # fmt: skip
 
-    def load_state_dict(self, ck: dict):
+    def load_state_dict(self, ck: dict) -> None:
         self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"]), self.bal.load_state_dict(ck["bal"])
         self.opt_wm.load_state_dict(ck["opt_wm"]), self.opt_pi.load_state_dict(ck["opt_pi"])
 
@@ -274,29 +374,51 @@ class HandSuperTrack(HandSuperMimic):
         fk, f = self.kin.forward(S[0]), task.ref.next_frame(f)
         return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), task.reward(S, fk, f, a, a_prev)
 
-    def policy_update(self, buffer: ReplayBuffer) -> tuple:
-        """One policy step on imagined rollouts from replayed states. Returns (policy loss, NaN, imagined reward as a share
-        of the maximum, gradient norm, imagined survival), the layout of SuperMimic's."""
-        horizon, B = self.horizon, self.args.pi_batch
-        age, env = buffer.sample_start_points(B)
-        S, f, a_prev = unflatten_state(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
-        set_requires_grad(self.wm, False)
+    def _rollout(self, S, f: torch.Tensor, a_prev: torch.Tensor, noises: list):
+        """--compile_rollout: ``policy_update``'s imagined rollout from the start ``S`` at frame ``f`` after ``a_prev`` as one
+        function, the start's kinematics and a step per noise of ``noises`` (drawn before, in the steps' order). Returns the
+        errors (horizon, B, terms), the termination probabilities (horizon, B), the actions and the rewards."""
         fk = self.kin.forward(S[0])
         errs, dones, acts, rews = [], [], [], []
-        for _ in range(horizon):
-            noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)
-            S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
+        for noise in noises:
+            S, fk, f, a_prev, e, d, r = self._st_step(S, fk, f, a_prev, noise)
             errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
-        E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)
-        terms = E.sum(0).mean(0)
-        if not self.bal.calibrated:
-            self.bal.calibrate(terms.detach().clamp(min=1e-6)[self.cal_idx], torch.ones_like(terms))
+        return torch.stack(errs), torch.stack(dones), acts, rews
+
+    def _st_objective(self, terms: torch.Tensor, d: torch.Tensor, acts: list):
+        """The policy's loss from the window's summed errors per term ``terms``, the termination probabilities ``d``
+        (horizon, B) and the actions (``horizon`` of (B, J)): the weighted terms, the failure penalty on the survival and
+        the actions' regularizer. Also returns the survival."""
+        horizon = self.horizon
         loss = (self.bal.w * self.term_scale * terms).sum()
         alive = survive(d, self.no_sync)  # cumprod(1 - d, 0)
         if self.fail_w:  # every imagined step after a failure costs st_fail_w steps' worth of loss
             loss = loss + self.fail_w * (self.step_worth / horizon) * (1 - alive).sum(0).mean()
         A = torch.stack(acts)
-        loss = loss + self.reg * ((A**2).mean() + A.abs().mean())
+        return loss + self.reg * ((A**2).mean() + A.abs().mean()), alive
+
+    def policy_update(self, buffer: ReplayBuffer) -> tuple:
+        """One policy step on imagined rollouts from replayed states. Returns (policy loss, NaN, imagined reward as a share
+        of the maximum, gradient norm, imagined survival), the layout of SuperMimic's."""
+        horizon, B = self.horizon, self.args.pi_batch
+        s, _ = self.sample_valid_starts_nosync(buffer, B)  # under --layout: the batch the actor drew
+        S, f, a_prev = unflatten_state(s["s"]), s["f"], s["a_prev"]
+        set_requires_grad(self.wm, False)
+        if self.rollout is not None:  # --compile_rollout: the rollout below as one compiled function, the noises drawn first
+            noises = [self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev) for _ in range(horizon)]
+            E, d, acts, rews = self.rollout(S, f, a_prev, noises)
+        else:
+            fk = self.start_fk(S[0])  # --compile_updates: compiled
+            errs, dones, acts, rews = [], [], [], []
+            for _ in range(horizon):
+                noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)
+                S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
+                errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
+            E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)
+        terms = E.sum(0).mean(0)
+        if not self.bal.calibrated:
+            self.bal.calibrate(terms.detach().clamp(min=1e-6)[self.cal_idx], torch.ones_like(terms))
+        loss, alive = self.st_objective(terms, d, acts)  # --compile_updates: compiled
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
         grad_norm = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)

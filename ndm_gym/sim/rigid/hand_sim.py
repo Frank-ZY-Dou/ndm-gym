@@ -10,7 +10,9 @@ first episodes end early, at random frames.
 ``step_nosync`` (train_hand --no_sync, --collect_graph; algos.hand_fast) is ``step`` without host synchronization: the
 caller runs it on Warp's stream (``torch_stream``), where torch's writes, the physics and torch's reads follow each other,
 or inside a capture with the physics as kernels (``physics``); the ended worlds are reset by mask (``reset_masked``) and
-the frame counter is advanced in place, so that a CUDA graph reads the tensors it captured.
+the frame counter is advanced in place, so that a CUDA graph reads the tensors it captured. Its three parts (``set_targets``,
+``advance``, ``finish_nosync``) are methods of their own, so that the torch work before and after the physics can be
+compiled apart from it (train_hand --compile_collect), with the resets' random draws (``reset_draws``) made outside.
 """
 
 from __future__ import annotations
@@ -82,16 +84,22 @@ class HandSim:
         self.f[mask] = 0
         self.last[mask] = self.ref.frames - 1
 
+    def reset_draws(self) -> tuple[torch.Tensor, torch.Tensor]:
+        """``reset_masked``'s random draws for every world, in its order: the joints' standard normal noise (N, num_joints)
+        and the object's uniform one in [0, 1) (N, 2)."""
+        return torch.randn(self.N, self.task.kin.num_joints, device=self.device), torch.rand(self.N, 2, device=self.device)
+
     @torch.no_grad()
-    def reset_masked(self, mask: torch.Tensor):
+    def reset_masked(self, mask: torch.Tensor, draws: tuple[torch.Tensor, torch.Tensor] | None = None):
         """``reset`` of the worlds of ``mask`` without a host read (train_hand --reset_masked): the same writes at fixed
         shapes, the random draws made for every world (another random stream than ``reset``'s, which draws for the worlds
-        it resets)."""
+        it resets). ``draws``: ``reset_draws``' values, drawn before (train_hand --compile_collect); None: drawn here."""
         N, o, m = self.N, self.object_qpos, mask.unsqueeze(-1)
-        q = self.ref.q[0] + self.joint_noise * torch.randn(N, self.task.kin.num_joints, device=self.device)
+        z_q, z_p = self.reset_draws() if draws is None else draws
+        q = self.ref.q[0] + self.joint_noise * z_q
         q = torch.clamp(q, self.task.kin.q_lo, self.task.kin.q_hi)
         p = self.ref.p[0].repeat(N, 1)
-        p[:, :2] += self.object_noise * (2 * torch.rand(N, 2, device=self.device) - 1)
+        p[:, :2] += self.object_noise * (2 * z_p - 1)
         self.qpos[:, self.qpos_idx] = torch.where(m, q, self.qpos[:, self.qpos_idx])
         self.qpos[:, o : o + 3] = torch.where(m, p, self.qpos[:, o : o + 3])
         self.qpos[:, o + 3 : o + 7] = torch.where(m, mat_to_quat(self.ref.R[0]), self.qpos[:, o + 3 : o + 7])
@@ -118,11 +126,27 @@ class HandSim:
         kernels) inside a capture. The ended worlds are reset by mask. ``fk``: the forward kinematics of the termination
         (train_hand --compile_eager's compiled ones; None: the task's)."""
         s = self.state()
+        self.set_targets(u)
+        self.advance(physics)
+        return self.finish_nosync(s, fk)
+
+    @torch.no_grad()
+    def set_targets(self, u: torch.Tensor):
+        """``step_nosync``'s first part: the joints' position targets ``u`` written to the actuators."""
         self.ctrl[:, self.ctrl_idx] = u
+
+    def advance(self, physics=None):
+        """``step_nosync``'s physics: the graph of a control step's physics replayed on Warp's stream, or ``physics`` (its
+        kernels) inside a capture."""
         if physics is None:
             wp.capture_launch(self.graph)
         else:
             physics()
+
+    @torch.no_grad()
+    def finish_nosync(self, s: torch.Tensor, fk=None, draws: tuple[torch.Tensor, torch.Tensor] | None = None):
+        """``step_nosync``'s last part, after the physics from the state ``s``: the frame advanced, the next state (``s``
+        where it is not finite), the terminations and ends, the ended worlds reset by mask (``draws``: reset_masked's)."""
         self.f.copy_(self.ref.next_frame(self.f))
         s1 = self.state()
         bad = ~torch.isfinite(s1).all(-1)
@@ -130,7 +154,7 @@ class HandSim:
         S1 = unflatten_state(s1)
         term = bad | self.task.termination(S1, (self.task.kin.forward if fk is None else fk)(S1[0]), self.f)
         done = term | (self.f >= self.last)
-        self.reset_masked(done)
+        self.reset_masked(done, draws)
         return s1, term, done
 
     @torch.no_grad()

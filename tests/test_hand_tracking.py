@@ -6,6 +6,7 @@ the simulator and CUDA graphs, on a GPU."""
 import argparse
 import importlib.util
 import sys
+import types
 
 import mujoco
 import numpy as np
@@ -522,6 +523,25 @@ class KinematicSim:
         self.last.masked_fill_(done, self.ref.frames - 1)
         return s1, term, done
 
+    # step_nosync in HandSim's three parts (--compile_collect); its resets draw nothing
+    def reset_draws(self):
+        return None
+
+    def set_targets(self, u):
+        self.u = u
+
+    def advance(self, physics=None):
+        self._move(self.u)
+
+    def finish_nosync(self, s, fk=None, draws=None):
+        assert draws is None
+        self.f.copy_(self.ref.next_frame(self.f))
+        s1, term, done = self._ends()
+        self.s.copy_(torch.where(done.unsqueeze(-1), flatten_state(self.ref.state(torch.zeros_like(self.f))), self.s))
+        self.f.masked_fill_(done, 0)
+        self.last.masked_fill_(done, self.ref.frames - 1)
+        return s1, term, done
+
 
 def default_collect(sim, task, algo, buffer, st: dict, noise: float):
     """train_hand's default collection step (its closure ``collect``) on the loop's state ``st``."""
@@ -547,11 +567,14 @@ def default_collect(sim, task, algo, buffer, st: dict, noise: float):
 
 
 @pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
-@pytest.mark.parametrize("graphed", [False, True], ids=["eager", "device_head"])
-def test_collector_matches_default_step(setup, monkeypatch, extra, graphed):
+@pytest.mark.parametrize("graphed,compiled", [(False, False), (True, False), (True, True), (False, True)],
+                         ids=["eager", "device_head", "device_head_compile_collect", "compile_collect"])  # fmt: skip
+def test_collector_matches_default_step(setup, monkeypatch, extra, graphed, compiled):
     """hand_fast.Collector's step on a simulator without physics computes the default loop's: the same replay, log sums,
     episode lengths, previous actions and normalizers, bit for bit; with the replay's device-side write head
-    (--collect_graph's) and the forward kinematics through the agent's ``fk`` (--compile_eager's, not compiled here) too."""
+    (--collect_graph's) and the forward kinematics through the agent's ``fk`` (--compile_eager's, not compiled here) too;
+    and with --compile_collect's step (its parts before and after the physics, not compiled here, the random draws made
+    first) too."""
     monkeypatch.setattr(torch, "compile", lambda f, **_: f)
     _, kin, task = setup
     n, steps = 8, 90
@@ -559,7 +582,8 @@ def test_collector_matches_default_step(setup, monkeypatch, extra, graphed):
     for collector in (False, True):
         monkeypatch.setattr(RunningNorm, "no_sync", collector)
         torch.manual_seed(0)
-        args = parse_args(small(extra + ((SYSTEMS + (["--collect_graph", "--compile_eager"] if graphed else [])) if collector else [])))
+        flags = (["--collect_graph", "--compile_eager"] if graphed else []) + (["--compile_collect"] if compiled else [])
+        args = parse_args(small(extra + ((SYSTEMS + flags) if collector else [])))
         algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
         sim = KinematicSim(task, n)
         buffer = ReplayBuffer(32, n, "cpu", fields=replay_fields(task), priorities=False)
@@ -577,7 +601,7 @@ def test_collector_matches_default_step(setup, monkeypatch, extra, graphed):
                 buffer.advance_host()
         if c is not None:
             st = {"a_prev": c.a_prev, "ep_len": c.ep_len, "acc": c.acc}
-            assert (algo.fk is c.fk) == graphed
+            assert (algo.fk is c.fk) == (graphed or compiled) and c.compiled == compiled
             assert graphed == (buffer.ptr_t is not None) and (not graphed or (int(buffer.ptr_t), int(buffer.size_t)) == (buffer.ptr, buffer.size))
         runs.append((buffer, st, sim, trained(algo)))
     (b0, st0, sim0, t0), (b1, st1, sim1, t1) = runs
@@ -642,6 +666,291 @@ def test_muon_updates(setup, monkeypatch, flags):
     other.load_state_dict(algo.state_dict())
     for a, b in zip(hidden_matrices([algo.pi.net]), hidden_matrices([other.pi.net]), strict=True):
         assert torch.equal(algo.opt_pi.muon.state[a]["momentum_buffer"], other.opt_pi.muon.state[b]["momentum_buffer"])
+
+
+# ---------------------------------------------------------------------- --phase_times (hand_fast.PhaseTimes)
+PHASE_COLUMNS = ("iteration", "collect_ms", "wm_ms", "policy_ms", "critic_ms", "log_ms", "ckpt_ms", "host_ms", "it_per_s")  # phase_times.csv
+
+
+class Clock:
+    """A clock the test advances, in time.perf_counter's place; ``takes(seconds)``: a function that takes so long."""
+
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self) -> float:
+        return self.t
+
+    def takes(self, seconds: float):
+        def fn():
+            self.t += seconds
+
+        return fn
+
+
+def phase_rows(run) -> np.ndarray:
+    """The rows of phase_times.csv in the directory ``run``, under its one header."""
+    lines = (run / "phase_times.csv").read_text().splitlines()
+    assert lines[0] == ",".join(PHASE_COLUMNS) and lines.count(lines[0]) == 1
+    return np.array([[float(x) for x in line.split(",")] for line in lines[1:]])
+
+
+def phase_summary(text: str) -> dict:
+    """PhaseTimes.finish's summary: the ms per phase (None: not timed), "total", "it_per_s" and the first line as "head"."""
+    head, *lines = text.splitlines()
+    ms = {line.split()[0]: (None if line.split()[1] == "-" else float(line.split()[1])) for line in lines}
+    return {**ms, "it_per_s": float(lines[-1].split()[3]), "head": head}
+
+
+def check_loop_rows(rows: np.ndarray, iterations: list, saved: list):
+    """Rows of train_hand's loop: one per log row, with time in the collection, the world-model updates, the policy update,
+    the log row and the host's rest, and in the checkpoints where ``saved``; the phases add up to the iteration."""
+    timed = [PHASE_COLUMNS.index(k) for k in ("collect_ms", "wm_ms", "policy_ms", "log_ms", "host_ms")]
+    assert rows[:, 0].tolist() == iterations and (rows[:, timed] > 0).all()
+    assert (rows[:, PHASE_COLUMNS.index("ckpt_ms")] > 0).tolist() == saved
+    assert np.allclose(np.nansum(rows[:, 1:-1], 1) * rows[:, -1], 1000, rtol=1e-4)
+
+
+def test_phase_times_accounting(tmp_path):
+    """hand_fast.PhaseTimes on a clock the test advances. A phase's time is the time between its boundaries and the host's
+    is the rest, so the phases add up to the iteration; a row per --log_every iterations holds the means since the last
+    row; SuperMimic's critic update has its column where the agent calls ``lap`` (without --update_graphs) and NaN with
+    the graphs, as an agent without a critic; the summary is over iterations 1,001 to 3,000 of a run from its first
+    iteration and over the second half of a shorter or a resumed run, which continues the file; a new run refuses it."""
+    assert hand_fast.PhaseTimes.COLUMNS == PHASE_COLUMNS and not parse_args(["--clip", "clip"]).phase_times
+
+    def run(log_dir, argv, critic, first, last, resumed=False):
+        """A loop from iteration ``first`` to ``last``: 1 ms of collection (10 ms in the first 1,000 iterations), 4 ms of
+        world-model updates, from iteration 301 a policy update of 3 ms, 2 ms for the critic and 0.5 ms for the
+        average, 0.25 ms of host work, 5 ms a log row and 20 ms a checkpoint. Returns the file's rows and the summary."""
+        log_dir.mkdir(exist_ok=True)
+        args = parse_args(small(argv) + ["--log_dir", str(log_dir), "--log_every", "50", "--ckpt_every", "200", "--phase_times"])
+        clock, algo = Clock(), types.SimpleNamespace(critic=critic, lap=None)
+        phases = hand_fast.PhaseTimes(args, algo, "cpu", resumed, clock=clock)
+        assert (algo.lap is not None) == (critic is not None and not args.update_graphs)
+
+        def policy():
+            clock.t += 3e-3
+            if algo.lap is not None:  # as HandSuperMimic.policy_update: its step ends, then its critic's update
+                algo.lap("policy")
+            clock.t += 2e-3
+            if algo.lap is not None:
+                algo.lap("critic")
+            clock.t += 0.5e-3
+
+        slow, collect, wm_update = (phases.timed(k, clock.takes(t)) for k, t in (("collect", 10e-3), ("collect", 1e-3), ("wm", 4e-3)))
+        policy_update = phases.timed("policy", policy)
+        for it in range(first, last + 1):
+            clock.t += 0.25e-3
+            (slow if it <= 1000 else collect)()
+            wm_update()
+            if it > 300:
+                policy_update()
+            if it % 50 == 0:
+                clock.t += 5e-3
+                phases.lap("log")
+            if it % 200 == 0:
+                clock.t += 20e-3
+                phases.lap("ckpt")
+            phases.end(it)
+        return phase_rows(log_dir), phase_summary(phases.finish())
+
+    rows, mean = run(tmp_path / "a", [], object(), 1, 3200)
+    assert rows[:, 0].tolist() == list(range(50, 3201, 50))
+    assert np.allclose(rows[0], [50, 10, 4, 0, 0, 0.1, 0, 0.25, 1000 / 14.35], rtol=1e-4)  # iterations 1 to 50: no policy update, no checkpoint
+    assert np.allclose(rows[23], [1200, 1, 4, 3.5, 2, 0.1, 0.4, 0.25, 1000 / 11.25], rtol=1e-4)  # 1,151 to 1,200, with a checkpoint
+    assert np.allclose(rows[:, 1:-1].sum(1) * rows[:, -1], 1000, rtol=1e-4)  # the phases add up to the iteration
+    want = {"collect": 1, "wm": 4, "policy": 3.5, "critic": 2, "log": 0.1, "ckpt": 0.1, "host": 0.25, "total": 10.95}
+    assert "iterations 1001-3000" in mean["head"] and {k: mean[k] for k in want} == pytest.approx(want, abs=1e-3)
+    assert mean["it_per_s"] == pytest.approx(1000 / 10.95, abs=0.05)
+    # a shorter run: its second half; continued by a resumed run, whose summary is over the second half of its own iterations
+    rows, mean = run(tmp_path / "b", [], object(), 1, 600)
+    assert "iterations 301-600" in mean["head"] and (mean["collect"], mean["policy"]) == pytest.approx((10, 3.5), abs=1e-3)
+    rows, mean = run(tmp_path / "b", [], object(), 601, 3200, resumed=True)
+    assert rows[:, 0].tolist() == list(range(50, 3201, 50))
+    assert "iterations 1901-3200" in mean["head"] and mean["collect"] == pytest.approx(1, abs=1e-3)
+    with pytest.raises(ValueError, match="phase_times.csv exists"):
+        run(tmp_path / "b", [], object(), 1, 50)
+    (tmp_path / "b" / "phase_times.csv").write_text("iteration,collect_ms\n")
+    with pytest.raises(ValueError, match="other columns"):
+        run(tmp_path / "b", [], object(), 3201, 3250, resumed=True)
+    # the critic's update in the policy update's graph, and an agent without a critic: in the policy's time, or absent
+    for name, argv, critic in (("c", SYSTEMS + ["--update_graphs"], object()), ("d", ST_ARM, None)):
+        rows, mean = run(tmp_path / name, argv, critic, 1, 400)
+        assert np.isnan(rows[:, 4]).all() and mean["critic"] is None and "iterations 201-400" in mean["head"]
+        assert np.allclose(rows[-1, [1, 2, 3, 5, 6, 7]], [10, 4, 5.5, 0.1, 0.4, 0.25], rtol=1e-4)
+        assert np.allclose(np.nansum(rows[:, 1:-1], 1) * rows[:, -1], 1000, rtol=1e-4)
+
+
+def same_tree(a, b) -> bool:
+    """Whether two checkpoints' trees hold the same values, the tensors bit for bit."""
+    if torch.is_tensor(a) or torch.is_tensor(b):
+        return torch.is_tensor(a) and torch.is_tensor(b) and a.dtype == b.dtype and torch.equal(a, b)
+    if isinstance(a, dict):
+        return isinstance(b, dict) and a.keys() == b.keys() and all(same_tree(a[k], b[k]) for k in a)
+    if isinstance(a, (list, tuple)):
+        return type(a) is type(b) and len(a) == len(b) and all(same_tree(x, y) for x, y in zip(a, b, strict=True))
+    return a == b
+
+
+@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+def test_phase_times_in_the_training_loop(setup, monkeypatch, tmp_path, capsys, extra):
+    """train_hand's loop on the CPU, a simulator without physics in HandSim's place, with and without --phase_times: the
+    same checkpoint (networks, normalizers, optimizers, policy average) and the same log bit for bit, the wall-clock
+    columns aside; with it phase_times.csv has a row per log row whose phases add up to the iteration, a checkpoint's
+    time in the row of its iteration, SuperMimic's critic update timed apart and no critic for SuperTrack; the summary
+    is over the second half of the short run."""
+    import ndm_gym.train_hand as train_hand
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", False)  # main() sets it; restored after the test
+    monkeypatch.setattr(train_hand, "DEVICE", "cpu")
+    monkeypatch.setattr(train_hand, "build", lambda clip, device, reward_std_scale=1.0: setup)
+    hand_sim = types.ModuleType("ndm_gym.sim.rigid.hand_sim")  # HandSim's module, which needs the simulator and a GPU
+    hand_sim.HandSim = lambda model, task, num_envs, device, stagger=False: KinematicSim(task, num_envs)
+    monkeypatch.setitem(sys.modules, "ndm_gym.sim.rigid.hand_sim", hand_sim)
+    argv = [*small(extra), "--pi_opt", "muon", "--wm_opt", "muon", "--pi_ema", "0.9", "--pi_lr_mult", "2", "--lr_decay_ret", "0.99", "--lr_decay_by",
+            "4", "--lr_decay_len", "2", "--num_envs", "8", "--buffer_steps", "16", "--warmup_steps", "8", "--wm_only_iters", "1", "--log_every", "2",
+            "--ckpt_every", "4", "--iterations", "6"]  # fmt: skip
+    runs = {}
+    for name, flag in (("off", []), ("on", ["--phase_times"])):
+        monkeypatch.setattr(sys, "argv", ["train_hand", *argv, *flag, "--log_dir", str(tmp_path / name)])
+        train_hand.main()
+        ck = torch.load(tmp_path / name / "last.pt", map_location="cpu", weights_only=False)
+        assert ck["iteration"] == 6 and ck["args"]["phase_times"] == bool(flag) and int(ck["pi_avg"]["n_averaged"]) == 5
+        log = np.loadtxt(tmp_path / name / "train_log.csv", delimiter=",", skiprows=1)
+        runs[name] = ({k: v for k, v in ck.items() if k not in ("wall_time", "args")}, log)
+    (ck0, log0), (ck1, log1) = runs["off"], runs["on"]
+    assert {"wm", "pi", "pi_live", "pi_avg", "opt_wm", "opt_pi"} <= set(ck0) and same_tree(ck0, ck1)
+    assert not same_tree(ck0["pi"], ck0["pi_live"])  # the comparison tells trained weights apart
+    same = [i for i, k in enumerate(train_hand.LOG_COLUMNS) if k not in ("wall_h", "it_per_s")]
+    assert log0.shape == (3, len(train_hand.LOG_COLUMNS)) and np.array_equal(log0[:, same], log1[:, same], equal_nan=True)
+    assert not (tmp_path / "off" / "phase_times.csv").exists()
+    rows = phase_rows(tmp_path / "on")
+    check_loop_rows(rows, [2, 4, 6], [False, True, False])
+    critic = rows[:, PHASE_COLUMNS.index("critic_ms")]
+    assert np.isnan(critic).all() if extra else (critic > 0).all()
+    mean = phase_summary(capsys.readouterr().out.split("--phase_times: ")[-1])
+    assert "iterations 4-6" in mean["head"] and (mean["critic"] is None) == bool(extra) and mean["policy"] > 0 and mean["total"] > 0
+
+
+# ---------------------------------------------------------------------- the updates' engineering options (algos.hand_fast)
+def test_engineering_arguments():
+    """--compile_updates, --muon_batched, --elementwise_3x3, --combo_kernels, --wm_palm_fk, --compile_collect,
+    --mix_order_reductions, --autotune_gemm and --compile_rollout are off by default; the combinations that cannot run are
+    refused."""
+    args = parse_args(["--clip", "clip"])
+    assert not (args.compile_updates or args.muon_batched or args.elementwise_3x3 or args.combo_kernels or args.wm_palm_fk)
+    assert not (args.compile_collect or args.mix_order_reductions or args.autotune_gemm or args.compile_rollout)
+    for refused in (["--compile_updates"], ["--compile_updates", "--fused_adam", "--reset_masked"], ["--muon_batched"], ["--compile_collect"],
+                    ["--compile_collect", "--fused_adam", "--reset_masked"]):  # fmt: skip
+        with pytest.raises(SystemExit):
+            parse_args(["--clip", "clip"] + refused)
+    on = parse_args(["--clip", "clip", *SYSTEMS, "--compile_updates", "--muon_batched", "--wm_opt", "muon", "--elementwise_3x3", "--combo_kernels",
+                     "--wm_palm_fk", "--compile_collect", "--mix_order_reductions", "--autotune_gemm", "--compile_rollout"])  # fmt: skip
+    assert on.compile_updates and on.muon_batched and on.elementwise_3x3 and on.combo_kernels and on.wm_palm_fk
+    assert on.compile_collect and on.mix_order_reductions and on.autotune_gemm and on.compile_rollout
+
+
+def test_inductor_settings(monkeypatch):
+    """--mix_order_reductions and --autotune_gemm set inductor's configuration (hand_fast.mix_order_reductions,
+    autotune_gemm), not its CUDA graphs."""
+    import torch._inductor.config as inductor
+
+    for k in ("mix_order_reduction", "mix_order_reduction_non_strict_mode"):
+        monkeypatch.setattr(inductor.triton, k, False)
+    monkeypatch.setattr(inductor, "max_autotune_gemm", False)
+    cudagraphs = inductor.triton.cudagraphs
+    hand_fast.mix_order_reductions()
+    assert inductor.triton.mix_order_reduction and inductor.triton.mix_order_reduction_non_strict_mode and not inductor.max_autotune_gemm
+    hand_fast.autotune_gemm()
+    assert inductor.max_autotune_gemm and inductor.triton.cudagraphs == cudagraphs
+
+
+@pytest.mark.parametrize("fingers,palm_bodies", [(XHAND_FINGERS, True), (ALLEGRO_FINGERS, False)])
+def test_palm_kinematics(fingers, palm_bodies):
+    """HandKinematics.palm (--wm_palm_fk) is forward's palm keypoint and rotation bit for bit, from the palm's chain alone."""
+    kin = HandKinematics(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies)), "cpu")
+    q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(64, kin.num_joints, generator=torch.Generator().manual_seed(0))
+    (keypoints, palm_R), (palm, palm_R1) = kin.forward(q), kin.palm(q)
+    assert palm.shape == (64, 1, 3) and torch.equal(palm[:, 0], keypoints[:, 0]) and torch.equal(palm_R1, palm_R)
+    assert len(kin.palm_chain) == (6 if palm_bodies else 1) < len(kin.steps)
+
+
+@pytest.mark.parametrize("extra", [[], ST_ARM, ST_ARM[:6] + ["--st_task_weights"]], ids=["supermimic", "supertrack", "supertrack_task_weights"])
+def test_engineering_options_match_default(setup, monkeypatch, extra):
+    """With the compilation left out (torch.compile as the identity, as on the CPU here), --compile_updates and
+    --wm_palm_fk compute what the updates compute without them: from the same state and random draws the same values,
+    parameters, normalizers and optimizer states bit for bit, SuperMimic's critic's too (on a GPU the compiled parts may
+    round differently). --muon_batched builds the optimizers with Muon's batched step, which batches the world model's two
+    hidden matrices."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    runs = []
+    for flags in ([], ["--compile_updates", "--wm_palm_fk"]):
+        args, algo, buffer = agent_and_replay(kin, task, extra + SYSTEMS + ["--pi_opt", "muon", "--wm_opt", "muon"] + flags)
+        assert algo.compile_updates == bool(flags) and (algo.wm_fk == kin.palm) == bool(flags)
+        torch.manual_seed(1)
+        out = torch.stack([algo.wm_update(buffer), *algo.policy_update(buffer), algo.wm_update(buffer), *algo.policy_update(buffer)])
+        opts = [part for o in algo.optimizers for part in ((o.muon, o.adam) if isinstance(o, MuonAdam) else (o,))]
+        state = [v for o in opts for st in o.state.values() for v in st.values()]
+        runs.append((out, trained(algo), state))
+    (out0, t0, s0), (out1, t1, s1) = runs
+    finite = torch.isfinite(out0)  # SuperTrack's value loss is NaN
+    assert int(finite.sum()) == (12 if not extra else 10) and torch.equal(out0[finite], out1[finite]) and torch.equal(finite, torch.isfinite(out1))
+    assert all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
+    assert len(s0) == len(s1) > 0 and all(torch.equal(a, b) for a, b in zip(s0, s1, strict=True))
+    args, algo, _ = agent_and_replay(kin, task, extra + ["--pi_opt", "muon", "--wm_opt", "muon", "--muon_batched"])
+    assert all(o.batched for o in algo.optimizers if isinstance(o, MuonAdam)) and len(algo.optimizers) == (3 if not extra else 2)
+    assert [tuple(p.shape) for p in algo.opt_wm.muon.param_groups[0]["params"]] == [(32, 32)]  # the small test model's one hidden matrix
+
+
+@pytest.mark.parametrize("extra", [[], ["--sm_reuse_input"], ST_ARM], ids=["supermimic", "supermimic_reuse_input", "supertrack"])
+def test_compile_rollout_matches_default(setup, monkeypatch, extra):
+    """--compile_rollout (torch.compile as the identity, as on the CPU here): the policy update's rollout as one function
+    computes what the steps' functions compute, from the same state and random draws (SuperTrack's imagination noise
+    drawn before the rollout, in the steps' order): the same values, parameters, normalizers and optimizer states bit for
+    bit, SuperMimic's critic's too."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    runs = []
+    for flags in ([], ["--compile_rollout"]):
+        args, algo, buffer = agent_and_replay(kin, task, extra + SYSTEMS + ["--compile_updates"] + flags)
+        assert (algo.rollout is not None) == bool(flags)
+        torch.manual_seed(1)
+        out = torch.stack([algo.wm_update(buffer), *algo.policy_update(buffer), algo.wm_update(buffer), *algo.policy_update(buffer)])
+        state = [v for o in algo.optimizers for st in o.state.values() for v in st.values()]
+        runs.append((out, trained(algo), state))
+    (out0, t0, s0), (out1, t1, s1) = runs
+    finite = torch.isfinite(out0)  # SuperTrack's value loss is NaN
+    assert int(finite.sum()) == (12 if "supertrack" not in extra else 10) and torch.equal(out0[finite], out1[finite])
+    assert torch.equal(finite, torch.isfinite(out1)) and all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
+    assert len(s0) == len(s1) > 0 and all(torch.equal(a, b) for a, b in zip(s0, s1, strict=True))
+
+
+def test_sm_reuse_input(setup, monkeypatch):
+    """--sm_reuse_input (SuperMimic's; refused for SuperTrack): the imagined steps take the policy's input from the critic's
+    input of the step before; from the same state and random draws the policy update returns the same values and moves
+    the parameters as without it (eagerly on the CPU, bit for bit: the same operations on the same values)."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    with pytest.raises(SystemExit):
+        parse_args(small(ST_ARM) + ["--sm_reuse_input"])
+    runs, inputs = [], []
+    for flags in ([], ["--sm_reuse_input"]):
+        args, algo, buffer = agent_and_replay(kin, task, SYSTEMS + flags)
+        assert algo.reuse_input == bool(flags)
+        step = algo.imag_step
+        monkeypatch.setattr(algo, "imag_step", lambda *a: inputs.append(len(a)) or step(*a))  # noqa: B023
+        torch.manual_seed(1)
+        out = torch.stack([*algo.policy_update(buffer), *algo.policy_update(buffer)])
+        runs.append((out, trained(algo)))
+    assert inputs == [4] * (2 * args.horizon) + [5] * (2 * args.horizon)
+    (out0, t0), (out1, t1) = runs
+    assert torch.equal(out0, out1) and all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
 
 
 # ------------------------------------------------- on a GPU: the simulator's steps and the CUDA graphs
@@ -720,14 +1029,14 @@ def test_collect_graph_replays_the_eager_step(gpu_setup, monkeypatch, extra):
     """--collect_graph: the captured collection step, replayed, computes what the step run eagerly on Warp's stream does
     (--no_sync) when both draw the same random numbers: the same episode ends and frames, and the same replay, log sums,
     actions and normalizers up to the rounding by which two simulations differ; with --compile_eager's compiled forward
-    kinematics too."""
+    kinematics too, and with --compile_collect's compiled step, run eagerly and captured."""
     from ndm_gym.sim.rigid.hand_sim import HandSim
 
     monkeypatch.setattr(RunningNorm, "no_sync", True)
     model, kin, task = gpu_setup
     n, steps, runs = 64, 40, []
-    for flags in ([], ["--collect_graph"], ["--collect_graph", "--compile_eager"]):
-        graphed = bool(flags)
+    for flags in ([], ["--collect_graph"], ["--collect_graph", "--compile_eager"], ["--compile_collect"], ["--collect_graph", "--compile_collect"]):
+        graphed = "--collect_graph" in flags
         torch.manual_seed(0)
         args = parse_args(small(extra + SYSTEMS + flags))
         algo = HAND_ALGOS[args.algo](args, kin, task, CUDA)
@@ -744,7 +1053,7 @@ def test_collect_graph_replays_the_eager_step(gpu_setup, monkeypatch, extra):
         runs.append((buffer, c, sim, trained(algo)))
     b0, c0, sim0, t0 = runs[0]
     for b1, c1, sim1, t1 in runs[1:]:
-        assert (int(b1.ptr_t), int(b1.size_t)) == (b1.ptr, b1.size)
+        assert b1.ptr_t is None or (int(b1.ptr_t), int(b1.size_t)) == (b1.ptr, b1.size)
         for k in ("f", "done"):
             assert torch.equal(b0.data[k], b1.data[k]), k
         for k in ("s", "s1", "u", "a_prev"):
@@ -825,3 +1134,65 @@ def test_training_loop_with_the_systems_options(gpu_setup, monkeypatch, tmp_path
     monkeypatch.setattr(sys, "argv", ["train_hand", *argv, "--iterations", "24", "--resume", str(run / "last.pt"), "--pi_opt", "muon"])
     with pytest.raises(ValueError, match="pi_opt"):
         train_hand.main()
+
+
+@GPU
+@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+def test_phase_times_with_the_systems_options(gpu_setup, monkeypatch, tmp_path, capsys, extra):
+    """--phase_times in train_hand's loop with every systems option on the small scene (the collection step and the
+    updates as CUDA graphs, Muon, the policy average): the graphs are captured and replayed between the boundaries, the
+    log's rows are finite, phase_times.csv has a row per log row whose phases add up to the iteration, and the critic's
+    update, in the policy update's graph, has no time of its own for either algorithm."""
+    import ndm_gym.train_hand as train_hand
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", False)  # main() sets it; restored after the test
+    monkeypatch.setattr(train_hand, "build", lambda clip, device, reward_std_scale=1.0: gpu_setup)
+    run = tmp_path / "run"
+    argv = [*small(extra), *SYSTEMS, "--collect_graph", "--compile_eager", "--update_graphs", "--pi_opt", "muon", "--wm_opt", "muon", "--pi_ema",
+            "0.9", "--pi_lr_mult", "2", "--lr_decay_ret", "0.99", "--lr_decay_by", "8", "--lr_decay_len", "4", "--num_envs", "32", "--buffer_steps",
+            "16", "--warmup_steps", "8", "--wm_only_iters", "2", "--log_every", "4", "--ckpt_every", "8", "--iterations", "12", "--log_dir", str(run),
+            "--phase_times"]  # fmt: skip
+    monkeypatch.setattr(sys, "argv", ["train_hand", *argv])
+    train_hand.main()
+    out = capsys.readouterr().out
+    assert "captured one collection step" in out and "captured the world-model updates" in out and "captured the policy update" in out
+    log = np.loadtxt(run / "train_log.csv", delimiter=",", skiprows=1)
+    cols = [train_hand.LOG_COLUMNS.index(k) for k in ("wm_loss", "pi_loss", "imag_r", "pi_gradnorm", "imag_survival", "sim_r", "ep_len")]
+    assert log[:, 0].tolist() == [4, 8, 12] and np.isfinite(log[1:, cols]).all()
+    rows = phase_rows(run)
+    check_loop_rows(rows, [4, 8, 12], [False, True, False])
+    assert np.isnan(rows[:, PHASE_COLUMNS.index("critic_ms")]).all()
+    text = out.split("--phase_times: ")[-1]
+    mean = phase_summary(text)
+    assert "iterations 7-12" in mean["head"] and mean["critic"] is None and text.count("one CUDA graph") == (4 if not extra else 3)
+
+
+@GPU
+@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+def test_engineering_options_with_the_systems_options(gpu_setup, monkeypatch, tmp_path, capsys, extra):
+    """--compile_updates, --muon_batched, --wm_palm_fk, --elementwise_3x3 and --combo_kernels in train_hand's loop with
+    every systems option on the small scene (compilation left out, inductor's settings recorded instead of made): the
+    collection step and the updates are captured as CUDA graphs and replayed, and the log's rows are finite."""
+    import ndm_gym.train as train
+    import ndm_gym.train_hand as train_hand
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", False)  # main() sets it; restored after the test
+    monkeypatch.setattr(train_hand, "build", lambda clip, device, reward_std_scale=1.0: gpu_setup)
+    made = []
+    monkeypatch.setattr(train, "elementwise_3x3_products", lambda: made.append("elementwise_3x3"))
+    monkeypatch.setattr(train, "combo_kernels", lambda: made.append("combo_kernels"))
+    run = tmp_path / "run"
+    argv = [*small(extra), *SYSTEMS, "--collect_graph", "--compile_eager", "--update_graphs", "--pi_opt", "muon", "--wm_opt", "muon", "--pi_ema",
+            "0.9", "--compile_updates", "--muon_batched", "--wm_palm_fk", "--elementwise_3x3", "--combo_kernels", "--num_envs", "32",
+            "--buffer_steps", "16", "--warmup_steps", "8", "--wm_only_iters", "2", "--log_every", "4", "--iterations", "12", "--log_dir", str(run),
+            *([] if extra else ["--sm_reuse_input"])]  # fmt: skip
+    monkeypatch.setattr(sys, "argv", ["train_hand", *argv])
+    train_hand.main()
+    out = capsys.readouterr().out
+    assert "captured one collection step" in out and "captured the world-model updates" in out and "captured the policy update" in out
+    assert made == ["elementwise_3x3", "combo_kernels"]
+    log = np.loadtxt(run / "train_log.csv", delimiter=",", skiprows=1)
+    cols = [train_hand.LOG_COLUMNS.index(k) for k in ("wm_loss", "pi_loss", "imag_r", "pi_gradnorm", "imag_survival", "sim_r", "ep_len")]
+    assert log[:, 0].tolist() == [4, 8, 12] and np.isfinite(log[1:, cols]).all()

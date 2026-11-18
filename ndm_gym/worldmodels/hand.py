@@ -8,6 +8,8 @@ units of the spread of one true step's increments."""
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn as nn
 
@@ -16,13 +18,20 @@ from ..core.normalizer import RunningNorm
 from ..core.rotations import mat_to_6d, so3_exp, so3_log
 from ..state import CONTROL_DT
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 KINDS = ("increment", "accel")
+# the hand-object state tuple S = (q, qd, p, R, v, w) of tasks.hand_tracking: the hand's joint positions and velocities
+# (..., num_joints), the object's position (..., 3), rotation matrix (..., 3, 3), world linear and angular velocity (..., 3)
+HandState = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
 
 class HandWorldModel(nn.Module):
     """Deterministic dynamics s_{t+1} = f(s_t, u_t), u_t the joints' position targets."""
 
-    def __init__(self, num_joints: int, hidden=(1024, 1024, 1024), act: str = "silu", layer_norm: bool = True, kind: str = "increment"):
+    def __init__(self, num_joints: int, hidden: Sequence[int] = (1024, 1024, 1024), act: str = "silu", layer_norm: bool = True,
+                 kind: str = "increment") -> None:
         super().__init__()
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
@@ -42,7 +51,7 @@ class HandWorldModel(nn.Module):
         self.register_buffer("err_floor", torch.cat((torch.full((num_joints,), 1e-3), torch.full((num_joints,), 2e-2), torch.full((3,), 5e-4),
                                                      torch.full((3,), 5e-3), torch.full((3,), 1e-2), torch.full((3,), 5e-2))))  # fmt: skip
 
-    def inputs(self, S, fk, u: torch.Tensor) -> torch.Tensor:
+    def inputs(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> torch.Tensor:
         q, qd, p, R, v, w = S
         keypoints, palm_R = fk
         Rt = palm_R.transpose(-1, -2)
@@ -50,20 +59,20 @@ class HandWorldModel(nn.Module):
                           mat_to_6d(R), u - q), -1)  # fmt: skip
 
     @staticmethod
-    def increments(S, S1) -> torch.Tensor:
+    def increments(S: HandState, S1: HandState) -> torch.Tensor:
         """The increments from S to S1: the object's rotation in its own frame."""
         q, qd, p, R, v, w = S
         q1, qd1, p1, R1, v1, w1 = S1
         return torch.cat((q1 - q, qd1 - qd, p1 - p, so3_log(R.transpose(-1, -2) @ R1), v1 - v, w1 - w), -1)
 
-    def targets(self, S, S1) -> torch.Tensor:
+    def targets(self, S: HandState, S1: HandState) -> torch.Tensor:
         """The regression targets, what ``out_norm`` normalizes: the increments from S to S1, or (accel) the mean
         accelerations over the step of the joints and of the object."""
         if self.kind == "increment":
             return self.increments(S, S1)
         return torch.cat((S1[1] - S[1], S1[4] - S[4], S1[5] - S[5]), -1) / CONTROL_DT
 
-    def step(self, S, fk, u: torch.Tensor):
+    def step(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> HandState:
         """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward, or its ``palm``: only the
         palm's pose is read) and the targets ``u``."""
         q, qd, p, R, v, w = S
@@ -76,7 +85,7 @@ class HandWorldModel(nn.Module):
         dq, dqd, dp, dth, dv, dw = d.split((self.num_joints, self.num_joints, 3, 3, 3, 3), -1)
         return q + dq, qd + dqd, p + dp, R @ so3_exp(dth), v + dv, w + dw
 
-    def error(self, S_hat, S) -> torch.Tensor:
+    def error(self, S_hat: HandState, S: HandState) -> torch.Tensor:
         """The prediction's error in the increments' layout, in units of the increments' spread."""
         q, qd, p, R, v, w = S
         qh, qdh, ph, Rh, vh, wh = S_hat

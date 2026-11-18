@@ -178,13 +178,15 @@ class LayoutTimer:
 class GivenStarts:
     """An imagination batch as fixed tensors on ``device``: the start states and their observation histories' states, as
     ``ReplayBuffer.starts_at`` returns them for ``B`` starts. ``starts`` stands in for the learner's own draw
-    (``Algo.sample_valid_starts_nosync``), which the policy update calls with what it was given as its replay buffer."""
+    (``Algo.sample_valid_starts_nosync``), which the policy update calls with what it was given as its replay buffer.
+    ``keys``: the replay's fields a start holds; ``hist`` 0: starts without a history (train_hand: the hand agents' draw,
+    ``hand_algos.START_KEYS``)."""
 
-    def __init__(self, buffer: ReplayBuffer, B: int, hist: int, device):
+    def __init__(self, buffer: ReplayBuffer, B: int, hist: int, device, keys: tuple = START_KEYS):
         def like(lead):
-            return {k: torch.zeros(lead + buffer.data[k].shape[2:], dtype=buffer.data[k].dtype, device=device) for k in START_KEYS}
+            return {k: torch.zeros(lead + buffer.data[k].shape[2:], dtype=buffer.data[k].dtype, device=device) for k in keys}
 
-        self.B, self.s, self.h = B, like((B,)), like((B, hist))
+        self.B, self.s, self.h = B, like((B,)), like((B, hist)) if hist > 0 else {}
 
     def starts(self, buffer, B: int):
         if buffer is not self or B != self.B:
@@ -193,13 +195,18 @@ class GivenStarts:
 
     @torch.no_grad()
     def fill(self, s: dict, h: dict):
-        for k in START_KEYS:
-            self.s[k].copy_(s[k])
-            self.h[k].copy_(h[k])
+        if s.keys() != self.s.keys() or h.keys() != self.h.keys():
+            raise ValueError(f"--layout: a draw of {sorted(s)} with a history of {sorted(h)}, the batch holds {sorted(self.s)} and {sorted(self.h)}")
+        for part, got in ((self.s, s), (self.h, h)):
+            for k in part:
+                if got[k].shape != part[k].shape or got[k].dtype != part[k].dtype:  # copy_ would broadcast or cast it silently
+                    raise ValueError(f"--layout: the draw's {k} is {tuple(got[k].shape)} {got[k].dtype}, the batch's {tuple(part[k].shape)} "
+                                     f"{part[k].dtype}")  # fmt: skip
+                part[k].copy_(got[k])
 
     def pairs(self, other: GivenStarts) -> dict:
         """The parcel entries that bring this batch into ``other``."""
-        return {f"batch.{part}.{k}": (getattr(self, part)[k], getattr(other, part)[k]) for part in ("s", "h") for k in START_KEYS}
+        return {f"batch.{part}.{k}": (getattr(self, part)[k], getattr(other, part)[k]) for part in ("s", "h") for k in getattr(self, part)}
 
 
 def copy_modules(src, dst) -> list[str]:
@@ -253,13 +260,17 @@ class Split:
     (the module's docstring). ``actor``: train.py's algorithm object on the simulator's device; ``algo_on(device)``: a new
     object of the same arguments on another device, with the task's tables there; ``buffer``: the replay buffer, on the
     actor's device with its write head and fill level on the device (--graph_early); ``devices``: the layout's, the
-    actor's first (the first GPUs the trainer sees by default).
+    actor's first (the first GPUs the trainer sees by default). ``start_keys``, ``hist``: the replay's fields of an
+    imagination start and its history's length (GivenStarts; None: --hist);
+    ``steps``: the collection steps of an iteration at most (None: those of --utd), the rows AWL's replica receives per
+    iteration. train_hand passes the hand agents' (algos.hand_layout).
 
     The training loop: ``update_graphs()`` once after the warm-up collection; per iteration its collection, the returned
     world-model update and, once ``ready``, the returned policy update; then ``exchange()``. ``algo`` (``SplitAlgo``) is
     what the loop reads otherwise."""
 
-    def __init__(self, args, actor, algo_on, buffer: ReplayBuffer, devices: tuple | None = None):
+    def __init__(self, args, actor, algo_on, buffer: ReplayBuffer, devices: tuple | None = None, start_keys: tuple = START_KEYS,
+                 hist: int | None = None, steps: int | None = None):
         layout = args.layout
         if layout not in LAYOUTS or LAYOUTS[layout] < 2:
             raise ValueError(f"--layout {layout}: not a split layout")
@@ -279,6 +290,7 @@ class Split:
             if getattr(actor, name, None) is None:
                 raise ValueError(f"--layout {layout}: the algorithm has no {name} (SuperMimic and SuperTrack do)")
         self.args, self.layout, self.devices, self.buffer, self.actor = args, layout, tuple(devices), buffer, actor
+        self.steps = steps
         self.learner = algo_on(devices[-1])
         self.wmer = algo_on(devices[1]) if layout == "AWL" else actor  # the world model's owner
         for other in (self.learner, self.wmer):
@@ -288,8 +300,9 @@ class Split:
                 copy_modules(actor, other)
         self.algo = SplitAlgo(actor, self.wmer, self.learner)
         # the imagination batch: the actor's draw (out) and the learner's copy (given), which its policy update reads
-        self.out = GivenStarts(buffer, args.pi_batch, args.hist, actor.dev)
-        self.given = GivenStarts(buffer, args.pi_batch, args.hist, self.learner.dev)
+        hist = args.hist if hist is None else hist
+        self.out = GivenStarts(buffer, args.pi_batch, hist, actor.dev, start_keys)
+        self.given = GivenStarts(buffer, args.pi_batch, hist, self.learner.dev, start_keys)
         self.learner.sample_valid_starts_nosync = self.given.starts  # the learner's own draw: the batch it was sent
         tensors = lambda m, kind: dict(getattr(m, f"named_{kind}")())  # noqa: E731
         pair = lambda prefix, src, dst: {f"{prefix}.{k}": (v, dst[k]) for k, v in src.items()}  # noqa: E731
@@ -320,10 +333,13 @@ class Split:
     def _make_replica(self):
         buf, dev = self.buffer, self.wmer.dev
         self.replica = ReplayBuffer(buf.T, buf.N, dev, fields=buf.fields, priorities=False)
+        self.replica.window_keys = buf.window_keys  # the fields a world-model window reads
         self.replica.use_device_ptr(device_size=True)
-        self.n_max = math.ceil(1.0 / self.args.utd - 1e-9)  # collection steps per iteration: floor(acc) <= ceil(1 / utd)
-        if self.n_max > buf.T:
-            raise ValueError(f"--layout AWL: {self.n_max} collection steps per iteration (--utd {self.args.utd}) and a replay of {buf.T} steps")
+        # collection steps per iteration: floor(acc) <= ceil(1 / utd), or the trainer's
+        self.n_max = math.ceil(1.0 / self.args.utd - 1e-9) if self.steps is None else self.steps
+        if not 1 <= self.n_max <= buf.T:
+            why = f"--utd {self.args.utd}" if self.steps is None else "the trainer's"
+            raise ValueError(f"--layout AWL: {self.n_max} collection steps per iteration ({why}) and a replay of {buf.T} steps")
         rows = lambda d: {k: torch.zeros((self.n_max,) + v.shape[1:], dtype=v.dtype, device=d) for k, v in buf.data.items()}  # noqa: E731
         self.rows_out, self.rows_in = rows(buf.device), rows(dev)
         self.rows = Parcel({f"rows.{k}": (self.rows_out[k], self.rows_in[k]) for k in buf.data})

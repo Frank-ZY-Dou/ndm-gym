@@ -39,7 +39,7 @@ def rollout(sim, algo, task, policy: bool = True):
     return torch.stack(states), torch.stack(qpos), failed
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--ckpt", type=str, required=True)
     parser.add_argument("--out", type=str, required=True)

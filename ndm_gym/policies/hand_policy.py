@@ -20,4 +20,8 @@ class HandPolicy(nn.Module):
         self.norm = RunningNorm(obs_dim + goal_dim)
 
     def forward(self, obs: torch.Tensor, goal: torch.Tensor) -> torch.Tensor:
-        return torch.tanh(run_mlp(self.net, self.norm(torch.cat((obs, goal), -1))))
+        return self.from_input(torch.cat((obs, goal), -1))
+
+    def from_input(self, x: torch.Tensor) -> torch.Tensor:
+        """The action from the observation and goal already concatenated (algos.hand_algos, --sm_reuse_input)."""
+        return torch.tanh(run_mlp(self.net, self.norm(x)))

@@ -4,14 +4,19 @@ algorithm's settings are LAFAN1's (ndm_gym.train's arguments) with the defaults 
 does not implement are refused unless left at their defaults (UNSUPPORTED).
 
 An iteration is one control step of every world, ``--wm_batches`` world-model steps and, after ``--wm_only_iters``,
-one policy and critic update. Writes ``train_log.csv``, ``args.json`` and ``last.pt`` to ``--log_dir``. ``last.pt``
+one policy and critic update. Writes ``train_log.csv``, ``args.json`` and ``last.pt`` to ``--log_dir``, with
+``--phase_times`` also ``phase_times.csv``: the time of each of an iteration's phases, the device synchronized at every
+boundary, a row per log row and a summary at the end (hand_fast.PhaseTimes; a slower run, the same results). ``last.pt``
 holds what ``--resume`` continues from: the networks with their normalizers and the optimizers' states. The replay is not
 saved; a resumed run refills it with ``--warmup_steps`` of collection, as a new run starts, and continues its log.
 
 Systems options (ndm_gym.algos.hand_fast, off by default): ``--fused_adam``, ``--reset_masked``, ``--no_sync`` (an iteration
 without host-device synchronization), ``--collect_graph`` and ``--update_graphs`` (the collection step and the updates as
 CUDA graphs), ``--compile_eager`` (the collection's forward kinematics compiled), ``--pi_opt muon``, ``--wm_opt muon``,
-``--pi_ema`` and ``--pi_lr_mult``. ``HAND_PROFILE=1`` prints each part's time with every log row.
+``--pi_ema`` and ``--pi_lr_mult``; engineering options (``--compile_updates``, ``--compile_collect``, ``--compile_rollout``,
+``--mix_order_reductions``, ``--autotune_gemm`` and others: hand_fast's docstring). ``HAND_PROFILE=1`` prints each part's time with every log row.
+``--layout AL | AWL`` (ndm_gym.algos.hand_layout, off by default): the iteration's steps on two or three GPUs at once, each on
+the others' results of the previous iteration.
 
 Run: ``python -m ndm_gym.train_hand --clip data/spider/processed/<dataset>/xhand/right/<task>/0 --log_dir logs/<run>``
 """
@@ -19,15 +24,16 @@ Run: ``python -m ndm_gym.train_hand --clip data/spider/processed/<dataset>/xhand
 from __future__ import annotations
 
 import argparse
+import sys
 import json
 import os
-import sys
 import time
 
 from ndm_gym.train import add_train_args
 
 LOG_COLUMNS = ("iteration", "wall_h", "sim_steps", "wm_loss", "pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival", "sim_r", "object_mm",
                "ep_len", "term_frac", "it_per_s", "lr")  # fmt: skip
+DEVICE = "cuda:0"  # the simulator's and the networks'; the tests run the loop on the CPU with a stand-in for the simulator
 # ndm_gym.train's defaults that hand training replaces: one clip of a few seconds in 2048 worlds
 HAND_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_000, "lr_decay_iters": 20_000, "buffer_steps": 256, "warmup_steps": 32,
                  "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4, "amp": "none"}  # fmt: skip
@@ -38,17 +44,19 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
                "pi_rollout_clip", "wm_bptt_fp32", "imag_fail_starts", "imag_fail_window", "sm_residual", "st_com", "st_quad_w",
                "st_late_w", "st_fail_margin", "utd", "hist", "wm_input_noise", "wm_smooth_w", "wm_smooth_eps", "wm_smooth_dirs",
                "wm_backbone", "rf_dim", "rf_layers", "rf_heads", "rf_registers", "rf_no_tree_bias", "rf_no_rope", "rf_rope_detach",
-               "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center", "rf_merge", "wm_sample", "wm_prio_alpha",
-               "wm_fail_windows", "wm_fail_window", "st_wm_loss", "wm_lr", "no_critic", "pi_updates", "lr_decay_hours", "ckpt_hours",
-               "motion_dir", "motions", "paired", "clips")  # fmt: skip
+               "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center", "rf_merge", "wm_sample", "wm_prio_alpha", "wm_fail_windows",
+               "wm_fail_window", "st_wm_loss", "wm_lr", "no_critic", "pi_updates", "lr_decay_hours", "ckpt_hours", "motion_dir", "motions",
+               "paired", "clips")  # fmt: skip
 
 
-def parse_args(argv: list[str] | None = None):
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     from ndm_gym.algos.hand_fast import add_hand_fast_args, check_hand_fast_args
+    from ndm_gym.algos.hand_layout import add_hand_layout_args, check_hand_layout_args
 
     parser = argparse.ArgumentParser()
     add_train_args(parser)
     add_hand_fast_args(parser)  # the systems options
+    add_hand_layout_args(parser)  # --layout
     parser.add_argument("--clip", type=str, required=True, help="a SPIDER trial directory (.../<task>/<trial>)")
     parser.add_argument("--st_vel_terms", action="store_true",
                         help="supertrack: also the L1 errors of the joints' velocities and of the object's linear and angular velocity")  # fmt: skip
@@ -76,7 +84,8 @@ def parse_args(argv: list[str] | None = None):
         parser.error("hand training implements --algo supertrack and --algo supermimic")
     st_only = {"st_vel_terms": False, "st_obj_w": 1.0, "st_unit_scales": False, "st_task_weights": False,
                **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w")}}  # fmt: skip
-    sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches")}  # its critic and return
+    sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches",  # its critic and return
+                                                  "sm_reuse_input")}  # fmt: skip
     if args.algo == "supermimic":
         for name, default in st_only.items():
             if getattr(args, name) != default:
@@ -92,6 +101,7 @@ def parse_args(argv: list[str] | None = None):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that hand training does not implement")
     try:
         check_hand_fast_args(args)
+        check_hand_layout_args(args)
     except ValueError as e:
         parser.error(str(e))
     return args
@@ -110,7 +120,7 @@ def build(clip: str, device: str, reward_std_scale: float = 1.0):
     return model, kin, HandTask(kin, ref, RewardCfg().scaled(reward_std_scale))
 
 
-def main():
+def main() -> None:
     args = parse_args()
 
     import torch
@@ -127,10 +137,21 @@ def main():
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    if args.elementwise_3x3 or args.combo_kernels:  # inductor's settings, before anything is compiled (ndm_gym.train's options)
+        from ndm_gym.train import combo_kernels, elementwise_3x3_products
+
+        if args.elementwise_3x3:
+            elementwise_3x3_products()
+        if args.combo_kernels:
+            combo_kernels()
+    if args.mix_order_reductions:  # inductor's settings too (algos.hand_fast)
+        hand_fast.mix_order_reductions()
+    if args.autotune_gemm:
+        hand_fast.autotune_gemm()
     torch.manual_seed(args.seed)
     nets.AMP_DTYPE = torch.bfloat16 if args.amp == "bf16" else None
     RunningNorm.no_sync = args.no_sync  # --no_sync: the normalizers' freeze test on the device, their statistics written in place
-    dev = "cuda:0"
+    dev = DEVICE
     os.makedirs(args.log_dir, exist_ok=True)
     log_path, header = os.path.join(args.log_dir, "train_log.csv"), ",".join(LOG_COLUMNS)
     resume_ck = torch.load(args.resume, map_location=dev, weights_only=False) if args.resume else None
@@ -197,6 +218,14 @@ def main():
     timers = None
     if os.environ.get("HAND_PROFILE", "0") == "1":  # each part's time per call, the device synchronized around it, with every log row
         timers = collect, wm_update, policy_update = [hand_fast.Timed(f) for f in (collect, wm_update, policy_update)]
+    split = None
+    if args.layout != "1GPU":  # --layout: the iteration's steps on two or three GPUs at once, each on the others' previous results
+        from ndm_gym.algos import hand_layout
+
+        split, average = hand_layout.build(args, algo, buffer, lambda d: build(args.clip, d, args.reward_std_scale)[1:])
+        print(split.describe(), flush=True)
+        algo = split.algo  # what the loop reads from here on, each from its owner (the collection step keeps the actor's agent);
+        # the one-GPU updates above are not called
 
     def save_last(iteration: int):
         ck = {**algo.state_dict(), **pi_lr.state_dict(), "iteration": iteration, "wall_time": time.time() - t_start, "sim_steps": iteration * N,
@@ -211,6 +240,9 @@ def main():
 
     for _ in range(args.warmup_steps):
         collect()
+    if split is not None:  # --layout: the updates on their devices, from the warm-up's replay
+        wm_update, policy_update = hand_layout.update_functions(split, average)
+    exchange = split.exchange if split is not None else None
     log_f = open(log_path, "a")
     if os.path.getsize(log_path) == 0:
         log_f.write(header + "\n")
@@ -218,6 +250,14 @@ def main():
     t_start = t_log - wall_offset
     agg = {k: [] for k in ("wm_loss", "pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival")}
     it = start_it
+    phases = None
+    if args.phase_times:  # each phase's time per iteration, the device synchronized at every boundary (hand_fast.PhaseTimes)
+        if split is None:
+            phases = hand_fast.PhaseTimes(args, algo, dev, resumed=bool(args.resume))
+        else:  # every device of the layout synchronized, the exchange timed apart
+            phases = hand_fast.PhaseTimes(args, split.learner, dev, resumed=bool(args.resume), devices=split.devices)
+            exchange = phases.timed("exchange", exchange)
+        collect, wm_update, policy_update = [phases.timed(k, f) for k, f in (("collect", collect), ("wm", wm_update), ("policy", policy_update))]
     for it in range(start_it + 1, args.iterations + 1):
         lr = lr_at(it, args.lr, args.lr_decay_iters)
         for opt in algo.optimizers:
@@ -226,12 +266,14 @@ def main():
             set_lr(algo.opt_pi, lr * pi_lr.at(it - 1))
         collect()
         agg["wm_loss"].append(wm_update())
-        if it > args.wm_only_iters:
+        if it > args.wm_only_iters and (split is None or split.ready):  # --layout: from the learner's first batch on
             for k, x in zip(("pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival"), policy_update(), strict=True):
                 agg[k].append(x)
+        if exchange is not None:  # --layout: the next batch drawn; batch, world model, normalizers and policy cross the devices
+            exchange()
         if it % args.log_every == 0:
             nan = torch.full((), float("nan"), device=dev)
-            vals = torch.stack([*(torch.stack(agg[k]).mean() if agg[k] else nan for k in agg), acc["done"], acc["r"] / acc["steps"],
+            vals = torch.stack([*(torch.stack(agg[k]).mean().to(dev) if agg[k] else nan for k in agg), acc["done"], acc["r"] / acc["steps"],
                                 acc["object_err"] / acc["steps"], acc["ep_len"], acc["term"]]).tolist()  # fmt: skip
             # (the row's values above in one read of the device)
             means, (n_done, sim_r, object_err, ep_sum, n_term) = vals[: len(agg)], vals[len(agg) :]
@@ -251,11 +293,19 @@ def main():
                 xs.clear()
             for x in acc.values():
                 x.zero_()
+            if phases is not None:  # --phase_times: the row's time
+                phases.lap("log")
         if it % args.ckpt_every == 0:
             save_last(it)
+            if phases is not None:
+                phases.lap("ckpt")
+        if phases is not None:  # the iteration's end: the rest of its time is the host's; a row of phase_times.csv with a log row
+            phases.end(it)
         if args.max_hours is not None and time.time() - t_start > args.max_hours * 3600:
             break
     save_last(it)
+    if phases is not None:  # the summary: each phase's mean over iterations 1,001 to 3,000 (a shorter or resumed run: its second half)
+        print(phases.finish(), flush=True)
 
 
 if __name__ == "__main__":
