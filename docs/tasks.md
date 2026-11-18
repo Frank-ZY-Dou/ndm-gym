@@ -1,6 +1,6 @@
 # Tasks
 
-Seven tasks share the pipeline. Scripts in `tools/` prepare the data; none of the motions are redistributed.
+These tasks share the pipeline. Scripts in `tools/` prepare the data; none of the motions are redistributed.
 
 | task | robot or character | simulator | data | command |
 |---|---|---|---|---|
@@ -11,6 +11,7 @@ Seven tasks share the pipeline. Scripts in `tools/` prepare the data; none of th
 | [Hand-object tracking](tasks/hand.md), SPIDER's clips | XHand, Allegro hand or Inspire hand on a floating palm | MuJoCo-Warp | `tools/download_hand_clips.py` | `python -m ndm_gym.train_hand` |
 | [Quadrotor trajectory tracking](tasks/quadrotor.md), Race Against the Machine's flights | a 5-inch racing quadrotor | MuJoCo-Warp | `tools/download_drone_racing.py` | `python -m ndm_gym.train_quadrotor` |
 | [Adroit Door tracking](tasks/adroit_door.md), a DAPG door-opening demonstration | the Adroit hand, a passive door and latch | MuJoCo on the CPU | `tools/replay_adroit_door.py`, `tools/prepare_adroit_door.py` | `python -m ndm_gym.train_door_full` |
+| [Adroit Pen, Hammer and Relocate](tasks/adroit_suite.md) | native Adroit hand, passive manipulated objects | native MuJoCo CPU collection, CUDA learning | `tools/replay_adroit.py`, `tools/prepare_adroit.py` | `python -m ndm_gym.train_adroit` |
 
 The world models also stand in for simulators:
 

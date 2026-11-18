@@ -1,0 +1,151 @@
+{
+  "status": "all_18_guards_completed",
+  "runs": [
+    {
+      "run": "hammer-supermimic-seed0",
+      "peak_process_tree_rss_gib": 1.7312088012695312,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 39.779296875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 12
+    },
+    {
+      "run": "hammer-supertrack-seed0",
+      "peak_process_tree_rss_gib": 2.044605255126953,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 40.44921875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 2
+    },
+    {
+      "run": "hammer-supermimic-seed1",
+      "peak_process_tree_rss_gib": 1.9272079467773438,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 39.779296875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 12
+    },
+    {
+      "run": "hammer-supertrack-seed1",
+      "peak_process_tree_rss_gib": 1.8896369934082031,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 40.4501953125,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 1
+    },
+    {
+      "run": "hammer-supermimic-seed2",
+      "peak_process_tree_rss_gib": 1.9127998352050781,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 39.7822265625,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 28
+    },
+    {
+      "run": "hammer-supertrack-seed2",
+      "peak_process_tree_rss_gib": 2.079448699951172,
+      "minimum_available_host_ram_gib": 525.981861114502,
+      "minimum_device_free_vram_gib": 40.4501953125,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 1
+    },
+    {
+      "run": "pen-supermimic-seed0",
+      "peak_process_tree_rss_gib": 1.8772773742675781,
+      "minimum_available_host_ram_gib": 450.5367012023926,
+      "minimum_device_free_vram_gib": 37.0419921875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "pen-supermimic-seed1",
+      "peak_process_tree_rss_gib": 1.8802680969238281,
+      "minimum_available_host_ram_gib": 450.55791091918945,
+      "minimum_device_free_vram_gib": 34.841796875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "pen-supermimic-seed2",
+      "peak_process_tree_rss_gib": 1.7533416748046875,
+      "minimum_available_host_ram_gib": 450.5367012023926,
+      "minimum_device_free_vram_gib": 33.33203125,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "pen-supertrack-seed0",
+      "peak_process_tree_rss_gib": 1.8505172729492188,
+      "minimum_available_host_ram_gib": 450.5367012023926,
+      "minimum_device_free_vram_gib": 35.73046875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "pen-supertrack-seed1",
+      "peak_process_tree_rss_gib": 1.923492431640625,
+      "minimum_available_host_ram_gib": 450.5367012023926,
+      "minimum_device_free_vram_gib": 34.5244140625,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "pen-supertrack-seed2",
+      "peak_process_tree_rss_gib": 1.8116683959960938,
+      "minimum_available_host_ram_gib": 450.53478622436523,
+      "minimum_device_free_vram_gib": 34.4619140625,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 0
+    },
+    {
+      "run": "relocate-supermimic-seed0",
+      "peak_process_tree_rss_gib": 1.9548263549804688,
+      "minimum_available_host_ram_gib": 507.5314712524414,
+      "minimum_device_free_vram_gib": 36.8193359375,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 2
+    },
+    {
+      "run": "relocate-supermimic-seed1",
+      "peak_process_tree_rss_gib": 1.9565086364746094,
+      "minimum_available_host_ram_gib": 507.5316047668457,
+      "minimum_device_free_vram_gib": 35.5673828125,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 6
+    },
+    {
+      "run": "relocate-supermimic-seed2",
+      "peak_process_tree_rss_gib": 1.9576187133789062,
+      "minimum_available_host_ram_gib": 509.5628242492676,
+      "minimum_device_free_vram_gib": 33.099609375,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 24
+    },
+    {
+      "run": "relocate-supertrack-seed0",
+      "peak_process_tree_rss_gib": 1.9510383605957031,
+      "minimum_available_host_ram_gib": 509.59032440185547,
+      "minimum_device_free_vram_gib": 40.279296875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 5
+    },
+    {
+      "run": "relocate-supertrack-seed1",
+      "peak_process_tree_rss_gib": 1.9390754699707031,
+      "minimum_available_host_ram_gib": 509.70534896850586,
+      "minimum_device_free_vram_gib": 38.1611328125,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 7
+    },
+    {
+      "run": "relocate-supertrack-seed2",
+      "peak_process_tree_rss_gib": 1.9341697692871094,
+      "minimum_available_host_ram_gib": 509.384578704834,
+      "minimum_device_free_vram_gib": 40.279296875,
+      "maximum_own_psi": 0.0,
+      "corroborated_pressure_events": 10
+    }
+  ],
+  "matched_run_log_warnings": [],
+  "scope": "Process-tree RSS is our job; host RAM and device free VRAM include other users. No unrelated processes were stopped."
+}

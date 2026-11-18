@@ -25,8 +25,8 @@ The algorithms share one pipeline within each task:
 - **Muscles:** MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp).
 - **Hands:** hand-object tracking with the XHand, the Allegro hand and the Inspire hand (MuJoCo-Warp).
 - **Quadrotor:** a racing quadrotor tracking flown trajectories, autonomous and piloted (MuJoCo-Warp).
-- **Adroit hand:** the 28-actuator Adroit hand opening a door by tracking one of DAPG's demonstrations (MuJoCo on the
-  CPU).
+- **Adroit hand:** Door, Pen, Hammer and Relocate tracking of DAPG demonstrations, with each task's native actuators
+  (MuJoCo CPU physics and CUDA learning).
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -916,6 +916,24 @@ All seeds and the screen of each algorithm's settings: [results](benchmarks/adro
 contributed study on an L40S: [full results](benchmarks/adroit_door/full_results_v1.md); preparation and commands:
 [task guide](docs/tasks/adroit_door.md).
 
+### Adroit Pen, Hammer and Relocate tracking
+
+Three native Adroit tasks extend the shared Door collector and learning infrastructure. SuperTrack and SuperMimic each run fresh seeds 0–2 at 20,000 iterations in 2,048 worlds: 18 complete runs. Final checkpoints and the float32 reference-control prior use identical sets of 256 starts. Entries are mean ± sample SD over three training-seed means.
+
+| Task | Prior final success | SuperTrack | SuperMimic |
+| --- | ---: | ---: | ---: |
+| Pen | 58.6% | 96.7 ± 1.2% | 79.4 ± 28.5% |
+| Hammer | 51.2% | 100.0 ± 0.0% | 73.0 ± 45.0% |
+| Relocate | 100.0% | 100.0 ± 0.0% | 100.0 ± 0.0% |
+
+Pen SuperTrack improves normalized tracking RMSE from the prior's 0.4024 to 0.0519 ± 0.0043. SuperMimic is seed-sensitive: Pen's native success is 99.6%, 46.9%, 91.8%; Hammer's is 21.1%, 100%, 98.0%. Hammer's selected 1 mm training kernel did not establish a robust repair. Neither method improves mean overall tracking error over the prior on Hammer or Relocate, and Relocate's prior already succeeds everywhere. Native success and tracking error must therefore both be reported. These are single-reference online tracking results, not D4RL offline-RL scores.
+
+<p align="center"><img src="docs/media/adroit_suite/v2/grid.webp" alt="Trained Adroit Pen, Hammer and Relocate policies" width="1000"/></p>
+<p align="center"><i>Native Hand accurate adaptation / SuperTrack: Pen seed 0, Hammer seed 1, Relocate seed 0, each final 20k checkpoint. Per case, the lowest fixed tracking-error final run among all six method/seed combinations; fixed nominal episode 0. Full nonterminal windows, native speed; shorter clips hold their last displayed frame. These selected previews do not replace the seed averages above.</i></p>
+<p align="center"><sub>DAPG references and native Gymnasium-Robotics 1.3.1 scenes/assets; see <a href="NOTICE">NOTICE</a>.</sub></p>
+
+Training takes 93.7–154.9 minutes per seed on one L40S and eight physical CPU cores. See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -1163,6 +1181,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/quadrotor_racing_tracking/`](benchmarks/quadrotor_racing_tracking/) | a racing quadrotor on Race Against the Machine's flights: tasks and results |
 | [`benchmarks/robokit_ndm/`](benchmarks/robokit_ndm/results.md) | RoboKit's planner on a world model: setup, step and planning times, commands |
 | [`benchmarks/mbrl_lib/`](benchmarks/mbrl_lib/results.md) | mbrl-lib's planner on a world model: returns, fits, planning and step times, commands |
+| [`benchmarks/adroit_suite/`](benchmarks/adroit_suite/) | native Adroit Pen, Hammer and Relocate: full-budget three-seed tracking study and controls |
 | [`docs/rigidformer_backbone.md`](docs/rigidformer_backbone.md) | RigidFormer world-model backbone: design, speed, validation |
 | [`docs/blinkmimic.md`](docs/blinkmimic.md) | BlinkMimic: its relation to SuperTrack and SuperMimic, its changes as options |
 | [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md) | XMimic: why it is fast, what carries over to this library (measured), and its techniques as options |

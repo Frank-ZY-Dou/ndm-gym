@@ -1,0 +1,8 @@
+{
+  "execution_sha256": "dcf2854520d9371fa2c397f87475770f13127be89d51aa8e91c9aceaa3f31753",
+  "active_guarded_wall_seconds": 24360.34423995018,
+  "elapsed_span_seconds": 29305.43942284584,
+  "pause_seconds": 4945.09518289566,
+  "guarded_gpu_hours": 38.17275408837531,
+  "definition": "Active wall is the union of all 18 guard reservation intervals; elapsed span includes the pause after the failed Hammer quality gate. Development, software checks, diagnostics and rendering are excluded."
+}

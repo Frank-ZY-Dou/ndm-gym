@@ -1,0 +1,68 @@
+[
+  {
+    "method": "supermimic",
+    "seed": 0,
+    "min_median_max_mm": [
+      9.850227917399673,
+      10.036227235026058,
+      10.325664799916463
+    ],
+    "success": 54,
+    "within_point5_mm": 202
+  },
+  {
+    "method": "supermimic",
+    "seed": 1,
+    "min_median_max_mm": [
+      9.765009308423062,
+      9.83000662639996,
+      9.938396208156107
+    ],
+    "success": 256,
+    "within_point5_mm": 0
+  },
+  {
+    "method": "supermimic",
+    "seed": 2,
+    "min_median_max_mm": [
+      9.682129013875864,
+      9.882578034255694,
+      10.029505931697988
+    ],
+    "success": 251,
+    "within_point5_mm": 5
+  },
+  {
+    "method": "supertrack",
+    "seed": 0,
+    "min_median_max_mm": [
+      9.832596151978915,
+      9.832608802677214,
+      9.832619280079669
+    ],
+    "success": 256,
+    "within_point5_mm": 0
+  },
+  {
+    "method": "supertrack",
+    "seed": 1,
+    "min_median_max_mm": [
+      9.835177053933158,
+      9.83518128839539,
+      9.835185049167114
+    ],
+    "success": 256,
+    "within_point5_mm": 0
+  },
+  {
+    "method": "supertrack",
+    "seed": 2,
+    "min_median_max_mm": [
+      9.900023340298745,
+      9.9000357411226,
+      9.908896063752984
+    ],
+    "success": 256,
+    "within_point5_mm": 0
+  }
+]

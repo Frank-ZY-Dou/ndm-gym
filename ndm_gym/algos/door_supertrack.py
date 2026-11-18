@@ -40,12 +40,11 @@ class DoorSuperTrack(DoorResidual):
         hidden = kwargs.get("wm_hidden", (64, 64))
         self.wm = self.world_model_cls(self.layout, hidden=hidden, amp=False, kind="accel").to(device)
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=kwargs.get("lr", 1e-3))
-        self.bal = LossBalancer(4).to(device)
+        self.bal = LossBalancer(len(self.task.tracking_widths)).to(device)
         if self.task_weights:
             # HandSuperTrack --st_task_weights: reward weight / kernel width / H.
             # Door has four equally weighted tracking kernels in native units.
-            c = self.task.cfg
-            widths = torch.tensor([c.translation_std, c.hand_std, c.door_std, c.latch_std], device=device)
+            widths = torch.tensor(self.task.tracking_widths, device=device)
             self.bal.w.copy_(widths.reciprocal() / self.horizon)
             self.bal.scale.copy_(widths)
             self.bal.ready.fill_(True)
@@ -91,9 +90,7 @@ class DoorSuperTrack(DoorResidual):
                     imagined = action
                 state = self.wm.step(*state, self.setpoint(imagined), self.task.dt)
                 frame = frame + 1
-                delta = (state[0] - self.task.q[frame]).abs()
-                errors.append(torch.stack((delta[:, 0], delta[:, 1:28].mean(-1),
-                                           delta[:, 28], delta[:, 29]), -1))
+                errors.append(self.task.tracking_terms(state, frame))
                 previous_action = action
             terms = torch.stack(errors).sum(0).mean(0)
             if not torch.isfinite(terms).all():

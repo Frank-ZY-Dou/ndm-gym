@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "runs": [
+    {
+      "method": "supertrack",
+      "exact": true,
+      "seconds": 106.1348659992218,
+      "old_source": "494476b28cd8663d6efb35967c9ebf5797a2e8644d335ec9107f2735c154fe3e",
+      "new_source": "b38450a68787120f9ea81d2792806a43ca53729256cea5516b258ca3595e3363",
+      "iterations": 320
+    },
+    {
+      "method": "supermimic",
+      "exact": true,
+      "seconds": 103.28054785728455,
+      "old_source": "494476b28cd8663d6efb35967c9ebf5797a2e8644d335ec9107f2735c154fe3e",
+      "new_source": "b38450a68787120f9ea81d2792806a43ca53729256cea5516b258ca3595e3363",
+      "iterations": 320
+    }
+  ],
+  "scope": "Full-capacity default training is bit-exact after upstream optional Door settings integration. All algorithm/optimizer/native integration/replay/RNG states and protocols except source fingerprint match the frozen 320-step prechecks. These are compatibility prefixes, not formal seeds."
+}

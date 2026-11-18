@@ -1,0 +1,55 @@
+{
+  "status": "all_three_previews_and_grid_reviewed",
+  "cases": {
+    "hammer": {
+      "inspected_preview_frame_indices": [
+        0,
+        156,
+        311
+      ],
+      "labels_readable": true,
+      "native_appearance_retained": true,
+      "ndm_mark_visible": true,
+      "manipulation_in_frame": true,
+      "terminal_frame_excluded": true,
+      "output_sha256": "53602cbc4ecfe62d6fd54b6626891d805d42c41616dd937f2dd25d8094ef5fe3"
+    },
+    "pen": {
+      "inspected_preview_frame_indices": [
+        0,
+        50,
+        99
+      ],
+      "labels_readable": true,
+      "native_appearance_retained": true,
+      "ndm_mark_visible": true,
+      "manipulation_in_frame": true,
+      "terminal_frame_excluded": true,
+      "output_sha256": "f04d5326dd519ea231e044421ad43e3e53600fa4c5857a1e4779cc00ccc08357"
+    },
+    "relocate": {
+      "inspected_preview_frame_indices": [
+        0,
+        88,
+        175
+      ],
+      "labels_readable": true,
+      "native_appearance_retained": true,
+      "ndm_mark_visible": true,
+      "manipulation_in_frame": true,
+      "terminal_frame_excluded": true,
+      "output_sha256": "cadfe9a75df37926f6f15e7ebc7d0be8fbac8ea3aa81d422cb1955256e058577"
+    }
+  },
+  "grid": {
+    "inspected_preview_frame_indices": [
+      0,
+      78,
+      155
+    ],
+    "labels_and_marks_readable": true,
+    "all_cases_framed": true,
+    "shorter_clips_hold_last_nonterminal_frame": true,
+    "output_sha256": "2ecb9f2e33116a48613b3c92fcfa13777e192d785292655b5d7ca1aad6ad3c6c"
+  }
+}

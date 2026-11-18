@@ -11,10 +11,10 @@ from .adroit_door import DoorPhysics
 
 
 class NativeDoorCollector:
-    def __init__(self, model, reference, worlds):
+    def __init__(self, model, reference, worlds, *, physics_cls=DoorPhysics):
         if type(worlds) is not int or worlds < 1:
             raise ValueError('worlds must be a positive integer')
-        self.worlds = tuple(DoorPhysics(model, reference) for _ in range(worlds))
+        self.worlds = tuple(physics_cls(model, reference) for _ in range(worlds))
         self.transitions = 0
         self.failed = False
 
@@ -34,7 +34,7 @@ class NativeDoorCollector:
         if self.failed:
             raise RuntimeError('Collector failed; reconstruct from a valid checkpoint')
         actions = np.asarray(actions, dtype=float)
-        if actions.shape != (len(self.worlds), 28) or not np.isfinite(actions).all():
+        if actions.shape != (len(self.worlds), self.worlds[0].model.nu) or not np.isfinite(actions).all():
             raise ValueError('Expected finite actions (worlds, 28)')
         actions = np.clip(actions, -1, 1)
         before = self.observe()
@@ -62,12 +62,12 @@ class PackedNativeDoorCollector:
     inserted between restore and mj_step. Must be benchmarked before training.
     """
 
-    def __init__(self, model, reference, worlds):
+    def __init__(self, model, reference, worlds, *, physics_cls=DoorPhysics):
         import mujoco
 
         if type(worlds) is not int or worlds < 1:
             raise ValueError('worlds must be a positive integer')
-        self.sim = DoorPhysics(model, reference)
+        self.sim = physics_cls(model, reference)
         self.spec = mujoco.mjtState.mjSTATE_INTEGRATION
         initial = np.empty(mujoco.mj_stateSize(model, self.spec))
         mujoco.mj_getState(model, self.sim.data, initial, self.spec)
@@ -87,7 +87,7 @@ class PackedNativeDoorCollector:
         if self.failed:
             raise RuntimeError('Collector failed; reconstruct from a valid checkpoint')
         actions = np.asarray(actions, dtype=float)
-        if actions.shape != (len(self.states), 28) or not np.isfinite(actions).all():
+        if actions.shape != (len(self.states), self.sim.model.nu) or not np.isfinite(actions).all():
             raise ValueError('Expected finite actions (worlds, 28)')
         actions = np.clip(actions, -1, 1)
         before = self.observe()
@@ -118,10 +118,10 @@ class CompiledPackedDoorCollector(PackedNativeDoorCollector):
     using this runtime's MuJoCo. CDLL releases the GIL for the whole chunk.
     """
 
-    def __init__(self, model, reference, worlds, library):
+    def __init__(self, model, reference, worlds, library, *, physics_cls=DoorPhysics):
         import ctypes
         import mujoco
-        super().__init__(model, reference, worlds)
+        super().__init__(model, reference, worlds, physics_cls=physics_cls)
         self.library = ctypes.CDLL(str(library))
         if self.library.door_mujoco_version() != mujoco.mj_version():
             raise ValueError('Native library MuJoCo version mismatch')
@@ -140,7 +140,7 @@ class CompiledPackedDoorCollector(PackedNativeDoorCollector):
         if self.failed:
             raise RuntimeError('Collector failed; reconstruct from a valid checkpoint')
         actions = np.asarray(actions, dtype=np.float64)
-        if actions.shape != (len(self.states), 28) or not np.isfinite(actions).all():
+        if actions.shape != (len(self.states), self.sim.model.nu) or not np.isfinite(actions).all():
             raise ValueError('Expected finite actions (worlds, 28)')
         actions = np.ascontiguousarray(np.clip(actions, -1, 1))
         before = self.observe()
@@ -168,20 +168,20 @@ class ParallelNativeDoorCollector:
     Call close (or use a context manager) before releasing the collector.
     """
 
-    def __init__(self, model, reference, worlds, workers=1, native_library=None):
+    def __init__(self, model, reference, worlds, workers=1, native_library=None, *, physics_cls=DoorPhysics):
         from concurrent.futures import ThreadPoolExecutor
 
         if type(worlds) is not int or worlds < 1:
             raise ValueError('worlds must be a positive integer')
         if type(workers) is not int or not 1 <= workers <= worlds:
             raise ValueError('workers must be between one and worlds')
-        factory = (PackedNativeDoorCollector if native_library is None else
-                   lambda m, r, n: CompiledPackedDoorCollector(m, r, n, native_library))
+        factory = (lambda m, r, n: PackedNativeDoorCollector(m, r, n, physics_cls=physics_cls)) if native_library is None else (
+            lambda m, r, n: CompiledPackedDoorCollector(m, r, n, native_library, physics_cls=physics_cls))
         self.chunks = tuple(factory(model, reference, len(indices))
                             for indices in np.array_split(np.arange(worlds), workers))
         self.slices = tuple(np.cumsum([0] + [len(c.states) for c in self.chunks]))
         self.pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix='door-native')
-        self.previous_actions = np.zeros((worlds, 28))
+        self.previous_actions = np.zeros((worlds, model.nu))
         self.transitions = 0
         self.failed = False
         self.closed = False
@@ -201,7 +201,7 @@ class ParallelNativeDoorCollector:
         if self.transitions or self.closed or self.failed:
             raise RuntimeError('Staggering requires a new collector')
         first = self.chunks[0]
-        sim = DoorPhysics(first.sim.model, first.sim.reference)
+        sim = type(first.sim)(first.sim.model, first.sim.reference)
         ref = sim.reference
         snapshots, positions, velocities = [], [], []
         for action in ref.actions:
@@ -232,8 +232,9 @@ class ParallelNativeDoorCollector:
         if self.closed or self.failed:
             raise RuntimeError('Cannot restore an invalid collector')
         n = len(self.previous_actions)
-        shapes = dict(states=(n, self.chunks[0].states.shape[1]), qpos=(n, 30),
-                      qvel=(n, 30), frames=(n,), previous_actions=(n, 28))
+        shapes = dict(states=(n, self.chunks[0].states.shape[1]), qpos=(n, self.chunks[0].sim.model.nq),
+                      qvel=(n, self.chunks[0].sim.model.nv), frames=(n,),
+                      previous_actions=(n, self.chunks[0].sim.model.nu))
         for key, shape in shapes.items():
             if state[key].shape != shape or not np.isfinite(state[key]).all():
                 raise ValueError(f'Invalid collector checkpoint: {key}')

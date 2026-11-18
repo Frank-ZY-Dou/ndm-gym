@@ -1,0 +1,68 @@
+{
+  "hammer-supermimic-seed0-guard": {
+    "samples": 4131,
+    "max_rss_gib": 1.9438591003417969,
+    "min_available_ram_gib": 451.7298889160156,
+    "min_free_gpu_gib": 34.6484375,
+    "min_free_data_gib": 2610.470371246338,
+    "corroborated_pressure_samples": 1,
+    "guard": {
+      "status": "completed"
+    }
+  },
+  "hammer-supertrack-seed0-guard": {
+    "samples": 3571,
+    "max_rss_gib": 1.7572555541992188,
+    "min_available_ram_gib": 451.76584243774414,
+    "min_free_gpu_gib": 35.7353515625,
+    "min_free_data_gib": 2610.692928314209,
+    "corroborated_pressure_samples": 1,
+    "guard": {
+      "status": "completed"
+    }
+  },
+  "pen-supermimic-seed0-guard": {
+    "samples": 4337,
+    "max_rss_gib": 1.8836555480957031,
+    "min_available_ram_gib": 451.76584243774414,
+    "min_free_gpu_gib": 35.388671875,
+    "min_free_data_gib": 2610.38623046875,
+    "corroborated_pressure_samples": 9,
+    "guard": {
+      "status": "completed"
+    }
+  },
+  "pen-supertrack-seed0-guard": {
+    "samples": 4006,
+    "max_rss_gib": 1.8496971130371094,
+    "min_available_ram_gib": 451.76584243774414,
+    "min_free_gpu_gib": 35.5400390625,
+    "min_free_data_gib": 2610.6374549865723,
+    "corroborated_pressure_samples": 1,
+    "guard": {
+      "status": "completed"
+    }
+  },
+  "relocate-supermimic-seed0-guard": {
+    "samples": 3200,
+    "max_rss_gib": 1.9710578918457031,
+    "min_available_ram_gib": 451.7298889160156,
+    "min_free_gpu_gib": 34.2724609375,
+    "min_free_data_gib": 2610.692928314209,
+    "corroborated_pressure_samples": 0,
+    "guard": {
+      "status": "completed"
+    }
+  },
+  "relocate-supertrack-seed0-guard": {
+    "samples": 2729,
+    "max_rss_gib": 1.9233245849609375,
+    "min_available_ram_gib": 451.76584243774414,
+    "min_free_gpu_gib": 35.599609375,
+    "min_free_data_gib": 2611.3352241516113,
+    "corroborated_pressure_samples": 0,
+    "guard": {
+      "status": "completed"
+    }
+  }
+}

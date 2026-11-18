@@ -19,6 +19,7 @@ from .door_schedule import FullHandSchedule
 from .motion.adroit_door import DoorReference
 from .motion.door_ring import DoorReplayRing
 from .sim.rigid.door_collector import ParallelNativeDoorCollector
+from .sim.rigid.adroit_door import DoorPhysics
 from .tasks.adroit_door import DoorTask
 from .train_door import DOOR_METHODS
 from .train_door_online import configure_fused_adam, fingerprint, optimizer_counts, updates
@@ -31,13 +32,13 @@ TUNABLE = dict(lr=None, residual_scale=.1, correction_reg=.01, correction_imag_n
 SUPERTRACK_ONLY, SUPERMIMIC_ONLY = ('correction_reg', 'correction_imag_noise'), ('gamma',)
 
 
-def make_algorithm(method, model, reference, device, options=None):
+def make_algorithm(method, model, reference, device, options=None, *, task_cls=DoorTask):
     options = dict(options or {})
     if set(options) - set(TUNABLE):
         raise ValueError(f'Unknown Door tuning settings: {sorted(set(options) - set(TUNABLE))}')
     if set(options) & set(SUPERTRACK_ONLY if method == 'supermimic' else SUPERMIMIC_ONLY):
         raise ValueError(f'{method}: settings of the other method: {sorted(options)}')
-    task = DoorTask(reference, model.actuator_ctrlrange, device=device, goal_frames=5)
+    task = task_cls(reference, model.actuator_ctrlrange, device=device, goal_frames=5)
     rate = options.get('lr') or (4e-4 if method == 'supertrack' else 2e-4)
     settings = (dict(task_weights=True, correction_reg=options.get('correction_reg', .01),
                      correction_imag_noise=options.get('correction_imag_noise', .2))
@@ -129,8 +130,8 @@ def restore(checkpoint, algo, collector, ring, protocol):
     return checkpoint['iteration'], checkpoint['timing']
 
 
-def main(argv=None):
-    p = argparse.ArgumentParser(description=__doc__)
+def main(argv=None, *, reference_cls=DoorReference, task_cls=DoorTask, physics_cls=DoorPhysics, extra_help=None):
+    p = argparse.ArgumentParser(description=__doc__, epilog=extra_help)
     for name in ('model', 'reference', 'native-library', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--method', choices=tuple(k for k in DOOR_METHODS if k != 'residual'), required=True)
@@ -156,6 +157,8 @@ def main(argv=None):
     if any(not np.isfinite(v) or v < 0 or (k in ('lr', 'residual_scale', 'gamma') and v <= 0) for k, v in options.items()) \
             or not np.isfinite(a.action_noise) or a.action_noise < 0 or a.wm_only_iters < 0 or options.get('gamma', .5) >= 1:
         p.error('Tuning settings must be finite: lr, residual scale > 0, 0 < gamma < 1, the others >= 0')
+    if reference_cls is not DoorReference and (options or a.action_noise != .1 or a.wm_only_iters != 300 or a.door_latch_offset):
+        p.error('Door-only tuning/start options are not supported by the fixed Adroit suite protocol')
     schedule = FullHandSchedule(wm_only_iters=a.wm_only_iters)
     end = a.development_steps if a.development_steps is not None else schedule.iterations
     if not 1 <= end <= schedule.iterations or not 1 <= a.workers <= schedule.worlds:
@@ -165,16 +168,18 @@ def main(argv=None):
     import mujoco
     torch.set_num_threads(1)
     torch.manual_seed(a.seed)
-    reference = DoorReference.load(a.reference)
+    reference = reference_cls.load(a.reference)
+    if reference_cls is not DoorReference and reference.metadata.get('model_sha256') != fingerprint(a.model):
+        raise ValueError('Physical reference model hash mismatch')
     model = mujoco.MjModel.from_xml_path(str(a.model.resolve()))
     if a.door_latch_offset and a.door_latch_offset >= model.jnt_range[28:30, 1].min():
         p.error('--door-latch-offset must stay inside the door and latch ranges')
     started = time.perf_counter()
     try:
-        algo, rate = make_algorithm(a.method, model, reference, a.device, options)
+        algo, rate = make_algorithm(a.method, model, reference, a.device, options, task_cls=task_cls)
     except ValueError as error:
         p.error(str(error))
-    ring = DoorReplayRing(256, schedule.worlds, a.device)
+    ring = DoorReplayRing(256, schedule.worlds, a.device, nq=model.nq, nv=model.nv, nu=model.nu)
     protocol = dict(format=1, method=a.method, seed=a.seed, schedule=asdict(schedule),
                     workers=a.workers, device=a.device, goal_frames=5, horizon=16,
                     wm_batch=2048, wm_window=8, pi_batch=4096, lr=rate, action_noise=a.action_noise,
@@ -183,6 +188,10 @@ def main(argv=None):
                     adaptation='native articulated state and action units; demonstration-control residual; finite-clip terminal; native CPU physics',
                     unavailable='XHand FK, error-based soft termination/failure penalty, CUDA physics/collection graphs',
                     input_hashes={key: fingerprint(getattr(a, key)) for key in ('model', 'reference', 'native_library')})
+    if reference_cls is not DoorReference:
+        protocol['task'] = reference.metadata['task']
+        protocol['task_reward'] = asdict(algo.task.cfg)
+        protocol['reference_schema'] = reference.metadata['kind']
     if a.door_latch_offset:
         protocol['door_latch_offset'] = a.door_latch_offset
     if options:
@@ -194,7 +203,7 @@ def main(argv=None):
     (a.output/'protocol.json').write_text(json.dumps(protocol, indent=2)+'\n')
     sync = torch.cuda.synchronize if a.device.startswith('cuda') else lambda: None
     with ParallelNativeDoorCollector(model, reference, schedule.worlds, a.workers,
-                                     a.native_library.resolve()) as collector:
+                                     a.native_library.resolve(), physics_cls=physics_cls) as collector:
         iteration = 0
         timing = dict(collection_seconds=0., update_seconds=0., checkpoint_seconds=0.)
         restart = door_latch_restarts(collector, a.door_latch_offset, a.seed)

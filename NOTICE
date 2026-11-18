@@ -57,3 +57,7 @@ come from Gymnasium-Robotics 1.3.1 (https://github.com/Farama-Foundation/Gymnasi
 Copyright (c) 2022 Farama Foundation). The demonstration archives, model XML, meshes and textures are obtained
 separately and are not redistributed in this repository. Their original notices and terms are not replaced by
 this repository's LICENSE.
+
+The Adroit suite previews in docs/media/adroit_suite use Pen, Hammer and Relocate demonstrations from the same
+DAPG commit and native Gymnasium-Robotics 1.3.1 assets credited above, under the same original notices and terms.
+Their demonstration archives, model XML, meshes and textures are likewise supplied externally and not redistributed.

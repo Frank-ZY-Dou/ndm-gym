@@ -103,6 +103,7 @@ nav:
       - Hand-object tracking: tasks/hand.md
       - Quadrotor trajectory tracking: tasks/quadrotor.md
       - Adroit Door tracking: tasks/adroit_door.md
+      - Adroit manipulation suite: tasks/adroit_suite.md
       - RoboKit's planner on a world model: tasks/robokit.md
       - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:

@@ -1,0 +1,33 @@
+{
+  "scope": "Post-evaluation diagnostic; no checkpoint, model, task or preview selection changes",
+  "native_success_threshold_mm": 10,
+  "rows": {
+    "prior": {
+      "final_nail_goal_distance_mm": {
+        "min": 9.804743969971495,
+        "median": 9.924647473725523,
+        "max": 10.406989018904895
+      },
+      "success_count": 131,
+      "episodes": 256
+    },
+    "supertrack": {
+      "final_nail_goal_distance_mm": {
+        "min": 9.832596151978915,
+        "median": 9.832608802677216,
+        "max": 9.832619280079669
+      },
+      "success_count": 256,
+      "episodes": 256
+    },
+    "supermimic": {
+      "final_nail_goal_distance_mm": {
+        "min": 10.000278843390927,
+        "median": 10.166045248121705,
+        "max": 10.195777579013589
+      },
+      "success_count": 0,
+      "episodes": 256
+    }
+  }
+}

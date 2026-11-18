@@ -1,0 +1,53 @@
+{
+  "passed": false,
+  "seeds": [
+    {
+      "seed": 0,
+      "means": {
+        "tracking_return": 24.82646320024473,
+        "normalized_tracking_rmse": 0.07308879942502179,
+        "hand_rotation_joint_rmse_rad": 0.030876845801070814,
+        "nail_rmse_m": 0.00025255310061196004,
+        "object_translation_rmse_m": 0.001512088777578217,
+        "object_rotation_joint_rmse_rad": 0.019847242229541144,
+        "native_success_final": 0.2109375,
+        "native_success_ever": 0.2109375,
+        "native_success_frame_fraction": 0.04357597155448718,
+        "finite": 1.0
+      },
+      "passed": false
+    },
+    {
+      "seed": 1,
+      "means": {
+        "tracking_return": 24.861505299526797,
+        "normalized_tracking_rmse": 0.06258043559711121,
+        "hand_rotation_joint_rmse_rad": 0.02673105579066937,
+        "nail_rmse_m": 0.00016537367249797242,
+        "object_translation_rmse_m": 0.0013710513964572519,
+        "object_rotation_joint_rmse_rad": 0.015684487261582197,
+        "native_success_final": 1.0,
+        "native_success_ever": 1.0,
+        "native_success_frame_fraction": 0.2042079827724359,
+        "finite": 1.0
+      },
+      "passed": true
+    },
+    {
+      "seed": 2,
+      "means": {
+        "tracking_return": 24.74507491447062,
+        "normalized_tracking_rmse": 0.09306989616929713,
+        "hand_rotation_joint_rmse_rad": 0.042159939601945376,
+        "nail_rmse_m": 0.00020102701337297251,
+        "object_translation_rmse_m": 0.001996277279320079,
+        "object_rotation_joint_rmse_rad": 0.02007540509546176,
+        "native_success_final": 0.98046875,
+        "native_success_ever": 0.98046875,
+        "native_success_frame_fraction": 0.2357960236378205,
+        "finite": 1.0
+      },
+      "passed": true
+    }
+  ]
+}

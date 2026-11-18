@@ -1,0 +1,30 @@
+{
+  "tool": "tools/make_grid.py",
+  "tool_sha256": "7099dd570857bd6820ebf48f7a556b5eca7c1b461acd830b03e31c7f4959588f",
+  "input_sha256": {
+    "pen": "f04d5326dd519ea231e044421ad43e3e53600fa4c5857a1e4779cc00ccc08357",
+    "hammer": "53602cbc4ecfe62d6fd54b6626891d805d42c41616dd937f2dd25d8094ef5fe3",
+    "relocate": "cadfe9a75df37926f6f15e7ebc7d0be8fbac8ea3aa81d422cb1955256e058577"
+  },
+  "output_sha256": "2ecb9f2e33116a48613b3c92fcfa13777e192d785292655b5d7ca1aad6ad3c6c",
+  "columns": 3,
+  "tile": [
+    400,
+    300
+  ],
+  "dimensions": [
+    1208,
+    324
+  ],
+  "fps": 25,
+  "frames": 156,
+  "duration_seconds": 6.24,
+  "quality": 80,
+  "lossless": false,
+  "held_seconds": {
+    "pen": 4.24,
+    "hammer": 0,
+    "relocate": 2.72
+  },
+  "selection": "results.json previews; fixed nominal episode0; every source window excludes terminal state"
+}

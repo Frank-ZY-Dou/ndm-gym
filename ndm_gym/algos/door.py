@@ -33,13 +33,13 @@ class DoorResidual:
             raise ValueError("Expected one reference action per transition")
         if not torch.isfinite(actions).all() or torch.any(actions.abs() > 1):
             raise ValueError("Reference actions must be finite and normalized")
-        if layout.nq != 30 or layout.nv != 30 or layout.nu != 28 or layout.dt != task.dt:
+        if layout.nq != task.nq or layout.nv != task.nv or layout.nu != task.action_dim or layout.dt != task.dt:
             raise ValueError("Expected native Door layout and control timestep")
         self.task, self.horizon = task, horizon
         self.layout = layout
         self.reference_actions = actions.detach().clone()
         self.wm = self.world_model_cls(layout, hidden=wm_hidden, amp=False, kind="increment").to(device)
-        self.pi = DoorResidualPolicy(goal_frames=task.goal_frames, hidden=hidden).to(device)
+        self.pi = DoorResidualPolicy(goal_frames=task.goal_frames, hidden=hidden, task_spec=task).to(device)
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=lr)
         self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=lr)
 
@@ -80,7 +80,8 @@ class DoorResidual:
 
     def task_identity(self):
         """Deployment contract, independent of device; validated before recovery."""
-        return {**({"goal_frames": self.task.goal_frames} if self.task.goal_frames != 1 else {}),
+        return {**({"adroit_task": self.task.identity()} if hasattr(self.task, "identity") else {}),
+                **({"goal_frames": self.task.goal_frames} if self.task.goal_frames != 1 else {}),
                 "q": self.task.q.detach().cpu().clone(),
                 "v": self.task.v.detach().cpu().clone(),
                 "ctrl_mid": self.task.ctrl_mid.detach().cpu().clone(),
