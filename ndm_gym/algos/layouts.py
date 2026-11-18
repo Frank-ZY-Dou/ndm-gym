@@ -136,6 +136,45 @@ class RunAhead:
             self.events.append(e)
 
 
+class LayoutTimer:
+    """``LAYOUT_PROFILE=1`` (train.py with --layout): every ``every``-th iteration, CUDA events on each device's current stream
+    around the iteration's steps (the collection on the actor, the world-model updates on their owner, the policy update on
+    the learner, the exchange on every device) and at the iteration's start; after the exchange the devices are synchronized
+    and one line is printed: per device, the milliseconds of its steps, its span (from the iteration's start to the end of its
+    part of the exchange, as its stream reached them) and its idle time, the span less its steps. The events add no work; the
+    synchronization stalls the host's run-ahead once every ``every`` iterations."""
+
+    def __init__(self, split, every: int = 20):
+        self.devs = [torch.device(d) for d in split.devices]
+        self.role = {"collect": self.devs[0], "wm": self.devs[1] if split.layout == "AWL" else self.devs[0], "policy": self.devs[-1]}
+        self.every, self.ev = every, {}
+
+    def due(self, it: int, after: int) -> bool:
+        return it % self.every == 0 and it > after
+
+    def mark(self, name: str, role: str | None = None):
+        """An event named ``name`` on the device of ``role`` (None: on every device)."""
+        for d in [self.role[role]] if role is not None else self.devs:
+            e = torch.cuda.Event(enable_timing=True)
+            e.record(torch.cuda.current_stream(d))
+            self.ev[(name, d)] = e
+
+    def report(self, it: int) -> str:
+        """The timed iteration's line (after the exchange's end marks); the events are then dropped."""
+        for d in self.devs:
+            torch.cuda.synchronize(d)
+        ms = lambda a, b, d: self.ev[(a, d)].elapsed_time(self.ev[(b, d)]) if (a, d) in self.ev and (b, d) in self.ev else 0.0  # noqa: E731
+        parts = []
+        for i, d in enumerate(self.devs):
+            steps = {k: ms(a, b, d) for k, a, b in (("collect", "c0", "c1"), ("wm", "w0", "w1"), ("policy", "p0", "p1"), ("exchange", "x0", "x1"))}
+            span = ms("start", "x1", d)
+            roles = "+".join(k for k in ("collect", "wm", "policy") if self.role[k] == d)
+            parts.append(f"GPU{i} ({roles}): " + ", ".join(f"{k} {v:.2f}" for k, v in steps.items()) +
+                         f", idle {span - sum(steps.values()):.2f} of {span:.2f} ms")  # fmt: skip
+        self.ev = {}
+        return f"[prof-layout] it {it} | " + " | ".join(parts)
+
+
 class GivenStarts:
     """An imagination batch as fixed tensors on ``device``: the start states and their observation histories' states, as
     ``ReplayBuffer.starts_at`` returns them for ``B`` starts. ``starts`` stands in for the learner's own draw

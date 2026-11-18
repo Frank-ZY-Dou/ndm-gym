@@ -447,6 +447,9 @@ def main():
         obs_hist = torch.zeros(args.num_envs, Hh, OBS_DIM, device=dev)
         graphed_step = GraphedCollector(env, algo, buffer, mdp, motion, obs_hist, args) if args.collect_graph else None
         split = None
+        layout_timer = None
+        if bool(int(os.environ.get("LAYOUT_PROFILE", "0"))) and args.layout == "1GPU":
+            raise ValueError("LAYOUT_PROFILE=1 times the devices of --layout AL or AWL; this run has no layout (SM_PROFILE=1 times one GPU)")
         if args.layout != "1GPU":  # --layout (XMimic): the iteration's steps on their own GPUs, each on the others' previous results
             from ndm_gym.algos.layouts import Split
 
@@ -460,6 +463,10 @@ def main():
 
             split = Split(args, algo, algo_on, buffer)
             print(split.describe(), flush=True)
+            if bool(int(os.environ.get("LAYOUT_PROFILE", "0"))):  # the devices' steps timed by CUDA events (algos.layouts.LayoutTimer)
+                from ndm_gym.algos.layouts import LayoutTimer
+
+                layout_timer = LayoutTimer(split)
             algo = split.algo  # what the loop reads from here on, each from its owner (the collection's graph keeps the actor's object)
 
         @torch.no_grad()
@@ -556,10 +563,17 @@ def main():
             prof = profile and it % 20 == 0 and it > args.wm_only_iters + 5
             if probe is not None:  # --eprobe_share: a sweep's failures applied when due, a sweep started when due
                 probe.tick(it, algo.pi_avg.module)
+            lt = layout_timer is not None and layout_timer.due(it, args.wm_only_iters + 5)
             if prof:
                 torch.cuda.synchronize()
                 tp0 = time.time()
+            if lt:
+                layout_timer.mark("start")
+                layout_timer.mark("c0", "collect")
             collect(n, stats)
+            if lt:
+                layout_timer.mark("c1", "collect")
+                layout_timer.mark("w0", "wm")
             if prof:
                 torch.cuda.synchronize()
                 tp1 = time.time()
@@ -573,11 +587,15 @@ def main():
                     else:
                         res = algo.wm_update(buffer, probe=log_now and b == args.wm_batches - 1)
             wm_l, e8 = res[:2]
+            if lt:
+                layout_timer.mark("w1", "wm")
             if prof:
                 torch.cuda.synchronize()
                 tp2 = time.time()
             agg["wm"].append(wm_l), agg["wm8"].append(e8)
             if it >= args.wm_only_iters and (split is None or split.ready):  # --layout: from the learner's first batch on
+                if lt:
+                    layout_timer.mark("p0", "policy")
                 for _ in range(args.pi_updates):  # --pi_updates: more policy updates per iteration, each on its own batch
                     if args.update_graphs and policy_update_g is not None:
                         n_avg0 = int(algo.pi_avg.n_averaged) if algo.pi_avg is not None else 0
@@ -591,10 +609,17 @@ def main():
                     torch.cuda.synchronize()
                     tp3 = time.time()
                     print(f"[prof] collect {1e3*(tp1-tp0):.0f} ms ({n} steps) | wm {1e3*(tp2-tp1):.0f} ms | policy {1e3*(tp3-tp2):.0f} ms", flush=True)
+                if lt:
+                    layout_timer.mark("p1", "policy")
                 agg["pi"].append(pl), agg["v"].append(vl), agg["ir"].append(ir), agg["gn"].append(gn), agg["surv"].append(surv)
                 agg["fs"].append(algo.fail_starts)
             if split is not None:  # --layout: the next batch drawn; batch, world model, normalizers and policy cross the devices
+                if lt:
+                    layout_timer.mark("x0")
                 split.exchange()
+                if lt:
+                    layout_timer.mark("x1")
+                    print(layout_timer.report(it), flush=True)
             if log_now:
                 mean = lambda x: float(sum(float(v) for v in x) / max(len(x), 1))  # noqa: E731
                 mean_nn = lambda x: mean([v for v in (float(v) for v in x) if v == v])  # noqa: E731  (--reset_masked: NaN = no end)

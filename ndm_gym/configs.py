@@ -18,7 +18,12 @@ SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_s
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
 RF_SMALL = "--rf_merge joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2"
-TIMED = "--iterations 6000 --ckpt_every 100"  # the timed runs' length and checkpoints, each evaluated while training (ndm-eval --watch)
+TIMED = "--iterations 6000 --ckpt_every 100"  # the timed runs' length and checkpoints, each evaluated (ndm-eval)
+LEAN = "--eprobe_lean --imag_hoist --wm_presample --muon_batched --gc_freeze"  # leaner probe sweeps and the learner's set (one GPU)
+AWL4 = "--layout AWL --eprobe_gpu 3 --eprobe_every 250 --eprobe_async 4 --eprobe_lean --gc_freeze"  # four GPUs: actor | WM | policy, probes
+ST_FAST = f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table --pi_encode_once {RESETS} {SYSTEMS} {TIMED}"
+SM_FAST = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 {RECIPE} --pi_ema 0.99 --pi_batch 1024 --pi_lr_mult 2 "
+           f"--pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix --sm_residual --wm_structured {RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
 PAIRED = "--motions interhuman --paired"  # with --motion_dir: a two-person clip (tools/convert_interhuman.py)
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
@@ -42,13 +47,16 @@ CONFIGS = {
                                        "--critic_cudagraphs --max_hours 3",
                                        "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 33,800 iterations): return "
                                        "0.872 +- 0.003, MPJPE 21.2 +- 0.3 mm (seeds 7-9)"),
-        "lafan1-supertrack-fast": (f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table "
-                                   f"--pi_encode_once {RESETS} {SYSTEMS} {TIMED}",
-                                   "LAFAN1: return 0.82 after 4.19 +- 0.16 min on an A100 40GB SXM4, 2.54 +- 0.11 min on an H100 (seeds 0-5)"),
-        "lafan1-supermimic-fast": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 {RECIPE} --pi_ema 0.99 "
-                                   f"--pi_batch 1024 --pi_lr_mult 2 --pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix "
-                                   f"--sm_residual --wm_structured {RESETS} {SYSTEMS} {TIMED}",
-                                   "LAFAN1: return 0.82 after 4.38 +- 0.57 min on an A100 40GB SXM4, 2.68 +- 0.19 min on an H100 (seeds 0-5)"),
+        "lafan1-supertrack-fast": (ST_FAST,
+                                   "LAFAN1: return 0.82 after 4.19 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
+        "lafan1-supermimic-fast": (f"{SM_FAST} --pi_encode_once {LEAN}",
+                                   "LAFAN1: return 0.82 after 3.53 +- 0.30 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
+        "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4}",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.48 +- 0.13 min, 5.9 GPU-minutes "
+                                        "(seeds 0-2)"),
+        "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4}",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.37 +- 0.05 min, 5.5 GPU-minutes "
+                                        "(seeds 0-2)"),
         "lafan1-supertrack-rf-accurate": (f"--algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 "
                                           f"{SPEED} {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.832 +- 0.003, MPJPE 21.0 +- 1.3 mm (seeds 7-9)"),
