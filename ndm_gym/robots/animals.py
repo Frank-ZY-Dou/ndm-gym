@@ -85,17 +85,13 @@ def _scale_spec(spec, s: float):
     return spec
 
 
-def build_model(animal: str, root: str, activation: bool = True):
-    """The ``mujoco.MjModel`` of ``animal`` in its arena, at MIMIC-MJX's physics settings. The body's names carry its suffix
-    (``ANIMALS[animal].suffix``), as in MIMIC-MJX's environments. The rat's actuators keep their first-order activation
-    filters (``activation_filter``); ``activation=False`` builds the same body without them (na = 0), the layout the world
-    model reads (worldmodels.mjcf.MjcfLayout refuses activation states), whose controls are then the activations."""
+def _attach(arena, animal: str, root: str, activation: bool, suffix: str, rgba=None):
+    """Attach ``animal``'s body, edited as MIMIC-MJX's environments edit it, to the spec ``arena`` with the name suffix
+    ``suffix``; with ``rgba`` every geom recolored, without collisions or actuators (a ghost to pose)."""
     import mujoco
 
     a = ANIMALS[animal]
-    xmls = os.path.join(root, animal, "xmls")
-    arena = mujoco.MjSpec.from_file(os.path.join(xmls, a.arena_xml))
-    body = mujoco.MjSpec.from_file(os.path.join(xmls, a.body_xml))
+    body = mujoco.MjSpec.from_file(os.path.join(root, animal, "xmls", a.body_xml))
     if a.torque_actuators:
         for act in body.actuators:
             if act.forcerange.size >= 2:
@@ -107,12 +103,34 @@ def build_model(animal: str, root: str, activation: bool = True):
             act.dyntype = mujoco.mjtDyn.mjDYN_NONE
     if a.rescale != 1.0:
         body = _scale_spec(body, a.rescale)
+    if rgba is not None:
+        for g in body.geoms:
+            g.rgba, g.contype, g.conaffinity = list(rgba), 0, 0
+        for act in list(body.actuators):
+            body.delete(act)
     frame = arena.worldbody.add_frame(pos=list(a.spawn_pos), quat=[1, 0, 0, 0])
-    attached = frame.attach_body(body.body(a.root_body), "", a.suffix)
+    attached = frame.attach_body(body.body(a.root_body), "", suffix)
     if a.add_free_joint:
-        attached.add_freejoint(name="root")
-    for geom in a.foot_pairs:
-        arena.add_pair(geomname1="floor", geomname2=geom + a.suffix, solref=[0.0002, 1.0], solimp=[0.95, 0.99, 0.01, 0.5, 2.0])
+        attached.add_freejoint(name="root" if rgba is None else "root_ghost")
+    if rgba is None:
+        for geom in a.foot_pairs:
+            arena.add_pair(geomname1="floor", geomname2=geom + suffix, solref=[0.0002, 1.0], solimp=[0.95, 0.99, 0.01, 0.5, 2.0])
+
+
+def build_model(animal: str, root: str, activation: bool = True, ghost_rgba=None):
+    """The ``mujoco.MjModel`` of ``animal`` in its arena, at MIMIC-MJX's physics settings. The body's names carry its suffix
+    (``ANIMALS[animal].suffix``), as in MIMIC-MJX's environments. The rat's actuators keep their first-order activation
+    filters (``activation_filter``); ``activation=False`` builds the same body without them (na = 0), the layout the world
+    model reads (worldmodels.mjcf.MjcfLayout refuses activation states), whose controls are then the activations.
+    ``ghost_rgba``: a second copy of the body after it (its qpos after the body's), in that color, without collisions or
+    actuators (tools/render_animal.py)."""
+    import mujoco
+
+    a = ANIMALS[animal]
+    arena = mujoco.MjSpec.from_file(os.path.join(root, animal, "xmls", a.arena_xml))
+    _attach(arena, animal, root, activation, a.suffix)
+    if ghost_rgba is not None:
+        _attach(arena, animal, root, activation, a.suffix + "-ghost", ghost_rgba)
     arena.option.noslip_iterations = 0  # as MIMIC-MJX compiles every body (the fly's file asks for 3; MuJoCo-Warp has no noslip)
     m = arena.compile()
     m.opt.timestep = a.sim_dt

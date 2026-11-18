@@ -13,15 +13,18 @@ converges in 6 to 20 hours on one GPU (over 30 hours on CPUs).
 
 - **Kinematics:** the reference clips of MIMIC-MJX (Zhang, Yang et al., "MIMIC-MJX: Neuromechanical Emulation of Animal
   Behavior", arXiv 2511.20532), [talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX) on Hugging Face
-  (MIT), at a pinned revision: the rat's `rodent_reference_clips.h5` (842 clips of 5 s at 50 Hz, from DANNCE keypoints),
-  the fly's `fly_reference_clip.h5` (treadmill walking, 500 Hz) and the stick insect's `stick_insect_mocap.h5` and model
-  references (treadmill walking, 75 Hz). The joint trajectories are theirs (stac-mjx's inverse kinematics); none are
-  retargeted here. About 3 GB of the dataset's 101 GB; downloaded by a script, not redistributed.
-- **Bodies:** the rat's and the stick insect's models of [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground)
-  (BSD-3-Clause) and the fly of [TuragaLab/flybody](https://github.com/TuragaLab/flybody) (Apache-2.0), as MIMIC-MJX uses
-  them (the rat: 74 DoF, 38 torque actuators; the fly: 102 DoF, 61 torque actuators with the wings, proboscis and antennae
-  off; the stick insect: 42 DoF), at pinned commits, downloaded by the same script. Contacts between the end effectors and
-  the floor, as in MIMIC-MJX.
+  (MIT), at a pinned revision: the rat's `rodent_reference_clips.h5` (842 clips of 250 frames, 5 s at 50 Hz, from DANNCE
+  keypoints), the fly's `fly_reference_clip.h5` (1,730 clips of 600 frames, 1.2 s of treadmill walking at 500 Hz) and the
+  stick insect's `stick_mesh_reference.h5` (75 clips of 225 frames at 50 Hz, the clips of its mesh model). Each holds
+  stac-mjx's qpos and qvel of the body per frame (none are retargeted here), resampled to the control rate. 2.9 GB of the
+  dataset's 101 GB; downloaded by a script, not redistributed.
+- **Bodies:** the rat's, the fly's and the stick insect's models of
+  [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) (BSD-3-Clause; its fly is
+  [flybody](https://github.com/TuragaLab/flybody)'s, Apache-2.0), built as MIMIC-MJX's environments build them
+  (`ndm_gym/robots/animals.py`): the rat (74 qpos, 38 actuators) with its motors as torque actuators, scaled by 0.9, its
+  actuators' first-order activation filters kept (40 ms); the fly (43 qpos, 36 position actuators on its legs); the stick
+  insect (48 qpos, 41 torque actuators) with its feet's contact pairs and its actuators' scaling. Their qpos and qvel match the
+  clips' layouts exactly, and one control step on MuJoCo-Warp matches MuJoCo's to 1e-8 (median) from the clips' frames.
 - **Simulator:** MuJoCo-Warp at MIMIC-MJX's rates (the rat and the stick insect: 100 Hz control, 2 ms steps; the fly:
   500 Hz control, 0.2 ms steps), the control step as one CUDA graph. No Isaac Lab, no MJX.
 - **Baseline:** [talmolab/track-mjx](https://github.com/talmolab/track-mjx) (BSD-3-Clause), MIMIC-MJX's PPO, run unmodified
