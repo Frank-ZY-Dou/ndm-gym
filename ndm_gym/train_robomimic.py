@@ -231,12 +231,12 @@ def main():
         if it % args.log_every == 0:
             nan = torch.full((), float("nan"), device=dev)
             vals = torch.stack([*(torch.stack(agg[k]).mean() if agg[k] else nan for k in agg), acc["done"], acc["r"] / acc["steps"],
-                                acc["object_err"] / acc["steps"], acc["success"], acc["ep_len"], acc["term"]]).tolist()  # fmt: skip
+                                acc["object_err"] / acc["steps"], acc["success"], acc["at_end"], acc["ep_len"], acc["term"]]).tolist()  # fmt: skip
             # (the row's values above in one read of the device)
-            means, (n_done, sim_r, object_err, n_success, ep_sum, n_term) = vals[: len(agg)], vals[len(agg) :]
+            means, (n_done, sim_r, object_err, n_success, n_end, ep_sum, n_term) = vals[: len(agg)], vals[len(agg) :]
             done, now = max(n_done, 1.0), time.time()
-            # success: of the episodes that reached the reference's last frame in the row, the share at robosuite's success there
-            row = [it, (now - t_start) / 3600, it * N, *means, sim_r, 1000 * object_err, n_success / max(n_done - n_term, 1.0), ep_sum / done,
+            # success: of the episodes that reached their demonstration's last frame in the row, the share at robosuite's success there
+            row = [it, (now - t_start) / 3600, it * N, *means, sim_r, 1000 * object_err, n_success / max(n_end, 1.0), ep_sum / done,
                    n_term / done, args.log_every / (now - t_log), lr]  # fmt: skip
             log_f.write(",".join(f"{x:.6g}" for x in row) + "\n")
             log_f.flush()

@@ -28,11 +28,12 @@ ARM_DAMPING = 1.0
 ARM_SCALE, FINGER_SCALE = 0.25, 0.02
 KEYPOINT_BODIES = ("eef", "leftfinger", "rightfinger")  # per gripper: gripper<k>_right_<name>
 
-# per task: the tracked objects' free joints, and robosuite's success test's constants
+# per task: the tracked objects' free joints (Transport's lid too: the arms open the start bin and set its lid down before the
+# hand-over; untracked, a lid left in the gripper keeps the arm from the hammer), and robosuite's success test's constants
 TASKS = {
     "lift": {"objects": ("cube_joint0",), "success": "lift"},
     "square": {"objects": ("SquareNut_joint0",), "success": "square"},
-    "transport": {"objects": ("payload_joint0", "trash_joint0"), "success": "transport",
+    "transport": {"objects": ("payload_joint0", "trash_joint0", "transport_start_bin_lid_joint0"), "success": "transport",
                   "bins": ("transport_target_bin_joint0", "transport_trash_bin_joint0")},
 }
 LIFT_TABLE_TOP, LIFT_HEIGHT = 0.8, 0.04  # robosuite Lift: the cube above the table's top by 4 cm
@@ -97,7 +98,7 @@ class RobomimicScene:
     others: tuple[tuple[int, int], ...]  # the other free joints
     success_kind: str
     success_xy: tuple[float, float] = (0.0, 0.0)  # Square: its peg's position
-    bins: tuple[tuple[int, int], ...] = ()  # Transport: each tracked object's bin's free joint
+    bins: tuple[tuple[int, int], ...] = ()  # Transport: the bins of the first tracked objects (the payload's, the trash's)
 
     @staticmethod
     def from_model(m: mujoco.MjModel, task: str) -> RobomimicScene:

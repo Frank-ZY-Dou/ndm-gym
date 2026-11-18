@@ -233,7 +233,7 @@ class RobomimicTask:
             return p[..., 0, 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
         if kind == "square":
             return ((p[..., 0, :2] - self.success_xy).abs() < SQUARE_XY).all(-1) & (p[..., 0, 2] < SQUARE_TABLE_TOP + SQUARE_Z)
-        if kind == "transport":  # every tracked object inside its bin (robots.robomimic_scenes.BIN_*)
+        if kind == "transport":  # the payload and the trash inside their bins (robots.robomimic_scenes.BIN_*); the lid has none
             ok = torch.ones(p.shape[:-2], dtype=torch.bool, device=p.device)
             for o, (q, _) in enumerate(self.scene.bins):
                 c, R = S[0][..., q : q + 3], quat_to_mat(S[0][..., q + 3 : q + 7])
