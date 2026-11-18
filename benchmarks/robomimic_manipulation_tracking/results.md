@@ -61,4 +61,5 @@ best run (Lift SuperTrack and SuperMimic seed 0, Square seed 1, Transport SuperT
 unperturbed start, Transport at four times real time, and the grid of the six (`tools/make_grid.py`).
 
 Open: one policy on several demonstrations (Square's ten in development reach a success of 100 %; Lift's cubes differ in
-size between demonstrations), Transport to the target, and the speed options of the G1 path.
+size between demonstrations), Transport to the target, the speed options of the G1 path, and a per-phase time table (both
+in the plan, not done).
