@@ -56,6 +56,10 @@ def main():
     parser.add_argument("--data_dir", type=str, default=None, help="the demonstrations' directory (default: the checkpoint's)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--no_reference", action="store_true", help="skip the rollouts under the reference's targets")
+    parser.add_argument("--solver_iterations", type=int, default=-1,
+                        help="the simulated scene's solver iterations: -1 the checkpoint's training physics, 0 the scene's own (robosuite's), "
+                        "else a cap (its line search: --solver_ls_iterations)")  # fmt: skip
+    parser.add_argument("--solver_ls_iterations", type=int, default=0)
     args = parser.parse_args()
 
     import numpy as np
@@ -71,8 +75,12 @@ def main():
     ck = torch.load(args.ckpt, map_location=dev, weights_only=False)
     targs = argparse.Namespace(**ck["args"])
     demo = targs.demo if args.demo is None else args.demo
-    model, task, (nconmax, njmax) = build(targs.task, demo, args.data_dir or targs.data_dir, dev, solver_iterations=getattr(targs, "solver_iterations", 0),
-                                          solver_ls_iterations=getattr(targs, "solver_ls_iterations", 0))  # fmt: skip  # the physics trained in
+    if args.solver_iterations < 0:  # the physics trained in
+        solver = (getattr(targs, "solver_iterations", 0), getattr(targs, "solver_ls_iterations", 0))
+    else:
+        solver = (args.solver_iterations, args.solver_ls_iterations if args.solver_iterations else 0)
+    model, task, (nconmax, njmax) = build(targs.task, demo, args.data_dir or targs.data_dir, dev, solver_iterations=solver[0],
+                                          solver_ls_iterations=solver[1])  # fmt: skip
     targs.update_graphs = False  # (plain optimizers: none is stepped here)
     sim = RobomimicSim(model, task, args.num_envs, dev, nconmax=nconmax, njmax=njmax)
     nominal = RobomimicSim(model, task, 1, dev, nconmax=nconmax, njmax=njmax, joint_noise=0.0)
@@ -93,7 +101,7 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     demos = demo if isinstance(demo, list) else [demo]
     metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": CONTROL_DT,
-               "num_envs": args.num_envs, "per_demo": {}}  # fmt: skip
+               "num_envs": args.num_envs, "solver_iterations": [int(model.opt.iterations), int(model.opt.ls_iterations)], "per_demo": {}}  # fmt: skip
     ref = task.ref
     for name, start in zip(demos, torch.unique(ref.start).tolist(), strict=True):
         end, m = int(ref.end[start]), {}
