@@ -9,10 +9,10 @@ the clips of its dataset ([talmolab/MIMIC-MJX](https://huggingface.co/datasets/t
 ```bash
 pip install -e '.[hand]'                                         # MuJoCo-Warp
 python tools/download_mimic_mjx.py                               # the clips and the bodies at pinned revisions into data/mimic_mjx (2.9 GB)
-python -m ndm_gym.train_animal --animal stick --clip_ids 0-9 --algo supertrack --log_dir logs/stick_st
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 4 --record --out logs/stick_st/eval
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --out logs/stick_st/eval_heldout   # held-out clips
-MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/eval/rollout.npz --out stick.mp4
+python -m ndm_gym.train_animal --config stick-supermimic --log_dir logs/stick_sm     # <animal>-<algorithm>: the benchmark's settings
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --repeats 4 --record --out logs/stick_sm/eval
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --clip_ids 10-19 --out logs/stick_sm/eval_heldout   # held-out clips
+MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_sm/eval/rollout.npz --world 3 --out stick.webp   # or .mp4
 ```
 
 ## The bodies
@@ -62,4 +62,11 @@ the root, the joints, the bodies and the end effectors; SuperMimic with the incr
 The systems options are the hand task's; `--wm_lr` (the world model's own rate) and `--fused_fk` (the forward kinematics body
 by body, far fewer kernels once compiled) come from the G1 path.
 
-Results: [benchmarks/mimic_mjx_animal_tracking](../../benchmarks/mimic_mjx_animal_tracking/README.md).
+`--config list` prints the six configurations (`stick`, `fly`, `rat` with `supertrack` or `supermimic`) with what each
+measured. Results: [benchmarks/mimic_mjx_animal_tracking](../../benchmarks/mimic_mjx_animal_tracking/results.md).
+
+![SuperTrack and SuperMimic on a stick insect, a fruit fly and a rat clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/grid.webp)
+
+Each case's run with the lowest bodies' error on a clip it lives through (the fly at a quarter of real time), the reference
+in translucent blue. The animations: [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_sm.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_sm.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_sm.webp)
+(SuperMimic); [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_st.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_st.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_st.webp) (SuperTrack).
