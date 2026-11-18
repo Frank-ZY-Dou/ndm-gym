@@ -75,12 +75,13 @@ def main():
             s1, term, done = sim.step(task.setpoint(a, f), reset=False)
             S1, f1 = task.unflatten(s1), sim.f
             e = task.errors(S1, task.kin(S1[0]), f1)
-            live = alive.float()
-            sums["body"] += live * e["body"].mean(-1)
-            sums["end_eff"] += live * e["end_eff"].mean(-1)
-            sums["root_pos"] += live * e["root_pos"]
-            sums["joint"] += live * e["joint"]
-            steps += live
+            # the ended worlds step on unreset and may diverge: their errors are left out by selection, not by a zero weight
+            zero = torch.zeros_like(steps)
+            sums["body"] += torch.where(alive, e["body"].mean(-1), zero)
+            sums["end_eff"] += torch.where(alive, e["end_eff"].mean(-1), zero)
+            sums["root_pos"] += torch.where(alive, e["root_pos"], zero)
+            sums["joint"] += torch.where(alive, e["joint"], zero)
+            steps += alive.float()
             ended |= alive & term
             if args.record:
                 frames.append(f1.cpu().numpy()), qposes.append(S1[0].cpu().numpy())
