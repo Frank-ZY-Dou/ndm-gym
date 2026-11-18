@@ -42,6 +42,11 @@ The README's grids, from the repository's root:
       --row_labels SuperTrack SuperMimic $(for r in st sm; do for t in walk run play; do echo --clip $M/go2/${t}_$r.webp; done; done)
       (tools/render_quadruped.py's renders of seed 0's single-clip runs, 640 x 360)
       (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
+  python tools/make_grid.py $M/animals/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
+      --col_labels "stick insect" "fruit fly (quarter speed)" rat --row_labels SuperTrack SuperMimic \\
+      $(for r in st sm; do for t in stick fly rat; do echo --clip $M/animals/${t}_$r.webp; done; done)
+      (tools/render_animal.py's renders, 640 x 360 at 20 fps, of each case's run with the lowest bodies' error on clips 0-9;
+      stick insect clip 3 at --distance 2, fruit fly clip 3 at --speed 0.25, rat clip 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above.

@@ -4,8 +4,12 @@ NDM Gym mark (tools/render.py's).
 
     MUJOCO_GL=egl python tools/render_animal.py --rollout logs/<run>/eval/rollout.npz --out rat.mp4 [--world 0] [--speed 0.5]
 
+An ``--out`` ending in ``.webp`` is an animated WebP at ``--quality`` (the README's renders, gathered by tools/make_grid.py);
+any other is a video through ffmpeg.
+
 ``--world``: which of the rollout's episodes (the clips in order, then their perturbed repeats); ``--speed``: playback speed
-(the fly's clips last 1.2 s: 0.25 shows them at a quarter). The episode's frames after it ended are not drawn. Needs ffmpeg (or the imageio-ffmpeg package's).
+(the fly's clips last 1.2 s: 0.25 shows them at a quarter); ``--first``, ``--seconds``: a window of the episode, in its seconds.
+The episode's frames after it ended are not drawn. A video needs ffmpeg (or the imageio-ffmpeg package's).
 """
 
 import argparse
@@ -40,6 +44,9 @@ def main():
     ap.add_argument("--height", type=int, default=540)
     ap.add_argument("--title", default="")
     ap.add_argument("--distance", type=float, default=None, help="the camera's distance in body sizes (default 3.5)")
+    ap.add_argument("--first", type=float, default=0.0, help="the window's start in the episode's seconds")
+    ap.add_argument("--seconds", type=float, default=None, help="the window's length in the episode's seconds (default: to its end)")
+    ap.add_argument("--quality", type=int, default=70, help=".webp: the lossy WebP's quality")
     a = ap.parse_args()
     check_egl_device()
     d = np.load(a.rollout)
@@ -49,9 +56,9 @@ def main():
     nq = (model.nq) // 2
     data = mujoco.MjData(model)
     qpos, frame, ref = d["qpos"][a.world], d["frame"][a.world], d["ref_qpos"]
-    alive = np.ones(len(frame), dtype=bool)
-    alive[1:] = frame[1:] != frame[:-1]  # an ended episode's frame stops at its clip's last
-    T = int(alive.sum()) if not alive.all() else len(frame)
+    T = int(d["lived"][a.world]) if "lived" in d else len(frame)  # the steps the episode lived (the world steps on after it ended)
+    if "ended" in d and d["ended"][a.world]:
+        print(f"world {a.world}: the episode ended after {T * spec.ctrl_dt:.2f} s")
     size = float(np.linalg.norm(np.ptp(ref[:, :3], 0))) or 0.1
     reach = {"rat": 0.16, "fly": 0.26, "stick": 0.018}[animal]
     renderer = mujoco.Renderer(model, a.height, a.width)
@@ -59,16 +66,20 @@ def main():
     cam.distance, cam.azimuth, cam.elevation = (a.distance or 3.5) * reach, 140.0, -18.0
     s = a.height / 432
     bold, small = _font(0, round(20 * s)), _font(1, round(15 * s))
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:  # the imageio-ffmpeg package's binary
-        import imageio_ffmpeg
+    webp, frames = a.out.endswith(".webp"), []
+    if not webp:
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:  # the imageio-ffmpeg package's binary
+            import imageio_ffmpeg
 
-        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
-    ff = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{a.width}x{a.height}",
-                           "-r", str(a.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out], stdin=subprocess.PIPE)  # fmt: skip
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+        ff = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{a.width}x{a.height}",
+                               "-r", str(a.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out], stdin=subprocess.PIPE)  # fmt: skip
     step = 1.0 / spec.ctrl_dt * a.speed / a.fps  # control steps per video frame
     look = None
-    t = 0.0
+    t = a.first / spec.ctrl_dt
+    if a.seconds is not None:
+        T = min(T, int(round((a.first + a.seconds) / spec.ctrl_dt)))
     start = int(d["start"][a.world])
     while t < T:
         k = int(t)
@@ -89,10 +100,17 @@ def main():
             _pill(draw, (m, m), [(a.title, bold, INK)])
         _pill(draw, (a.width - m, m), [(f"{animal}   {(frame[k] - start) * spec.ctrl_dt:4.2f} s", small, MUTED)], anchor="ra")
         draw_mark(draw, a.width, a.height, bold)
-        ff.stdin.write(np.asarray(Image.alpha_composite(img, over).convert("RGB")).tobytes())
+        out = Image.alpha_composite(img, over).convert("RGB")
+        if webp:
+            frames.append(out)
+        else:
+            ff.stdin.write(np.asarray(out).tobytes())
         t += step
-    ff.stdin.close()
-    ff.wait()
+    if webp:
+        frames[0].save(a.out, save_all=True, append_images=frames[1:], duration=round(1000 / a.fps), loop=0, quality=a.quality, method=4)
+    else:
+        ff.stdin.close()
+        ff.wait()
     print("wrote", a.out, f"({size:.3g} root span)")
 
 

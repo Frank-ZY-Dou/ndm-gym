@@ -6,7 +6,8 @@ the others' metres converted), the joints' RMS error (deg), and the share of epi
     python -m ndm_gym.evaluate_animal --ckpt logs/<run>/last.pt [--clip_ids 0-9] [--out <dir>]
 
 ``--clip_ids`` defaults to the run's clips; held-out clips evaluate generalization. ``--out`` writes ``metrics.json`` and,
-with ``--record``, ``rollout.npz`` (each world's qpos per step, the reference's, the frames) for tools/render_animal.py.
+with ``--record``, ``rollout.npz`` (each world's qpos per step, the reference's, the frames, the steps each episode lived and whether
+it ended) for tools/render_animal.py; a world steps on after its episode ended.
 """
 
 from __future__ import annotations
@@ -103,7 +104,8 @@ def main():
             json.dump(metrics, fh, indent=2)
         if args.record:
             np.savez_compressed(os.path.join(args.out, "rollout.npz"), qpos=np.stack(qposes, 1), frame=np.stack(frames, 1),
-                                ref_qpos=ref.qpos.cpu().numpy(), start=f0.cpu().numpy(), animal=run.animal)  # fmt: skip
+                                ref_qpos=ref.qpos.cpu().numpy(), start=f0.cpu().numpy(), animal=run.animal,
+                                lived=steps.long().cpu().numpy(), ended=ended.cpu().numpy())  # fmt: skip
 
 
 if __name__ == "__main__":
