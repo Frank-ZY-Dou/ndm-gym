@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # (label, second line, speedup, baseline): 4,096 parallel worlds in every row (benchmarks/ndm_speed/results.md, benchmarks/g1_boxing/results.md)
 # but the Adroit door's, at 16,384 worlds, SuperTrack's model as a bf16 copy against MuJoCo Warp (benchmarks/adroit_door/results_a100.md),
-# the racing quadrotor's: the fused step in fp32 on the acceleration and on the increment model against MuJoCo Warp
+# the racing quadrotor's: the fused step in fp32 with the network as one kernel, on the acceleration and on the increment model, against MuJoCo Warp
 # (benchmarks/quadrotor_racing_tracking/results_a100.md),
 # RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds, the median over five planner
 # seeds, with the simulation step's speedup in the second line (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
@@ -22,8 +22,8 @@ ROWS = [
     ("NDM simulation", "HDMI's scenes", 45.3, "vs Isaac Lab + MuJoCo-Warp"),
     ("NDM simulation", "two G1s", 27.0, "vs Isaac Lab + MuJoCo-Warp"),
     ("NDM simulation", "Adroit door", 69.7, "vs MuJoCo Warp"),
-    ("NDM simulation", "racing quadrotor\nacceleration model", 19.8, "vs MuJoCo Warp"),
-    ("NDM simulation", "racing quadrotor\nincrement model", 19.6, "vs MuJoCo Warp"),
+    ("NDM simulation", "racing quadrotor\nacceleration model", 22.8, "vs MuJoCo Warp"),
+    ("NDM simulation", "racing quadrotor\nincrement model", 22.6, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 carrying; step 9.8×", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 climbing; step 3.8×", 1.8, "vs MuJoCo Warp"),
     ("RoboKit planning", "Go2 jumping; step 2.3×", 2.1, "vs MuJoCo Warp"),
