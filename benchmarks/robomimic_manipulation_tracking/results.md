@@ -5,7 +5,7 @@ MuJoCo-Warp, with SuperTrack and SuperMimic. First round: the development config
 
 ## How the numbers were obtained
 
-- **Runs:** `--config robomimic-supertrack-dev` (`--lr 4e-4 --st_fail_w 2 --st_task_weights`) and `--config robomimic-supermimic-dev`
+- **Runs:** `--config robomimic-supertrack` (`--lr 4e-4 --st_fail_w 2 --st_task_weights`) and `--config robomimic-supermimic`
   (SuperMimic's defaults), both with the hand task's systems options; `--task <task> --demo 0 --solver_iterations 20`,
   1,500 iterations in 2,048 worlds on the schedule of the development runs (`--lr_decay_iters 4000`), seeds 0, 1, 2.
 - **Evaluation:** `evaluate_robomimic` on each run's last checkpoint: 256 rollouts of the whole demonstration from perturbed

@@ -44,6 +44,9 @@ GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadrupe
 # manipulation demonstration tracking: the hand task's settings and systems options as the starting point
 ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights {HAND_SYSTEMS}"
 ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
+# the benchmark's runs (benchmarks/robomimic_manipulation_tracking): 1,500 iterations on the schedule of 4,000, the solver at 20
+# iterations, a checkpoint kept every 500
+ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 500 --ckpt_keep"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -152,8 +155,12 @@ CONFIGS = {
                                 "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
     },
     "train_robomimic": {
-        "robomimic-supertrack-dev": (ROBOMIMIC_ST, "development: the hand task's SuperTrack settings with its systems options (add --task, --demo); not measured yet"),
-        "robomimic-supermimic-dev": (ROBOMIMIC_SM, "development: SuperMimic's defaults with the hand task's systems options (add --task, --demo); not measured yet"),
+        "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations on an RTX 4090: success 100 / 100 / 89.8 %, "
+                                 "object 0.60 / 1.96 / 7.13 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts)"),
+        "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations on an RTX 4090: success 100 / 100 / 37.1 %, "
+                                 "object 0.80 / 4.08 / 12.3 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts)"),
     },
 }
 
