@@ -41,6 +41,12 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
+# the animals' settings (benchmarks/mimic_mjx_animal_tracking): the hand task's fast configurations with LAFAN1's world-model rate,
+# a policy batch of 2,048 and the fused forward kinematics; one policy on clips 0-9 of a body's reference
+ANIMAL_SPEED = "--pi_batch 2048 --wm_lr 2e-3 --fused_fk --clip_ids 0-9"
+ANIMAL_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
+ANIMAL_SM = f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
+ANIMAL_ITERS = {"stick": 4000, "fly": 6000, "rat": 10000}
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -148,7 +154,20 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
                                 "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
     },
-    "train_animal": {},  # the selected configurations come with the study's runs (benchmarks/mimic_mjx_animal_tracking)
+    "train_animal": {
+        f"{animal}-{algo}": (f"{opts} --animal {animal} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 1000 --ckpt_keep",
+                             f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, RTX 4090)")
+        for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
+        for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))
+        for result in [{
+            ("stick", "supertrack"): "no episode ended, bodies 0.41 mm; held-out clips 0.7 % ended, 0.77 mm",
+            ("stick", "supermimic"): "no episode ended, bodies 0.39 mm; held-out clips 1.3 % ended, 0.87 mm",
+            ("fly", "supertrack"): "no episode ended, bodies 0.062 mm; held-out clips 6.7 % ended, 0.092 mm",
+            ("fly", "supermimic"): "no episode ended, bodies 0.047 mm; held-out clips none ended, 0.066 mm",
+            ("rat", "supertrack"): "69 % of the episodes ended, bodies 35.8 mm (not solved)",
+            ("rat", "supermimic"): "19 % of the episodes ended, bodies 19.6 mm (not solved)",
+        }[animal, algo]]
+    },
 }
 
 
