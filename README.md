@@ -81,7 +81,8 @@ the position within 20 mm. Commands: [Recommended settings](#-recommended-settin
 | **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | ⏱ time to the target, not engineered | `--algo blinkmimic --layout AWL --eprobe_gpu 3`, a probe sweep every 250 iterations ([XMimic](docs/algorithms/xmimic.md)'s layout: actor, world model, policy and probe sweeps on a GPU each) | return 0.82 after **2.30 ± 0.22 min** on four A100 40GB SXM4, against 4.48 ± 0.37 min on one (seeds 0-2); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min on four, 3.53 ± 0.15 min on one (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
 | **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supermimic` | return 0.88 after **0.10 h** on an A100 80GB (seed 0; `two-g1-supertrack` 0.11 h) |
-|  | 🎯 most accurate | `two-g1-supermimic` by return | return **0.904 ± 0.001** (MLP world model, seeds 0-2; 0.3 h of training against `two-g1-supertrack`'s 0.5 h, so not an equal-budget comparison) |
+|  | 🎯 lowest pose error (root-relative) | `two-g1-supertrack` | root-relative MPJPE **14.1 ± 0.2 mm** (MLP world model, seeds 0-2, 9,396 iterations) |
+|  | 📈 highest return | `two-g1-supermimic` | return **0.9055 ± 0.0011** (MLP world model, seeds 0-2, 9,396 iterations) |
 | **[Hand-object tracking](#hand-object-tracking)**, XHand, three clips | ⏱ time to the target, not engineered | `hand-supermimic-fast` | **1.3 / 1.6 / 1.6 min**, every run (an A100 40GB, mean of seeds 0-2) |
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
 | **Hand-object tracking**, Allegro hand, three clips | ⏱ time to the target, not engineered | `hand-supertrack-fast --st_fail_w 5` | **1.6 / 1.3 / 8.8 min**, every run (an A100 40GB, mean of seeds 0-2) |
@@ -115,7 +116,7 @@ options beside them); both methods are on offer for every task.
 | **LAFAN1**, MLP world model | lowest pose error, highest return | `lafan1-supertrack-accurate`: MPJPE 15.2 mm, joint angle 2.02°, return 0.857 (3 h with the speed options, A100 40GB SXM4) | `lafan1-supermimic-accurate`: 21.2 mm, 3.40°, return 0.872 (the same) |
 | | fastest | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4), 2.54 min (H100) | `lafan1-supermimic-fast`: 4.38 and 2.68 min |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
-| **Two G1s**, MLP world model (add `--motion_dir`) | | `two-g1-supertrack`: return 0.893 ± 0.001, MPJPE 46.2 / 14.1 mm (seeds 0-2; 0.5 h) | `two-g1-supermimic`: 0.904 ± 0.001, 47.5 / 16.1 mm (0.3 h: not an equal-budget comparison) |
+| **Two G1s**, MLP world model (add `--motion_dir`) | lowest pose error, highest return | `two-g1-supertrack`: MPJPE 46.2 / 14.1 mm, return 0.8925 (seeds 0-2, 9,396 iterations) | `two-g1-supermimic`: 45.3 / 16.0 mm, return 0.9055 (the same) |
 | **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
 | **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
 | | time to the target, not engineered | `hand-supertrack-fast`: the target in 0.9 / 1.5 / 2.4 min | `hand-supermimic-fast`: 1.3 / 1.6 / 1.6 min |
@@ -557,13 +558,16 @@ redistributed). One policy controls both.
 
 | goal | configuration | result |
 |---|---|---|
-| most accurate by return | `--config two-g1-supermimic` | return 0.904 ± 0.001 (MLP world model, seeds 0-2; 0.3 h of training against `two-g1-supertrack`'s 0.5 h) |
+| lowest pose error (root-relative) | `--config two-g1-supertrack` | root-relative MPJPE 14.1 ± 0.2 mm (MLP world model, seeds 0-2, 9,396 iterations) |
+| highest return | `--config two-g1-supermimic` | return 0.9055 ± 0.0011 (MLP world model, seeds 0-2, 9,396 iterations) |
 | time to the target, not engineered | `--config two-g1-supermimic` | return 0.88 after 0.10 h (`two-g1-supertrack` 0.11 h; seed 0, A100 80GB) |
 
 Add `--motion_dir`; seeds 0-2, GPUs below.
 
-**In short:** `two-g1-supermimic` for return and the time to return 0.88 (one seed: SuperTrack 0.11 h, SuperMimic 0.10 h,
-not engineered); global MPJPE is 45.8-47.5 mm in all four configurations.
+**In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
+the measure it optimizes (root-relative MPJPE 14.1 against 16.0 mm, return 0.9055 against 0.8925), and the global MPJPE is
+level (46.2 against 45.3 mm). `two-g1-supermimic` reaches return 0.88 first (one seed: 0.10 h against 0.11 h, not
+engineered).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack, MLP world model, on InterHuman clip 1566: seed 0's best checkpoint (iteration 7,000); blue ghosts: the references.<br>MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
@@ -571,25 +575,29 @@ not engineered); global MPJPE is 45.8-47.5 mm in all four configurations.
 - **Selection:** with the MLP, two rounds with equal run counts; the small RigidFormer (SuperTrack-RF, SuperMimic-RF),
   from the first round's selections, in six further rounds of two runs per algorithm; then three training seeds.
 - **Table:** mean ± standard deviation over training seeds 0-2 of each run's best checkpoint, evaluated five times.
-- **GPUs and budgets:** seed 0 on an A100 80GB for 0.5 h (SuperTrack with the MLP: 9,396 iterations), SuperMimic with the
-  MLP for 0.3 h (6,264 iterations, its best checkpoint its last), so the MLP rows are not an equal-budget comparison; seeds
-  1 and 2 on an A100 40GB to seed 0's iteration counts ([details](benchmarks/g1_boxing/results.md)).
+- **GPUs and budgets:** with the MLP both train 9,396 iterations: SuperTrack's seed 0 on an A100 80GB (0.5 h), its seeds 1
+  and 2 on an A100 40GB SXM4, SuperMimic's seeds 0-2 on an A100 40GB SXM4 (for 0.3 h, 6,264 iterations: return 0.9042).
+  The RigidFormer's seed 0 on an A100 80GB for 0.5 h, seeds 1 and 2 on an A100 40GB SXM4 to seed 0's iteration counts
+  ([details](benchmarks/g1_boxing/results.md)).
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
 | pair success, every evaluation | 5 / 5 | 5 / 5 |
-| normalized return, MLP world model | 0.893 ± 0.001 | 0.904 ± 0.001 |
-| normalized return, RigidFormer | 0.894 ± 0.002 | 0.904 ± 0.001 |
-| MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 47.5 ± 8.6 / 16.1 ± 0.4 |
+| normalized return, MLP world model | 0.8925 ± 0.0011 | 0.9055 ± 0.0011 |
+| normalized return, RigidFormer | 0.8938 ± 0.0016 | 0.9038 ± 0.0010 |
+| MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 45.3 ± 3.3 / 16.0 ± 0.7 |
 | MPJPE, global / root-relative (mm), RigidFormer | 47.2 ± 5.2 / 14.7 ± 0.2 | 45.8 ± 2.5 / 17.0 ± 0.7 |
 | training to return 0.88 (h), seed 0, MLP world model, not engineered | 0.11 | 0.10 |
+
+With the MLP, SuperTrack minus SuperMimic (Welch 95% intervals): return -0.0129 [-0.0154, -0.0105], global MPJPE +0.8
+[-15.0, +16.7] mm, root-relative MPJPE -2.0 [-3.4, -0.5] mm.
 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
 # $RECIPE and $SYSTEMS as under Training speed
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --max_hours 0.5 --ckpt_every 1000 --log_dir logs/box_st
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 --log_dir logs/box_st
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
-          --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --max_hours 0.3 --ckpt_every 1000 --log_dir logs/box_sm
+          --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 --log_dir logs/box_sm
 # SuperTrack-RF and SuperMimic-RF: the named configurations (their options: ndm_gym/configs.py)
 ndm-train --config two-g1-supertrack-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_st_rf
 ndm-train --config two-g1-supermimic-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_sm_rf

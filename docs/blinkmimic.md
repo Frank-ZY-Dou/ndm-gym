@@ -192,6 +192,7 @@ SuperMimic's round-2 selection, `--wm_lr 4e-4`, the options cut the time by abou
 | muscles, SuperMimic-MLP | 621 (109 / 261 / 251) | 395 (103 / 130 / 162) |
 | two robots, SuperTrack-MLP (before: `--wm_cudagraphs --pi_cudagraphs`) | 418 (161 / 117 / 140) | 306 (71 / 115 / 120) |
 | the same, A100 80GB | 328 (94 / 112 / 122) | 289 (65 / 110 / 114) |
+| two robots, SuperMimic-MLP (before: `--wm_cudagraphs --pi_cudagraphs --critic_cudagraphs`) | 222 (80 / 43 / 100) | 163 (54 / 26 / 83) |
 
 On the muscles the collection graph saves 6 of the collection's 108 ms (the simulator's kernels dominate), and
 SuperMimic-MLP's model update, not captured before, varies between profiles (654 ms per iteration in a second one).

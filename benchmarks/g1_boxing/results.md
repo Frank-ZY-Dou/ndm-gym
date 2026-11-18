@@ -78,9 +78,22 @@ of two 0.5 h runs per algorithm, by the rule above (the MLP: the two rounds abov
 How it was read: a run's best checkpoint on its learning curve (one checkpoint per 1,000 iterations and the last one, one
 evaluation each) is evaluated five times from the clip's first frame; a cell is the mean of the five, and ± is the standard
 deviation over the three seeds. Seed 0 trained on an A100-SXM4-80GB for 0.5 h (SuperMimic with the MLP 0.3 h, its best
-checkpoint its last, so the MLP rows are not an equal-budget comparison). Seeds 1 and 2
-trained on A100-SXM4-40GB GPUs to seed 0's iteration counts (9,396, 4,373, 6,264 and 5,718, in the table's order), so
-training times are not compared across the seeds.
+checkpoint its last). Seeds 1 and 2 trained on A100-SXM4-40GB GPUs to seed 0's iteration counts (9,396, 4,373, 6,264 and
+5,718, in the table's order), so training times are not compared across the seeds.
+
+### SuperTrack-MLP and SuperMimic-MLP at one budget
+
+SuperMimic-MLP trained again to SuperTrack-MLP's 9,396 iterations (seeds 0-2, A100-SXM4-40GB), read as above: the same
+number of collection steps and updates for both. Its 6,264-iteration rows above are its runs for 0.3 h.
+
+| configuration | iterations | return, seeds 0 / 1 / 2 | mean ± sd | global MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd | root-relative MPJPE (mm), seeds 0 / 1 / 2 | mean ± sd |
+|---|---|---|---|---|---|---|---|
+| SuperTrack, MLP | 9,396 | 0.8932 / 0.8931 / 0.8913 | 0.8925 ± 0.0011 | 39.4 / 44.9 / 54.2 | 46.2 ± 7.5 | 14.2 / 13.8 / 14.2 | 14.1 ± 0.2 |
+| SuperMimic, MLP | 9,396 | 0.9053 / 0.9045 / 0.9067 | 0.9055 ± 0.0011 | 41.8 / 45.9 / 48.3 | 45.3 ± 3.3 | 16.7 / 15.8 / 15.5 | 16.0 ± 0.7 |
+
+SuperTrack-MLP minus SuperMimic-MLP, Welch 95% intervals: return -0.0129 [-0.0154, -0.0105], global MPJPE +0.8 mm
+[-15.0, +16.7], root-relative MPJPE -2.0 mm [-3.4, -0.5]. SuperMimic maximizes the return directly and SuperTrack
+minimizes the pose errors directly; each leads on the measure it optimizes, and the global MPJPE is level.
 
 ## LAFAN1's selections, 3 h
 
