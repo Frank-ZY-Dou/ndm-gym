@@ -28,6 +28,7 @@ The algorithms share one pipeline within each task:
 - **Adroit hand:** Door, Pen, Hammer and Relocate tracking of DAPG demonstrations, with each task's native actuators
   (MuJoCo CPU physics and CUDA learning).
 - **Quadruped:** a Unitree Go2 tracking a Labrador's motion capture, one clip or all 65 (MuJoCo-Warp).
+- **Animals:** MIMIC-MJX's rat, fruit fly and stick insect tracking their animals' recorded kinematics (MuJoCo-Warp).
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -82,7 +83,8 @@ margins; the CPU collector and the world models' training data keep no-slip.
 For each task, the fastest and the most accurate configuration in this repository (LAFAN1: by pose error and by return);
 each task's section has its settings table and its results. Hands: apple / spray bottle / can; the target is a success
 of 0.99 with the object within 10 mm. Quadrotor: ellipse / lemniscate / race track; the target is a success of 0.99 with
-the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Commands:
+the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Animals: the target is at most 2 % of the episodes
+ended with the bodies within 3 % of the body's size. Commands:
 [Recommended settings](#-recommended-settings), [Results](#-results).
 
 | Task | Goal | Configuration | Result |
@@ -107,6 +109,9 @@ the position within 20 mm. Quadruped: the target is a success of 0.99 with the t
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
+| **[Animal motion tracking](#animal-motion-tracking)**, stick insect / fruit fly, ten clips each | ⏱ time to the target, not engineered | `stick-supertrack`, `fly-supermimic` | **8.8 / 11.3 min**, every run (an RTX 4090 shared by three runs, mean of seeds 0-2; `stick-supermimic` 10.4 min, `fly-supertrack` 23.4 min) |
+|  | 🎯 most accurate | `stick-supermimic`, `fly-supermimic` | bodies **0.39 / 0.047 mm** (2.2 / 1.8 % of the body's size), no episode ended; held-out clips 0.87 / 0.066 mm (seeds 0-2, RTX 4090) |
+| **Animal motion tracking**, rat, ten clips | 🎯 most accurate | `rat-supermimic` | not solved: 19 % of the episodes ended, bodies 19.6 mm (seeds 0-2, 10,000 iterations); with 40,000 iterations (seed 0, 2.2 h) 16 % and 17.2 mm, held-out clips 22 % ended from 51 % |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -125,7 +130,7 @@ with its published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 m
 Each training task's best settings, as measured here, are named configurations (on the Allegro and the Inspire hand with
 options beside them); both methods are on offer for every task.
 
-- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor` and `train_quadruped` take `--config` too;
+- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor`, `train_quadruped` and `train_animal` take `--config` too;
   `train_door_full` takes the options as given in its rows.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
@@ -151,6 +156,9 @@ options beside them); both methods are on offer for every task.
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
+| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.41 mm; the target in 8.8 min | `stick-supermimic`: 0.39 mm; 10.4 min |
+| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.062 mm; the target in 23.4 min | `fly-supermimic`: 0.047 mm; 11.3 min |
+| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 69 % of the episodes ended, bodies 35.8 mm | `rat-supermimic`: 19 %, 19.6 mm |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
@@ -169,7 +177,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand,
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
   [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations,
-  [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play.
+  [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play,
+  [animal motion tracking](#animal-motion-tracking): MIMIC-MJX's rat, fruit fly and stick insect.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; a body-token RigidFormer on the muscle-actuated
   character, its most accurate configuration ([results](#muscle-actuated-character)); world models of MuJoCo models in
@@ -210,7 +219,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
-  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; RoboKit's G1 box carrying,
+  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; MIMIC-MJX's rat, fruit fly and stick insect tracking
+  their animals' recorded kinematics; RoboKit's G1 box carrying,
   G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics on HDMI's scenes, with fused Triton inference
@@ -403,6 +413,26 @@ MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_sm/evaluation/
 
 # a task and seed of the benchmark (benchmarks/go2_lifelike_tracking/tasks.json: all, walk, run, play)
 benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic
+```
+
+</details>
+
+<details>
+<summary><b>Animal motion tracking</b></summary>
+
+```bash
+pip install -e '.[hand]'                             # MuJoCo-Warp
+python tools/download_mimic_mjx.py                   # MIMIC-MJX's clips and vnl-playground's bodies, pinned, into data/mimic_mjx
+
+# one body on clips 0-9: train, evaluate on them and on held-out clips, render a clip over the reference
+python -m ndm_gym.train_animal --config stick-supermimic --log_dir logs/stick_sm     # also fly-, rat-; -supertrack
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --repeats 4 --record --out logs/stick_sm/evaluation
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --clip_ids 10-19 --repeats 4 --out logs/stick_sm/heldout
+MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_sm/evaluation/rollout.npz --world 3 --out stick.webp
+
+# the benchmark's runs of one algorithm (three bodies, seeds 0-2), then a run's time to the target
+benchmarks/mimic_mjx_animal_tracking/run_formal.sh supermimic
+python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/stick_supermimic_s0
 ```
 
 </details>
@@ -1043,6 +1073,48 @@ benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimi
 benchmarks/go2_lifelike_tracking/run.sh walk 0 logs/go2_sm --config go2-supermimic-clip  # walk, run, play; go2-supertrack-clip
 ```
 
+### Animal motion tracking
+
+MIMIC-MJX's rat, fruit fly and stick insect (Zhang, Yang et al., [arXiv:2511.20532](https://arxiv.org/abs/2511.20532)) track
+their animals' recorded kinematics on MuJoCo-Warp, with the bodies of
+[vnl-playground](https://github.com/talmolab/vnl-playground) at MIMIC-MJX's solver settings and terminations: a rat with
+67 joints and 38 torque actuators behind 40 ms activation filters, a fly 2.6 mm long with 36 leg servos at 0.2 ms physics
+steps, a stick insect 1.8 cm long with 41 torque actuators. One policy per body on ten clips; ten more clips are held out.
+
+| goal | configuration (`train_animal`) | result |
+|---|---|---|
+| most accurate, stick insect / fruit fly | `--config stick-supermimic`, `--config fly-supermimic` | bodies 0.39 / 0.047 mm, end effectors 0.59 / 0.078 mm, no episode ended; held-out clips 0.87 / 0.066 mm, 1.3 / 0 % ended (seeds 0-2) |
+| time to the target, not engineered | `--config stick-supertrack`, `--config fly-supermimic` | 8.8 ± 2.4 / 11.3 ± 2.5 min, every run (seeds 0-2; checkpoints every 1,000 iterations) |
+| rat | `--config rat-supermimic` | not solved: 19 % of the episodes ended, bodies 19.6 mm; SuperTrack 69 %, 35.8 mm |
+
+**In short:** the stick insect and the fly are tracked to about 2 % of their size with no episode ended, on held-out
+clips too, in under half an hour each on a consumer GPU shared by three runs; SuperMimic has the lower errors on both.
+The rat is not solved in this budget: SuperMimic ends 19 % of its episodes, SuperTrack 69 %. Four times the iterations
+(40,000, seed 0, 2.2 h) help most on the held-out clips (22 % ended, bodies 27.5 mm, from 51 % and 43.2 mm) and little on
+the training clips (16 %, 17.2 mm): the target, 2 % ended with the bodies within 4.7 mm, needs more than a longer budget.
+
+<p align="center"><img src="docs/media/animals/grid.webp" alt="SuperTrack and SuperMimic tracking a stick insect, a fruit fly and a rat clip of MIMIC-MJX" width="100%"/></p>
+<p align="center"><i>A stick insect, a fruit fly (a quarter of real time) and a rat clip with SuperTrack and SuperMimic: each case's run with the lowest bodies' error, from the reference's start.<br>The reference is the translucent blue ghost (<a href="docs/tasks/animals.md">the task</a>).</i></p>
+<p align="center"><sub>Renders of policies tracking MIMIC-MJX's clips (MIT) with vnl-playground's bodies (BSD-3-Clause; the fly flybody's, Apache-2.0); see <a href="NOTICE">NOTICE</a>.</sub></p>
+
+- **Runs:** 4,000 (stick insect), 6,000 (fruit fly) and 10,000 (rat) iterations in 2,048 worlds, the learning rate
+  decayed over them, on one RTX 4090 shared by three runs at once (the times are upper bounds of a run alone). Each run's
+  last checkpoint plays every clip from its first frame and four more times from perturbed starts
+  ([results](benchmarks/mimic_mjx_animal_tracking/results.md), [task](docs/tasks/animals.md)).
+- **Selection:** no tuning on the bodies: both algorithms take the hand task's fast configurations with LAFAN1's
+  world-model learning rate, a policy batch of 2,048 and the fused forward kinematics.
+
+| | stick insect | fruit fly | rat |
+|---|---|---|---|
+| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
+| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 0 / 0 % | 69 / 19 % |
+| bodies ↓, SuperTrack / SuperMimic | 0.41 / 0.39 mm | 0.062 / 0.047 mm | 35.8 / 19.6 mm |
+| joints ↓, SuperTrack / SuperMimic | 8.6 / 4.1° | 4.8 / 3.8° | 12.1 / 9.8° |
+| held-out clips: ended ↓, SuperTrack / SuperMimic | 0.7 / 1.3 % | 6.7 / 0 % | 83 / 51 % |
+| held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.77 / 0.87 mm | 0.092 / 0.066 mm | 52.8 / 43.2 mm |
+| training (min), SuperTrack / SuperMimic | 17 / 19 | 27 / 30 | 53 / 54 |
+| to the target ↓, SuperTrack / SuperMimic | 8.8 / 10.4 min | 23.4 / 11.3 min | not reached |
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -1305,16 +1377,16 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands on a floating palm (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`, `drone_racing.py`) |
-| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); a hand and an object on MuJoCo-Warp (`rigid/hand_sim.py`); a quadrotor on MuJoCo-Warp (`rigid/quadrotor_sim.py`); Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings (`robokit_ndm.py`, `robokit_rec.py`); mbrl-lib's environments on a world model (`mbrl_envs.py`, `mbrl_ndm.py`) |
-| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py`; `quadrotor_tracking.py` |
-| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `mjcf.py` (MuJoCo models in generalized coordinates); inference copies (`g1_infer.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands on a floating palm (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`); MIMIC-MJX's animals (`animals.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `musclevae.py`, `interhuman.py`, `spider.py`, `drone_racing.py`, `mimic_mjx.py`) |
+| `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator, one or two G1s (`rigid/isaaclab_mjwarp.py`); HDMI's scenes (`rigid/hdmi_sim.py`); MuscleVAE on Newton (`rigid/muscle_sim.py`); a hand and an object on MuJoCo-Warp (`rigid/hand_sim.py`); a quadrotor on MuJoCo-Warp (`rigid/quadrotor_sim.py`); an animal on MuJoCo-Warp (`rigid/animal_sim.py`); Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings (`robokit_ndm.py`, `robokit_rec.py`); mbrl-lib's environments on a world model (`mbrl_envs.py`, `mbrl_ndm.py`) |
+| `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py`; `quadrotor_tracking.py`; `animal_tracking.py` |
+| `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `animal.py`, `mjcf.py` (MuJoCo models in generalized coordinates); inference copies (`g1_infer.py`) |
 | `ndm_gym/kernels/` | fused Triton kernels: RigidFormer blocks (inference, training), muscle geometry |
 | `ndm_gym/policies/` | tracking policy and critic; HOI, muscle, hand and quadrotor policies; MuscleVAE's released policy (`musclevae_pretrained.py`) |
-| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `ppo_hoi.py` |
+| `ndm_gym/algos/` | `common.py` (world-model fitting, imagination starts), `supertrack.py`, `supermimic.py`, `blinkmimic.py`, `eprobe.py`, `xmimic.py`, `layouts.py`, `hoi_algos.py`, `muscle_algos.py`, `hand_algos.py`, `quadrotor_algos.py`, `animal_algos.py`, `ppo_hoi.py` |
 | `ndm_gym/wmbench/` | offline world-model benchmark; NDM throughput against physics (`speed_hoi.py`, `speed_muscles.py`, `speed_pair.py`, `speed_quadrotor.py`); RoboKit's and mbrl-lib's recordings, fits, timing and plans (`collect_robokit.py`, `fit_mjcf.py`, `speed_mjcf.py`, `plan_robokit.py`, `collect_mbrl.py`, `plan_mbrl.py`, `speed_mbrl.py`) |
-| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py`; `train_quadrotor.py`, `evaluate_quadrotor.py` |
+| `ndm_gym/train.py`, `ndm_gym/evaluate.py` | `ndm-train`, `ndm-eval`; `train_hoi.py`, `train_ppo_hoi.py`, `evaluate_hoi.py`; `train_muscles.py`; `train_hand.py`, `evaluate_hand.py`; `train_quadrotor.py`, `evaluate_quadrotor.py`; `train_animal.py`, `evaluate_animal.py` |
 | `scripts/`, `tools/` | install and launch scripts; rendering, plots, ablation tables, diagnostics |
 | `benchmarks/` | studies run with the library: results, ablations, speed |
 | `docs/` | guides, the API reference and the design documents (`mkdocs.yml`) |
@@ -1409,6 +1481,10 @@ Data:
   Z. Zhang. *Lifelike Agility and Play in Quadrupedal Robots using Reinforcement Learning and Generative Pre-trained
   Models.* Nature Machine Intelligence 6, 787-798, 2024. [DOI](https://doi.org/10.1038/s42256-024-00861-3) ·
   [arXiv:2308.15143](https://arxiv.org/abs/2308.15143) · [code and data](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play)
+- **MIMIC-MJX** (the animal clips, the bodies' edits and terminations): Zhang, Yang et al. *MIMIC-MJX: Neuromechanical
+  Emulation of Animal Behavior.* arXiv preprint, 2025. [arXiv:2511.20532](https://arxiv.org/abs/2511.20532) ·
+  [data](https://huggingface.co/datasets/talmolab/MIMIC-MJX) · [bodies](https://github.com/talmolab/vnl-playground)
+  (the fruit fly: [flybody](https://github.com/TuragaLab/flybody))
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,

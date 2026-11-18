@@ -39,6 +39,47 @@ GPU). Its critic appears to carry the balance that SuperTrack's 0.16 s imagined 
 Not comparable as they stand: MIMIC-MJX reports the rat's median keypoint error against stac-mjx's keypoints (about 10 mm on
 held-out clips); the bodies' error here is a mean over the body frames' origins, and the rat does not yet finish its clips.
 
+## Time to the target
+
+The target: at most 2 % of the episodes ended, with the bodies' error within 3 % of the body's size (stick insect 17.58 mm,
+fly 2.623 mm, rat 156.6 mm: 0.53, 0.079 and 4.7 mm). `time_to.py` evaluates every kept checkpoint (every 1,000 iterations)
+as the last one is, and reports the wall time of the first checkpoint from which every later one meets the target. The
+times are the runs' own wall clock with three runs sharing the GPU, the first checkpoint's including the compilation, and
+the checkpoints are 1,000 iterations apart, so they are upper bounds.
+
+```bash
+python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/{stick,fly}_*_s?
+```
+
+| body | algorithm | minutes to the target ↓ | iteration | seeds 0 / 1 / 2 (min) |
+|---|---|---|---|---|
+| stick insect | SuperTrack | 8.8 ± 2.4 | 2,000, every run | 11.5 / 7.4 / 7.3 |
+| | SuperMimic | 10.4 ± 2.7 | 2,000, every run | 13.5 / 9.1 / 8.7 |
+| fruit fly | SuperTrack | 23.4 ± 6.7 | 5,000-6,000 | 30.7 / 22.0 / 17.5 |
+| | SuperMimic | 11.3 ± 2.5 | 2,000, every run | 14.2 / 10.2 / 9.6 |
+| rat | both | not reached | | |
+
+The fly's SuperTrack meets the error target from 2,000 iterations but ends one or three of the 50 episodes at some later
+checkpoints (2-6 %), so it holds the target only from 5,000 or 6,000; SuperMimic ends none from its first checkpoint.
+
+## The rat with a longer budget
+
+`rat-supermimic`'s options with 40,000 iterations, the learning rate decayed over them (seed 0, 2.2 h on the shared GPU):
+
+| | ended ↓ | bodies ↓ | end effectors ↓ | joints ↓ | held-out: ended ↓ | held-out: bodies ↓ |
+|---|---|---|---|---|---|---|
+| 10,000 iterations (seeds 0-2) | 19 ± 1 % | 19.6 ± 1.7 mm | 16.8 ± 1.1 mm | 9.8 ± 0.1° | 51 ± 6 % | 43.2 ± 3.0 mm |
+| 40,000 iterations (seed 0) | 16 % | 17.2 mm | 14.3 mm | 9.0° | 22 % | 27.5 mm |
+
+Four times the iterations halve the held-out clips' failures and error but change the training clips' little: still far
+from the target, and past the GPU budget this benchmark keeps to. Not a configuration of its own.
+
+## Renders
+
+`tools/render_animal.py` renders a rollout recorded by `evaluate_animal`; `docs/media/animals/` holds each case's run with
+the lowest bodies' error (stick insect SuperTrack seed 2 and SuperMimic seed 1, fly seeds 2 and 0, rat seed 1 each) from
+the reference's start (the fly at a quarter of real time), and the grid of the six (`tools/make_grid.py`).
+
 ## Development notes
 
 - **PD servos for the rat:** gains from each actuator's effective inertia and force (natural frequency 1-8 Hz) keep the open
@@ -48,4 +89,7 @@ held-out clips); the bodies' error here is a mean over the body frames' origins,
 - **Iteration time** (rat, SuperTrack, 2,048 worlds, the GPU alone): collection 20 ms, world-model updates 28 ms, policy update
   43 ms with `--pi_batch 2048 --fused_fk`, from 145 ms with the default batch of 4,096 and the level-by-level kinematics.
   `--fused_fk` compiles for about 5 minutes on the rat, inside the training time above.
-- **Open:** the rat (a longer budget, a longer imagined window for SuperTrack), the time to a target, and the RigidFormer.
+- **Open:** the rat (a longer imagined window for SuperTrack, the observation and termination choices), and the RigidFormer.
+- **Not done from the plan:** MIMIC-MJX's PPO (track-mjx) timed on the same GPU, 6 to 20 hours a run and past this
+  benchmark's GPU budget (its published figures are quoted instead); a per-phase time table for every body (the rat's
+  SuperTrack only, above).
