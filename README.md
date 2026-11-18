@@ -1180,6 +1180,17 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 python -m pytest tests          # CPU; the equivalence tests compare against third_party/supermimic
 ```
 
+## 🤝 Contributors
+
+Pull requests from outside contributors, each merged with its runs and results:
+
+- [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it, and the Allegro and the Inspire
+  hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+- [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights
+  ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
+- [Yifan Kang](https://github.com/YIFANK): native Adroit Door tracking with SuperTrack and SuperMimic
+  ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+
 ## 📄 Papers and repositories
 
 Everything the library covers (methods, simulators, data, robot models, tools), one line each with its link:
