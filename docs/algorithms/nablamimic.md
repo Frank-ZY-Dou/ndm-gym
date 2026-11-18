@@ -30,8 +30,8 @@ run, of the earlier recipe with absolute actions: 0.82 after 0.41 h.
 | reduced memory, `remat` with `--replay-steps 250` ([section 5](#5-memory-on-the-gpu)) | A100 40GB SXM4 | 0.72 | 18.48 ± 1.72 (19.16 ± 1.72) | 17.93 ± 2.33 | 0.871, 0.864, 0.872 |
 
 These numbers stand beside this library's [training speed](../../README.md#training-speed) on the A100 40GB SXM4
-(SuperTrack 4.19 ± 0.16 min and SuperMimic 4.38 ± 0.57 min to return 0.82, seeds 0-5) and are not ranked with it: the
-two evaluations run on different simulators and robot models ([section 4](#4-its-evaluation-beside-this-librarys)).
+(SuperTrack 4.19 ± 0.18 min and SuperMimic 3.53 ± 0.30 min to return 0.82, one GPU, seeds 0-2) and are not ranked
+with it: the two evaluations run on different simulators and robot models ([section 4](#4-its-evaluation-beside-this-librarys)).
 
 ## 2. How it trains
 

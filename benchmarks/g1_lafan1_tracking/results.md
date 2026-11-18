@@ -64,20 +64,63 @@ SuperTrack's configuration scored 0.861 ± 0.003 and 14.5 ± 0.2 mm in its earli
 ## Training speed
 
 Minutes to return 0.82 with MLP world models, BlinkMimic's recipe and systems options, and each algorithm's fastest
-configuration ([commands](../../README.md#training-speed)). Time starts at iteration 50, after compilation and graph
-capture, and ends at the first checkpoint whose four evaluations on all 40 clips average 0.82. A second GPU evaluates
-every checkpoint (one per 100 iterations) during training. Selection used seed 0's time on the A100 40GB PCIe, the lowest
-time in that row for both algorithms. Means and standard deviations use unrounded times.
+configuration ([commands](../../README.md#training-speed)): seeds 0-2, one run at a time on A100 40GB SXM4 GPUs with nothing
+else running, the two algorithms' runs of each GPU count in one session. Every run trained 3,000 iterations with a checkpoint
+every 100, evaluated after training (`ndm-eval --group 18 --repeats 4 --graph`); time starts at iteration 50, after
+compilation and graph capture, and ends at the first checkpoint whose four evaluations on all 40 clips average at least 0.82.
+Means and standard deviations use unrounded times.
 
-Its rounds were declared one at a time, each before its runs; the first rounds (SuperTrack's first two, SuperMimic's first) ranked by the time to return
-0.83, the later ones by 0.82. SuperMimic's seed 0 on the A100 40GB SXM4 is a rerun: the first run reached 0.82 in 5.17 min (1,600 iterations), with iterations
-1,000-1,500 at 5.57 min per 1,000 against 3.20-3.24 for its other seeds during a machine stall; the rerun took 5.38 min (2,000 iterations).
+| configuration | GPUs | minutes to 0.82, seeds 0 / 1 / 2 | mean ± std | iterations to 0.82 | ms per iteration, 200-1000 / 1000-1500 |
+|---|---|---|---|---|---|
+| `lafan1-supertrack-fast` | 1 | 4.29 / 3.99 / 4.30 | 4.19 ± 0.18 | 1700, 1600, 1700 | 127.4 / 188.7 |
+| `lafan1-supermimic-fast` | 1 | 3.23 / 3.54 / 3.82 | 3.53 ± 0.30 | 1500, 1600, 1700 | 116.4 / 165.0 |
+| `lafan1-supertrack-fast-4gpu` | 4 | 1.50 / 1.33 / 1.59 | 1.48 ± 0.13 | 1800, 1600, 1900 | 51.5 / 51.6 |
+| `lafan1-supermimic-fast-4gpu` | 4 | 1.34 / 1.43 / 1.35 | 1.37 ± 0.05 | 1600, 1700, 1600 | 52.0 / 52.0 |
 
-| GPU | SuperTrack, seeds 0-5 | mean ± std | SuperMimic, seeds 0-5 | mean ± std |
-|---|---|---|---|---|
-| H100 | 2.40, 2.62, 2.41, 2.54, 2.63, 2.62 | 2.54 ± 0.11 | 2.84, 2.37, 2.84, 2.61, 2.59, 2.80 | 2.68 ± 0.19 |
-| A100 40GB SXM4 | 4.00, 4.01, 4.36, 4.18, 4.31, 4.28 | 4.19 ± 0.16 | 5.38, 4.34, 3.99, 3.91, 4.68, 4.00 | 4.38 ± 0.57 |
-| A100 40GB PCIe | 3.69, 4.75, 4.43, 4.48, 4.43, 4.40 | 4.37 ± 0.35 | 3.62, 4.04, 4.01, 4.31, 3.95, 3.97 | 3.98 ± 0.22 |
+Time per iteration by phase on one GPU, iterations 200-1000, ms (the same configurations, synchronized profiles):
+
+| configuration | total | collection (2.5 steps) | world-model updates | policy update with the critic | the rest |
+|---|---|---|---|---|---|
+| `lafan1-supertrack-fast` | 127.4 | 42.3 | 35.0 | 50.0 | 0.1 |
+| `lafan1-supermimic-fast` | 116.3 | 45.8 | 24.0 | 46.0 | 0.4 |
+
+On one GPU an iteration runs its phases one after another, and the host adds under 1 ms. SuperMimic's configuration encodes
+each imagined step's goal once per rollout instead of inside every step (`--pi_encode_once`, which SuperTrack's configuration
+has too) and runs with the lean options (`--eprobe_lean --imag_hoist --wm_presample --muon_batched --gc_freeze`): its policy
+update takes 46.0 ms instead of 55.0, and `--eprobe_lean` computes only what a probe sweep reads.
+
+Both algorithms were timed with and without the lean options in one session, under the same conditions (seeds 0-2):
+
+| one GPU, minutes to 0.82 | SuperTrack | SuperMimic |
+|---|---|---|
+| without the lean options (SuperMimic also without `--pi_encode_once`) | 4.30 ± 0.01 | 4.22 ± 0.42 |
+| with them | 4.04 ± 0.30 | 3.43 ± 0.18 |
+
+SuperTrack's two times are level within the seeds' spread, so its configuration stays without them; SuperMimic's
+configuration carries them.
+
+The four-GPU path by device, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each device's stream around the
+iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of each configuration, the lines of
+iterations 200-1000 averaged, ms per timed iteration:
+
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 LAYOUT_PROFILE=1 ndm-train --config lafan1-supertrack-fast-4gpu --seed 0 --iterations 1000
+CUDA_VISIBLE_DEVICES=0,1,2,3 LAYOUT_PROFILE=1 ndm-train --config lafan1-supermimic-fast-4gpu --seed 0 --iterations 1000
+```
+
+| configuration | device | collection | world-model updates | policy update | exchange (incl. waiting) | idle | span |
+|---|---|---|---|---|---|---|---|
+| SuperTrack, four GPUs | GPU 0, actor | 33.9 | | | 16.6 | 0.0 | 50.5 |
+| | GPU 1, world model | | 34.9 | | 15.4 | 0.1 | 50.4 |
+| | GPU 2, policy | | | 49.5 | 0.9 | 0.1 | 50.5 |
+| SuperMimic, four GPUs | GPU 0, actor | 36.5 | | | 11.0 | 0.0 | 47.5 |
+| | GPU 1, world model | | 26.3 | | 21.1 | 0.1 | 47.4 |
+| | GPU 2, policy | | | 46.5 | 0.8 | 0.1 | 47.5 |
+
+The layout runs the actor, the world-model learner and the policy learner at the same time on different GPUs, each on the
+others' results of the previous iteration, so an iteration takes about its slowest step: the policy update (46.5-49.5 ms).
+The actor and the world-model learner finish early and wait in the exchange for the policy learner's results; the probe sweeps run
+on a fourth GPU, every 250 iterations.
 
 ## Multi-GPU layouts and the learner's restructuring, timed
 
@@ -194,8 +237,8 @@ of 250 × 4096 states instead of 1000 × 4096 (`--replay-steps 250`). It is not 
 | `nm_a100_remat250_s2` | 0.716 | 1750 / 21.14 / 20.46 | 20.53 | 3250 / 39.17 / 38.49 | 0.872 (4984) | 0.872, 0 of 40 | 25.6 of 31.0 GB |
 | mean ± sd | 0.72 ± 0.00 | 1583 / 19.16 ± 1.72 / 18.48 ± 1.72 | 17.93 ± 2.33 | | | | |
 
-**Beside this library's fastest configurations.** On the A100 40GB SXM4, SuperTrack reaches return 0.82 after
-4.19 ± 0.16 min and SuperMimic after 4.38 ± 0.57 min ([Training speed](#training-speed), seeds 0-5). NablaMimic's rows
+**Beside this library's fastest configurations.** On one A100 40GB SXM4, SuperTrack reaches return 0.82 after
+4.19 ± 0.18 min and SuperMimic after 3.53 ± 0.30 min ([Training speed](#training-speed), seeds 0-2). NablaMimic's rows
 stand beside these numbers and are not ranked with them. The same in both: the 40 clips, the return's formula, each
 clip's start, the fall thresholds, the reward's terms and weights, the G1's joints, gains and mass. Not the same: the
 evaluator and its simulator, the G1's colliders and self-collisions, the anchor body, the clips' heights, one evaluation
