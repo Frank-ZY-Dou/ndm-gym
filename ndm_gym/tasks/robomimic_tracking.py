@@ -21,7 +21,8 @@ import torch
 import torch.nn as nn
 
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq
-from ..robots.robomimic_scenes import KEYPOINT_BODIES, LIFT_HEIGHT, LIFT_TABLE_TOP, SQUARE_TABLE_TOP, SQUARE_XY, SQUARE_Z, RobomimicScene
+from ..robots.robomimic_scenes import (BIN_FLOOR, BIN_HALF_XY, BIN_TOP, KEYPOINT_BODIES, LIFT_HEIGHT, LIFT_TABLE_TOP, SQUARE_TABLE_TOP, SQUARE_XY,
+                                       SQUARE_Z, RobomimicScene)  # fmt: skip
 from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel
 
 CONTROL_DT = 0.05  # robosuite's control_freq 20
@@ -126,6 +127,7 @@ class RobomimicTask:
         self.arm = long([i for i, a in enumerate(scene.arm) if a])  # the actuators of arm joints, and of gripper fingers
         self.fingers = long([i for i, a in enumerate(scene.arm) if not a])
         self.obj_d = [d for _, d in scene.objects]
+        self.success_xy = f32(scene.success_xy)  # (on the device: success() runs inside the collection's CUDA graph)
         self.num_keypoints, self.num_objects, self.num_arms = len(scene.keypoint_bodies), len(scene.objects), scene.num_arms
         self.state_dim = scene.nq + scene.nv
         kps, objs, arms, acts = self.num_keypoints, self.num_objects, self.num_arms, self.nu
@@ -214,8 +216,14 @@ class RobomimicTask:
         if kind == "lift":
             return p[..., 0, 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
         if kind == "square":
-            xy = torch.tensor(self.scene.success_xy, device=p.device)
-            return ((p[..., 0, :2] - xy).abs() < SQUARE_XY).all(-1) & (p[..., 0, 2] < SQUARE_TABLE_TOP + SQUARE_Z)
+            return ((p[..., 0, :2] - self.success_xy).abs() < SQUARE_XY).all(-1) & (p[..., 0, 2] < SQUARE_TABLE_TOP + SQUARE_Z)
+        if kind == "transport":  # every tracked object inside its bin (robots.robomimic_scenes.BIN_*)
+            ok = torch.ones(p.shape[:-2], dtype=torch.bool, device=p.device)
+            for o, (q, _) in enumerate(self.scene.bins):
+                c, R = S[0][..., q : q + 3], quat_to_mat(S[0][..., q + 3 : q + 7])
+                rel = ((p[..., o, :] - c).unsqueeze(-2) @ R).squeeze(-2)  # in the bin's frame
+                ok = ok & (rel[..., :2].abs() < BIN_HALF_XY).all(-1) & (rel[..., 2] > BIN_FLOOR) & (rel[..., 2] < BIN_TOP)
+            return ok
         raise NotImplementedError(f"success of {kind!r}")
 
     def critic_features(self, S, fk: torch.Tensor, f: torch.Tensor, a_prev: torch.Tensor, goal_frames: int) -> torch.Tensor:

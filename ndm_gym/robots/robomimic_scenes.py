@@ -32,10 +32,15 @@ KEYPOINT_BODIES = ("eef", "leftfinger", "rightfinger")  # per gripper: gripper<k
 TASKS = {
     "lift": {"objects": ("cube_joint0",), "success": "lift"},
     "square": {"objects": ("SquareNut_joint0",), "success": "square"},
-    "transport": {"objects": ("payload_joint0", "trash_joint0"), "success": "transport"},
+    "transport": {"objects": ("payload_joint0", "trash_joint0"), "success": "transport",
+                  "bins": ("transport_target_bin_joint0", "transport_trash_bin_joint0")},
 }
 LIFT_TABLE_TOP, LIFT_HEIGHT = 0.8, 0.04  # robosuite Lift: the cube above the table's top by 4 cm
 SQUARE_TABLE_TOP, SQUARE_PEG, SQUARE_XY, SQUARE_Z = 0.82, "peg1", 0.03, 0.05  # NutAssembly: the square nut on peg1
+# TwoArmTransport: the payload in the target bin and the trash in the trash bin. robosuite tests each object's contact with
+# its bin's base; here, as a function of the state, the object's origin inside its bin (in the bin's frame: within the base's
+# half width, above the base's top and below the walls' top: the bins of TransportGroup, 0.3 x 0.3 x 0.15 m)
+BIN_HALF_XY, BIN_FLOOR, BIN_TOP = 0.145, -0.065, 0.075
 
 
 def resolve_assets(xml: str, assets_root: str) -> str:
@@ -92,6 +97,7 @@ class RobomimicScene:
     others: tuple[tuple[int, int], ...]  # the other free joints
     success_kind: str
     success_xy: tuple[float, float] = (0.0, 0.0)  # Square: its peg's position
+    bins: tuple[tuple[int, int], ...] = ()  # Transport: each tracked object's bin's free joint
 
     @staticmethod
     def from_model(m: mujoco.MjModel, task: str) -> RobomimicScene:
@@ -121,14 +127,19 @@ class RobomimicScene:
         if missing:
             raise ValueError(f"the scene has no free joint {missing} of task {task!r}")
         objects = tuple(free[o] for o in TASKS[task]["objects"])
-        xy = (0.0, 0.0)
+        xy, bins = (0.0, 0.0), ()
+        if "bins" in TASKS[task]:
+            missing = [o for o in TASKS[task]["bins"] if o not in free]
+            if missing:
+                raise ValueError(f"the scene has no free joint {missing} of task {task!r}")
+            bins = tuple(free[o] for o in TASKS[task]["bins"])
         if TASKS[task]["success"] == "square":
             peg = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, SQUARE_PEG)
             xy = tuple(float(x) for x in m.body_pos[peg, :2])
         return RobomimicScene(task=task, nq=m.nq, nv=m.nv, nu=m.nu, act_q=tuple(act_q), act_d=tuple(act_d), act_lo=tuple(lo), act_hi=tuple(hi),
                               act_scale=tuple(scale), arm=tuple(arm), keypoint_bodies=tuple(bodies), objects=objects,
                               others=tuple(v for k, v in free.items() if v not in objects), success_kind=TASKS[task]["success"],
-                              success_xy=xy)  # fmt: skip
+                              success_xy=xy, bins=bins)  # fmt: skip
 
     @property
     def num_arms(self) -> int:
