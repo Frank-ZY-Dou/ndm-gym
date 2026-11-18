@@ -26,6 +26,7 @@ NEEDS_SIMULATOR = {
     "ndm_gym.sim.rigid.muscle_sim",  # Newton and MuJoCo-Warp directly
     "ndm_gym.sim.rigid.hand_sim",  # MuJoCo-Warp directly
     "ndm_gym.sim.rigid.quadrotor_sim",  # MuJoCo-Warp directly
+    "ndm_gym.sim.rigid.quadruped_sim",  # MuJoCo-Warp directly
     "ndm_gym.algos.hoi_algos",  # ndm_constants from sim.rigid.hdmi_sim
     "ndm_gym.train_hoi",  # isaaclab.app
 }

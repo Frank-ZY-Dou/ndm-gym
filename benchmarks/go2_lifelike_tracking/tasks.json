@@ -1,0 +1,29 @@
+{
+  "dataset": "https://github.com/Tencent-RoboticsX/lifelike-agility-and-play",
+  "commit": "cc9eaa9",
+  "clips_dir": "data/lifelike_go2",
+  "tasks": [
+    {
+      "id": "walk",
+      "clips": [
+        "dog_quad_walk_002_1"
+      ]
+    },
+    {
+      "id": "run",
+      "clips": [
+        "dog_quad_run_002_0"
+      ]
+    },
+    {
+      "id": "play",
+      "clips": [
+        "dog_play_002_0"
+      ]
+    },
+    {
+      "id": "all",
+      "clips": []
+    }
+  ]
+}

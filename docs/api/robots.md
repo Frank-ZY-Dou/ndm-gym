@@ -15,3 +15,5 @@ The Unitree G1's specification and the state layout shared by simulators, world 
 ::: ndm_gym.robots.musclevae_char
 
 ::: ndm_gym.robots.quadrotor
+
+::: ndm_gym.robots.go2

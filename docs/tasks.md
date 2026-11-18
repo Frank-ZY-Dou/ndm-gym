@@ -10,6 +10,7 @@ Six tasks share the pipeline. Scripts in `tools/` prepare the data; none of the 
 | [Muscle-actuated character](tasks/muscles.md) | MuscleVAE's character | Newton, MuJoCo-Warp | `tools/download_musclevae.sh`, `tools/convert_musclevae.py` | `python -m ndm_gym.train_muscles` |
 | [Hand-object tracking](tasks/hand.md), SPIDER's clips | XHand, Allegro hand or Inspire hand on a floating palm | MuJoCo-Warp | `tools/download_hand_clips.py` | `python -m ndm_gym.train_hand` |
 | [Quadrotor trajectory tracking](tasks/quadrotor.md), Race Against the Machine's flights | a 5-inch racing quadrotor | MuJoCo-Warp | `tools/download_drone_racing.py` | `python -m ndm_gym.train_quadrotor` |
+| [Quadruped motion tracking](tasks/quadruped.md), the Lifelike Labrador motion capture | Unitree Go2 | MuJoCo-Warp | `tools/download_lifelike.sh`, `tools/convert_lifelike.py` | `python -m ndm_gym.train_quadruped` |
 
 The world models also stand in for simulators:
 

@@ -31,6 +31,11 @@ QUAD_SYSTEMS = "--fused_adam --reset_masked --no_sync --collect_graph --update_g
 # the quadrotor's selected settings: an imagined window of 0.64 s, a world model of 3 x 256
 QUAD_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights --horizon 64 {HOI_OPT} --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
 QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+# the Go2's selected settings (benchmarks/go2_lifelike_tracking): SuperTrack with the hand task's options, SuperMimic with HOI's
+# optimizer options and a discount of 0.95
+GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
+GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
+GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -118,6 +123,20 @@ CONFIGS = {
         "quadrotor-supermimic-fast": (f"{QUAD_SM} --iterations 1000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep",
                                       "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm after 0.93 / 0.78 / 0.89 min "
                                       "(H200, mean of seeds 0-2, checkpoints every 250 iterations; not engineered)"),
+    },
+    "train_quadruped": {
+        "go2-supertrack": (f"{GO2_ST} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",
+                           "Go2, all 65 Lifelike clips, 10,000 iterations, 11.1 min on an RTX 6000 Ada: success 0.9987 +- 0.0012, return 0.977, "
+                           "feet 7.3 mm, trunk 12.8 mm; a success of 0.99 with the trunk within 20 mm after 4.43 +- 0.58 min (seeds 0-2)"),
+        "go2-supermimic": (f"{GO2_SM} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",
+                           "Go2, all 65 Lifelike clips, 10,000 iterations, 14.0 min on an RTX 6000 Ada: success 1.000, return 0.986, feet 5.3 mm, "
+                           "trunk 12.1 mm; a success of 0.99 with the trunk within 20 mm after 1.31 +- 0.03 min (seeds 0-2)"),
+        "go2-supertrack-clip": (f"{GO2_ST} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
+                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.992 / 0.973 / 0.985 on "
+                                "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
+        "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
+                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
+                                "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
     },
 }
 

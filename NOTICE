@@ -35,6 +35,12 @@ docs/media/quadrotor holds renders (and a grid of them) of policies tracking fli
 race-track flights of release v3.0.0, Bosello et al., IEEE Robotics and Automation Letters 2026; the dataset by TII Racing, CC BY
 4.0), the flown path and the gates drawn from its motion capture, with a model of its drone written in this repository from the
 paper's specification. They are shared under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+docs/media/go2 holds renders (and a grid of them) of policies tracking motion capture of a Labrador from "Lifelike agility
+and play in quadrupedal robots" (https://github.com/Tencent-RoboticsX/lifelike-agility-and-play; its licence file MIT, its
+README: for research purposes only), retargeted to the Unitree Go2 with supermimic-quadruped's quadmotion
+(https://github.com/Houserz/supermimic-quadruped; MIT) and drawn with MuJoCo Menagerie's Unitree Go2
+(https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause), the retarget laid over it in translucent blue. They are for
+research and non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
 docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch/mbrl-lib; MIT, Copyright (c) Facebook, Inc. and
 its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans

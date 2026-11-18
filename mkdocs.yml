@@ -102,6 +102,7 @@ nav:
           - Design: musclevae_design.md
       - Hand-object tracking: tasks/hand.md
       - Quadrotor trajectory tracking: tasks/quadrotor.md
+      - Quadruped motion tracking: tasks/quadruped.md
       - RoboKit's planner on a world model: tasks/robokit.md
       - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:
@@ -123,6 +124,7 @@ nav:
       - Hands: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/xhand_tracking/results.md
       - Muscles: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/musclevae/results.md
       - Quadrotor: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/quadrotor_racing_tracking/results.md
+      - Quadruped: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/go2_lifelike_tracking/results.md
       - NDMs as simulators: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/ndm_speed/results.md
       - RoboKit: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md
       - mbrl-lib: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/mbrl_lib/results.md

@@ -106,7 +106,7 @@ def check_hand_fast_args(args: argparse.Namespace):
 def check_resume(ck_args: dict, args: argparse.Namespace):
     """A resumed run must have its checkpoint's algorithm, SuperTrack's terms, optimizers and policy average; raises ValueError."""
     for k, default in RESUME_MATCH.items():
-        if ck_args.get(k, default) != getattr(args, k):
+        if ck_args.get(k, default) != getattr(args, k, default):  # (an option the task's training does not have: its default)
             raise ValueError(f"--resume: --{k} must match the checkpoint's run ({ck_args.get(k, default)!r})")
 
 
@@ -269,7 +269,17 @@ class Collector:
     for it. With --collect_graph the first two calls run so (kernels loaded, workspaces allocated), the third captures
     the step with the physics as kernels in one CUDA graph (torch's capture on Warp's stream, Warp's registered as
     external: sim.rigid.isaaclab_mjwarp.capture_step's way), and it is replayed from then on; the transition is written
-    at the replay's device-side head, the host's advanced after each call."""
+    at the replay's device-side head, the host's advanced after each call.
+
+    Another task's training (train_quadruped) subclasses it with its own log sums (``acc_keys``, ``log_errors``) and its
+    state's layout (``unflatten``); its simulator has HandSim's ``step_nosync``, ``physics`` and ``torch_stream``."""
+
+    acc_keys = ACC_KEYS
+    unflatten = staticmethod(unflatten_state)
+
+    def log_errors(self, errors: dict):
+        """The task's errors of a step's next states, into the log's sums."""
+        self.acc["object_err"] += errors["object_pos"].sum()
 
     def __init__(self, sim, task, algo, buffer, args):
         self.sim, self.task, self.algo, self.buffer, self.args = sim, task, algo, buffer, args
@@ -278,7 +288,7 @@ class Collector:
             raise ValueError("--collect_graph writes at the replay's device-side head (ReplayBuffer.use_device_ptr(device_size=True))")
         self.a_prev = torch.zeros(sim.N, task.kin.num_joints, device=sim.device)
         self.ep_len = torch.zeros(sim.N, device=sim.device)
-        self.acc = {k: torch.zeros((), device=sim.device) for k in ACC_KEYS}
+        self.acc = {k: torch.zeros((), device=sim.device) for k in self.acc_keys}
         self.fk = task.kin.forward
         if args.compile_eager:  # one compiled function for the step's forward kinematics: the agent's, the termination's, the reward's
             self.fk = algo.fk = torch.compile(task.kin.forward)
@@ -289,11 +299,11 @@ class Collector:
         """One collection step on the fixed tensors; ``physics``: the simulator's physics as kernels, inside the capture."""
         sim, task, algo, acc, a_prev = self.sim, self.task, self.algo, self.acc, self.a_prev
         s, f = sim.state(), sim.f.clone()
-        S = unflatten_state(s)
+        S = self.unflatten(s)
         a = algo.act(S, a_prev, f, noise=self.args.action_noise)
         u = task.setpoint(a, f)
         s1, term, done = sim.step_nosync(u, physics, self.fk)
-        S1, f1 = unflatten_state(s1), task.ref.next_frame(f)
+        S1, f1 = self.unflatten(s1), task.ref.next_frame(f)
         fk1 = self.fk(S1[0])
         algo.update_wm_norms(S, S1, u)
         tr = {"s": s, "s1": s1, "u": u, "a_prev": a_prev, "f": f, "done": done}
@@ -303,7 +313,7 @@ class Collector:
             self.buffer.add(tr)
         self.ep_len.add_(1)
         acc["r"] += task.reward(S1, fk1, f1, a, a_prev).sum() / task.max_step_reward
-        acc["object_err"] += task.errors(S1, fk1, f1)["object_pos"].sum()
+        self.log_errors(task.errors(S1, fk1, f1))
         acc["steps"] += sim.N
         acc["done"] += done.sum()
         acc["term"] += term.sum()

@@ -62,6 +62,7 @@ this repository yet.
 | HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
 | Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset), [paper](https://doi.org/10.1109/LRA.2024.3371288) | the quadrotor's flights, autonomous and piloted |
 | On Your Own | [paper](https://doi.org/10.1109/LRA.2026.3653405), [release v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0) | the professional pilot's race-track flights |
+| Lifelike agility and play | [Tencent-RoboticsX/lifelike-agility-and-play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play), [paper](https://doi.org/10.1038/s42256-024-00861-3) | a Labrador's motion capture, retargeted to the Go2 for quadruped tracking |
 
 ## Robots and hands
 
@@ -69,7 +70,7 @@ this repository yet.
 |---|---|---|---|
 | Unitree G1 | humanoid, 29 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros) | tracking, two G1s, human-object interaction, RoboKit's G1 tasks |
 | Unitree G1, mjlab's model | humanoid, primitive colliders | [mujocolab/mjlab](https://github.com/mujocolab/mjlab) | the differentiable-simulator comparison |
-| Unitree Go2 | quadruped | [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie) | RoboKit's Go2 jumping |
+| Unitree Go2 | quadruped | [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie) | RoboKit's Go2 jumping; quadruped motion tracking |
 | LimX TRON 1 | wheel-legged biped | [limxdynamics/tron1-robot-description](https://github.com/limxdynamics/tron1-robot-description) | driving and a ramp, planned on world models *(ongoing)* |
 | XHand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
 | Allegro hand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
@@ -89,3 +90,5 @@ this repository yet.
 | HoloMotion | [HorizonRobotics/HoloMotion](https://github.com/HorizonRobotics/HoloMotion) | retargets the two-person clip |
 | supermimic_vibed | [zita-ch/supermimic_vibed](https://github.com/zita-ch/supermimic_vibed) | the code this library started from |
 | MASS | [lsw9021/MASS](https://github.com/lsw9021/MASS) | the bone meshes of the muscle renders |
+| supermimic-quadruped (`quadmotion`) | [Houserz/supermimic-quadruped](https://github.com/Houserz/supermimic-quadruped) | retargets the Labrador's motion capture to the Go2, from the user's checkout |
+| unitree_mujoco | [unitreerobotics/unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco) | the Go2's joint damping |

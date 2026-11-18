@@ -29,6 +29,24 @@ time; they copy none of its files. `ndm_gym/sim/mbrl_envs.py` ports a few functi
   [dm_control](https://github.com/google-deepmind/dm_control), Copyright 2017 The dm_control Authors, under the Apache
   License 2.0 ([text](https://www.apache.org/licenses/LICENSE-2.0)).
 
+## Quadruped motion tracking
+
+The quadruped tracking task ([`docs/tasks/quadruped.md`](docs/tasks/quadruped.md)) copies no third-party file. What it
+reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`) and is not redistributed:
+
+- the Labrador motion capture of "Lifelike agility and play in quadrupedal robots using reinforcement learning and
+  generative pre-trained models" (Han et al., Nature Machine Intelligence 2024;
+  [Tencent-RoboticsX/lifelike-agility-and-play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play) @
+  `cc9eaa9`, `data/raw_mocap_data`; its licence file is MIT, its README says the code and data are for research purposes
+  only);
+- the Unitree Go2 of [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie) @ `370c439`
+  (`unitree_go2`, BSD-3-Clause).
+
+`tools/convert_lifelike.py` calls the `quadmotion` package of
+[supermimic-quadruped](https://github.com/Houserz/supermimic-quadruped) (MIT, Copyright (c) 2026 Yuxi Liu and Houserz;
+the results used `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
+of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from
