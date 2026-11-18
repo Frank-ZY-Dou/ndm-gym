@@ -46,3 +46,11 @@ definitions import without it.
 ::: ndm_gym.evaluate_quadrotor
     options:
       members: [main, rollout]
+
+::: ndm_gym.train_quadruped
+    options:
+      members: [main, parse_args, build]
+
+::: ndm_gym.evaluate_quadruped
+    options:
+      members: [main, rollout_sums, summarize_sums, minutes_to_success]

@@ -34,3 +34,5 @@ The human-object interaction's and the muscle-actuated character's algorithms; `
 ::: ndm_gym.algos.muscle_algos
 
 ::: ndm_gym.algos.quadrotor_algos
+
+::: ndm_gym.algos.quadruped_algos

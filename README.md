@@ -27,6 +27,7 @@ The algorithms share one pipeline within each task:
 - **Quadrotor:** a racing quadrotor tracking flown trajectories, autonomous and piloted (MuJoCo-Warp).
 - **Adroit hand:** Door, Pen, Hammer and Relocate tracking of DAPG demonstrations, with each task's native actuators
   (MuJoCo CPU physics and CUDA learning).
+- **Quadruped:** a Unitree Go2 tracking a Labrador's motion capture, one clip or all 65 (MuJoCo-Warp).
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -79,7 +80,8 @@ margins; the CPU collector and the world models' training data keep no-slip.
 For each task, the fastest and the most accurate configuration in this repository (LAFAN1: by pose error and by return);
 each task's section has its settings table and its results. Hands: apple / spray bottle / can; the target is a success
 of 0.99 with the object within 10 mm. Quadrotor: ellipse / lemniscate / race track; the target is a success of 0.99 with
-the position within 20 mm. Commands: [Recommended settings](#-recommended-settings), [Results](#-results).
+the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Commands:
+[Recommended settings](#-recommended-settings), [Results](#-results).
 
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
@@ -101,6 +103,8 @@ the position within 20 mm. Commands: [Recommended settings](#-recommended-settin
 |  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
 | **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on **99.3 %** of 256 starts (the demonstration's controls: 65.2 %), return **8.165 ± 0.054** (seeds 0-2, A100 40GB) |
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
+| **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
+|  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -119,7 +123,7 @@ with its published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 m
 Each training task's best settings, as measured here, are named configurations (on the Allegro and the Inspire hand with
 options beside them); both methods are on offer for every task.
 
-- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles` and `train_quadrotor` take `--config` too;
+- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor` and `train_quadruped` take `--config` too;
   `train_door_full` takes the options as given in its rows.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
@@ -144,6 +148,8 @@ options beside them); both methods are on offer for every task.
 | | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
+| **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
+| **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -160,7 +166,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   on a two-person clip ([three training seeds](benchmarks/g1_boxing/results.md#training-seeds-0-2)),
   [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand,
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
-  [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations.
+  [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations,
+  [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; a body-token RigidFormer on the muscle-actuated
   character, its most accurate configuration ([results](#muscle-actuated-character)); world models of MuJoCo models in
@@ -200,7 +207,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
-  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; RoboKit's G1 box carrying,
+  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; RoboKit's G1 box carrying,
   G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics on HDMI's scenes, with fused Triton inference
@@ -371,6 +378,28 @@ MUJOCO_GL=egl python tools/render_quadrotor.py --rollout logs/ellipse_st/evaluat
 
 # a task and seed of the benchmark (benchmarks/quadrotor_racing_tracking/tasks.json: ellipse, lemniscate, race_track, all)
 benchmarks/quadrotor_racing_tracking/run.sh ellipse 0 logs/quad_st --config quadrotor-supertrack-accurate
+```
+
+</details>
+
+<details>
+<summary><b>Quadruped motion tracking</b></summary>
+
+```bash
+pip install -e '.[hand]'                             # MuJoCo-Warp
+tools/download_lifelike.sh                           # the Labrador's motion capture and the Go2, at pinned commits, into data/
+git clone https://github.com/Houserz/supermimic-quadruped data/third_party/supermimic-quadruped
+git -C data/third_party/supermimic-quadruped checkout 46a81c2
+python tools/convert_lifelike.py --quadmotion data/third_party/supermimic-quadruped/src   # 65 clips into data/lifelike_go2
+
+# all clips: train (SuperMimic, then SuperTrack), evaluate beside the reference's targets with pushes, render a clip
+python -m ndm_gym.train_quadruped --config go2-supermimic --log_dir logs/go2_sm
+python -m ndm_gym.train_quadruped --config go2-supertrack --log_dir logs/go2_st
+python -m ndm_gym.evaluate_quadruped --ckpt logs/go2_sm/last.pt --out logs/go2_sm/evaluation --push 1 2 --save_rollout
+MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_sm/evaluation/rollout.npz --clip dog_play_002_0 --out play.webp
+
+# a task and seed of the benchmark (benchmarks/go2_lifelike_tracking/tasks.json: all, walk, run, play)
+benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic
 ```
 
 </details>
@@ -934,6 +963,52 @@ Pen SuperTrack improves normalized tracking RMSE from the prior's 0.4024 to 0.05
 
 Training takes 93.7–154.9 minutes per seed on one L40S and eight physical CPU cores. See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
 
+### Quadruped motion tracking
+
+A Unitree Go2 tracks the motion capture of a Labrador retriever from
+[Lifelike agility and play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play) on MuJoCo-Warp: 12 joint
+position servos at 50 Hz, a floating base with four feet, flight phases and turns. The reference is a kinematic retarget
+(supermimic-quadruped's `quadmotion`) that no physics shaped, so the policy has to find the contacts.
+
+| goal | configuration (`train_quadruped`) | result |
+|---|---|---|
+| most accurate, all 65 clips | `--config go2-supermimic` | return 0.986, feet 5.3 mm in the trunk's frame, trunk 12.1 mm, joints 1.1°; no clip failed at a success of 100 % (seeds 0-2, RTX 6000 Ada) |
+| time to the target, not engineered | `--config go2-supermimic` | 1.31 ± 0.03 min to a success of 0.99 with the trunk within 20 mm, every run (seeds 0-2) |
+
+**In short:** SuperMimic, with HOI's optimizer options and a discount of 0.95, is the more accurate on every task and
+reaches the target 3.4 times sooner on all clips (SuperTrack: return 0.977, feet 7.3 mm, 4.3 failed clips of 65,
+4.43 min). On one clip both reach the target in 1 to 2.5 min.
+
+<p align="center"><img src="docs/media/go2/grid.webp" alt="SuperTrack and SuperMimic tracking a walk, a run and a play clip of a Labrador's motion capture with a Unitree Go2" width="100%"/></p>
+<p align="center"><i>The walk, the run and the play clip with SuperTrack and SuperMimic; seed 0, real time, from the unperturbed start.<br>The retargeted reference laid over the robot in translucent blue: where the robot's white shows, it is off the reference (<a href="docs/tasks/quadruped.md">the task</a>).</i></p>
+<p align="center"><sub>Renders of policies tracking the motion capture of Lifelike agility and play (Tencent Robotics X; for research purposes), with MuJoCo Menagerie's Go2 (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
+- **Runs:** all clips 10,000 iterations (11 to 14 min), one clip 6,000, on one RTX 6000 Ada each; the last checkpoint
+  plays 252 (all clips) or 256 rollouts per clip of the whole clip from perturbed starts. The reference's joint
+  positions as the targets, open loop, keep the robot up in 5 % of the rollouts on all clips and in none on the single
+  ones ([results](benchmarks/go2_lifelike_tracking/results.md), [task](docs/tasks/quadruped.md)).
+- **Selection:** each algorithm starts from the library's options (the hand task's for SuperTrack, HOI's optimizer options
+  for SuperMimic). SuperMimic needed a discount of 0.95 in place of 0.99: on all clips at 4,000 iterations (seed 0) its
+  return goes from 0.706 to 0.962 with the trainer's defaults and from 0.839 to 0.968 with HOI's options
+  ([beside the starting point](benchmarks/go2_lifelike_tracking/results.md#beside-the-starting-point)).
+- **Pushes,** not trained for: at 1 m/s every 2 s, 5.5 of 65 clips fail for SuperMimic and 21.5 for SuperTrack; at
+  2 m/s most clips fail for both.
+
+| | all 65 clips | walk | run | play |
+|---|---|---|---|---|
+| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
+| success ↑, SuperTrack / SuperMimic | 99.9 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
+| reference's targets, open loop: success | 5.2 % | 0 % | 0 % | 0 % |
+| return ↑, SuperTrack | 0.9767 ± 0.0014 | 0.9915 ± 0.0001 | 0.9728 ± 0.0001 | 0.9851 ± 0.0001 |
+| return ↑, SuperMimic | 0.9856 ± 0.0001 | 0.9947 ± 0.0000 | 0.9773 ± 0.0016 | 0.9894 ± 0.0000 |
+| feet ↓, SuperTrack / SuperMimic | 7.26 / 5.33 mm | 6.13 / 4.15 mm | 10.40 / 7.70 mm | 7.66 / 5.57 mm |
+| training to a success of 0.99 within 20 mm ↓, SuperTrack / SuperMimic | 4.43 / 1.31 min | 1.08 / 1.32 min | 1.28 / 2.52 min | 1.08 / 1.61 min |
+
+```bash
+benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic        # seeds 0-2; go2-supertrack
+benchmarks/go2_lifelike_tracking/run.sh walk 0 logs/go2_sm --config go2-supermimic-clip  # walk, run, play; go2-supertrack-clip
+```
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -1295,6 +1370,11 @@ Data:
   F. Alneyadi, J. Panerati, G. Pau. *On Your Own: Pro-Level Autonomous Drone Racing in Uninstrumented Arenas.* IEEE
   Robotics and Automation Letters 11(3), 2026. [DOI](https://doi.org/10.1109/LRA.2026.3653405) ·
   [data v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0)
+- **Lifelike agility and play** (the Labrador's motion capture of quadruped tracking): L. Han, Q. Zhu, J. Sheng, C. Zhang,
+  T. Li, Y. Zhang, H. Zhang, Y. Liu, C. Zhou, R. Zhao, J. Li, Y. Zhang, R. Wang, W. Chi, X. Li, Y. Zhu, L. Xiang, X. Teng,
+  Z. Zhang. *Lifelike Agility and Play in Quadrupedal Robots using Reinforcement Learning and Generative Pre-trained
+  Models.* Nature Machine Intelligence 6, 787-798, 2024. [DOI](https://doi.org/10.1038/s42256-024-00861-3) ·
+  [arXiv:2308.15143](https://arxiv.org/abs/2308.15143) · [code and data](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play)
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,
@@ -1311,9 +1391,11 @@ Data:
 Robot models:
 - **Unitree G1:** Unitree Robotics. [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/g1_description`,
   BSD-3-Clause)
-- **MuJoCo Menagerie** (the Go2 of RoboKit's Go2 jumping): K. Zakka, Y. Tassa, MuJoCo Menagerie Contributors. *MuJoCo
+- **MuJoCo Menagerie** (the Go2 of RoboKit's Go2 jumping and of quadruped tracking): K. Zakka, Y. Tassa, MuJoCo Menagerie Contributors. *MuJoCo
   Menagerie: A collection of high-quality simulation models for MuJoCo.* 2022.
   [code](https://github.com/google-deepmind/mujoco_menagerie)
+- **unitree_mujoco** (the Go2's joint damping of quadruped tracking): Unitree Robotics.
+  [code](https://github.com/unitreerobotics/unitree_mujoco)
 - **mjlab** (the G1 of the differentiable-simulator comparison, as NablaEngine bundles it): K. Zakka, Q. Liao, B. Yi,
   L. Le Lay, K. Sreenath, P. Abbeel. *mjlab: A Lightweight Framework for GPU-Accelerated Robot Learning.* arXiv preprint,
   2026. [arXiv:2601.22074](https://arxiv.org/abs/2601.22074) · [code](https://github.com/mujocolab/mjlab)
@@ -1354,6 +1436,8 @@ Tools:
   [code](https://github.com/HorizonRobotics/HoloMotion)
 - **supermimic_vibed** (the code this library started from): C. Zhang. An unofficial SuperMimic reproduction, 2026.
   [code](https://github.com/zita-ch/supermimic_vibed)
+- **supermimic-quadruped** (its `quadmotion` retargets the Labrador's motion capture to the Go2, run from the user's
+  checkout): Y. Liu, Houserz. SuperMimic on quadruped robots, 2026. [code](https://github.com/Houserz/supermimic-quadruped)
 
 ## 📝 Citation
 

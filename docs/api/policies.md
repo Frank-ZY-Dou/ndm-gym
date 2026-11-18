@@ -11,3 +11,5 @@
 ::: ndm_gym.policies.hand_policy
 
 ::: ndm_gym.policies.quadrotor_policy
+
+::: ndm_gym.policies.quadruped_policy

@@ -17,3 +17,5 @@ Reference motions: the 50 Hz motion library the tasks read goals from, and the l
 ::: ndm_gym.motion.sources.musclevae
 
 ::: ndm_gym.motion.sources.drone_racing
+
+::: ndm_gym.motion.sources.lifelike
