@@ -2,7 +2,7 @@
 
 Pen, Hammer and Relocate extend the native Adroit infrastructure used by [Door](adroit_door.md). The algorithms learn from new simulator transitions and optimize tracking through a learned dynamics model. This is an online demonstration-tracking study, **not standard D4RL offline RL**.
 
-The first study uses one fresh seed for each method and task. Door's independent three-seed contribution is unchanged. The [study protocol and results](../../benchmarks/adroit_suite/README.md) record reference selection, adaptation, controls, compute budgets and limitations.
+The initial single-seed study is retained as historical evidence. The [three-seed follow-up](../../benchmarks/adroit_suite/v2/README.md) uses fresh complete runs for both methods and all three tasks. Door's independent contribution is unchanged. The [study protocol and results](../../benchmarks/adroit_suite/README.md) record reference selection, adaptation, controls, compute budgets and limitations.
 
 ## Native task contracts
 
@@ -63,6 +63,10 @@ CUDA_VISIBLE_DEVICES=0 python -m ndm_gym.train_adroit $COMMON \
   --method supermimic --seed 0 --workers 8 --output "$OUT/pen-supermimic-seed0"
 ```
 
+For the follow-up, repeat each task/method with seeds 0, 1 and 2 in separate output directories. Hammer SuperMimic additionally uses `--nail-tracking-std .001`; every other task/method retains the defaults. This changes only the training reward width, not the reference or native success predicate. Evaluation always reports the original widths. The narrower width did not make Hammer success robust across seeds; preserve every result. Door-specific tuning and start-offset options are rejected by the fixed suite protocol.
+
+The formal training source matches commit `1fbef65` in `ndm_gym/`. Subsequent integration with upstream `76b9914` retains the same default execution: both algorithms' full-capacity 320-step states, optimizers, replay and RNGs match bit-for-bit, with only the source fingerprint differing. [Compatibility record](../../benchmarks/adroit_suite/v2/upstream_compatibility.json).
+
 The shared schedule performs 40,960,000 training transitions plus 65,536 warmup transitions, 80,000 model optimizer steps and 19,700 policy updates. SuperMimic additionally performs 394,000 critic optimizer steps. The Hand accurate adaptation uses four model batches of 2,048 eight-step windows, 4,096 imagined policy starts, horizon 16, five goal frames, the existing network sizes and method-specific learning rates. Native joint coordinates/controller, finite-clip termination and CPU physics differ from XHand; this is not a literal equivalence claim.
 
 Use a distinct explicitly selected GPU and disjoint bounded CPU cores for concurrent runs, leaving RAM/VRAM/disk headroom. Run a representative full-capacity warmup first. This path uses native CPU physics and standard Torch GPU learning; it does not depend on upstream Triton kernels whose per-block shared-memory requirements exceed an L40S. Checkpoints include simulator integration states, replay, optimizers and RNG states; `--resume` requires a new output directory and matching source/protocol/inputs.
@@ -78,8 +82,10 @@ python tools/render_adroit.py "$OUT/pen/reference.npz" "$OUT/pen/model.xml" "$OU
   --start-frame 0 --end-frame 200 --stride 2 --label "SuperTrack accurate / seed 0 / 20k"
 ```
 
-Both methods and the control use the same 256 fixed starts: one nominal and 255 hand-only perturbed starts. The object and nail initial states remain unchanged. Evaluate the entire clip, retain final physical states and never silently drop failed episodes. Select the README method using the lower normalized tracking RMSE over all episodes; use fixed seed 0 and nominal episode 0, exclude termination, and retain native appearance and the NDM Gym mark. Adjust the exclusive endpoint to the selected task's action count. One clip and one training seed do not establish generalization or training-seed variability.
+Both methods and the control use the same 256 fixed starts: one nominal and 255 hand-only perturbed starts. The object and nail initial states remain unchanged. Evaluate the entire clip, retain final physical states and never silently drop failed episodes. Select the README method using the lower normalized tracking RMSE over all episodes; for the three-seed follow-up select the lowest-error final run across all six method/seed combinations and use fixed nominal episode 0, exclude termination, and retain native appearance and the NDM Gym mark. Adjust the exclusive endpoint to the selected task's action count. Three training seeds estimate variability only for this one reference; they do not establish held-out-motion generalization.
 
 ## Observed limitations
 
-The [single-seed results](../../benchmarks/adroit_suite/results_v1.md) show improved Pen tracking, but no overall tracking improvement over the explicit prior for Hammer or Relocate. Hammer SuperMimic has lower tracking error than SuperTrack yet fails the original final success threshold on all 256 starts. Its final nail-to-goal distance is only slightly above 10 mm; success and tracking must both be reported. Keep the original predicate when investigating a stronger goal-margin objective in a subsequent study, and fix that new study's rules before training. Current results do not establish robustness to larger perturbations or unseen demonstrations.
+The [complete three-seed results](../../benchmarks/adroit_suite/v2/results.md) show that Pen SuperTrack improves tracking and native success over the explicit prior. SuperMimic is variable: Pen succeeds on 99.61%, 46.88% and 91.80% of starts, and Hammer on 21.09%, 100% and 98.05%. The selected 1 mm nail kernel does not establish a robust repair. All six Relocate policies succeed everywhere, as the prior already does, while mean tracking error worsens. Hammer and Relocate show no mean overall tracking improvement over the prior for either method.
+
+The original strict native predicates and fixed reporting widths remain unchanged. Every failure is retained. The [historical single-seed results](../../benchmarks/adroit_suite/results_v1.md) are separate evidence and are not pooled into the three-seed averages. These results do not establish robustness to larger passive-object perturbations or unseen demonstrations.

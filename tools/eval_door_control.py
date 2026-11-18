@@ -15,7 +15,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from ndm_gym.eval_door_full import evaluation_offsets, initialize_evaluation, evaluate, score
+from ndm_gym.eval_door_full import evaluation_starts, initialize_evaluation, evaluate, score
 from ndm_gym.motion.adroit_door import DoorReference, JOINT_NAMES
 from ndm_gym.sim.rigid.door_collector import ParallelNativeDoorCollector
 from ndm_gym.train_door_full import make_algorithm
@@ -32,7 +32,11 @@ def main():
     for name in ('model', 'reference', 'native-library', 'output'):
         p.add_argument('--'+name, type=Path, required=True)
     p.add_argument('--workers', type=int, default=8)
+    p.add_argument('--door-latch-offset', type=float, default=0.,
+                   help='Starts of eval_door_full --door-latch-offset (default 0: the original starts)')
     a = p.parse_args()
+    if not np.isfinite(a.door_latch_offset) or a.door_latch_offset < 0:
+        p.error('--door-latch-offset must be finite and nonnegative')
     import mujoco
     torch.set_num_threads(1)
     reference = DoorReference.load(a.reference)
@@ -40,7 +44,7 @@ def main():
     model = mujoco.MjModel.from_xml_path(str(a.model.resolve()))
     algo, _ = make_algorithm('supertrack', model, reference, 'cpu')
     a.output.mkdir(parents=True, exist_ok=False)
-    offsets, velocities = evaluation_offsets()
+    offsets, velocities = evaluation_starts(a.door_latch_offset)
     np.savez_compressed(a.output/'starts.npz', qpos=offsets, qvel=velocities)
     started = time.perf_counter()
     with ParallelNativeDoorCollector(model, reference, 256, a.workers, a.native_library.resolve()) as collector:
@@ -59,6 +63,8 @@ def main():
                   means={k: float(np.mean([r[k] for r in results])) for k in results[0]},
                   wall_seconds=time.perf_counter()-started,
                   evaluation_scope='Same 256 starts and physical targets; precision-matched zero-residual control supplement')
+    if a.door_latch_offset:
+        report['door_latch_offset'] = a.door_latch_offset
     (a.output/'result.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps(report['means']))
 

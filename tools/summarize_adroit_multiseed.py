@@ -110,15 +110,15 @@ def main():
         evidence[str(baseline/'result.json')] = sha(baseline/'result.json')
     groups, previews = aggregate(rows)
     gate = read(formal/'hammer-gate.json')
-    if not gate['passed']:
-        raise ValueError('Hammer quality gate failed')
-    for row in rows:
-        if row['task'] == 'hammer' and row['method'] == 'supermimic':
-            if row['means']['native_success_final'] < .95 or row['means']['normalized_tracking_rmse'] > .1:
-                raise ValueError('Hammer repair did not pass on every seed')
+    observed_gate = all(row['means']['finite'] == 1 and row['means']['native_success_final'] >= .95
+                        and row['means']['normalized_tracking_rmse'] <= .1
+                        for row in rows if row['task'] == 'hammer' and row['method'] == 'supermimic')
+    if gate['passed'] != observed_gate:
+        raise ValueError('Archived Hammer quality gate disagrees with actual results')
+    # An unsuccessful method is a result, not an invalid study. Keep its failed gate visible.
     for path in (formal/'manifest.json', formal/'execution.json', formal/'hammer-gate.json'):
         evidence[str(path)] = sha(path)
-    result = dict(status='complete_three_seed_study', rows=rows, groups=groups, priors=priors, previews=previews,
+    result = dict(status='complete_three_seed_study', hammer_quality_gate_passed=observed_gate, rows=rows, groups=groups, priors=priors, previews=previews,
                   frozen_source_sha256=manifest['source_sha256'], evidence_sha256=evidence,
                   wall_seconds=max(x['ended'] for x in execution.values())-min(x['started'] for x in execution.values()),
                   guarded_gpu_hours=sum(x['ended']-x['started'] for x in execution.values())/3600,

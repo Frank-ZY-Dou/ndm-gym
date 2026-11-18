@@ -58,6 +58,7 @@ this repository yet.
 | OMOMO | [lijiaman/omomo_release](https://github.com/lijiaman/omomo_release) | RoboKit's G1 box carrying |
 | InterMimic | [project page](https://sirui-xu.github.io/InterMimic/) | OMOMO's clip as it processed it |
 | OmniRetarget (holosoma) | [amazon-far/holosoma](https://github.com/amazon-far/holosoma) | RoboKit's G1 climbing |
+| DAPG's demonstrations | [aravindr93/hand_dapg](https://github.com/aravindr93/hand_dapg), [paper](https://arxiv.org/abs/1709.10087) | the Adroit door's demonstration (clip 23) |
 | SPIDER's retargets | [retarget/retarget_full](https://huggingface.co/datasets/retarget/retarget_full) | the hands' clips |
 | HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
 | Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset), [paper](https://doi.org/10.1109/LRA.2024.3371288) | the quadrotor's flights, autonomous and piloted |
@@ -76,7 +77,7 @@ this repository yet.
 | Inspire hand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
 | Wuji Hand 1, Wuji Hand 2.2 | dexterous hands | [openrobokit/robokit](https://github.com/openrobokit/robokit) | hand-object tracking with our own retargets, RoboKit's cube *(ongoing)* |
 | Sharpa hand | dexterous hand | [openrobokit/robokit](https://github.com/openrobokit/robokit) | RoboKit's pen *(ongoing)* |
-| Adroit hand | dexterous hand, 28 actuators | [the contributed pull request](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3) | door opening *(ongoing)* |
+| Adroit hand | dexterous hand, 28 actuators | [Farama-Foundation/Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics) | door opening from a DAPG demonstration ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)) |
 | Race Against the Machine's racer | 5-inch racing quadrotor | written here from the paper's specification (`ndm_gym/robots/quadrotor.py`) | trajectory tracking |
 | MuscleVAE's character | muscle-actuated humanoid | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | tracking with muscles |
 | Cart-pole, pusher | PETS' MuJoCo models | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | mbrl-lib's planner on world models |

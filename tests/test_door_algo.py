@@ -27,7 +27,7 @@ def build():
 
 
 def test_registration_loss_and_exact_next_update():
-    assert set(ALGOS) == {"supermimic", "supertrack"}
+    assert {"supermimic", "supertrack"} <= set(ALGOS) and not set(DOOR_ALGOS.values()) & set(ALGOS.values())
     torch.manual_seed(2914)
     algo = build()
     state = (torch.zeros(2, 30), torch.zeros(2, 30))
@@ -102,4 +102,4 @@ def test_door_methods_share_public_registry():
     from ndm_gym.train_door import DOOR_METHODS
 
     assert DOOR_ALGOS == DOOR_METHODS
-    assert set(ALGOS) == {"supermimic", "supertrack"}
+    assert {"supermimic", "supertrack"} <= set(ALGOS) and not set(DOOR_ALGOS.values()) & set(ALGOS.values())

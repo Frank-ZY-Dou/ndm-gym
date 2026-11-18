@@ -13,7 +13,7 @@ RECIPE = ("--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon
 RF_RECIPE = RECIPE.replace(" --wm_hidden 1024 1024 1024", "")  # the recipe without the MLP's size
 RESETS = "--fail_reset 0.3 --bin_fix --eprobe_share 0.15 --eprobe_graph --eprobe_async 20 --eprobe_start 1000 --eprobe_every 125 --eprobe_decay 0.7"
 SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
-# speed options of the 3 h confirmation runs: SPEED for both backbones (SuperMimic's RigidFormer runs also --critic_cudagraphs), RF_SPEED
+# speed options of the 3 h runs: SPEED for both backbones (SuperMimic's runs also --critic_cudagraphs), RF_SPEED the
 # RigidFormer's own
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
@@ -36,10 +36,12 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 CONFIGS = {
     "train": {
         "lafan1-supertrack-accurate": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {SPEED} --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB with the speed options (about 35,700 iterations): return 0.861 +- 0.003, "
-                                       "MPJPE 14.5 +- 0.2 mm (seeds 7-9)"),
-        "lafan1-supermimic-accurate": ("--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB: return 0.824 +- 0.013, MPJPE 28.4 +- 0.5 mm (seeds 1-3)"),
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 36,200 iterations): return "
+                                       "0.857 +- 0.004, MPJPE 15.2 +- 1.0 mm (seeds 7-9)"),
+        "lafan1-supermimic-accurate": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.1 --imag_start_perturb 0.3 --sm_residual {SPEED} "
+                                       "--critic_cudagraphs --max_hours 3",
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 33,800 iterations): return "
+                                       "0.872 +- 0.003, MPJPE 21.2 +- 0.3 mm (seeds 7-9)"),
         "lafan1-supertrack-fast": (f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table "
                                    f"--pi_encode_once {RESETS} {SYSTEMS} {TIMED}",
                                    "LAFAN1: return 0.82 after 4.19 +- 0.16 min on an A100 40GB SXM4, 2.54 +- 0.11 min on an H100 (seeds 0-5)"),
@@ -54,15 +56,15 @@ CONFIGS = {
                                           f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
         "two-g1-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {SYSTEMS} {PAIRED} "
-                              "--ckpt_every 1000 --max_hours 0.5",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.893 +- 0.001, MPJPE 46.2 / 14.1 mm global / root-relative "
-                              "(seeds 0-2: seed 0 on an A100 80GB for 0.5 h, seeds 1-2 on an A100 40GB to its iteration count)"),
+                              "--ckpt_every 1000 --iterations 9396",
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / "
+                              "root-relative (seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4)"),
         "two-g1-supermimic": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 "
                               f"--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured {SYSTEMS} {PAIRED} --ckpt_every 1000 "
-                              "--max_hours 0.3",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.904 +- 0.001, MPJPE 47.5 / 16.1 mm global / root-relative "
-                              "(seeds 0-2: seed 0 on an A100 80GB for 0.3 h, its best checkpoint its last, so not an equal-budget comparison "
-                              "with two-g1-supertrack's 0.5 h; seeds 1-2 on an A100 40GB to its iteration count)"),
+                              "--iterations 9396",
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / "
+                              "root-relative (seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: "
+                              "0.9042 +- 0.0015, 47.5 / 16.1 mm)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "

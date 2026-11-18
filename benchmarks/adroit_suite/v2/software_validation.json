@@ -1,31 +1,45 @@
 {
-  "source_manifest": "tested_source.json",
-  "source_files": 317,
+  "source_files": 320,
   "source_mismatches": [],
   "runtime": "Python 3.12.3, Torch 2.11.0+cu126, MuJoCo 3.15.0 on gpu156",
   "checks": [
     {
       "command": "make test-fast",
       "returncode": 0,
-      "seconds": 890.8616225719452,
-      "passed": 1028,
+      "seconds": 891.3869910240173,
+      "passed": 1046,
       "skipped": 234,
       "deselected": 74,
-      "warnings": 54
+      "warnings": 54,
+      "source_manifest": "tested_source.json"
     },
     {
       "command": "make test",
       "returncode": 0,
-      "seconds": 1232.3945631980896,
-      "passed": 1038,
+      "seconds": 1231.2795722484589,
+      "passed": 1056,
       "skipped": 298,
       "deselected": 0,
-      "warnings": 74
+      "warnings": 75,
+      "source_manifest": "full_suite_tested_source.json"
     }
+  ],
+  "full_to_final_changed_files": [
+    "tools/summarize_adroit_multiseed.py"
   ],
   "scope": "CPU-visible software suites. Skipped CUDA/asset/compiler-dependent tests remain skipped, not passed. Exact native GPU learning configurations are separately warmed before each run; no unsupported L40S custom-kernel claim.",
   "recovery": "Hammer nail_std .001: full-capacity fresh-process 301-to-320 resume exactly matches uninterrupted 320 on SuperTrack and SuperMimic; development prefix, not formal seed.",
+  "upstream_compatibility": "upstream_compatibility.json",
+  "formal_training_commit": "1fbef65; ndm files exactly match training_source.json",
   "priors": "All 768 evaluation-start metrics exactly match original v1 reference-control evaluations.",
-  "formal_results": "pending; passing software checks is not evidence that all three training seeds pass",
-  "docs": "pending final results and preview grid"
+  "formal_results": "All 18 complete runs audited: seeds, full update counts, source/input/checkpoint identity, identical evaluation starts, finite full trajectories and archived native outcomes. Hammer scientific gate remains failed, not a CONTRIBUTING requirement.",
+  "docs": {
+    "command": "make docs",
+    "returncode": 0,
+    "scope": "Strict build with final results and preview grid"
+  },
+  "lint": {
+    "command": "make lint",
+    "returncode": 0
+  }
 }

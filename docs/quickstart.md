@@ -6,8 +6,8 @@ With the simulator installed (`bash scripts/setup.sh`, then `source ~/ndm_gym/ve
 
 ```bash
 # train (scripts/run_train.sh adds a memory cap, CPU pinning and a GPU lock)
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --max_hours 3 --log_dir logs/st
-ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 --max_hours 3 --log_dir logs/sm
+ndm-train --config lafan1-supertrack-accurate --log_dir logs/st    # 3 h; --config list: every named configuration
+ndm-train --config lafan1-supermimic-accurate --log_dir logs/sm
 ndm-train --algo supertrack --wm_backbone rigidformer --max_hours 3 --log_dir logs/st_rf   # the RigidFormer world model
 
 # evaluate every checkpoint as it is written; push robustness of one checkpoint

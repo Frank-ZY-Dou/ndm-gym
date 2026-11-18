@@ -1,0 +1,24 @@
+{
+  "label": "supertrack accurate / seed 1 / 20k",
+  "camera": {
+    "azimuth": 45.0,
+    "elevation": -25.0,
+    "distance": 1.2,
+    "lookat": [
+      0.0,
+      -0.16,
+      0.14
+    ]
+  },
+  "episode": 0,
+  "start_frame": 0,
+  "end_frame_exclusive": 624,
+  "stride": 2,
+  "contains_terminal_frame": false,
+  "input_sha256": {
+    "reference": "0d10ff0c5d2afab0e00cab3510e99b38de042cda1914d80ac2f3ddaa7672aed2",
+    "model": "1f4a20c842b776ffc08a9200073e2d7e3a7ac34b8b874643bd02bd610c08ca1d",
+    "rollouts": "74843168aba6720bf8554a100d31a42b2ba1034008ff0daa49f6bbc8dec76db1"
+  },
+  "output_sha256": "53602cbc4ecfe62d6fd54b6626891d805d42c41616dd937f2dd25d8094ef5fe3"
+}

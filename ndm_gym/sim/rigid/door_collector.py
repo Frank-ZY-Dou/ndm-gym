@@ -250,6 +250,33 @@ class ParallelNativeDoorCollector:
         self.previous_actions[:] = state['previous_actions']
         self.transitions = state['transitions']
 
+    def restart_worlds(self, indices, qpos_offsets):
+        """Move worlds that the last step reset to the reference's first frame onto offset initial positions.
+
+        Opt-in start perturbations (``train_door_full --door-latch-offset``); default collection never calls it. A
+        restarted world's integration state is that of ``DoorPhysics.reset`` with the offsets, as the evaluation's starts.
+        """
+        import mujoco
+        if self.failed or self.closed:
+            raise RuntimeError('Collector failed or closed; reconstruct before restarting worlds')
+        indices = np.asarray(indices, dtype=np.int64)
+        offsets = np.asarray(qpos_offsets, dtype=float)
+        if indices.ndim != 1 or offsets.shape != (len(indices), 30) or not np.isfinite(offsets).all():
+            raise ValueError('Expected world indices and finite qpos offsets (n, 30)')
+        if (np.any(indices < 0) or np.any(indices >= len(self.previous_actions))
+                or len(np.unique(indices)) != len(indices)):
+            raise ValueError('World indices out of range or repeated')
+        if not hasattr(self, 'restart_sim'):
+            self.restart_sim = DoorPhysics(self.chunks[0].sim.model, self.chunks[0].sim.reference)
+        for index, dq in zip(indices, offsets):
+            c = int(np.searchsorted(self.slices, index, side='right')) - 1
+            chunk, local = self.chunks[c], index - self.slices[c]
+            if chunk.frames[local] != 0 or np.any(self.previous_actions[index]):
+                raise ValueError('Only worlds just reset to the first frame can be restarted')
+            q, v = self.restart_sim.reset(qpos_offset=dq)
+            mujoco.mj_getState(self.restart_sim.model, self.restart_sim.data, chunk.states[local], chunk.spec)
+            chunk.qpos[local], chunk.qvel[local] = q, v
+
     def step(self, actions):
         if self.failed or self.closed:
             raise RuntimeError('Collector failed or closed; reconstruct before stepping')

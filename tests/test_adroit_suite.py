@@ -219,3 +219,17 @@ def test_evaluation_starts_are_independent_of_precision():
         np.testing.assert_array_equal(x, y)
     assert not np.array_equal(a[0][1:], b[0][1:])
     np.testing.assert_array_equal(a[0][:, 26:], b[0][:, 26:])
+
+
+@pytest.mark.parametrize('option', [
+    ['--door-latch-offset', '.3'], ['--lr', '.001'], ['--residual-scale', '.2'],
+    ['--action-noise', '.2'], ['--wm-only-iters', '100'],
+    ['--correction-reg', '.02'], ['--gamma', '.95'],
+])
+def test_suite_rejects_door_only_tuning_before_loading_inputs(option):
+    from ndm_gym.train_adroit import main
+    with pytest.raises(SystemExit) as error:
+        main(['--model', 'absent.xml', '--reference', 'absent.npz',
+              '--native-library', 'absent.so', '--output', 'absent-output',
+              '--method', 'supermimic', *option])
+    assert error.value.code == 2
