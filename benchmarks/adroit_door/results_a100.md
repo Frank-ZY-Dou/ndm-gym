@@ -78,6 +78,16 @@ eight physical cores; the median of five timed runs. MuJoCo on the CPU runs the 
 cores, MuJoCo Warp runs in float32 with its five physics steps as one CUDA graph, and the world model runs in fp32 as
 trained (one CUDA graph) and as a bf16 inference copy (compiled, one CUDA graph).
 
+```bash
+# both checkpoints at 1,024-65,536 worlds: one GPU with nothing else running, addressed by its UUID, and eight physical cores
+# of its NUMA node; <in dir> as the script's header says
+CUDA_VISIBLE_DEVICES=GPU-<uuid> PY=python taskset -c <eight cores> benchmarks/adroit_door/scripts/door_speed.sh <in dir> <out dir>
+# or one checkpoint at one world count
+python -m ndm_gym.wmbench.speed_door --ckpt <run>/latest.pt --rollouts <run>-evaluation/physical-rollouts.npz \
+  --model door23-supported/door.xml --reference door23-supported/reference.npz --native-library door_batch.so \
+  --nworld 16384 --profile --out speed.json
+```
+
 World-steps per second, SuperTrack's model (an acceleration MLP, 3 × 1,024) / SuperMimic's (an increment MLP, 3 × 1,024);
 MuJoCo Warp measured beside each, the CPU once:
 
