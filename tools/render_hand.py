@@ -10,8 +10,9 @@ reference pose as the position targets, over the same ghost; ``--source referenc
 ffmpeg (or the imageio-ffmpeg package's).
 
 ``--look noir``: a dark stage instead of the studio's light one (a dark gradient sky, a glossy dark floor with a faint grid
-that fades into the haze, a warm key light, a cool rim light from behind, satin materials on the hand and the object, the
-reference as a faintly glowing cyan ghost, the mark in white). ``--orbit d``: the camera turns by d degrees over the clip;
+that fades into the haze, a warm key light, a cool rim light from behind, satin materials on the hand and the object (a black hand lifted to graphite), the
+reference as a faintly glowing cyan ghost, the mark in white). ``--brightness b``: the dark stage's sky, floor and lights
+scaled (1: as it is). ``--orbit d``: the camera turns by d degrees over the clip;
 ``--zoom z``: the camera's distance times z; ``--follow_z``: the camera follows the height too; ``--no_ghost``: the
 solid scene alone; ``--ghost_overlay``: the reference rendered alone and laid over the frame as a translucent blue
 silhouette with an outline, so that it does not interleave with the solid hand where the two nearly coincide.
@@ -33,7 +34,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ndm_gym.core.rotations import mat_to_quat
-from ndm_gym.robots.xhand import scene_indices
+from ndm_gym.robots.hands import scene_indices
 
 FLOOR_CELL = 0.1  # the side of a floor tile (m)
 GHOST_RGBA = (0.25, 0.58, 0.95, 0.18)
@@ -43,18 +44,34 @@ OVERLAY_RGBA = {"studio": (0.20, 0.50, 0.98, 1.0), "noir": (0.32, 0.62, 1.0, 1.0
 OVERLAY_ALPHA = {"studio": (0.26, 0.75), "noir": (0.26, 0.85)}  # the silhouette's and the outline's opacity
 NOIR_SKY = ((0.115, 0.125, 0.15), (0.012, 0.013, 0.017))  # the gradient's top and bottom
 NOIR_HAZE = (0.016, 0.017, 0.021, 1.0)
+NOIR_DARKEST = 0.36  # the dark stage's darkest hand color: a black hand (the Allegro's, the Inspire's) reads as graphite on it
 LOOKS = ("studio", "noir")
 SHOWN_GROUPS = 3  # geom groups 0-2: the floor, the hand's and the object's visual meshes; not the collision shapes
 
 
-def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str = "studio", overlay: bool = False) -> mujoco.MjModel:
+def noir_rgba(rgba) -> list[float]:
+    """A color for the dark stage: those darker than mid grey are lifted toward it, down to NOIR_DARKEST for black."""
+    r, g, b, a = (float(x) for x in rgba)
+    lift = lambda x: x if max(r, g, b) >= 0.5 else NOIR_DARKEST + (0.5 - NOIR_DARKEST) * x / 0.5  # noqa: E731
+    return [lift(r), lift(g), lift(b), a]
+
+
+def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str = "studio", overlay: bool = False,
+                 brightness: float = 1.0) -> mujoco.MjModel:
     """The clip's scene with tools/render.py's studio look (a gradient sky, a softly reflecting floor with a fine grid, a
     shadow-casting key light and a fill light, haze), or with ``look="noir"`` the dark stage of the module's docstring. With
     ``ghost``, a second, translucent hand and object for the reference, their names prefixed ``ref_``; with ``overlay`` the
-    ghost is opaque, in geom group GHOST_GROUP, for a pass of its own (main's --ghost_overlay)."""
+    ghost is opaque, in geom group GHOST_GROUP, for a pass of its own (main's --ghost_overlay). ``brightness`` (the dark stage
+    only; 1: as it is) scales its key light by b, its sky, floor, haze and fill light by b squared and its ambient light by b to
+    the power 1.5, colors kept within 1, and doubles the shadow's range."""
     if look not in LOOKS:
         raise ValueError(f"look must be one of {LOOKS}, got {look!r}")
     noir = look == "noir"
+    if brightness != 1.0 and not noir:
+        raise ValueError("brightness other than 1 needs the dark stage (look='noir')")
+    if brightness <= 0:
+        raise ValueError(f"brightness must be positive, got {brightness}")
+    lit = lambda c, p: c if brightness == 1.0 else tuple(min(1.0, x * brightness**p) for x in c)  # noqa: E731
     spec = mujoco.MjSpec.from_file(scene_xml)
     for light in spec.lights:
         spec.delete(light)
@@ -64,6 +81,9 @@ def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str
         for geom in spec.geoms:
             if geom.type != mujoco.mjtGeom.mjGEOM_PLANE and not geom.material and geom.group < SHOWN_GROUPS:
                 geom.material = "noir_satin"
+                geom.rgba = noir_rgba(geom.rgba)
+        for material in spec.materials:  # the Allegro hand's black, as the Inspire hand's geoms above
+            material.rgba = noir_rgba(material.rgba)
     if ghost:
         copy = mujoco.MjSpec.from_file(scene_xml)
         for light in copy.lights:
@@ -85,11 +105,12 @@ def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str
     for tex in spec.textures:
         if tex.type == mujoco.mjtTexture.mjTEXTURE_SKYBOX:
             spec.delete(tex)
-    sky = NOIR_SKY if noir else ((0.985, 0.987, 0.99), (0.86, 0.88, 0.91))
+    sky = (lit(NOIR_SKY[0], 2), lit(NOIR_SKY[1], 2)) if noir else ((0.985, 0.987, 0.99), (0.86, 0.88, 0.91))
     spec.add_texture(name="studio_sky", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
                      rgb1=sky[0], rgb2=sky[1], width=512, height=512)  # fmt: skip
     if noir:
-        checker = dict(rgb1=(0.078, 0.081, 0.092), rgb2=(0.070, 0.073, 0.083), mark=mujoco.mjtMark.mjMARK_EDGE, markrgb=(0.150, 0.160, 0.188))
+        checker = dict(rgb1=lit((0.078, 0.081, 0.092), 2), rgb2=lit((0.070, 0.073, 0.083), 2), mark=mujoco.mjtMark.mjMARK_EDGE,
+                       markrgb=lit((0.150, 0.160, 0.188), 2))  # fmt: skip
     else:
         checker = dict(rgb1=(0.80, 0.81, 0.83), rgb2=(0.77, 0.78, 0.80), mark=mujoco.mjtMark.mjMARK_EDGE, markrgb=(0.66, 0.68, 0.72))
     spec.add_texture(name="studio_floor", type=mujoco.mjtTexture.mjTEXTURE_2D, builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER,
@@ -103,12 +124,14 @@ def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str
             geom.material, geom.rgba, geom.size = "studio_floor", (1, 1, 1, 1), (0, 0, 0.05)
     if noir:  # a warm key light, a cool rim light from behind the hand (turned with the camera), a faint fill
         spec.worldbody.add_light(name="key", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=(0.8, -0.6, 3), dir=(-0.35, 0.3, -1),
-                                 castshadow=True, diffuse=(1.00, 0.95, 0.88), specular=(0.60, 0.57, 0.52))  # fmt: skip
+                                 castshadow=True, diffuse=tuple(x * brightness for x in (1.00, 0.95, 0.88)),
+                                 specular=tuple(x * brightness for x in (0.60, 0.57, 0.52)))  # fmt: skip
         spec.worldbody.add_light(name="rim", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=(0, 0, 3), dir=(1, 0, -0.35),
                                  castshadow=False, diffuse=(0.36, 0.50, 0.74), specular=(0.65, 0.80, 1.00))  # fmt: skip
         spec.worldbody.add_light(name="fill", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=(0, 0, 5), dir=(0.5, 0.6, -0.6),
-                                 castshadow=False, diffuse=(0.17, 0.18, 0.21), specular=(0, 0, 0))  # fmt: skip
-        spec.visual.headlight.ambient, spec.visual.headlight.diffuse, spec.visual.headlight.specular = (0.17, 0.17, 0.18), (0.14,) * 3, (0.05,) * 3
+                                 castshadow=False, diffuse=lit((0.17, 0.18, 0.21), 2), specular=(0, 0, 0))  # fmt: skip
+        spec.visual.headlight.ambient, spec.visual.headlight.diffuse = lit((0.17, 0.17, 0.18), 1.5), lit((0.14,) * 3, 1)
+        spec.visual.headlight.specular = (0.05,) * 3
     else:
         spec.worldbody.add_light(name="key", type=mujoco.mjtLightType.mjLIGHT_DIRECTIONAL, pos=(0.8, -0.6, 3), dir=(-0.3, 0.25, -1),
                                  castshadow=True, diffuse=(0.58, 0.57, 0.55), specular=(0.2, 0.2, 0.2))  # fmt: skip
@@ -120,11 +143,12 @@ def studio_scene(scene_xml: str, width: int, height: int, ghost: bool, look: str
     model = spec.compile()
     model.stat.extent = 1.0  # the unit of the clipping planes, the shadow's range and the haze
     model.vis.map.znear, model.vis.map.shadowscale = (0.05, 0.6) if noir else (0.01, 0.6)
-    model.vis.map.shadowclip = 3.0 if noir else 1.0
+    # the shadow test speckles toward the far edge of its range, which the dark stage keeps in the haze; a brighter stage needs it farther
+    model.vis.map.shadowclip = (3.0 if brightness == 1.0 else 6.0) if noir else 1.0
     if noir:  # the depth buffer's precision over the floor in view: with znear 0.01 the far floor's shadow test speckles
         model.vis.map.zfar = 8.0
     model.vis.map.haze = 0.9 if noir else 0.4
-    model.vis.rgba.haze[:] = NOIR_HAZE if noir else (0.95, 0.96, 0.97, 1.0)
+    model.vis.rgba.haze[:] = (*lit(NOIR_HAZE[:3], 2), NOIR_HAZE[3]) if noir else (0.95, 0.96, 0.97, 1.0)
     return model
 
 
@@ -162,6 +186,8 @@ def main():
     parser.add_argument("--elevation", type=float, default=-15.0)
     parser.add_argument("--no_mark", action="store_true", help="frames without the NDM Gym mark")
     parser.add_argument("--look", type=str, default="studio", choices=LOOKS, help="studio: tools/render.py's light studio; noir: a dark stage")
+    parser.add_argument("--brightness", type=float, default=1.0,
+                        help="the dark stage's sky, floor and lights scaled (1: as it is; needs --look noir)")
     parser.add_argument("--orbit", type=float, default=0.0, help="the camera turns by this many degrees over the clip")
     parser.add_argument("--zoom", type=float, default=1.0, help="the camera's distance times this")
     parser.add_argument("--follow_z", action="store_true", help="the camera also follows the height of the palm and the object")
@@ -184,7 +210,7 @@ def main():
     if ghost:  # the ghost's joints follow the scene's own in qpos
         frames = np.concatenate((frames, followed), -1)
     overlay = ghost and args.ghost_overlay
-    model = studio_scene(scene_xml, args.width, args.height, ghost=ghost, look=args.look, overlay=overlay)
+    model = studio_scene(scene_xml, args.width, args.height, ghost=ghost, look=args.look, overlay=overlay, brightness=args.brightness)
     if model.nq != frames.shape[1]:
         raise ValueError("the studio scene's qpos does not match the rollout's")
 

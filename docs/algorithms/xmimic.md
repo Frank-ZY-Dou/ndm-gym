@@ -85,6 +85,7 @@ at least 0.82; GPU-minutes are those minutes times the GPUs the run trains on; t
 | `--layout AL --eprobe_gpu 2` | 3 | 86.9 | 1,500-1,600 | 2.48 ± 0.14 | 7.44 ± 0.41 |
 | `--layout AWL` | 3 | 87.1 | 1,500-1,600 | 2.69 ± 0.15 | 8.07 ± 0.46 |
 | `--layout AWL --eprobe_gpu 3` | 4 | 87.2 | 1,400-1,700 | 2.57 ± 0.34 | 10.29 ± 1.36 |
+| the same, a probe sweep every 250 iterations (`--eprobe_every 250 --eprobe_async 4`) | 4 | 87.2 | 1,500-1,800 | 2.30 ± 0.22 | 9.21 ± 0.89 |
 | `--layout AL --eprobe_gpu 2 --pi_encode_once` | 3 | 80.4 | 1,500-1,700 | 2.41 ± 0.26 | 7.23 ± 0.77 |
 | XMimic's own code, one GPU | 1 | 138.9 | 1,400-1,500 | 3.53 ± 0.15 | 3.53 ± 0.15 |
 | XMimic's own code, `AWLP` | 4 | 74.2 | 1,400-1,600 | 1.81 ± 0.13 | 7.25 ± 0.52 |
@@ -112,11 +113,13 @@ What each of the four does here:
    through Isaac Lab on Newton, with a state conversion at every substep and 500 rows. `--njmax 256` takes 1.2 % off
    here and changes results.
 3. **The sweeps off the trainer's GPU carry over.** While sweeps run, an iteration takes 227.3 ms on one GPU and 180.1
-   with the probe worker on a second (`--eprobe_gpu`). `--eprobe_lean`, this library's own, makes the sweep step itself
+   with the probe worker on a second (`--eprobe_gpu`). On four GPUs a sweep every 250 iterations, as XMimic's four-GPU
+   layout sweeps, removes the wait for the sweeps (87.3 ms per iteration over iterations 1000-1500 against 124.8) and
+   reaches 0.82 after 2.30 ± 0.22 min. `--eprobe_lean`, this library's own, makes the sweep step itself
    cheaper by leaving out what a sweep does not read.
 4. **The host.** `--gc_freeze` freezes the garbage collector; the layout runs use it.
 
-In short, on this task: with two to four GPUs, splitting the iteration is the largest gain (0.82 in 2.4-2.9 minutes
+In short, on this task: with two to four GPUs, splitting the iteration is the largest gain (0.82 in 2.3-2.9 minutes
 instead of 4.5), and it is paid in GPU time. On one GPU, what carries over is encoding the goals once (6.6 %) and, with
 a second GPU free, the probe sweeps off the trainer's. The rest of the one-GPU difference to XMimic's own code is in how
 the simulator is stepped, which no option here changes.

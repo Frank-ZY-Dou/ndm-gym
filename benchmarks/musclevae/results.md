@@ -98,11 +98,12 @@ systems options, which also change the random stream, 99.0 and 60.5 mm in round 
 
 **Runs outside the rounds.** Before round 1, each starting configuration trained once for 12 h with seed 0 as a development run; at about 3 h,
 SuperTrack 32.8 mm, ended 0.008, joint error 9.8 deg; SuperMimic 73.6 mm, ended 0.056, joint error 9.8 deg. Round 1's selections, up to 3 h with the
-default updates, seed 1: SuperTrack 79.2 mm, ended 0.096; SuperMimic 116.3 mm, ended 0.112. Round 2's, the same, seeds 1-3: SuperTrack 38.6, 105.4 and
+default updates, seed 1: SuperTrack 79.2 mm, ended 0.096; SuperMimic 116.3 mm, ended 0.112 (checkpoint 2,000; none ended 0.10 or less). Round 2's, the
+same, seeds 1-3: SuperTrack 38.6, 105.4 and
 78.6 mm (74.2 ± 33.7), ended 0.022 ± 0.019, joint error 16.1 ± 4.4 deg; SuperMimic 69.2, 64.1 and 70.9 mm (68.0 ± 3.5), ended 0.079 ± 0.026, joint
 error 10.0 ± 0.3 deg.
 
-**Round 3 was declared after those three SuperTrack runs had ended, while SuperMimic's three were ending.**
+**Round 3 was defined after those three SuperTrack runs had ended, while SuperMimic's three were ending.**
 
 **Round 3's selections at 3 h.** Up to 3 h, seeds 1-3, evaluated as above: SuperTrack at `--wm_lr` 1.6e-3 36.7 ± 1.0 mm, ended 0.008 ± 0.002, joint error 11.5 ± 0.8 deg; at 1.5e-3, the next value
 on the grid of published rates, 36.4 ± 1.9 mm, 0.014 ± 0.011, 10.9 ± 0.9 deg; SuperMimic at the recipe's 4e-4 63.6 ± 4.1 mm, 0.059 ± 0.027, 10.1 ± 0.6 deg. Round 4 selects by the same 1 h rule,
@@ -187,6 +188,46 @@ with seed 0, evaluated with seed 1. The selections before round 8 (width 64, 2 b
 SuperTrack-RF 40.1 mm, ended 0.005, joint error 11.0 deg; SuperMimic-RF 57.1 mm, ended 0.009, joint error 8.8 deg.
 Width 128 with 3 blocks: SuperTrack-RF 40.0 mm, ended 0.000, joint error 11.1 deg; SuperMimic-RF 56.4 mm, ended 0.008, joint error 9.1 deg.
 The rule ranks at 1 h, so these runs select nothing.
+
+## The RigidFormer against the MLP
+
+The four configurations above (the MLP's fourth-round selections and the RigidFormer's ninth), seeds 1-3, one A100 40GB
+PCIe per run, each run's best checkpoint evaluated as [above](#how-the-numbers-were-obtained): mean ± sd over the seeds.
+
+| | SuperTrack, MLP | SuperTrack-RF | SuperMimic, MLP | SuperMimic-RF |
+|---|---|---|---|---|
+| root-frame MPJPE (mm) | 38.1 ± 1.0 | 34.9 ± 0.7 | 65.6 ± 8.1 | 60.2 ± 2.0 |
+| heading-frame MPJPE (mm) | 38.5 ± 1.1 | 35.1 ± 0.7 | 45.7 ± 2.5 | 38.5 ± 3.4 |
+| episodes ended | 0.011 ± 0.005 | 0.0004 ± 0.0008 | 0.053 ± 0.014 | 0.009 ± 0.014 |
+| joint error (deg) | 10.6 ± 1.1 | 10.1 ± 0.3 | 9.7 ± 0.4 | 8.7 ± 0.4 |
+| best checkpoint (iteration), seeds 1 / 2 / 3 | 26,000 / 22,000 / 30,000 | 11,882 / 11,882 / 12,033 | 6,000 / 6,000 / 8,000 | 8,000 / 9,105 / 9,202 |
+| iterations trained, seeds 1 / 2 / 3 | 28,400 / 24,400 / 32,500 | 11,882 / 11,882 / 12,033 | 18,400 / 16,450 / 14,450 | 9,279 / 9,105 / 9,202 |
+| training time (h), seeds 1 / 2 / 3 | 1.8 / 1.5 / 2.0 | 3.0 / 3.0 / 3.0 | 1.2 / 1.0 / 0.9 | 3.0 / 3.0 / 3.0 |
+| end of training | progress rule | 3 h cap | progress rule | 3 h cap |
+| named configuration | `muscles-supertrack` | `muscles-supertrack-rf` | `muscles-supermimic` | `muscles-supermimic-rf` |
+
+Iterations trained: where the progress rule stopped the run (MLP; its log runs 200-250 iterations further, with no later
+checkpoint), or the last checkpoint, written at the 3 h cap (RigidFormer). SuperTrack-RF's best checkpoints and
+SuperMimic-RF's in seeds 2 and 3 are their last.
+
+Configurations: SuperTrack is BlinkMimic's recipe with `--st_fail_w 5 --st_balance_w 4`, SuperMimic the recipe with
+`--pi_lr_mult 2 --reward_std_scale 0.5 --action_noise 0.3 --imag_start_perturb 0.3`, each with the same policy settings for
+both world models and with the systems options. World models: MLP 3 x 1024 with Muon at `--wm_lr 2.5e-3` (SuperTrack 8
+batches, SuperMimic 5); RigidFormer `--rf_dim 128 --rf_layers 2 --rf_heads 4` at `--wm_lr 5e-3` (SuperTrack with Muon and
+5 batches, SuperMimic with Adam and 8).
+
+RigidFormer minus MLP over seeds 1-3, with the Welch 95% interval:
+
+| | SuperTrack | SuperMimic |
+|---|---|---|
+| root-frame MPJPE (mm) | -3.2 [-5.2, -1.2] | -5.4 [-24.1, 13.3] |
+| heading-frame MPJPE (mm) | -3.4 [-5.7, -1.1] | -7.2 [-14.2, -0.2] |
+| episodes ended | -0.010 [-0.023, 0.002] | -0.044 [-0.076, -0.013] |
+| joint error (deg) | -0.5 [-3.1, 2.1] | -1.0 [-2.0, -0.1] |
+
+The interval is d ± t(0.975, ν) SE, with d the difference of the means, SE = sqrt(s_RF² / 3 + s_MLP² / 3) and
+ν = SE⁴ / ((s_RF² / 3)² / 2 + (s_MLP² / 3)² / 2) (Welch-Satterthwaite; in the root frame ν = 3.7 for SuperTrack, 2.2 for
+SuperMimic). The RigidFormer had nine tuning rounds, the MLP four ([above](#rigidformer-world-model)).
 
 ## The systems options
 

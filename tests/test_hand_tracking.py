@@ -19,10 +19,10 @@ from ndm_gym.algos.hand_algos import HAND_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.core.muon import MuonAdam, hidden_matrices
 from ndm_gym.core.normalizer import RunningNorm
-from ndm_gym.robots.xhand import FINGER_JOINTS, KEYPOINTS, NUM_J, PALM_JOINTS, HandKinematics, scene_indices
+from ndm_gym.robots.hands import FINGERTIP_SITES, PALM_SITE, HandKinematics, scene_indices
 from ndm_gym.train import add_train_args
 from ndm_gym.train_hand import HAND_DEFAULTS, UNSUPPORTED, parse_args
-from ndm_gym.tasks.hand_tracking import HOLD, OBS_DIM, STATE_DIM, HandTask, build_reference, flatten_state, unflatten_state
+from ndm_gym.tasks.hand_tracking import HOLD, HandTask, build_reference, flatten_state, unflatten_state
 from ndm_gym.worldmodels.hand import HandWorldModel
 
 # the arguments hand training implements; the rest of ndm_gym.train's are train_hand.UNSUPPORTED
@@ -32,45 +32,80 @@ SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_
              "st_reg", "st_imag_noise", "st_fail_w")  # fmt: skip
 
 
-def scene_xml() -> str:
-    """The palm's slides and hinges in a chain, each finger a chain of its hinges off the palm, and a free box."""
+XHAND_FINGERS = {"thumb": 3, "index": 3, "middle": 2, "ring": 2, "pinky": 2}  # the XHand's joints per finger
+ALLEGRO_FINGERS = {"thumb": 4, "index": 4, "middle": 4, "ring": 4}  # the Allegro hand's: no little finger
+NUM_J = 6 + sum(XHAND_FINGERS.values())
+
+
+def scene_xml(fingers: dict = XHAND_FINGERS, palm_bodies: bool = True) -> str:
+    """The palm's slides and hinges (a chain of bodies, or the joints of one body), each finger a chain of its hinges
+    off the palm with its fingertip's site, and a free box."""
     axes = ["1 0 0", "0 1 0", "0 0 1", "0 0 1", "1 0 0", "0 -1 0"]
-    palm = "".join(f'<body name="p{i}"><joint name="{n}" type="{"slide" if i < 3 else "hinge"}" axis="{a}" range="-3 3"/>'
-                   f'<geom size="0.01" mass="0.1"/>' for i, (n, a) in enumerate(zip(PALM_JOINTS, axes, strict=True)))  # fmt: skip
-    fingers = ""
-    for k, name in enumerate(("thumb", "index", "mid", "ring", "pinky")):
-        joints = [j for j in FINGER_JOINTS if f"_{name}_" in j]
+    palm_joints = [f"palm_joint_{i}" for i in range(6)]
+    joint = lambda i: f'<joint name="{palm_joints[i]}" type="{"slide" if i < 3 else "hinge"}" axis="{axes[i]}" range="-3 3"/>'  # noqa: E731
+    geom = '<geom size="0.01" mass="0.1"/>'
+    palm = "".join(f"<body>{joint(i)}{geom}" for i in range(6)) if palm_bodies else "<body>" + "".join(joint(i) for i in range(6)) + geom
+    chains, finger_joints = "", []
+    for k, (finger, count) in enumerate(fingers.items()):
+        joints = [f"{finger}_joint_{i}" for i in range(count)]
+        finger_joints += joints
         body = "".join(f'<body pos="0.01 {0.02 * k - 0.04} -0.03" quat="0.96 0.1 0.2 0.1"><joint name="{j}" axis="1 0.2 0" pos="0 0.005 0" range="0 1.5"/>'
                        f'<geom size="0.008" mass="0.02"/>' for j in joints)  # fmt: skip
-        fingers += body + f'<site name="{KEYPOINTS[k + 1]}" pos="0 0.004 -0.027"/>' + "</body>" * len(joints)
-    actuators = "".join(f'<position joint="{j}" kp="50"/>' for j in PALM_JOINTS + FINGER_JOINTS)
-    return (f'<mujoco><compiler angle="radian"/><worldbody><geom type="plane" size="1 1 0.1"/>{palm}<site name="right_palm"/>{fingers}'
-            f'{"</body>" * 6}<body name="right_object" pos="0.1 0 0.05"><freejoint/><geom type="box" size="0.02 0.02 0.02" mass="0.1"/></body>'
-            f"</worldbody><actuator>{actuators}</actuator></mujoco>")  # fmt: skip
+        chains += body + f'<site name="right_{finger}_tip" pos="0 0.004 -0.027"/>' + "</body>" * count
+    actuators = "".join(f'<position joint="{j}" kp="50"/>' for j in palm_joints + finger_joints)
+    return (f'<mujoco><compiler angle="radian"/><worldbody><geom type="plane" size="1 1 0.1"/>{palm}<site name="{PALM_SITE}"/>{chains}'
+            f'{"</body>" * (6 if palm_bodies else 1)}<body name="right_object" pos="0.1 0 0.05"><freejoint/>'
+            f'<geom type="box" size="0.02 0.02 0.02" mass="0.1"/></body></worldbody><actuator>{actuators}</actuator></mujoco>')  # fmt: skip
+
+
+def hand_task(model: mujoco.MjModel, device: str = "cpu"):
+    kin = HandKinematics(model, device)
+    n = 12
+    quat = torch.nn.functional.normalize(torch.tensor([1.0, 0, 0, 0]) + 0.3 * torch.rand(n, 4), dim=-1)
+    clip = {"q": 0.5 * torch.rand(n, kin.num_joints).cumsum(0) / n, "p": torch.tensor([0.1, 0, 0.05]) + 0.01 * torch.rand(n, 3).cumsum(0),
+            "quat": quat}  # fmt: skip
+    return kin, HandTask(kin, build_reference(clip, kin, device))
 
 
 @pytest.fixture(scope="module")
 def setup():
     torch.manual_seed(0)
     model = mujoco.MjModel.from_xml_string(scene_xml())
+    return (model, *hand_task(model))
+
+
+@pytest.mark.parametrize("fingers,palm_bodies", [(XHAND_FINGERS, True), (ALLEGRO_FINGERS, False)])
+def test_kinematics_match_mujoco(fingers, palm_bodies):
+    """The palm as a chain of bodies or as one body's joints, five fingers or four: the keypoints are the palm and the
+    fingertips the hand has, and follow MuJoCo's."""
+    torch.manual_seed(0)
+    model = mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies))
     kin = HandKinematics(model, "cpu")
-    n = 12
-    quat = torch.nn.functional.normalize(torch.tensor([1.0, 0, 0, 0]) + 0.3 * torch.rand(n, 4), dim=-1)
-    clip = {"q": 0.5 * torch.rand(n, NUM_J).cumsum(0) / n, "p": torch.tensor([0.1, 0, 0.05]) + 0.01 * torch.rand(n, 3).cumsum(0), "quat": quat}
-    return model, kin, HandTask(kin, build_reference(clip, kin, "cpu"))
-
-
-def test_kinematics_match_mujoco(setup):
-    model, kin, _ = setup
+    assert (kin.num_joints, kin.num_keypoints) == (6 + sum(fingers.values()), 1 + len(fingers))
     idx, data = scene_indices(model), mujoco.MjData(model)
-    sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, n) for n in KEYPOINTS]
-    q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(4, NUM_J)
-    kp, palm_R = kin.forward(q)
+    sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, n) for n in (PALM_SITE,) + FINGERTIP_SITES[: len(fingers)]]
+    q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(4, kin.num_joints)
+    keypoints, palm_R = kin.forward(q)
     for i in range(4):
         data.qpos[idx["qpos"]] = q[i].numpy()
         mujoco.mj_kinematics(model, data)
-        np.testing.assert_allclose(kp[i].numpy(), data.site_xpos[sites], atol=1e-5)
+        np.testing.assert_allclose(keypoints[i].numpy(), data.site_xpos[sites], atol=1e-5)
         np.testing.assert_allclose(palm_R[i].numpy(), data.site_xmat[sites[0]].reshape(3, 3), atol=1e-5)
+
+
+def test_sizes_follow_the_hand(monkeypatch):
+    """A four-fingered hand with sixteen finger joints: the state, the observation and the networks take its sizes, and
+    an update of each algorithm runs."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    torch.manual_seed(0)
+    kin, task = hand_task(mujoco.MjModel.from_xml_string(scene_xml(ALLEGRO_FINGERS, palm_bodies=False)))
+    assert (kin.num_joints, task.state_dim, task.obs_dim) == (22, 57, 3 * 22 + 3 * 4 + 21)
+    for argv in (["--algo", "supermimic"], ["--algo", "supertrack", "--st_task_weights"]):
+        args, algo, buffer = agent_and_replay(kin, task, argv)
+        assert algo.pi.net[-1].out_features == 22
+        assert torch.isfinite(algo.wm_update(buffer))
+        out = algo.policy_update(buffer)  # (loss, value loss: none for SuperTrack, ...)
+        assert torch.isfinite(out[0]) and torch.isfinite(out[3])
 
 
 def test_reference_is_optimal_and_held(setup):
@@ -80,7 +115,7 @@ def test_reference_is_optimal_and_held(setup):
     f = torch.arange(ref.frames)
     S = ref.state(f)
     fk, a = kin.forward(S[0]), torch.zeros(ref.frames, NUM_J)
-    assert task.obs(S, fk, a).shape == (ref.frames, OBS_DIM)
+    assert task.obs(S, fk, a).shape == (ref.frames, task.obs_dim)
     assert torch.allclose(task.reward(S, fk, f, a, a), torch.full((ref.frames,), task.max_step_reward), atol=1e-5)
     assert not task.termination(S, fk, f).any() and float(task.soft_termination(S, fk, f).max()) < 1e-3
     assert torch.allclose(task.setpoint(a, f), ref.q[ref.next_frame(f)])
@@ -93,10 +128,10 @@ def test_state_and_increments_round_trip(setup):
     f = torch.arange(task.ref.frames - 1)
     S, S1 = task.ref.state(f), task.ref.state(f + 1)
     x = flatten_state(S)
-    assert x.shape == (len(f), STATE_DIM)
+    assert x.shape == (len(f), task.state_dim)
     for a, b in zip(unflatten_state(x), S, strict=True):
         assert torch.allclose(a, b, atol=1e-5)
-    wm = HandWorldModel(hidden=(32,))
+    wm = HandWorldModel(NUM_J, hidden=(32,))
     wm.out_norm.update(wm.targets(S, S1))
     assert float(wm.error(S1, S1).abs().max()) < 1e-4
     increments = (wm.targets(S, S1) - wm.out_norm.mean) / wm.out_norm.std()
@@ -116,7 +151,7 @@ def test_supermimic_update(setup, monkeypatch):
     args = parse_args(["--clip", "clip", "--goal_frames", "3", "--horizon", "4", "--wm_hidden", "32", "32", "--wm_batches", "2", "--wm_batch",
                        "16", "--wm_window", "4", "--pi_batch", "16", "--critic_epochs", "1", "--critic_minibatches", "2"])  # fmt: skip
     algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
-    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     f = torch.randint(0, task.ref.frames - 1, (8,))
     S, a_prev = task.ref.state(f), torch.zeros(8, NUM_J)
@@ -163,7 +198,7 @@ def test_accel_world_model_round_trip(setup):
     _, kin, task = setup
     f = torch.arange(task.ref.frames - 1)
     S, S1 = task.ref.state(f), task.ref.state(f + 1)
-    wm = HandWorldModel(hidden=(32,), kind="accel")
+    wm = HandWorldModel(NUM_J, hidden=(32,), kind="accel")
     wm.out_norm.update(wm.targets(S, S1)), wm.err_norm.update(wm.increments(S, S1))
     assert wm.targets(S, S1).shape[-1] == NUM_J + 6 and float(wm.error(S1, S1).abs().max()) < 1e-4
     accel = (wm.targets(S, S1) - wm.out_norm.mean) / wm.out_norm.std()
@@ -182,7 +217,7 @@ def test_accel_world_model_round_trip(setup):
 
     assert torch.allclose(R1, so3_exp(dt * S1[5]) @ S[3], atol=1e-5)
     with pytest.raises(ValueError, match="kind"):
-        HandWorldModel(hidden=(32,), kind="other")
+        HandWorldModel(NUM_J, hidden=(32,), kind="other")
 
 
 @pytest.mark.parametrize("extra", [[], ["--st_vel_terms", "--st_obj_w", "2", "--st_fail_w", "2", "--st_imag_noise", "0.2"],
@@ -199,7 +234,7 @@ def test_supertrack_update(setup, monkeypatch, extra):
     algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
     assert algo.wm.kind == "accel" and algo.critic is None and len(algo.optimizers) == 2
     assert len(algo.terms) == (9 if extra else 6)
-    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     f = torch.randint(0, task.ref.frames - 1, (8,))
     S, a_prev = task.ref.state(f), torch.zeros(8, NUM_J)
@@ -243,6 +278,8 @@ SM_CRITIC = ["--critic_epochs", "1", "--critic_minibatches", "2"]  # SuperMimic'
 def small(extra: list) -> list:
     """SMALL with ``extra``, and SuperMimic's small critic unless ``extra`` is SuperTrack's."""
     return SMALL + extra + ([] if "supertrack" in extra else SM_CRITIC)
+
+
 ST_ARM = ["--algo", "supertrack", "--st_fail_w", "2", "--st_imag_noise", "0.2", "--st_vel_terms", "--st_obj_w", "2"]
 CUDA = "cuda:0"
 HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("mujoco_warp") is not None
@@ -254,10 +291,10 @@ def agent_and_replay(kin, task, argv, n=8, steps=16, dev="cpu"):
     torch.manual_seed(0)
     args = parse_args(small(argv))
     algo = HAND_ALGOS[args.algo](args, kin, task, dev)
-    buffer = ReplayBuffer(steps, n, dev, fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(steps, n, dev, fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     f = torch.randint(0, task.ref.frames - 1, (n,), device=dev)
-    S, a_prev, done = task.ref.state(f), torch.zeros(n, NUM_J, device=dev), torch.zeros(n, dtype=torch.bool, device=dev)
+    S, a_prev, done = task.ref.state(f), torch.zeros(n, kin.num_joints, device=dev), torch.zeros(n, dtype=torch.bool, device=dev)
     for _ in range(steps):
         a = algo.act(S, a_prev, f, noise=0.1)
         u, f1 = task.setpoint(a, f), task.ref.next_frame(f)
@@ -286,7 +323,7 @@ def test_supertrack_task_weights(setup, monkeypatch):
     assert algo.terms == algo.TERMS and algo.bal.calibrated and algo.step_worth == 5.0
     expect = torch.tensor([1 / 0.04, 0, 0.5 / 0.4, 0.5 / 0.4, 2 / 0.04, 1 / 0.5]) / 4
     assert torch.allclose(algo.bal.w, expect) and algo.term_scale.tolist() == [1, 1, 1, 1, 2, 2]
-    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(16, 8, "cpu", fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     f = torch.randint(0, task.ref.frames - 1, (8,))
     S, a_prev = task.ref.state(f), torch.zeros(8, NUM_J)
@@ -525,7 +562,7 @@ def test_collector_matches_default_step(setup, monkeypatch, extra, graphed):
         args = parse_args(small(extra + ((SYSTEMS + (["--collect_graph", "--compile_eager"] if graphed else [])) if collector else [])))
         algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
         sim = KinematicSim(task, n)
-        buffer = ReplayBuffer(32, n, "cpu", fields=replay_fields(), priorities=False)
+        buffer = ReplayBuffer(32, n, "cpu", fields=replay_fields(task), priorities=False)
         if collector and graphed:
             buffer.use_device_ptr(device_size=True)
         st = {"a_prev": torch.zeros(n, NUM_J), "ep_len": torch.zeros(n), "acc": {k: torch.zeros(()) for k in hand_fast.ACC_KEYS}}
@@ -553,7 +590,7 @@ def test_collector_matches_default_step(setup, monkeypatch, extra, graphed):
     assert torch.equal(sim0.s, sim1.s) and torch.equal(sim0.f, sim1.f) and torch.equal(sim0.last, sim1.last)
     assert all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
     assert 0 < float(st0["acc"]["term"]) < float(st0["acc"]["done"])  # episodes ended by termination and at their last frame
-    host_head = ReplayBuffer(32, n, "cpu", fields=replay_fields(), priorities=False)
+    host_head = ReplayBuffer(32, n, "cpu", fields=replay_fields(task), priorities=False)
     with pytest.raises(ValueError, match="device-side head"):
         hand_fast.Collector(sim, task, algo, host_head, parse_args(small(SYSTEMS + ["--collect_graph"])))
 
@@ -695,7 +732,7 @@ def test_collect_graph_replays_the_eager_step(gpu_setup, monkeypatch, extra):
         args = parse_args(small(extra + SYSTEMS + flags))
         algo = HAND_ALGOS[args.algo](args, kin, task, CUDA)
         sim = HandSim(model, task, n, CUDA, stagger=True)
-        buffer = ReplayBuffer(32, n, CUDA, fields=replay_fields(), priorities=False)
+        buffer = ReplayBuffer(32, n, CUDA, fields=replay_fields(task), priorities=False)
         if graphed:
             buffer.use_device_ptr(device_size=True)
         c = hand_fast.Collector(sim, task, algo, buffer, args)

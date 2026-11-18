@@ -1,6 +1,6 @@
 """Hand-object motion tracking: a dexterous hand follows a kinematic reference of a hand and the object it handles.
 
-State tuple ``S = (q, qd, p, R, v, w)``: the hand's joint positions and velocities (ndm_gym.robots.xhand), and the
+State tuple ``S = (q, qd, p, R, v, w)``: the hand's joint positions and velocities (ndm_gym.robots.hands), and the
 object's position, rotation matrix and world linear and angular velocity. Observation, goal, reward and termination are
 analytic functions of the state, its forward kinematics ``fk`` (HandKinematics.forward of the joint positions, computed
 once per state) and the reference frame, shared by the simulator's transitions and the world model's imagined rollouts.
@@ -17,13 +17,10 @@ import torch
 
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq
 from ..motion.library import _angular_velocity, _gradient
-from ..robots.xhand import ACTION_SCALE, NUM_J, NUM_KP, NUM_PALM, HandKinematics
+from ..robots.hands import NUM_PALM, HandKinematics
 from ..state import CONTROL_DT, OBJ_DIM, flatten_object, unflatten_object
 
 HOLD = 25  # frames of the last pose appended to a clip (0.5 s)
-STATE_DIM = NUM_J + NUM_J + OBJ_DIM
-OBS_DIM = NUM_J + NUM_J + 3 * (NUM_KP - 1) + 6 + 3 + 6 + 3 + 3 + NUM_J
-GOAL_FRAME_DIM = NUM_J + 3 + 6
 
 
 def flatten_state(S) -> torch.Tensor:
@@ -31,7 +28,8 @@ def flatten_state(S) -> torch.Tensor:
 
 
 def unflatten_state(x: torch.Tensor):
-    return x[..., :NUM_J], x[..., NUM_J : 2 * NUM_J], *unflatten_object(x[..., 2 * NUM_J :])
+    num_joints = (x.shape[-1] - OBJ_DIM) // 2
+    return x[..., :num_joints], x[..., num_joints : 2 * num_joints], *unflatten_object(x[..., 2 * num_joints :])
 
 
 class HandReference(NamedTuple):
@@ -92,7 +90,11 @@ class RewardCfg:
 class HandTask:
     def __init__(self, kin: HandKinematics, ref: HandReference, cfg: RewardCfg = RewardCfg()):
         self.kin, self.ref, self.cfg = kin, ref, cfg
-        self.scale = torch.tensor(ACTION_SCALE, device=ref.q.device)
+        self.scale = kin.action_scale
+        joints, fingertips = kin.num_joints, kin.num_keypoints - 1
+        self.state_dim = 2 * joints + OBJ_DIM
+        self.obs_dim = joints + joints + 3 * fingertips + 6 + 3 + 6 + 3 + 3 + joints
+        self.goal_frame_dim = joints + 3 + 6
         self.max_step_reward = (cfg.w_keypoint + cfg.w_finger + cfg.w_palm_ori + cfg.w_object_pos + cfg.w_object_ori) * CONTROL_DT
 
     def setpoint(self, a: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
@@ -120,7 +122,7 @@ class HandTask:
         return torch.cat(parts, -1)
 
     def errors(self, S, fk, f: torch.Tensor) -> dict[str, torch.Tensor]:
-        """Tracking errors against frame ``f``: keypoints (..., NUM_KP) and object position (m), finger joints (rad, RMS),
+        """Tracking errors against frame ``f``: keypoints (..., num_keypoints) and object position (m), finger joints (rad, RMS),
         and the squared rotation angles of the palm and the object."""
         q, _, p, R, _, _ = S
         keypoints, palm_R = fk

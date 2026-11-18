@@ -1,7 +1,7 @@
 # MuscleVAE in NDM Gym: design
 
 MuscleVAE's character and muscle model in `ndm_gym`, with SuperTrack and SuperMimic (§4) and a RigidFormer world model
-with one token per muscle.
+with a token per body and per muscle, or per body as in the reported runs (§5).
 
 **Paper:** Y. Feng, X. Xu, L. Liu, *MuscleVAE: Model-Based Controllers of Muscle-Actuated Characters*, SIGGRAPH Asia 2023
 Conference Papers ([doi:10.1145/3610548.3618137](https://doi.org/10.1145/3610548.3618137),
@@ -100,7 +100,8 @@ posterior, mixture of experts) is not re-implemented. Code: `tasks/muscle_tracki
 - **Reference:** our forward kinematics of the clips, raised as a reset raises them. This is the reset pose and what
   `tools/replay_musclevae.py` scores. Their dataset's placement is not used: the hinges cannot reach it (lower legs,
   feet and hands are 1–11 cm off on average). The termination keeps their head height, as MuscleSim does.
-- **World models** (MLP 2048×3, LayerNorm, SiLU; maximal coordinates): inputs in the root's heading frame.
+- **World models** (MLP, 2048×3 by default and 3×1024 in the reported runs; LayerNorm, SiLU; maximal coordinates): inputs
+  in the root's heading frame.
   - SuperTrack: per-body linear and angular accelerations and the fatigue rate, integrated by semi-implicit Euler.
     Fit by the L1 window loss (positions, velocities, rotations, rotation rates) plus an L1 fatigue term.
   - SuperMimic: per-body increments and the fatigue increment. Fit by the normalized squared error.
@@ -185,7 +186,8 @@ Mapping details:
   | RigidFormer, width 64, 2 blocks | 0.20 M | 659 ms | 4.5 s | 34.9 ms per step, 117 k env-steps/s |
 
   MuscleSim at 4096 environments (training settings): 37.2 ms per control step, 110 k env-steps/s. With 309 tokens a
-  step of the RigidFormer costs 41-88 times the MLP's, and in inference it runs at about the simulator's speed.
+  step of the width-128 RigidFormer costs 41-89 times the MLP's; in inference it runs at half the simulator's speed (57 k against
+  110 k env-steps/s), the width-64 one at about its speed (117 k).
 
 ### Body tokens (`--rf_muscle_tokens body`)
 

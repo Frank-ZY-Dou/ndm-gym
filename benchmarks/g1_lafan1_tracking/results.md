@@ -1,7 +1,8 @@
 # Results in detail
 
 The [README](../../README.md#-results) reports the main A100 results. Tables here come from run files: `tools/ablations.py`
-generates the H100 tables; other generators are named in their sections.
+generates the H100 tables, `tools/rf_checks.py` the RigidFormer checks, `tools/grad_diag_report.py` the policy-gradient
+diagnostic and `nablamimic/nm_table.py` NablaMimic's; the other tables come from the same run files.
 
 ## How the numbers were obtained
 
@@ -10,12 +11,14 @@ with seed 0 after their starting configurations, 3 h each. Among the seed-0 runs
 SuperMimic (counting the starting configurations and SuperTrack's round-1 run without task penalties), those within
 0.01 of the highest evaluation return at 3 h are ranked by fewer failed clips, then by return (three SuperMimic runs
 tied at 0 failed clips). Selected configurations run on seeds 1-3, 3 h on one A100 40GB per run (8 physical cores,
-24 GB memory cap). SuperTrack-RF and SuperMimic-RF are
+24 GB memory cap). The RigidFormer runs take
 these configurations with RigidFormer (RF-S, world-model learning rate 4e-4, chosen offline on the world-model
 benchmark's test sets), compared with the MLP at 3 h and at equal iterations (12,670 and 13,540, the MLP finals' mean
-counts at 3 h). The standard evaluation plays each of the 40 LAFAN1 clips once from its first frame, without noise or
+counts at 3 h); the H100 supplement and the RigidFormer checks use them. SuperTrack-RF's and SuperMimic-RF's final
+configurations, tuned online as the MLP was: [below](#rigidformers-final-configurations). The standard evaluation plays
+each of the 40 LAFAN1 clips once from its first frame, without noise or
 randomization. Differences come with Welch 95% intervals over seeds. Every section below except the training speed and the policy-gradient
-diagnostic was declared, with its rule, before its runs. Both algorithms are re-implementations on this pipeline, not
+diagnostic fixed its rule before its runs. Both algorithms are re-implementations on this pipeline, not
 the authors' code; SuperMimic's selected configuration differs from the paper's (action noise 0.3 instead of 0.1,
 imagination kicks 0.3, reward kernels ×0.7).
 
@@ -36,6 +39,84 @@ Its rounds were declared one at a time, each before its runs; the first rounds (
 | H100 | 2.40, 2.62, 2.41, 2.54, 2.63, 2.62 | 2.54 ± 0.11 | 2.84, 2.37, 2.84, 2.61, 2.59, 2.80 | 2.68 ± 0.19 |
 | A100 40GB SXM4 | 4.00, 4.01, 4.36, 4.18, 4.31, 4.28 | 4.19 ± 0.16 | 5.38, 4.34, 3.99, 3.91, 4.68, 4.00 | 4.38 ± 0.57 |
 | A100 40GB PCIe | 3.69, 4.75, 4.43, 4.48, 4.43, 4.40 | 4.37 ± 0.35 | 3.62, 4.04, 4.01, 4.31, 3.95, 3.97 | 3.98 ± 0.22 |
+
+## Multi-GPU layouts and the learner's restructuring, timed
+
+BlinkMimic's recipe (`--algo blinkmimic`, the algorithm and hyperparameters XMimic runs) with the options taken from
+XMimic: the iteration's steps side by side on several GPUs (`--layout`), the probe sweeps on a GPU of their own
+(`--eprobe_gpu`) and the learner's restructuring ([the options](../../docs/algorithms/xmimic.md)). One node of A100 40GB
+SXM4 GPUs with nothing else running: training on four of its GPUs, the evaluators on the others; XMimic's own code ran on
+the same node (below). Every run's policy updated in every window read (the log's policy loss is nonzero).
+
+**Time per iteration** (seed 0, no evaluation; milliseconds per iteration from the training log's wall clock). The learner's
+options are added one group at a time, each row on top of the one above it:
+
+| options | GPUs | ms/it, iterations 200-1000 | 1000-1500 (four probe sweeps) |
+|---|---|---|---|
+| the recipe | 1 | 160.8 | 227.3 |
+| `--pi_encode_once` | 1 | 150.2 (-6.6 %) | |
+| and `--imag_hoist` | 1 | 150.0 | |
+| and `--pi_deferred_grads --wm_deferred_grads` | 1 | 163.8 | |
+| and `--muon_batched` | 1 | 163.4 | |
+| and `--wm_presample` | 1 | 161.3 | |
+| and `--gc_freeze`: the learner's set | 1 | 161.2 | 227.9 |
+| the set and `--njmax 256` | 1 | 159.2 (-1.2 % from the set) | |
+| the recipe, the probe worker on GPU 1 | 2 | 160.6 | 180.1 |
+| the set, the probe worker on GPU 1 | 2 | 161.1 | 180.5 |
+| the recipe again, last | 1 | 160.9 | 227.4 |
+
+The two runs of the recipe differ by 0.1 ms. `--pi_encode_once` alone takes 6.6 % off; the deferred gradients add 13.8 ms
+back, and the learner's whole set ends within 0.3 % of the recipe. The probe worker on a second GPU takes 47 ms per iteration
+off iterations 1000-1500 (227.3 to 180.1).
+
+**Time to return 0.82** (seeds 0-2; checkpoints every 100 iterations, evaluated during training with `ndm-eval --watch
+--group 18 --repeats 4 --graph`; minutes of training from iteration 50 to the first checkpoint whose four evaluations average
+at least 0.82; GPU-minutes are those minutes times the GPUs the run trains on; the layout runs train with `--gc_freeze`):
+
+| arm | GPUs | ms/it 200-1000 | ms/it 1000-1500 | iterations to 0.82 | minutes to 0.82 | GPU-minutes |
+|---|---|---|---|---|---|---|
+| the recipe | 1 | 160.81 ± 0.04 | 227.12 ± 0.81 | 1400, 1500, 1600 | 4.12, 4.45, 4.85 (4.48 ± 0.37) | 4.48 ± 0.37 |
+| the learner's set | 1 | 161.11 ± 0.07 | 227.66 ± 0.77 | 1500, 1600, 1500 | 4.46, 4.89, 4.45 (4.60 ± 0.25) | 4.60 ± 0.25 |
+| `--layout AL` | 2 | 86.84 ± 0.04 | 141.82 ± 1.61 | 1500, 1600, 1800 | 2.56, 2.81, 3.31 (2.89 ± 0.38) | 5.79 ± 0.77 |
+| `--layout AL --eprobe_gpu 2` | 3 | 86.86 ± 0.07 | 123.30 ± 1.21 | 1600, 1500, 1500 | 2.64, 2.39, 2.41 (2.48 ± 0.14) | 7.44 ± 0.41 |
+| `--layout AWL` | 3 | 87.08 ± 0.01 | 136.38 ± 1.74 | 1500, 1600, 1600 | 2.52, 2.76, 2.80 (2.69 ± 0.15) | 8.07 ± 0.46 |
+| `--layout AWL --eprobe_gpu 3` | 4 | 87.17 ± 0.04 | 124.80 ± 0.92 | 1600, 1400, 1700 | 2.63, 2.21, 2.88 (2.57 ± 0.34) | 10.29 ± 1.36 |
+| the same, a probe sweep every 250 iterations | 4 | 87.18 ± 0.05 | 87.32 ± 0.04 | 1500, 1600, 1800 | 2.11, 2.25, 2.54 (2.30 ± 0.22) | 9.21 ± 0.89 |
+| `--layout AL --eprobe_gpu 2 --pi_encode_once` | 3 | 80.39 ± 0.08 | 118.35 ± 1.23 | 1700, 1500, 1500 | 2.70, 2.25, 2.27 (2.41 ± 0.26) | 7.23 ± 0.77 |
+
+Arms within one standard deviation of each other are read as level:
+- The recipe and the learner's set are level.
+- Every layout arm reaches 0.82 1.5-1.9 times sooner than the recipe (2.3-2.9 against 4.5 minutes), at 1.3-2.3 times its
+  GPU-minutes.
+- AL with the probe worker, AWL with the probe worker, and the last two arms are level with each other.
+- AWL is level with AWL with the probe worker, and slower than AL with the probe worker and than the last two arms.
+- AL alone is level with AWL and AWL with the probe worker, and slower than AL with the probe worker and than the last two
+  arms.
+
+The last two arms:
+- A probe sweep every 250 iterations (`--eprobe_every 250 --eprobe_async 4`), as XMimic's four-GPU layout sweeps, removes the
+  four-GPU arm's wait for the sweeps: 87.3 ms per iteration over iterations 1000-1500, against 124.8.
+- `--pi_encode_once` on AL with the probe worker takes 7.4 % off its time per iteration (80.4 against 86.9 ms).
+
+`--njmax 256` was not timed to return 0.82: it takes 1.2 % off an iteration (above).
+
+**XMimic's own code** ([nico-bohlinger/xmimic](https://github.com/nico-bohlinger/xmimic) at `54860e1`, unmodified, with
+its published configuration and the training budget of its table, `--max_minutes 6.2`; scored after training by its own
+evaluator, `python -m xmimic.evaluate --reps 4 --group 18`, on another GPU; JAX at its `train.py`'s 0.9 of each GPU's
+memory). Minutes from iteration 50 as above, and on its own clock, which starts after compilation; its target is a return of
+at least 0.82 with no failed clip, held for three checkpoints in a row:
+
+| arm | GPUs | seeds | it/s 200-1000 | it/s 1100-3500 | first ≥ 0.82: iterations | minutes from iteration 50 | on its clock | its target, minutes from iteration 50 |
+|---|---|---|---|---|---|---|---|---|
+| its one-GPU trainer | 1 | 3 | 7.20 ± 0.00 | 5.59 ± 0.02 | 1400, 1400, 1500 | 3.45, 3.44, 3.70 (3.53 ± 0.15) | 3.63, 3.62, 3.88 | 4.62, not within the run, 4.01 |
+| `AWLP` | 4 | 3 | 13.48 ± 0.08 | 13.20 ± 0.01 | 1400, 1500, 1600 | 1.68, 1.82, 1.94 (1.81 ± 0.13) | 1.82, 1.96, 2.08 | 2.69, 2.45, 2.19 (2.44 ± 0.25) |
+| `FP` | 2 | 1 (seed 0) | 7.20 | 7.18 | 1300 | 2.91 | 3.09 | 3.37 |
+| `ALP` | 3 | 1 (seed 0) | 12.08 | 12.03 | 1400 | 1.86 | 2.01 | 2.28 |
+
+XMimic's rows stand beside this library's and are not ranked with them: the evaluators, the simulators, the constraint rows
+per world in training (256 against 500) and the clocks differ. During the compilation of its one-GPU run with seed 1, before
+its clock and its iteration 50 started, a copy of 1.6 GB of earlier runs' files read the node's disk; its measures begin
+after it (its minutes match seeds 0 and 2).
 
 ## NablaMimic's own code, timed
 
@@ -85,7 +166,7 @@ both evaluators.
 
 ## H100 supplement
 
-Selected configurations and their RigidFormer versions, seeds 1-3, one H100 each (16 physical cores per run; other GPUs
+Selected configurations and their RigidFormer versions before its tuning, seeds 1-3, one H100 each (16 physical cores per run; other GPUs
 on the host were not controlled), scored as on the A100, with a checkpoint every 2000 iterations. Open an issue for run
 files. The last three rows use training logs, with noise and randomization, before and after SuperMimic's evaluation
 drop. RigidFormer runs end before those windows. SuperMimic's paper reports return 0.82 after 1.2 h with its own configuration.
@@ -132,7 +213,7 @@ Appendix F.1).
 ## Noise check: SuperMimic with action noise 0.1
 
 SuperMimic's full configuration with the paper's action noise 0.1 instead of 0.3, seeds 1-3, 3 h on the H100, scored
-as above. Declared rule: a drop is an evaluation below 0.60 after the first at or above return 0.82 (with 0.3, evaluations
+as above. Rule, fixed before the runs: a drop is an evaluation below 0.60 after the first at or above return 0.82 (with 0.3, evaluations
 fell below 0.60 by iteration 22000-24000 and ended at 0.02-0.15). No seed drops: the lowest subsequent evaluation is
 0.817-0.829; at 3 h, return is 0.854 ± 0.003 with 0.2 failed clips. Open an issue for run files.
 
@@ -155,7 +236,7 @@ fell below 0.60 by iteration 22000-24000 and ended at 0.02-0.15). No seed drops:
 
 ## RigidFormer check 1: dynamics shifts
 
-The equal-iteration checkpoints of the MLP finals and of SuperTrack-RF and SuperMimic-RF, seeds 1-3, each evaluated once
+The equal-iteration checkpoints of the MLP finals and of their RigidFormer versions before its tuning, seeds 1-3, each evaluated once
 with the feet's and the ground's friction at 0.2, 0.5 or 2.0 (training draws 0.3-1.2) or with 5 or 10 kg added to the
 torso. Rule: RigidFormer counts as more robust under a condition when at least one of return, failed clips and
 MPJPE-local is significantly better (Welch 95% interval) and none is significantly worse. Generated by
@@ -357,7 +438,8 @@ Iterations reached in 3 h: SuperTrack-RF 12654, 12677, 12696; SuperMimic-RF 1071
 | SuperMimic | RigidFormer - MLP | 0.804 ± 0.007; **+0.667 [0.246, 1.088]** | 0.78 ± 0.38; **-36.67 [-47.55, -25.79]** | 33.1 ± 0.5; -22.6 [-52.3, 7.1] | 6.05 ± 0.62; -3.64 [-7.76, 0.47] | 1.3 ± 0.6; **-38.0 [-40.4, -35.6]** | 9.0 ± 2.0; **-31.0 [-36.0, -26.0]** |
 | SuperMimic | MLP iterations in 3 h | 33184, 33205, 33244 | | | | | |
 
-With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861.
+With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861 ± 0.003 and its
+MPJPE-local 14.5 ± 0.2 mm (seeds 7-9; `ndm-train --config lafan1-supertrack-accurate`).
 SuperMimic's MLP drops late, as on the H100 with
 action noise 0.3 (return 0.137 at about 33k iterations); its highest per-checkpoint evaluation averages 0.841 over the
 seeds, SuperMimic-RF's 0.811.
@@ -397,7 +479,7 @@ policy, the same batches for every setting (`grad_diag.sh`, `tools/grad_stats.py
 "cos of the > 3x ones" does so for the updates above three times the median norm, "consistency" is the length of the
 mean unit gradient (1 when all updates align), and "mean direction against base" is the cosine of this setting's mean
 direction with that of the run's own setting. `final_*_s1` are seed 1 of the MLP finals and `abl_*_rf_s1` that of
-SuperTrack-RF and SuperMimic-RF (A100 40GB), `c2_*_s4` seed 4 of check 2 (A100 80GB); `_rf` marks RigidFormer. Generated
+their RigidFormer versions before its tuning (A100 40GB), `c2_*_s4` seed 4 of check 2 (A100 80GB); `_rf` marks RigidFormer. Generated
 by `tools/grad_diag_report.py`.
 
 On every RigidFormer run the cap lowers the 99th percentile of the gradient norm and raises single updates' cosine with

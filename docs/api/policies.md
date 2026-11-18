@@ -9,3 +9,5 @@
 ::: ndm_gym.policies.muscle_policy
 
 ::: ndm_gym.policies.hand_policy
+
+::: ndm_gym.policies.quadrotor_policy

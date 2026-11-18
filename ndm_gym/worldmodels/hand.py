@@ -14,34 +14,32 @@ import torch.nn as nn
 from ..core.nets import ACTIVATIONS, mlp, run_mlp
 from ..core.normalizer import RunningNorm
 from ..core.rotations import mat_to_6d, so3_exp, so3_log
-from ..robots.xhand import NUM_J
 from ..state import CONTROL_DT
 
 KINDS = ("increment", "accel")
-# the palm's translations are left out: the dynamics do not depend on them
-WM_IN = (NUM_J - 3) + NUM_J + 3 + 6 + 3 + 3 + 1 + 6 + NUM_J
-WM_OUT = NUM_J + NUM_J + 3 + 3 + 3 + 3
-WM_OUT_ACCEL = NUM_J + 3 + 3  # the joints' accelerations, the object's linear and angular
 
 
 class HandWorldModel(nn.Module):
     """Deterministic dynamics s_{t+1} = f(s_t, u_t), u_t the joints' position targets."""
 
-    def __init__(self, hidden=(1024, 1024, 1024), act: str = "silu", layer_norm: bool = True, kind: str = "increment"):
+    def __init__(self, num_joints: int, hidden=(1024, 1024, 1024), act: str = "silu", layer_norm: bool = True, kind: str = "increment"):
         super().__init__()
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
-        self.kind = kind
-        out = WM_OUT if kind == "increment" else WM_OUT_ACCEL
-        self.net = mlp(WM_IN, list(hidden), out, act=ACTIVATIONS[act], layer_norm=layer_norm)
+        self.kind, self.num_joints = kind, num_joints
+        # the palm's translations are left out of the input: the dynamics do not depend on them
+        inp = (num_joints - 3) + num_joints + 3 + 6 + 3 + 3 + 1 + 6 + num_joints
+        increments = num_joints + num_joints + 3 + 3 + 3 + 3
+        out = increments if kind == "increment" else num_joints + 3 + 3  # or the joints' and the object's accelerations
+        self.net = mlp(inp, list(hidden), out, act=ACTIVATIONS[act], layer_norm=layer_norm)
         nn.init.zeros_(self.net[-1].weight)
         nn.init.zeros_(self.net[-1].bias)
-        self.in_norm = RunningNorm(WM_IN)
+        self.in_norm = RunningNorm(inp)
         self.out_norm = RunningNorm(out, eps=1e-4 if kind == "increment" else 1e-4 / CONTROL_DT)
         # accel: the spread of one true step's increments, the error's units (increment: the output normalizer's)
-        self.err_norm = RunningNorm(WM_OUT, eps=1e-4) if kind == "accel" else None
+        self.err_norm = RunningNorm(increments, eps=1e-4) if kind == "accel" else None
         # floors on the error normalization: joint positions and velocities, the object's position, rotation, velocities
-        self.register_buffer("err_floor", torch.cat((torch.full((NUM_J,), 1e-3), torch.full((NUM_J,), 2e-2), torch.full((3,), 5e-4),
+        self.register_buffer("err_floor", torch.cat((torch.full((num_joints,), 1e-3), torch.full((num_joints,), 2e-2), torch.full((3,), 5e-4),
                                                      torch.full((3,), 5e-3), torch.full((3,), 1e-2), torch.full((3,), 5e-2))))  # fmt: skip
 
     def inputs(self, S, fk, u: torch.Tensor) -> torch.Tensor:
@@ -66,15 +64,16 @@ class HandWorldModel(nn.Module):
         return torch.cat((S1[1] - S[1], S1[4] - S[4], S1[5] - S[5]), -1) / CONTROL_DT
 
     def step(self, S, fk, u: torch.Tensor):
-        """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward) and the targets ``u``."""
+        """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward, or its ``palm``: only the
+        palm's pose is read) and the targets ``u``."""
         q, qd, p, R, v, w = S
         y = run_mlp(self.net, self.in_norm(self.inputs(S, fk, u)))
         d = y * self.out_norm.std() + self.out_norm.mean
         if self.kind == "accel":  # semi-implicit Euler over the control step; the angular velocity is the world frame's
-            aq, av, aw = d.split((NUM_J, 3, 3), -1)
+            aq, av, aw = d.split((self.num_joints, 3, 3), -1)
             qd1, v1, w1 = qd + CONTROL_DT * aq, v + CONTROL_DT * av, w + CONTROL_DT * aw
             return q + CONTROL_DT * qd1, qd1, p + CONTROL_DT * v1, so3_exp(CONTROL_DT * w1) @ R, v1, w1
-        dq, dqd, dp, dth, dv, dw = d.split((NUM_J, NUM_J, 3, 3, 3, 3), -1)
+        dq, dqd, dp, dth, dv, dw = d.split((self.num_joints, self.num_joints, 3, 3, 3, 3), -1)
         return q + dq, qd + dqd, p + dp, R @ so3_exp(dth), v + dv, w + dw
 
     def error(self, S_hat, S) -> torch.Tensor:

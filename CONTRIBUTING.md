@@ -35,10 +35,11 @@ fastest paths this repository has measured, or on a faster one you have found an
 Figures and videos share the repository's look, so that results read alike across tasks:
 
 - Renders come from the repository's tools (`tools/render.py` and the task renderers `render_hoi.py`, `render_hand.py`,
-  `render_musclevae.py`), which add the NDM Gym mark. A task taken from another project keeps that project's look (for
+  `render_musclevae.py`, `render_robokit.py`, `render_mbrl.py`), which add the NDM Gym mark. A task taken from another
+  project keeps that project's look (for
   example MuscleVAE's bones, red muscles and checkered floor), so that its results can be set beside the original's.
-- The README shows policies trained here, one per task: the configuration with the lowest tracking error, in a window where
-  the episode does not end, captioned with its configuration. Reference motions and other projects' policies belong in the
+- The README shows policies trained here, in one grid per task: per case the run with the lowest tracking error, in a
+  window where the episode does not end, captioned with its configuration. Reference motions and other projects' policies belong in the
   documentation.
 - Charts follow `tools/make_speedup_chart.py`: drawn at twice their display size and saved as lossless WebP. README videos are
   WebP previews (`tools/compare_videos.py`); MP4s and other large media stay out of the repository.

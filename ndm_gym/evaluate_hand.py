@@ -20,13 +20,13 @@ import os
 
 def rollout(sim, algo, task, policy: bool = True):
     """Every world from its current start to the reference's last frame, under the policy or, without it, under the
-    reference pose as the position targets. Returns the states (T, N, STATE_DIM), the scene's qpos (T, N, nq) and
+    reference pose as the position targets. Returns the states (T, N, state_dim), the scene's qpos (T, N, nq) and
     whether each world terminated."""
     import torch
 
     from ndm_gym.tasks.hand_tracking import unflatten_state
 
-    a_prev = torch.zeros(sim.N, task.kin.q_lo.shape[0], device=sim.device)
+    a_prev = torch.zeros(sim.N, task.kin.num_joints, device=sim.device)
     failed = torch.zeros(sim.N, dtype=torch.bool, device=sim.device)
     states, qpos = [sim.state()], [sim.qpos.clone()]
     for _ in range(task.ref.frames - 1):

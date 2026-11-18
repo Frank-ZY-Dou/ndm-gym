@@ -155,12 +155,14 @@ interpolated as its paper does.
 
 Its published configuration, on an A100 80GB SXM4: 0.67 s per update, updates 1,000, 1,250 and 1,750, 14.48 ± 4.31 min.
 
-The two reach 0.82 in about as many updates, and an update through the exact simulator takes about four times as long.
+The two reach 0.82 in about as many updates, and an update through the exact simulator takes about 4.5 times as long
+(0.72 against 0.16 s).
 Each of its updates differentiates 4,096 windows of 64 control steps. NablaEngine's gradient of a rollout takes 5.5 ms per
 control step at 4,096 worlds on this GPU
 ([speed tables](../../benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models)): about 0.35 s
-of the 0.72 s. This library's update differentiates 2,048 windows of 32 steps through the MLP world model, 0.7 to 1.6 ms per
-control step at 1,024 to 4,096 worlds. The exact gradient needs no model and carries no model error; in these runs it does
+of the 0.72 s. This library's update differentiates 2,048 windows of 32 steps through its 3 × 1024 MLP world model;
+through SuperTrack's larger 2048 × 3 MLP the gradient takes 0.7 to 1.6 ms per control step at 1,024 to 4,096 worlds. The
+exact gradient needs no model and carries no model error; in these runs it does
 not lower the number of updates to 0.82. The evaluators, the simulators and the checkpoint grids differ (the table above),
 so the rows stand side by side and are not a ranking.
 
