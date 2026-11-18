@@ -198,6 +198,8 @@ The simulator is one rigid body without contacts, four physics steps per control
 to save, and bf16 does not help a network of this size. The acceleration model integrates the position from the velocity,
 as the simulator does; the increment model predicts it.
 
+On an A100 40GB SXM4, with the step fused: [results_a100.md](results_a100.md#the-world-model-as-the-simulator).
+
 ## The model's estimates
 
 The drone's inertia and drag are estimates ([the drone](../../docs/tasks/quadrotor.md#the-drone)). SuperTrack's selected
