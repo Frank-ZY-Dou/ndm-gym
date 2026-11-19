@@ -120,6 +120,15 @@ engineered.
 | `two-g1-supertrack-3gpu` | 3 | 1.73 / 2.08 / 1.73 | 1.85 ± 0.21 | 1,250, 1,500, 1,250 | 86.3 |
 | `two-g1-supermimic-3gpu` | 3 | 1.51 / 1.52 / 1.83 | 1.62 ± 0.18 | 1,250, 1,250, 1,500 | 75.3 |
 
+At that checkpoint, from the same evaluations, mean ± sd over seeds 0-2:
+
+| configuration | GPUs | return | global MPJPE (mm) | root-relative MPJPE (mm) |
+|---|---|---|---|---|
+| `two-g1-supertrack` | 1 | 0.8823 ± 0.0010 | 79.9 ± 4.6 | 16.8 ± 0.4 |
+| `two-g1-supermimic` | 1 | 0.8886 ± 0.0042 | 67.8 ± 7.2 | 19.9 ± 1.4 |
+| `two-g1-supertrack-3gpu` | 3 | 0.8840 ± 0.0004 | 72.2 ± 2.0 | 16.1 ± 0.5 |
+| `two-g1-supermimic-3gpu` | 3 | 0.8861 ± 0.0021 | 81.4 ± 7.6 | 20.0 ± 0.4 |
+
 Time per iteration by phase, seed 0, iterations 200-1000, ms:
 
 | configuration | total | collection | world-model updates | policy update with the critic |
@@ -134,7 +143,10 @@ On three GPUs (`--layout AWL`) each device's steps, ms:
 | `two-g1-supertrack-3gpu` | 86.3 | 48.9 | 35.1 | 84.9 |
 | `two-g1-supermimic-3gpu` | 75.5 | 52.0 | 26.7 | 70.0 |
 
-- Both reach 0.88 in the same iterations on average; SuperMimic's iteration is shorter, on one GPU and on three.
+- Both reach 0.88 in the same iterations on average: SuperTrack with the lower root-relative MPJPE (16.8 against 19.9 mm on one
+  GPU, 16.1 against 20.0 mm on three), SuperMimic sooner, as its iteration is shorter. There the global MPJPE is lower for
+  SuperMimic on one GPU and for SuperTrack on three, with a wide spread between seeds, and the return is slightly higher for
+  SuperMimic.
 - On one GPU the policy update is the largest phase: 85 against 71 ms. SuperTrack's policy batch is twice SuperMimic's
   (`--pi_batch` 4,096 against 2,048).
 - On three GPUs the collection and the world-model updates run beside the policy update, so the iteration is the policy update

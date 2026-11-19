@@ -75,21 +75,23 @@ CONFIGS = {
                                           f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
         "two-g1-supertrack": (TWO_G1_ST,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.66 +- 0.00 min on an A100 40GB SXM4 (seeds "
-                              "0-2); return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / root-relative (seeds 0-2 to 9,396 iterations: seed 0 "
-                              "on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4; measured before the goal was encoded once, which "
-                              "computes the same values up to float rounding)"),
-        "two-g1-supermimic": (TWO_G1_SM,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.26 +- 0.00 min on an A100 40GB SXM4 (seeds "
-                              "0-2); return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / root-relative (seeds 0-2 to two-g1-supertrack's "
-                              "9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: 0.9042 +- 0.0015, 47.5 / 16.1 mm; measured before "
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.66 +- 0.00 min, root-relative MPJPE there "
+                              "16.8 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / root-relative "
+                              "(seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4; measured before "
                               "the goal was encoded once, which computes the same values up to float rounding)"),
+        "two-g1-supermimic": (TWO_G1_SM,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.26 +- 0.00 min, root-relative MPJPE there "
+                              "19.9 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / root-relative "
+                              "(seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: 0.9042 +- 0.0015, "
+                              "47.5 / 16.1 mm; measured before the goal was encoded once, which computes the same values up to float rounding)"),
         "two-g1-supertrack-3gpu": (f"{TWO_G1_ST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min (seeds 0-2)"),
+                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min, root-relative MPJPE there 16.1 mm "
+                                   "(seeds 0-2)"),
         "two-g1-supermimic-3gpu": (f"{TWO_G1_SM} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min (seeds 0-2)"),
+                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min, root-relative MPJPE there 20.0 mm "
+                                   "(seeds 0-2)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "
