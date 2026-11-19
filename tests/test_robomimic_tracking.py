@@ -663,6 +663,39 @@ def test_time_to_the_target(tmp_path):
     assert res["iteration_to_target"] is None and res["minutes_to_target"] is None
 
 
+def test_stop_rule(tmp_path):
+    """stop_rule.py: the first evaluation where the three-evaluation means of the object error improved by less than 3 %
+    over 1,000 iterations and the success holds (0.99) or stopped improving; a run's checkpoints read in order until it
+    holds, its last one otherwise."""
+    path = os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "stop_rule.py")
+    spec = importlib.util.spec_from_file_location("robomimic_stop_rule", path)
+    rule = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rule)
+    falling = {i: (1.0, max(20 - i / 250, 8.0)) for i in range(250, 6001, 250)}  # 8 mm from 3,000 on
+    assert rule.stop(falling) == 4500  # E(4500) = E(3500) = 8 mm; at 4,000 E(3000) is 9 mm
+    learning = {i: (min(1.0, 0.3 + i / 5000), 30.0) for i in range(250, 6001, 250)}  # the error flat, the success rising
+    assert rule.stop(learning) == 4000  # S(4000) = 1.0: the success holds
+    noisy = {i: (0.5 + (0.08 if (i // 250) % 2 else -0.08), 10.0) for i in range(250, 3001, 250)}  # flat around 0.5
+    assert rule.stop(noisy) == 1750
+    ended = dict(falling)
+    ended[3000] = (0.0, math.nan)  # every rollout terminated: no error, no stop in the windows that hold it
+    assert rule.stop(ended) == 4750 and rule.stop({i: (1.0, 30.0 - i / 100) for i in range(250, 6001, 250)}) is None
+    run = tmp_path / "run"
+    run.mkdir()
+    for it in range(250, 6001, 250):
+        (run / f"ckpt_{it:06d}.pt").write_bytes(b"")
+    seen = []
+
+    def evaluate(ckpt, out):
+        seen.append(int(os.path.basename(ckpt)[5:11]))
+        s, e = falling[seen[-1]]
+        return {"policy": {"success_rate": s, "object_mm": e}}
+
+    res = rule.stop_of(str(run), evaluate)
+    assert res["stop_iteration"] == 4500 and res["by_rule"] and seen == list(range(250, 4501, 250)) and res["stop_ckpt"].endswith("ckpt_004500.pt")
+    assert json.loads((run / "stop.json").read_text())["stop_iteration"] == 4500
+
+
 CUDA = "cuda:0"
 HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("mujoco_warp") is not None
 GPU = pytest.mark.skipif(not HAVE_SIM, reason="needs a GPU and MuJoCo-Warp")

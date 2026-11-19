@@ -1,10 +1,10 @@
 """The training time at which a run reaches the benchmark's target for good: every kept checkpoint of the run (train_robomimic
---ckpt_keep) evaluated as the last one is (evaluate_robomimic, 256 perturbed rollouts, without the reference's targets); the
-wall time of the first checkpoint from which every later one has a success of at least 0.99 with the tracked objects within
-10 mm (the hand task's target). The last checkpoint's evaluation is the run's own (<run>/eval) when it exists. Writes
-<run>/time_to.json (minutes_to_target: null if never). The times are the runs' own wall clock, checkpoints every
---ckpt_every iterations. A run without kept checkpoints, or with an evaluation in <run>/eval_ckpts that is not this script's,
-is an error.
+--ckpt_keep) up to its stop (<run>/stop.json from stop_rule.py, when it exists) evaluated as the last one is (evaluate_robomimic,
+256 perturbed rollouts, without the reference's targets); the wall time of the first checkpoint from which every later one has
+a success of at least 0.99 with the tracked objects within 10 mm (the hand task's target). The last checkpoint's evaluation is
+the run's own (<run>/eval) when it exists. Writes <run>/time_to.json (minutes_to_target: null if never). The times are the
+runs' own wall clock, checkpoints every --ckpt_every iterations. A run without kept checkpoints, or with an evaluation in
+<run>/eval_ckpts that is not this script's, is an error.
 
     python benchmarks/robomimic_manipulation_tracking/time_to.py <run directory> [...]
 """
@@ -40,11 +40,15 @@ def time_to(run: str, evaluate=evaluate) -> dict:
     checkpoints, or with an evaluation that is not this script's, is an error."""
     own = os.path.join(run, "eval", "metrics.json")
     last = json.load(open(own)) if os.path.exists(own) else None
+    stop_path = os.path.join(run, "stop.json")
+    stop = json.load(open(stop_path))["stop_iteration"] if os.path.exists(stop_path) else None
     ckpts, rows = sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))), []
     if not ckpts:
         sys.exit(f"{run}: no ckpt_*.pt (train_robomimic --ckpt_keep keeps them)")
     for ckpt in ckpts:
         it = int(os.path.basename(ckpt)[5:11])
+        if stop is not None and it > stop:
+            continue
         if last and last["iteration"] == it:
             m = check(last, it, own)
         else:
