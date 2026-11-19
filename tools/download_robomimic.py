@@ -7,16 +7,20 @@ and the meshes and textures of robosuite 1.5.0 (the v1.5.0 tag's commit) that th
 
 Lift's file is 37 MB, Square's 69 MB, Transport's 226 MB; the assets 46 MB. Every file is checked against its SHA-256 in
 ``tools/download_robomimic.sha256.json`` (by its path under ``<out>``), also when it is already there; a file not listed
-there, or one that differs, raises. The files keep their upstream terms and stay out of Git.
+there, or one that differs, raises. The files keep their upstream terms and stay out of Git. A transfer that fails (a reset
+connection, a timeout) is started again, up to ``ATTEMPTS`` times, each retry reported.
 """
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
+import sys
+import time
 import urllib.parse
 import urllib.request
 
@@ -27,6 +31,7 @@ TASKS = ("lift", "square", "transport")
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "download_robomimic.sha256.json")) as _f:
     SHA256 = json.load(_f)  # each file's path under --out: its SHA-256 at the pinned revisions
 TIMEOUT = 60  # s, a connection's and a read's
+ATTEMPTS = 5  # transfers of a file before its error is raised
 
 
 def sha256(path: str) -> str:
@@ -37,9 +42,10 @@ def sha256(path: str) -> str:
     return digest.hexdigest()
 
 
-def fetch(url: str, out: str, rel: str, timeout: float = TIMEOUT) -> str:
+def fetch(url: str, out: str, rel: str, timeout: float = TIMEOUT, attempts: int = ATTEMPTS, wait: float = 5.0) -> str:
     """Download ``url`` to ``<out>/<rel>`` through a ``.part`` file, unless it exists; either way check its SHA-256 against
-    ``SHA256[rel]``. A mismatching download is deleted. Returns the path."""
+    ``SHA256[rel]``. A mismatching download is deleted. A failed transfer starts again after ``wait`` times its number of
+    seconds, up to ``attempts`` transfers. Returns the path."""
     if rel not in SHA256:
         raise ValueError(f"{rel}: no SHA-256 in download_robomimic.sha256.json")
     dest = os.path.join(out, rel)
@@ -49,9 +55,17 @@ def fetch(url: str, out: str, rel: str, timeout: float = TIMEOUT) -> str:
             raise ValueError(f"{dest}: SHA-256 {got}, expected {SHA256[rel]}; delete it to download it again")
         return dest
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with urllib.request.urlopen(url, timeout=timeout) as r, open(dest + ".part", "wb") as f:
-        while chunk := r.read(1 << 22):
-            f.write(chunk)
+    for k in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as r, open(dest + ".part", "wb") as f:
+                while chunk := r.read(1 << 22):
+                    f.write(chunk)
+            break
+        except (OSError, http.client.HTTPException) as e:  # (urllib's URLError and socket errors are OSErrors)
+            if k == attempts:
+                raise
+            print(f"{url}: transfer {k} of {attempts} failed ({type(e).__name__}: {e}); again in {wait * k:g} s", file=sys.stderr, flush=True)
+            time.sleep(wait * k)
     got = sha256(dest + ".part")
     if got != SHA256[rel]:
         os.remove(dest + ".part")

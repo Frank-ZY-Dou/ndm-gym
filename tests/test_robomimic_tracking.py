@@ -182,8 +182,8 @@ def test_servos_and_the_scene():
 
 def test_downloader(tmp_path, monkeypatch):
     """The downloader keeps a file only at its SHA-256 in its list (each demonstration file and asset), checks one already
-    there, refuses one not listed, and refuses an asset path that leaves robosuite's assets (a path through ``..`` inside
-    them, as the recorded scenes name some, is kept)."""
+    there, refuses one not listed, starts a failed transfer again up to its attempts, and refuses an asset path that leaves
+    robosuite's assets (a path through ``..`` inside them, as the recorded scenes name some, is kept)."""
     h5py = pytest.importorskip("h5py")
     import tools.download_robomimic as dl
 
@@ -191,7 +191,8 @@ def test_downloader(tmp_path, monkeypatch):
     assert all(f"{task}/demo_v15.hdf5" in dl.SHA256 for task in dl.TASKS)
     src = tmp_path / "src.bin"
     src.write_bytes(b"robomimic" * 1000)
-    monkeypatch.setitem(dl.SHA256, "a/ok.bin", hashlib.sha256(src.read_bytes()).hexdigest())
+    digest = hashlib.sha256(src.read_bytes()).hexdigest()
+    monkeypatch.setitem(dl.SHA256, "a/ok.bin", digest)
     monkeypatch.setitem(dl.SHA256, "a/bad.bin", "0" * 64)
     assert dl.fetch(src.as_uri(), str(tmp_path), "a/ok.bin") == str(tmp_path / "a" / "ok.bin")
     assert (tmp_path / "a" / "ok.bin").read_bytes() == src.read_bytes()
@@ -204,6 +205,25 @@ def test_downloader(tmp_path, monkeypatch):
     monkeypatch.setitem(dl.SHA256, "a/ok.bin", "0" * 64)
     with pytest.raises(ValueError, match="delete it"):
         dl.fetch(src.as_uri(), str(tmp_path), "a/ok.bin")
+    import urllib.request
+
+    calls, real = [], urllib.request.urlopen
+
+    def flaky(url, timeout):  # a reset connection twice, then the file
+        calls.append(url)
+        if len(calls) <= 2:
+            raise ConnectionResetError(104, "Connection reset by peer")
+        return real(url, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", flaky)
+    monkeypatch.setitem(dl.SHA256, "a/retried.bin", digest)
+    monkeypatch.setitem(dl.SHA256, "a/never.bin", digest)
+    dl.fetch(src.as_uri(), str(tmp_path), "a/retried.bin", wait=0.0)
+    assert len(calls) == 3 and (tmp_path / "a" / "retried.bin").read_bytes() == src.read_bytes()
+    calls.clear()
+    with pytest.raises(ConnectionResetError):
+        dl.fetch(src.as_uri(), str(tmp_path), "a/never.bin", attempts=2, wait=0.0)
+    assert len(calls) == 2 and not (tmp_path / "a" / "never.bin").exists()
 
     def scene_file(name: str, files: list[str]) -> str:
         path = tmp_path / name
