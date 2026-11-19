@@ -135,3 +135,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Wuji Hand piano
+
+- The unmounted Wuji Hand 2 beta2 hand descriptions and STL meshes come from Wuji Technology under MIT. The downloader fetches the upstream license at the same revision. [Wuji Technology, revision c2cd7f8](https://github.com/wuji-technology/wuji-description/tree/c2cd7f8d1ef8b6dc8cb907c17daa5a88b4442d95)
+- The passive keyboard comes from Eden’s asset dataset. Its authors credit RoboPianist, Copyright 2023 The RoboPianist Authors, Apache-2.0. The downloader fetches the keyboard and the accompanying attribution. [Pinned keyboard and notice](https://huggingface.co/datasets/Kashu7100/eden_assets/tree/f409faaf65d8a996425cc71a035c30845c7314d8/objects/piano)
+- The benchmark adapts Eden’s handwritten piano arrangements, timing and configuration to MuJoCo-Warp. The score generator, simulator integration, learning objectives and evaluation code in this repository implement the benchmark locally. [Eden score source at revision 148d972](https://github.com/embodied-ai-nexus/Eden/blob/148d972beaee94b801c6a55808f00445bedb381b/eden/tasks/piano/songs.py) · [Eden Apache-2.0 license](benchmarks/wuji_piano/EDEN_LICENSE)

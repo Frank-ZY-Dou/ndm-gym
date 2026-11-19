@@ -377,6 +377,21 @@ ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_
 </details>
 
 <details>
+<summary><b>Wuji Hand piano playing</b></summary>
+
+| Goal | Configuration | Result |
+|---|---|---|
+| Play the melody and bass of Eden’s *Ode to Joy* | Two free Wuji hands, 52 controls, 20 rounds, seeds 0–2, RTX 3060 | SuperTrack 0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090 Eden F1 |
+
+SuperTrack and SuperMimic held both due pitches on 69.4% and 10.5% of the two-note frames on 256 starts per seed. [Task and results](benchmarks/wuji_piano/README.md)
+
+![Two Wuji hands playing the complete Ode to Joy arrangement](docs/media/wuji_piano/ode-supertrack.webp)
+
+SuperTrack, seed 0, round 20. The policy uses three imagined steps at 20 Hz. It had the highest final validation F1 (0.907) and reached 17 of 19 notes in this nominal rollout.
+
+</details>
+
+<details>
 <summary><b>Quadrotor trajectory tracking</b></summary>
 
 ```bash
