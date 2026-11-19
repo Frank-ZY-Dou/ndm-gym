@@ -100,6 +100,9 @@ def main():
         if any(load_demo(path, i)["xml"] != scene for i in demos):
             raise ValueError(f"--demo {demos}: not recorded in the scene of the checkpoint's demonstrations {trained}")
     if args.solver_iterations < 0:  # the physics trained in
+        missing = [k for k in ("solver_iterations", "solver_ls_iterations") if k not in ck["args"]]
+        if missing:
+            raise ValueError(f"{args.ckpt}: the run's arguments have no {', '.join(missing)}; give --solver_iterations (0: the scene's)")
         solver = (targs.solver_iterations, targs.solver_ls_iterations)
     else:
         solver = (args.solver_iterations, args.solver_ls_iterations if args.solver_iterations else 0)

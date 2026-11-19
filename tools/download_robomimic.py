@@ -1,7 +1,7 @@
 """Download the manipulation tracking task's demonstrations and scenes' assets at pinned revisions into ``<out>``: robomimic's
 proficient-human demonstrations (huggingface.co/datasets/robomimic/robomimic_datasets, MIT), ``<out>/<task>/demo_v15.hdf5``,
-and the meshes and textures of robosuite 1.5.0 that their scenes name (github.com/ARISE-Initiative/robosuite, MIT),
-``<out>/robosuite_assets/``.
+and the meshes and textures of robosuite 1.5.0 (the v1.5.0 tag's commit) that their scenes name
+(github.com/ARISE-Initiative/robosuite, MIT), ``<out>/robosuite_assets/``.
 
     python tools/download_robomimic.py [--out data/robomimic] [--tasks lift square transport]
 
@@ -22,10 +22,11 @@ import urllib.request
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HF_DATASET, HF_REVISION = "robomimic/robomimic_datasets", "74fa018461f479cd9fd15b924a16103012096203"
-ROBOSUITE, ROBOSUITE_COMMIT = "ARISE-Initiative/robosuite", "dc7fcf9fa6cdf0796f79b4c873166a8fb9fe8c9e"  # v1.5.0, as the data were recorded
+ROBOSUITE, ROBOSUITE_COMMIT = "ARISE-Initiative/robosuite", "1a8701b90c07c6595ace4af9935d7c5ebe1baed3"  # the v1.5.0 tag, as the data were recorded
 TASKS = ("lift", "square", "transport")
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "download_robomimic.sha256.json")) as _f:
     SHA256 = json.load(_f)  # each file's path under --out: its SHA-256 at the pinned revisions
+TIMEOUT = 60  # s, a connection's and a read's
 
 
 def sha256(path: str) -> str:
@@ -36,7 +37,7 @@ def sha256(path: str) -> str:
     return digest.hexdigest()
 
 
-def fetch(url: str, out: str, rel: str) -> str:
+def fetch(url: str, out: str, rel: str, timeout: float = TIMEOUT) -> str:
     """Download ``url`` to ``<out>/<rel>`` through a ``.part`` file, unless it exists; either way check its SHA-256 against
     ``SHA256[rel]``. A mismatching download is deleted. Returns the path."""
     if rel not in SHA256:
@@ -48,7 +49,7 @@ def fetch(url: str, out: str, rel: str) -> str:
             raise ValueError(f"{dest}: SHA-256 {got}, expected {SHA256[rel]}; delete it to download it again")
         return dest
     os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with urllib.request.urlopen(url) as r, open(dest + ".part", "wb") as f:
+    with urllib.request.urlopen(url, timeout=timeout) as r, open(dest + ".part", "wb") as f:
         while chunk := r.read(1 << 22):
             f.write(chunk)
     got = sha256(dest + ".part")
@@ -60,7 +61,8 @@ def fetch(url: str, out: str, rel: str) -> str:
 
 
 def asset_paths(path: str) -> set[str]:
-    """The robosuite asset files (relative to its ``models/assets``) that the scenes of a demonstration file name."""
+    """The robosuite asset files (relative to its ``models/assets``) that the scenes of a demonstration file name; a path
+    that leaves that directory (absolute, or above it through ``..``) is an error."""
     import h5py
 
     out = set()
@@ -68,7 +70,10 @@ def asset_paths(path: str) -> set[str]:
         for g in f["data"].values():
             xml = g.attrs["model_file"]
             for p in re.findall(r'file="[^"]*?robosuite/models/assets/([^"]+)"', xml if isinstance(xml, str) else xml.decode()):
-                out.add(os.path.normpath(p).replace(os.sep, "/"))
+                q = os.path.normpath(p)
+                if os.path.isabs(q) or q == os.pardir or q.startswith(os.pardir + os.sep):
+                    raise ValueError(f"{path}: the asset path {p!r} leaves robosuite's models/assets")
+                out.add(q.replace(os.sep, "/"))
     return out
 
 

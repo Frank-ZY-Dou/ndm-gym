@@ -1,10 +1,12 @@
 """Manipulation demonstration tracking on small scenes in robosuite's naming (seven-joint arms with their torque actuators,
 two-finger grippers with their grip sites, the task's free objects), their demonstrations made by MuJoCo itself: the servos
-and the gravity compensation, the scene's layout for the task, the demonstration's file and assets, the forward kinematics against MuJoCo's, the task at the reference, robosuite's success tests against their
+and the gravity compensation, the scene's layout for the task, the demonstration's file and assets and the downloader's
+checks, the forward kinematics against MuJoCo's, the task at the reference, robosuite's success tests against their
 transcription from robosuite, the world model's control step, the updates and training's arguments; on a GPU, the simulator
 against MuJoCo and its success test against robosuite's."""
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -15,7 +17,6 @@ import numpy as np
 import pytest
 import torch
 
-from ndm_gym.algos.hand_fast import add_hand_fast_args
 from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.motion.sources.robomimic import load_demo, split_states
@@ -24,7 +25,7 @@ from ndm_gym.tasks.robomimic_tracking import (CONTROL_DT, HOLD, Contacts, Reward
                                               unflatten_state)  # fmt: skip
 from ndm_gym.train import add_train_args
 from ndm_gym.train_hand import UNSUPPORTED
-from ndm_gym.train_robomimic import ROBOMIMIC_DEFAULTS, UNSUPPORTED_SYSTEMS, parse_args
+from ndm_gym.train_robomimic import HAND_ONLY, ROBOMIMIC_DEFAULTS, parse_args
 from ndm_gym.worldmodels.mjcf import MjcfLayout
 
 # the arguments robomimic training implements; the rest of ndm_gym.train's are train_hand.UNSUPPORTED
@@ -32,9 +33,6 @@ SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_
              "wm_batch", "pi_batch", "lr", "gamma", "reward_std_scale", "lam", "action_noise", "critic_epochs", "critic_minibatches", "warmup_steps",
              "wm_only_iters", "lr_decay_iters", "ckpt_every", "max_hours", "log_every", "log_dir", "seed", "resume", "amp", "bptt_decay",
              "st_reg", "st_imag_noise", "st_fail_w")  # fmt: skip
-# hand training's systems options that robomimic training implements
-SYSTEMS = ("fused_adam", "reset_masked", "no_sync", "collect_graph", "compile_eager", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "pi_lr_mult",
-           "lr_decay_ret", "lr_decay_len", "lr_decay_by", "muon_batched")  # fmt: skip
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SUBSTEPS = round(CONTROL_DT / 0.002)
 
@@ -141,7 +139,7 @@ def setup():
 def test_servos_and_the_scene():
     """The arm's torque actuators become position servos within their torque ranges, the robot is compensated for gravity,
     the gripper keeps its servos; the scene's actuators, keypoints, objects and what the success tests read as the task
-    reads them."""
+    reads them; an actuated joint without a range is an error."""
     raw = mujoco.MjModel.from_xml_string(scene_xml())
     model = scene_spec().compile()
     for k in range(7):
@@ -161,6 +159,8 @@ def test_servos_and_the_scene():
         RobomimicScene.from_model(model, "square")
     with pytest.raises(ValueError, match="torque actuators"):
         build_spec(scene_xml().replace("robot0_torq_j7", "robot0_motor_j7"), "/unused")
+    with pytest.raises(ValueError, match="no range"):  # (the targets' clip would be made up)
+        RobomimicScene.from_model(build_spec(scene_xml().replace('axis="0 1 0" range="0 0.04"', 'axis="0 1 0"'), "/unused").compile(), "lift")
     with pytest.raises(ValueError, match="grip_site"):
         RobomimicScene.from_model(build_spec(scene_xml().replace("_grip_site", "_site"), "/unused").compile(), "lift")
     assert resolve_assets('<texture file="/x/y/robosuite/models/assets/textures/a.png"/>', "/data/assets") == '<texture file="/data/assets/textures/a.png"/>'
@@ -174,6 +174,44 @@ def test_servos_and_the_scene():
     tr_name = lambda i: mujoco.mj_id2name(tr, mujoco.mjtObj.mjOBJ_GEOM, i)  # noqa: E731
     named = [([tr_name(g) for g in geoms], tr_name(base)) for geoms, base in pairs]
     assert named == [(["payload_handle", "payload_head"], "transport_target_bin_base"), (["trash_g0"], "transport_trash_bin_base")]
+
+
+def test_downloader(tmp_path, monkeypatch):
+    """The downloader keeps a file only at its SHA-256 in its list (each demonstration file and asset), checks one already
+    there, refuses one not listed, and refuses an asset path that leaves robosuite's assets (a path through ``..`` inside
+    them, as the recorded scenes name some, is kept)."""
+    h5py = pytest.importorskip("h5py")
+    import tools.download_robomimic as dl
+
+    assert dl.ROBOSUITE_COMMIT.startswith("1a8701b")  # the v1.5.0 tag's commit
+    assert all(f"{task}/demo_v15.hdf5" in dl.SHA256 for task in dl.TASKS)
+    src = tmp_path / "src.bin"
+    src.write_bytes(b"robomimic" * 1000)
+    monkeypatch.setitem(dl.SHA256, "a/ok.bin", hashlib.sha256(src.read_bytes()).hexdigest())
+    monkeypatch.setitem(dl.SHA256, "a/bad.bin", "0" * 64)
+    assert dl.fetch(src.as_uri(), str(tmp_path), "a/ok.bin") == str(tmp_path / "a" / "ok.bin")
+    assert (tmp_path / "a" / "ok.bin").read_bytes() == src.read_bytes()
+    dl.fetch(src.as_uri(), str(tmp_path), "a/ok.bin")  # there and checked
+    with pytest.raises(ValueError, match="SHA-256"):
+        dl.fetch(src.as_uri(), str(tmp_path), "a/bad.bin")
+    assert not (tmp_path / "a" / "bad.bin").exists() and not (tmp_path / "a" / "bad.bin.part").exists()
+    with pytest.raises(ValueError, match="no SHA-256"):
+        dl.fetch(src.as_uri(), str(tmp_path), "a/other.bin")
+    monkeypatch.setitem(dl.SHA256, "a/ok.bin", "0" * 64)
+    with pytest.raises(ValueError, match="delete it"):
+        dl.fetch(src.as_uri(), str(tmp_path), "a/ok.bin")
+
+    def scene_file(name: str, files: list[str]) -> str:
+        path = tmp_path / name
+        with h5py.File(path, "w") as f:
+            g = f.create_group("data").create_group("demo_0")
+            g.attrs["model_file"] = "<mujoco>" + "".join(f'<mesh file="/home/x/robosuite/models/assets/{q}"/>' for q in files) + "</mujoco>"
+        return str(path)
+
+    assert dl.asset_paths(scene_file("in.hdf5", ["arenas/../textures/a.png", "meshes/b.stl"])) == {"textures/a.png", "meshes/b.stl"}
+    for bad in ("../../.ssh/id_ed25519", "textures/../../x.png", "/etc/passwd"):
+        with pytest.raises(ValueError, match="leaves"):
+            dl.asset_paths(scene_file("out.hdf5", [bad]))
 
 
 def test_demonstration_file(tmp_path):
@@ -439,16 +477,6 @@ def test_training_arguments():
     assert (st.algo, st.st_fail_w, st.st_task_weights, st.demo, st.solver_iterations, st.solver_ls_iterations) == ("supertrack", 2, True, [7], 20, 10)
 
 
-def test_systems_options_implemented_or_refused(capsys):
-    parser = argparse.ArgumentParser()
-    add_hand_fast_args(parser)
-    assert {a.dest for a in parser._actions} - {"help"} == set(SYSTEMS) | set(UNSUPPORTED_SYSTEMS)
-    for name in UNSUPPORTED_SYSTEMS:  # each is a flag
-        with pytest.raises(SystemExit):
-            parse_args(["--task", "lift", f"--{name}"])
-        assert f"--{name} is an option of hand training" in capsys.readouterr().err
-
-
 def test_evaluation_refuses_no_rollouts(monkeypatch, capsys):
     from ndm_gym import evaluate_robomimic
 
@@ -485,6 +513,29 @@ def test_time_to_the_target(tmp_path, monkeypatch):
     checkpoint(450, 1.0, 5.0, num_envs=64)  # another evaluation's metrics
     with pytest.raises(SystemExit, match="not this script's evaluation"):
         tool.main()
+# hand_fast's options that robomimic training implements: the systems options, the optimizers, the policy's average and
+# learning rate, and the inductor's settings; the rest are HAND_ONLY
+HAND_FAST_IMPLEMENTED = ("fused_adam", "reset_masked", "no_sync", "collect_graph", "compile_eager", "update_graphs", "pi_opt", "wm_opt", "pi_ema",
+                         "pi_lr_mult", "lr_decay_ret", "lr_decay_len", "lr_decay_by", "muon_batched", "elementwise_3x3", "combo_kernels",
+                         "mix_order_reductions", "autotune_gemm")  # fmt: skip
+
+
+def test_hand_options(capsys):
+    """Every option of hand_fast is implemented here or refused (HAND_ONLY: what only hand training's code reads), so none is
+    silently ignored; the inductor's settings are accepted."""
+    from ndm_gym.algos.hand_fast import add_hand_fast_args
+
+    parser = argparse.ArgumentParser()
+    add_hand_fast_args(parser)
+    names = {action.dest for action in parser._actions if action.dest != "help"}
+    assert names == set(HAND_FAST_IMPLEMENTED) | set(HAND_ONLY) and not set(HAND_FAST_IMPLEMENTED) & set(HAND_ONLY)
+    systems = ["--no_sync", "--fused_adam", "--reset_masked"]
+    for name in HAND_ONLY:
+        with pytest.raises(SystemExit):
+            parse_args(["--task", "lift", f"--{name}", *systems])
+        assert "hand training" in capsys.readouterr().err
+    args = parse_args(["--task", "lift", "--elementwise_3x3", "--combo_kernels", "--mix_order_reductions", "--autotune_gemm", *systems])
+    assert args.elementwise_3x3 and args.combo_kernels and args.mix_order_reductions and args.autotune_gemm
 
 
 CUDA = "cuda:0"

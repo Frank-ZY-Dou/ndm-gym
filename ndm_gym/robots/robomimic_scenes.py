@@ -120,8 +120,9 @@ class RobomimicScene:
             j = int(m.actuator_trnid[a, 0])
             is_arm = bool(re.fullmatch(r"robot\d+_torq_j\d", name(mujoco.mjtObj.mjOBJ_ACTUATOR, a)))
             act_q.append(int(m.jnt_qposadr[j])), act_d.append(int(m.jnt_dofadr[j])), arm.append(is_arm)
-            r = m.jnt_range[j] if m.jnt_limited[j] else (-np.pi, np.pi)
-            lo.append(float(r[0])), hi.append(float(r[1])), scale.append(ARM_SCALE if is_arm else FINGER_SCALE)
+            if not m.jnt_limited[j]:
+                raise ValueError(f"actuator {name(mujoco.mjtObj.mjOBJ_ACTUATOR, a)}: its joint has no range (the targets' clip)")
+            lo.append(float(m.jnt_range[j, 0])), hi.append(float(m.jnt_range[j, 1])), scale.append(ARM_SCALE if is_arm else FINGER_SCALE)
         grippers = sorted({int(g) for g in re.findall(r"gripper(\d+)_right_eef", " ".join(name(mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(m.nbody)))})
         bodies = []
         for g in grippers:

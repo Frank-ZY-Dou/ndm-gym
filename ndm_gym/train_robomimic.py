@@ -1,9 +1,9 @@
 """Training loop for manipulation demonstration tracking on robomimic demonstrations of one scene (docs/tasks/robomimic.md): collect in
 RobomimicSim -> fit the world model on replay windows -> policy update through imagined rollouts
 (ndm_gym.algos.robomimic_algos). The loop, the schedule and the systems options are hand-object tracking's (ndm_gym.train_hand,
-ndm_gym.algos.hand_fast) with the defaults of ROBOMIMIC_DEFAULTS; ndm_gym.train's arguments and hand training's systems
-options that this training does not implement are refused unless left at their defaults (train_hand.UNSUPPORTED,
-UNSUPPORTED_SYSTEMS).
+ndm_gym.algos.hand_fast) with the defaults of ROBOMIMIC_DEFAULTS; ndm_gym.train's arguments that this training does not
+implement are refused unless left at their defaults (train_hand.UNSUPPORTED), and so are hand_fast's options that only hand
+training implements (HAND_ONLY).
 
 An iteration is one control step of every world, ``--wm_batches`` world-model steps and, after ``--wm_only_iters``, one policy
 (and critic) update. Writes ``train_log.csv``, ``args.json`` and ``last.pt`` to ``--log_dir`` (``--ckpt_keep``: also
@@ -32,12 +32,10 @@ ROBOMIMIC_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_0
 # the options a resumed run must share with its checkpoint: the algorithm and SuperTrack's weights, the optimizers' layouts
 # and states, the policy average
 RESUME_MATCH = ("algo", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
-
-# hand training's systems options (algos.hand_fast) that this training does not implement; each is refused unless at its
-# default: train_hand's own (the kernels' options, its phase times), HandSuperMimic's, and hand_fast.Collector's
-# --compile_collect (RobomimicCollector compiles the forward kinematics only: --compile_eager)
-UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "elementwise_3x3",
-                       "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
+# hand_fast's options that hand training's own code implements (hand_algos, its collector's compiled step, its phase times),
+# refused here unless at their defaults; the inductor's settings (--elementwise_3x3, --combo_kernels, --mix_order_reductions,
+# --autotune_gemm) apply as in hand training
+HAND_ONLY = ("compile_updates", "compile_collect", "compile_rollout", "sm_reuse_input", "wm_palm_fk", "phase_times")
 
 
 def parse_args(argv: list[str] | None = None):
@@ -87,7 +85,7 @@ def parse_args(argv: list[str] | None = None):
     for name in UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that robomimic training does not implement")
-    for name in UNSUPPORTED_SYSTEMS:
+    for name in HAND_ONLY:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that robomimic training does not implement")
     if args.episode < 2:
@@ -145,6 +143,17 @@ def main():
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+    if args.elementwise_3x3 or args.combo_kernels:  # inductor's settings, before anything is compiled (as train_hand)
+        from ndm_gym.train import combo_kernels, elementwise_3x3_products
+
+        if args.elementwise_3x3:
+            elementwise_3x3_products()
+        if args.combo_kernels:
+            combo_kernels()
+    if args.mix_order_reductions:  # inductor's settings too (algos.hand_fast)
+        hand_fast.mix_order_reductions()
+    if args.autotune_gemm:
+        hand_fast.autotune_gemm()
     torch.manual_seed(args.seed)
     nets.AMP_DTYPE = torch.bfloat16 if args.amp == "bf16" else None
     RunningNorm.no_sync = args.no_sync  # --no_sync: the normalizers' freeze test on the device, their statistics written in place
