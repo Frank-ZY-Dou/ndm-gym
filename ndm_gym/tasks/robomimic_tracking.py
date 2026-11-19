@@ -22,8 +22,8 @@ import torch
 import torch.nn as nn
 
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq
-from ..robots.robomimic_scenes import (BIN_FLOOR, BIN_HALF_XY, BIN_TOP, KEYPOINT_BODIES, LIFT_HEIGHT, LIFT_TABLE_TOP, SQUARE_TABLE_TOP, SQUARE_XY,
-                                       SQUARE_Z, RobomimicScene)  # fmt: skip
+from ..robots.robomimic_scenes import (KEYPOINT_BODIES, LIFT_HEIGHT, LIFT_TABLE_TOP, SQUARE_REACH, SQUARE_TABLE_TOP, SQUARE_XY, SQUARE_Z,
+                                       RobomimicScene)  # fmt: skip
 from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel
 
 CONTROL_DT = 0.05  # robosuite's control_freq 20
@@ -55,6 +55,15 @@ class SceneKinematics(nn.Module):
     def forward(self, qpos: torch.Tensor) -> torch.Tensor:
         P, _ = self.body_poses(qpos)
         return P[..., self.bodies, :]
+
+
+class Contacts(NamedTuple):
+    """A simulator's contact list as robosuite's tests read it: each entry's two geoms (C, 2), its world (C,) and whether it
+    is a contact of the list (C,), the entries past the list's count not."""
+
+    geom: torch.Tensor
+    world: torch.Tensor
+    valid: torch.Tensor
 
 
 class RobomimicReference(NamedTuple):
@@ -143,7 +152,13 @@ class RobomimicTask:
         self.arm = long([i for i, a in enumerate(scene.arm) if a])  # the actuators of arm joints, and of gripper fingers
         self.fingers = long([i for i, a in enumerate(scene.arm) if not a])
         self.obj_d = [d for _, d in scene.objects]
-        self.success_xy = f32(scene.success_xy)  # (on the device: success() runs inside the collection's CUDA graph)
+        # what success() reads, on the device (it runs inside the collection's CUDA graph)
+        self.grip_sites, self.success_bodies, self.pegs = long(scene.grip_sites), long(scene.success_bodies), long(scene.pegs)
+        self.contact_pairs = []  # per test: the object's contact geoms as a mask over the geom ids (a last False entry for -1), the base's id
+        for geoms, base in scene.contact_pairs:
+            mask = torch.zeros(scene.ngeom + 1, dtype=torch.bool, device=dev)
+            mask[list(geoms)] = True
+            self.contact_pairs.append((mask, base))
         self.num_keypoints, self.num_objects, self.num_arms = len(scene.keypoint_bodies), len(scene.objects), scene.num_arms
         self.state_dim = scene.nq + scene.nv
         kps, objs, arms, acts = self.num_keypoints, self.num_objects, self.num_arms, self.nu
@@ -225,20 +240,27 @@ class RobomimicTask:
             1 - torch.sigmoid((e["keypoint"] - self.cfg.term_keypoint) / width)).prod(-1)  # fmt: skip
         return 1 - alive
 
-    def success(self, S) -> torch.Tensor:
-        """robosuite's success test of the task as a function of the state (bool, ...)."""
-        p, _ = object_poses(self.scene, S[0])
+    def success(self, xpos: torch.Tensor, site_xpos: torch.Tensor, contacts: Contacts | None = None) -> torch.Tensor:
+        """robosuite's success test of the task (``_check_success``, robots.robomimic_scenes) for each of N worlds (bool, N),
+        from what it reads of the simulator after a control step: the bodies' and the sites' world positions (N, nbody, 3)
+        and (N, nsite, 3), and for Transport the contact list (all of them as the physics' last step left them)."""
         kind = self.scene.success_kind
         if kind == "lift":
-            return p[..., 0, 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
-        if kind == "square":
-            return ((p[..., 0, :2] - self.success_xy).abs() < SQUARE_XY).all(-1) & (p[..., 0, 2] < SQUARE_TABLE_TOP + SQUARE_Z)
-        if kind == "transport":  # the payload and the trash inside their bins (robots.robomimic_scenes.BIN_*); the lid has none
-            ok = torch.ones(p.shape[:-2], dtype=torch.bool, device=p.device)
-            for o, (q, _) in enumerate(self.scene.bins):
-                c, R = S[0][..., q : q + 3], quat_to_mat(S[0][..., q + 3 : q + 7])
-                rel = ((p[..., o, :] - c).unsqueeze(-2) @ R).squeeze(-2)  # in the bin's frame
-                ok = ok & (rel[..., :2].abs() < BIN_HALF_XY).all(-1) & (rel[..., 2] > BIN_FLOOR) & (rel[..., 2] < BIN_TOP)
+            return xpos[:, self.success_bodies[0], 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
+        if kind == "square":  # a nut on its own peg, released
+            nut, peg = xpos[:, self.success_bodies], xpos[:, self.pegs]  # (N, 2, 3)
+            on_peg = ((nut[..., :2] - peg[..., :2]).abs() < SQUARE_XY).all(-1) & (nut[..., 2] < SQUARE_TABLE_TOP + SQUARE_Z)
+            dist = torch.linalg.vector_norm(site_xpos[:, self.grip_sites].unsqueeze(-3) - nut.unsqueeze(-2), dim=-1).amin(-1)  # the nearer grip site
+            return (on_peg & (1 - torch.tanh(10.0 * dist) < SQUARE_REACH)).any(-1)
+        if kind == "transport":  # each object's contact geoms touching its bin's base
+            if contacts is None:
+                raise ValueError("Transport's success test reads the simulator's contacts")
+            g = torch.where(contacts.valid.unsqueeze(-1), contacts.geom.long(), -1)  # (the entries past the list's count: -1, no geom)
+            g0, g1, world = g[:, 0], g[:, 1], contacts.world.long().clamp(0, xpos.shape[0] - 1)
+            ok = torch.ones(xpos.shape[0], dtype=torch.bool, device=xpos.device)
+            for mask, base in self.contact_pairs:
+                hit = (mask[g0] & (g1 == base)) | (mask[g1] & (g0 == base))
+                ok = ok & (torch.zeros(xpos.shape[0], device=xpos.device).index_add_(0, world, hit.float()) > 0)
             return ok
         raise NotImplementedError(f"success of {kind!r}")
 

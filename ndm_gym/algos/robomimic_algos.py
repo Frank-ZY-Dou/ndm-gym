@@ -297,7 +297,8 @@ ROBOMIMIC_ALGOS = {"supertrack": RobomimicSuperTrack, "supermimic": RobomimicSup
 def collect_step(sim, task, algo, buffer, args, a_prev: torch.Tensor, ep_len: torch.Tensor, acc: dict, step, add, fk):
     """One collection step on the loop's state kept in fixed tensors (the previous action, the episode lengths, the log's
     sums ``acc``), without a host read: ``step(u)`` the simulator's control step with its resets, ``add(transition)`` the
-    replay's write, ``fk`` the forward kinematics of the next state's reward and success."""
+    replay's write, ``fk`` the forward kinematics of the next state's reward; the success test is the simulator's after
+    the step (RobomimicSim.success)."""
     s, f = sim.state(), sim.f.clone()
     S = unflatten_state(s, task.nq)
     a = algo.act(S, a_prev, f, noise=args.action_noise)
@@ -311,7 +312,7 @@ def collect_step(sim, task, algo, buffer, args, a_prev: torch.Tensor, ep_len: to
     acc["r"] += task.reward(S1, fk1, f1, a, a_prev).sum() / task.max_step_reward
     acc["object_err"] += task.errors(S1, fk1, f1)["object_pos"].mean(-1).sum()
     at_end = (f1 == task.ref.end[f1]) & ~term  # the episodes that reach their demonstration's last frame
-    acc["success"] += (task.success(S1) & at_end).sum()
+    acc["success"] += (sim.success() & at_end).sum()
     acc["at_end"] += at_end.sum()
     acc["steps"] += sim.N
     acc["done"] += done.sum()

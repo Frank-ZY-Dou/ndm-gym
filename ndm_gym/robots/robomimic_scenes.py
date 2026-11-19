@@ -9,8 +9,8 @@ it. The grippers keep their position servos on the finger slides. robosuite itse
 
 ``RobomimicScene`` names what the task reads of a compiled scene: the actuated joints in the actuators' order (each arm's
 seven, then its gripper's two fingers), the tracked keypoints (each gripper's end effector and fingers), the free joints of
-the objects the task tracks and of the others, and the task's success test (robosuite's ``_check_success``, as a function of
-the objects' positions).
+the objects the task tracks and of the others, and what robosuite's success test of the task (``_check_success`` at the
+pinned commit) reads of the simulator: bodies' and grip sites' positions, and contacts between geoms.
 """
 
 from __future__ import annotations
@@ -29,19 +29,24 @@ ARM_SCALE, FINGER_SCALE = 0.25, 0.02
 KEYPOINT_BODIES = ("eef", "leftfinger", "rightfinger")  # per gripper: gripper<k>_right_<name>
 
 # per task: the tracked objects' free joints (Transport's lid too: the arms open the start bin and set its lid down before the
-# hand-over; untracked, a lid left in the gripper keeps the arm from the hammer), and robosuite's success test's constants
+# hand-over; untracked, a lid left in the gripper keeps the arm from the hammer) and the success test's kind
 TASKS = {
     "lift": {"objects": ("cube_joint0",), "success": "lift"},
     "square": {"objects": ("SquareNut_joint0",), "success": "square"},
-    "transport": {"objects": ("payload_joint0", "trash_joint0", "transport_start_bin_lid_joint0"), "success": "transport",
-                  "bins": ("transport_target_bin_joint0", "transport_trash_bin_joint0")},
+    "transport": {"objects": ("payload_joint0", "trash_joint0", "transport_start_bin_lid_joint0"), "success": "transport"},
 }
-LIFT_TABLE_TOP, LIFT_HEIGHT = 0.8, 0.04  # robosuite Lift: the cube above the table's top by 4 cm
-SQUARE_TABLE_TOP, SQUARE_PEG, SQUARE_XY, SQUARE_Z = 0.82, "peg1", 0.03, 0.05  # NutAssembly: the square nut on peg1
-# TwoArmTransport: the payload in the target bin and the trash in the trash bin. robosuite tests each object's contact with
-# its bin's base; here, as a function of the state, the object's origin inside its bin (in the bin's frame: within the base's
-# half width, above the base's top and below the walls' top: the bins of TransportGroup, 0.3 x 0.3 x 0.15 m)
-BIN_HALF_XY, BIN_FLOOR, BIN_TOP = 0.145, -0.065, 0.075
+# robosuite's success tests (_check_success at the pinned commit) and what they read. Lift: the cube's body above the table's
+# top (its table_offset, 0.8 m) by more than 4 cm.
+LIFT_BODY, LIFT_TABLE_TOP, LIFT_HEIGHT = "cube_joint0", 0.8, 0.04
+# NutAssemblySquare (single_object_mode 2): a nut on its own peg (on_peg: its body within 3 cm of the peg's in x and y, below
+# the table's top, 0.82 m, plus 5 cm) and released (1 - tanh(10 d) < 0.6, d its body's distance to the nearer grip site);
+# success if one is. The round nut stays in the scene, cleared off the table.
+SQUARE_NUTS = (("SquareNut_joint0", "peg1"), ("RoundNut_joint0", "peg2"))
+SQUARE_TABLE_TOP, SQUARE_XY, SQUARE_Z, SQUARE_REACH = 0.82, 0.03, 0.05, 0.6
+# TwoArmTransport: the payload touches the target bin's base and the trash the trash bin's (TransportGroup's
+# payload_in_target_bin and trash_in_trash_bin: sim_utils.check_contact between an object's contact geoms, those of group 0,
+# and the base geom, over MuJoCo's contact list)
+TRANSPORT_CONTACTS = (("payload_joint0", "transport_target_bin_base"), ("trash_joint0", "transport_trash_bin_base"))
 
 
 def resolve_assets(xml: str, assets_root: str) -> str:
@@ -97,8 +102,11 @@ class RobomimicScene:
     objects: tuple[tuple[int, int], ...]  # the tracked objects' free joints (qpos, qvel addresses)
     others: tuple[tuple[int, int], ...]  # the other free joints
     success_kind: str
-    success_xy: tuple[float, float] = (0.0, 0.0)  # Square: its peg's position
-    bins: tuple[tuple[int, int], ...] = ()  # Transport: the bins of the first tracked objects (the payload's, the trash's)
+    ngeom: int = 0
+    grip_sites: tuple[int, ...] = ()  # each gripper's grip site (robosuite's eef_site_id), site ids
+    success_bodies: tuple[int, ...] = ()  # Lift: the cube's body; Square: each nut's body
+    pegs: tuple[int, ...] = ()  # Square: each nut's peg, body ids
+    contact_pairs: tuple[tuple[tuple[int, ...], int], ...] = ()  # Transport: per test, an object's contact geoms and its bin's base geom
 
     @staticmethod
     def from_model(m: mujoco.MjModel, task: str) -> RobomimicScene:
@@ -128,23 +136,46 @@ class RobomimicScene:
         if missing:
             raise ValueError(f"the scene has no free joint {missing} of task {task!r}")
         objects = tuple(free[o] for o in TASKS[task]["objects"])
-        xy, bins = (0.0, 0.0), ()
-        if "bins" in TASKS[task]:
-            missing = [o for o in TASKS[task]["bins"] if o not in free]
-            if missing:
-                raise ValueError(f"the scene has no free joint {missing} of task {task!r}")
-            bins = tuple(free[o] for o in TASKS[task]["bins"])
-        if TASKS[task]["success"] == "square":
-            peg = mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, SQUARE_PEG)
-            xy = tuple(float(x) for x in m.body_pos[peg, :2])
+        kind, success = TASKS[task]["success"], {}
+        if kind == "lift":
+            success["success_bodies"] = (_free_body(m, LIFT_BODY),)
+        elif kind == "square":
+            success["success_bodies"] = tuple(_free_body(m, nut) for nut, _ in SQUARE_NUTS)
+            success["pegs"] = tuple(_id(m, mujoco.mjtObj.mjOBJ_BODY, peg) for _, peg in SQUARE_NUTS)
+        else:
+            success["contact_pairs"] = tuple((_contact_geoms(m, _free_body(m, o)), _id(m, mujoco.mjtObj.mjOBJ_GEOM, base)) for o, base in TRANSPORT_CONTACTS)
+        sites = tuple(_id(m, mujoco.mjtObj.mjOBJ_SITE, f"gripper{g}_right_grip_site") for g in grippers)
         return RobomimicScene(task=task, nq=m.nq, nv=m.nv, nu=m.nu, act_q=tuple(act_q), act_d=tuple(act_d), act_lo=tuple(lo), act_hi=tuple(hi),
                               act_scale=tuple(scale), arm=tuple(arm), keypoint_bodies=tuple(bodies), objects=objects,
-                              others=tuple(v for k, v in free.items() if v not in objects), success_kind=TASKS[task]["success"],
-                              success_xy=xy, bins=bins)  # fmt: skip
+                              others=tuple(v for k, v in free.items() if v not in objects), success_kind=kind, ngeom=m.ngeom,
+                              grip_sites=sites, **success)  # fmt: skip
 
     @property
     def num_arms(self) -> int:
         return sum(self.arm) // 7
+
+
+def _id(m: mujoco.MjModel, kind, name: str) -> int:
+    i = mujoco.mj_name2id(m, kind, name)
+    if i < 0:
+        raise ValueError(f"the scene has no {kind.name[6:].lower()} {name!r}")
+    return int(i)
+
+
+def _free_body(m: mujoco.MjModel, joint: str) -> int:
+    """The body of a free joint: an object's root body (robosuite's ``root_body``, whose position its tests read)."""
+    j = _id(m, mujoco.mjtObj.mjOBJ_JOINT, joint)
+    if m.jnt_type[j] != mujoco.mjtJoint.mjJNT_FREE:
+        raise ValueError(f"the joint {joint!r} is not a free joint")
+    return int(m.jnt_bodyid[j])
+
+
+def _contact_geoms(m: mujoco.MjModel, root: int) -> tuple[int, ...]:
+    """robosuite's ``contact_geoms`` of the object whose root body is ``root``: the geoms of group 0 in its bodies."""
+    geoms = tuple(g for g in range(m.ngeom) if m.body_rootid[m.geom_bodyid[g]] == root and m.geom_group[g] == 0)
+    if not geoms:
+        raise ValueError(f"the body {mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, root)!r} has no geom of group 0")
+    return geoms
 
 
 def contact_capacity(m: mujoco.MjModel, qpos: np.ndarray, qvel: np.ndarray, every: int = 5) -> tuple[int, int]:

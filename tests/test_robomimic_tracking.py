@@ -1,7 +1,8 @@
-"""Manipulation demonstration tracking on a small scene in robosuite's naming (a seven-joint arm with its torque actuators, a
-two-finger gripper, a free cube), its demonstration made by MuJoCo itself: the servos and the gravity compensation, the scene's
-layout for the task, the demonstration's file and assets, the forward kinematics against MuJoCo's, the task at the reference,
-the world model's control step, the updates and training's arguments; on a GPU, the simulator against MuJoCo."""
+"""Manipulation demonstration tracking on small scenes in robosuite's naming (seven-joint arms with their torque actuators,
+two-finger grippers with their grip sites, the task's free objects), their demonstrations made by MuJoCo itself: the servos
+and the gravity compensation, the scene's layout for the task, the demonstration's file and assets, the forward kinematics against MuJoCo's, the task at the reference, robosuite's success tests against their
+transcription from robosuite, the world model's control step, the updates and training's arguments; on a GPU, the simulator
+against MuJoCo and its success test against robosuite's."""
 
 import argparse
 import importlib.util
@@ -18,8 +19,9 @@ from ndm_gym.algos.hand_fast import add_hand_fast_args
 from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.motion.sources.robomimic import load_demo, split_states
-from ndm_gym.robots.robomimic_scenes import ARM_KP, LIFT_HEIGHT, LIFT_TABLE_TOP, RobomimicScene, build_spec, resolve_assets
-from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, HOLD, RewardCfg, RobomimicTask, SceneKinematics, build_reference, unflatten_state
+from ndm_gym.robots.robomimic_scenes import ARM_KP, RobomimicScene, build_spec, resolve_assets
+from ndm_gym.tasks.robomimic_tracking import (CONTROL_DT, HOLD, Contacts, RewardCfg, RobomimicTask, SceneKinematics, build_reference,
+                                              unflatten_state)  # fmt: skip
 from ndm_gym.train import add_train_args
 from ndm_gym.train_hand import UNSUPPORTED
 from ndm_gym.train_robomimic import ROBOMIMIC_DEFAULTS, UNSUPPORTED_SYSTEMS, parse_args
@@ -37,35 +39,77 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SUBSTEPS = round(CONTROL_DT / 0.002)
 
 
-def scene_xml(texture: bool = False) -> str:
-    """A Panda-like scene in robosuite's names: seven hinges (with the Panda's armature) driven by torque actuators, a gripper's two finger slides on
-    position servos, a free cube on a table; ``texture``: one in robosuite's assets' path, as recorded scenes name them."""
+def arm_xml(r: int, base: str, yaw: float = 0.0) -> str:
+    """Robot ``r``: seven hinges (with the Panda's armature) on a base at ``base``, a gripper with its grip site at the end
+    effector and two finger slides."""
     links, axes = "", ("0 0 1", "0 1 0", "0 0 1", "0 -1 0", "0 0 1", "0 -1 0", "0 0 1")
     for k, axis in enumerate(axes, start=1):
-        links += (f'<body name="robot0_link{k}" pos="0 0 {0.0 if k == 1 else 0.12}"><joint name="robot0_joint{k}" axis="{axis}" range="-2.8 2.8" armature="1" damping="0.1"/>'
+        links += (f'<body name="robot{r}_link{k}" pos="0 0 {0.0 if k == 1 else 0.12}">'
+                  f'<joint name="robot{r}_joint{k}" axis="{axis}" range="-2.8 2.8" armature="1" damping="0.1"/>'
                   f'<geom type="capsule" fromto="0 0 0 0 0 0.12" size="0.03" mass="1"/>')  # fmt: skip
-    gripper = ('<body name="robot0_right_hand" pos="0 0 0.12"><body name="gripper0_right_right_gripper"><body name="gripper0_right_eef" pos="0 0 0.097"/>'
-               '<body name="gripper0_right_leftfinger" pos="0 0 0.05"><joint name="gripper0_right_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>'
-               '<geom type="box" pos="0 0.015 0" size="0.01 0.005 0.02" mass="0.05"/></body>'
-               '<body name="gripper0_right_rightfinger" pos="0 0 0.05"><joint name="gripper0_right_finger_joint2" type="slide" axis="0 1 0" range="-0.04 0"/>'
-               '<geom type="box" pos="0 -0.015 0" size="0.01 0.005 0.02" mass="0.05"/></body></body></body>')  # fmt: skip
-    torques = "".join(f'<general name="robot0_torq_j{k}" joint="robot0_joint{k}" ctrlrange="{-r} {r}"/>' for k, r in
+    g = f"gripper{r}_right"
+    gripper = (f'<body name="robot{r}_right_hand" pos="0 0 0.12"><body name="{g}_right_gripper">'
+               f'<body name="{g}_eef" pos="0 0 0.097"><site name="{g}_grip_site" size="0.01"/></body>'
+               f'<body name="{g}_leftfinger" pos="0 0 0.05"><joint name="{g}_finger_joint1" type="slide" axis="0 1 0" range="0 0.04"/>'
+               f'<geom type="box" pos="0 0.015 0" size="0.01 0.005 0.02" mass="0.05"/></body>'
+               f'<body name="{g}_rightfinger" pos="0 0 0.05"><joint name="{g}_finger_joint2" type="slide" axis="0 1 0" range="-0.04 0"/>'
+               f'<geom type="box" pos="0 -0.015 0" size="0.01 0.005 0.02" mass="0.05"/></body></body></body>')  # fmt: skip
+    return f'<body name="robot{r}_base" pos="{base}" euler="0 0 {yaw}">{links}{gripper}{"</body>" * 7}</body>'
+
+
+def actuators_xml(r: int) -> str:
+    torques = "".join(f'<general name="robot{r}_torq_j{k}" joint="robot{r}_joint{k}" ctrlrange="{-t} {t}"/>' for k, t in
                       zip(range(1, 8), (80, 80, 80, 80, 80, 12, 12), strict=True))  # fmt: skip
+    g = f"gripper{r}_right"
+    return (f'{torques}<position name="{g}_gripper_finger_joint1" joint="{g}_finger_joint1" kp="1000" ctrlrange="0 0.04"/>'
+            f'<position name="{g}_gripper_finger_joint2" joint="{g}_finger_joint2" kp="1000" ctrlrange="-0.04 0"/>')  # fmt: skip
+
+
+def bin_xml(name: str, pos: str) -> str:
+    """A bin of robosuite's TransportGroup in its names: a free body with its base and a wall (the base's top 1 cm above the
+    root's bottom, on a table's top when the root is 0.075 m above it)."""
+    return (f'<body name="{name}_root" pos="{pos}"><freejoint name="{name}_joint0"/>'
+            f'<geom name="{name}_base" type="box" pos="0 0 -0.07" size="0.145 0.145 0.005" mass="2"/>'
+            f'<geom name="{name}_wall0" type="box" pos="0.145 0 0" size="0.005 0.15 0.075" mass="0.2"/></body>')  # fmt: skip
+
+
+# each task's objects in robosuite's names (Square's nut a slab beside its peg: on_peg reads the body's position, not a hole)
+OBJECTS = {
+    "lift": '<body name="cube_main" pos="0 0 0.82"><freejoint name="cube_joint0"/><geom name="cube_g0" type="box" size="0.02 0.02 0.02" mass="0.07"/></body>',
+    "square": ('<body name="peg1" pos="0.23 0.1 0.85"><geom type="box" size="0.016 0.016 0.1"/></body>'
+               '<body name="peg2" pos="0.23 -0.1 0.85"><geom type="cylinder" size="0.02 0.1"/></body>'
+               '<body name="SquareNut_main" pos="0 0.2 0.8095"><freejoint name="SquareNut_joint0"/>'
+               '<geom name="SquareNut_g0" type="box" size="0.005 0.02 0.01" mass="0.05"/></body>'
+               '<body name="RoundNut_main" pos="0 -0.2 0.8095"><freejoint name="RoundNut_joint0"/>'
+               '<geom name="RoundNut_g0" type="box" size="0.005 0.02 0.01" mass="0.05"/></body>'),
+    "transport": (bin_xml("transport_target_bin", "0.2 0.25 0.875") + bin_xml("transport_trash_bin", "0.2 -0.25 0.875")
+                  + '<body name="payload_root" pos="-0.2 0.25 0.8095"><freejoint name="payload_joint0"/>'
+                  '<geom name="payload_handle" type="box" size="0.08 0.01 0.01" mass="0.1"/>'
+                  '<geom name="payload_head" type="box" pos="0.08 0 0" size="0.01 0.03 0.01" mass="0.1"/>'
+                  '<geom name="payload_handle_vis" type="box" size="0.08 0.01 0.01" group="1" contype="0" conaffinity="0" mass="0"/></body>'
+                  '<body name="trash_main" pos="-0.2 -0.25 0.8195"><freejoint name="trash_joint0"/>'
+                  '<geom name="trash_g0" type="box" size="0.02 0.02 0.02" mass="0.05"/></body>'
+                  '<body name="transport_start_bin_lid_root" pos="-0.2 0 0.8045"><freejoint name="transport_start_bin_lid_joint0"/>'
+                  '<geom name="transport_start_bin_lid_top" type="box" size="0.1 0.1 0.005" mass="0.2"/></body>'),
+}  # fmt: skip
+
+
+def scene_xml(texture: bool = False, task: str = "lift", arms: int = 1) -> str:
+    """A Panda-like scene in robosuite's names: ``arms`` arms (seven hinges driven by torque actuators, a gripper's two finger
+    slides on position servos), the task's free objects on a table; ``texture``: one in robosuite's assets' path, as recorded
+    scenes name them."""
+    bases = (("-0.5 0 0.8", 0.0), ("0.5 0 0.8", 3.14159))[:arms]
     asset = '<asset><texture name="t" type="2d" file="/home/someone/robosuite/models/assets/textures/wood.png"/></asset>' if texture else ""
     return f"""<mujoco><compiler angle="radian"/><option timestep="0.002"/>{asset}
       <worldbody><geom name="floor" type="plane" size="2 2 0.1"/>
         <body name="table" pos="0 0 0.775"><geom type="box" size="0.4 0.4 0.025"/></body>
-        <body name="robot0_base" pos="-0.5 0 0.8">{links}{gripper}{"</body>" * 7}</body>
-        <body name="cube_main" pos="0 0 0.82"><freejoint name="cube_joint0"/><geom type="box" size="0.02 0.02 0.02" mass="0.07"/></body>
+        {"".join(arm_xml(r, b, y) for r, (b, y) in enumerate(bases))}{OBJECTS[task]}
       </worldbody>
-      <actuator>{torques}
-        <position name="gripper0_right_gripper_finger_joint1" joint="gripper0_right_finger_joint1" kp="1000" ctrlrange="0 0.04"/>
-        <position name="gripper0_right_gripper_finger_joint2" joint="gripper0_right_finger_joint2" kp="1000" ctrlrange="-0.04 0"/>
-      </actuator></mujoco>"""
+      <actuator>{"".join(actuators_xml(r) for r in range(arms))}</actuator></mujoco>"""
 
 
-def scene_spec(**kw):
-    return build_spec(scene_xml(), "/unused", **kw)
+def scene_spec(task: str = "lift", arms: int = 1, **kw):
+    return build_spec(scene_xml(task=task, arms=arms), "/unused", **kw)
 
 
 def demonstration(model, frames: int, seed: int):
@@ -96,25 +140,40 @@ def setup():
 
 def test_servos_and_the_scene():
     """The arm's torque actuators become position servos within their torque ranges, the robot is compensated for gravity,
-    the gripper keeps its servos; the scene's actuators, keypoints and objects as the task reads them."""
+    the gripper keeps its servos; the scene's actuators, keypoints, objects and what the success tests read as the task
+    reads them."""
     raw = mujoco.MjModel.from_xml_string(scene_xml())
     model = scene_spec().compile()
     for k in range(7):
         assert model.actuator_gainprm[k, 0] == ARM_KP[k] and model.actuator_biasprm[k, 1] == -ARM_KP[k] and model.actuator_biasprm[k, 2] < 0
-        assert model.actuator_forcelimited[k] and np.allclose(model.actuator_forcerange[k], raw.actuator_ctrlrange[k]) and not model.actuator_ctrllimited[k]
+        assert model.actuator_forcelimited[k] and np.allclose(model.actuator_forcerange[k], raw.actuator_ctrlrange[k])
+        assert not model.actuator_ctrllimited[k]
     assert np.allclose(model.actuator_gainprm[7:9, 0], raw.actuator_gainprm[7:9, 0])
     b = lambda n: mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, n)  # noqa: E731
-    assert model.body_gravcomp[b("robot0_link3")] == 1 and model.body_gravcomp[b("gripper0_right_leftfinger")] == 1 and model.body_gravcomp[b("cube_main")] == 0
-    assert scene_spec(gravcomp=False).compile().body_gravcomp.max() == 0
+    assert model.body_gravcomp[b("robot0_link3")] == 1 and model.body_gravcomp[b("gripper0_right_leftfinger")] == 1
+    assert model.body_gravcomp[b("cube_main")] == 0 and scene_spec(gravcomp=False).compile().body_gravcomp.max() == 0
     scene = RobomimicScene.from_model(model, "lift")
     assert scene.arm == (True,) * 7 + (False,) * 2 and scene.num_arms == 1 and scene.act_q == tuple(range(9))
     assert scene.keypoint_bodies == (b("gripper0_right_eef"), b("gripper0_right_leftfinger"), b("gripper0_right_rightfinger"))
-    assert scene.objects == ((9, 9),) and scene.others == ()
+    assert scene.objects == ((9, 9),) and scene.others == () and scene.success_bodies == (b("cube_main"),)
+    assert scene.grip_sites == (mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, "gripper0_right_grip_site"),) and scene.ngeom == model.ngeom
     with pytest.raises(ValueError, match="SquareNut_joint0"):
         RobomimicScene.from_model(model, "square")
     with pytest.raises(ValueError, match="torque actuators"):
         build_spec(scene_xml().replace("robot0_torq_j7", "robot0_motor_j7"), "/unused")
+    with pytest.raises(ValueError, match="grip_site"):
+        RobomimicScene.from_model(build_spec(scene_xml().replace("_grip_site", "_site"), "/unused").compile(), "lift")
     assert resolve_assets('<texture file="/x/y/robosuite/models/assets/textures/a.png"/>', "/data/assets") == '<texture file="/data/assets/textures/a.png"/>'
+    two = scene_spec("square", arms=2).compile()
+    sq = RobomimicScene.from_model(two, "square")
+    name = lambda kind, i: mujoco.mj_id2name(two, kind, i)  # noqa: E731
+    assert [name(mujoco.mjtObj.mjOBJ_BODY, i) for i in sq.success_bodies + sq.pegs] == ["SquareNut_main", "RoundNut_main", "peg1", "peg2"]
+    assert [name(mujoco.mjtObj.mjOBJ_SITE, i) for i in sq.grip_sites] == ["gripper0_right_grip_site", "gripper1_right_grip_site"] and sq.num_arms == 2
+    tr = scene_spec("transport").compile()
+    pairs = RobomimicScene.from_model(tr, "transport").contact_pairs
+    tr_name = lambda i: mujoco.mj_id2name(tr, mujoco.mjtObj.mjOBJ_GEOM, i)  # noqa: E731
+    named = [([tr_name(g) for g in geoms], tr_name(base)) for geoms, base in pairs]
+    assert named == [(["payload_handle", "payload_head"], "transport_target_bin_base"), (["trash_g0"], "transport_trash_bin_base")]
 
 
 def test_demonstration_file(tmp_path):
@@ -161,9 +220,125 @@ def test_kinematics_and_the_task_at_the_reference(setup):
     x = task.critic_features(S, fk, f, a0, 3)
     assert x.shape == (ref.frames, task.obs_dim + 3 * task.goal_frame_dim)
     moved = ref.qpos.clone()
-    moved[:, 9 + 2] = LIFT_TABLE_TOP + LIFT_HEIGHT + 0.2  # the cube lifted: robosuite's success; and far from its reference: a termination
-    assert task.success((moved, ref.qvel)).all() and not task.success(S).any()
+    moved[:, 9 + 2] += 0.2  # the cube lifted, far from its reference: a termination
     assert task.termination((moved, ref.qvel), task.fk(moved), f).all()
+
+
+def robosuite_check_success(m: mujoco.MjModel, d: mujoco.MjData, task: str) -> bool:
+    """robosuite's ``_check_success`` of the task at the pinned commit, transcribed onto MuJoCo's data (the names robosuite
+    gives these scenes' objects; Transport's object contact geoms listed as robosuite's models list them)."""
+    body = lambda n: mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_BODY, n)  # noqa: E731
+    geom = lambda i: mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_GEOM, i)  # noqa: E731
+    if task == "lift":  # Lift: cube_height > table_height + 0.04
+        return bool(d.xpos[body("cube_main")][2] > 0.8 + 0.04)
+    if task == "square":  # NutAssembly, single_object_mode 2: a nut on its peg (on_peg) and r_reach < 0.6
+        sites = [i for i in range(m.nsite) if mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_SITE, i).endswith("_right_grip_site")]
+        objects_on_pegs = []
+        for nut, peg in (("SquareNut_main", "peg1"), ("RoundNut_main", "peg2")):
+            obj_pos, peg_pos = d.xpos[body(nut)], d.xpos[body(peg)]
+            dist = min(np.linalg.norm(d.site_xpos[i] - obj_pos) for i in sites)
+            r_reach = 1 - np.tanh(10.0 * dist)
+            on_peg = abs(obj_pos[0] - peg_pos[0]) < 0.03 and abs(obj_pos[1] - peg_pos[1]) < 0.03 and obj_pos[2] < 0.82 + 0.05
+            objects_on_pegs.append(int(on_peg and r_reach < 0.6))
+        return bool(np.sum(objects_on_pegs) > 0)
+
+    def check_contact(geoms_1, geoms_2):  # sim_utils.check_contact
+        for i in range(d.ncon):
+            g1, g2 = geom(d.contact[i].geom1), geom(d.contact[i].geom2)
+            if (g1 in geoms_1 and g2 in geoms_2) or (g1 in geoms_2 and g2 in geoms_1):
+                return True
+        return False
+
+    return check_contact(["transport_target_bin_base"], ["payload_handle", "payload_head"]) and check_contact(["transport_trash_bin_base"], ["trash_g0"])
+
+
+def task_of(name: str, arms: int = 1, device: str = "cpu"):
+    """A scene of the task and the task on a short demonstration of it."""
+    model = scene_spec(name, arms=arms).compile()
+    scene = RobomimicScene.from_model(model, name)
+    qpos, qvel = demonstration(model, 3, 0)
+    kin = SceneKinematics(MjcfLayout.from_model(model), scene.keypoint_bodies).to(device)
+    return model, scene, qpos, RobomimicTask(scene, kin, build_reference(qpos, qvel, scene, kin, device))
+
+
+def place(model: mujoco.MjModel, qpos: np.ndarray, where: dict) -> np.ndarray:
+    """``qpos`` with free joints moved to positions (``where``: joint name -> x, y, z), upright."""
+    q = qpos.copy()
+    for joint, p in where.items():
+        a = model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, joint)]
+        q[a : a + 7] = (*p, 1.0, 0.0, 0.0, 0.0)
+    return q
+
+
+def test_success_lift_and_square():
+    """Lift's and Square's success tests read the simulator's body and grip-site positions as robosuite's do: the cube above
+    the table by 4 cm; a nut on its own peg (within 3 cm in x and y, below the table's top + 5 cm) and released, more than
+    atanh(0.4) / 10 = 4.24 cm from the nearer grip site, either nut."""
+    model, _, qpos, task = task_of("lift")
+    d = mujoco.MjData(model)
+    rows = []
+    for z in (0.82, 0.8399, 0.8401, 1.0):
+        d.qpos[:] = place(model, qpos[0], {"cube_joint0": (0.0, 0.0, z)})
+        mujoco.mj_kinematics(model, d)
+        rows.append((d.xpos.copy(), d.site_xpos.copy(), robosuite_check_success(model, d, "lift")))
+    got = task.success(torch.tensor(np.stack([r[0] for r in rows]), dtype=torch.float32), torch.tensor(np.stack([r[1] for r in rows]), dtype=torch.float32))
+    assert got.tolist() == [r[2] for r in rows] == [False, False, True, True]
+
+    model, scene, qpos, task = task_of("square", arms=2)
+    d = mujoco.MjData(model)
+    d.qpos[:] = qpos[0]
+    mujoco.mj_kinematics(model, d)
+    sn, rn = scene.success_bodies
+    far = np.array([[-0.5, 0.0, 1.9], [0.5, 0.0, 1.9]])
+    on1, on2, away = np.array([0.23, 0.1, 0.83]), np.array([0.23, -0.1, 0.83]), np.array([0.0, 0.3, 0.81])
+    cases = [  # the square nut, the round nut, the grip sites; robosuite's outcome
+        (on1, away, far, True), (on1, away, [on1 + [0, 0, 0.03], far[1]], False), (on1, away, [far[0], on1 + [0.02, 0, 0]], False),
+        (on1 + [0.035, 0, 0], away, far, False), (on1 + [0, 0, 0.045], away, far, False), (away, on2, far, True), (on2, away, far, False),
+        (on1, away, [on1 + [0.042, 0, 0], far[1]], False), (on1, away, [on1 + [0.043, 0, 0], far[1]], True),
+    ]  # fmt: skip
+    xpos, site_xpos, want = [], [], []
+    for nut, round_nut, sites, outcome in cases:
+        x, sx = d.xpos.copy(), d.site_xpos.copy()
+        x[sn], x[rn], sx[list(scene.grip_sites)] = nut, round_nut, sites
+        dd = mujoco.MjData(model)
+        dd.xpos[:], dd.site_xpos[:] = x, sx
+        assert robosuite_check_success(model, dd, "square") == outcome
+        xpos.append(x), site_xpos.append(sx), want.append(outcome)
+    got = task.success(torch.tensor(np.stack(xpos), dtype=torch.float32), torch.tensor(np.stack(site_xpos), dtype=torch.float32))
+    assert got.tolist() == want
+
+
+def test_success_transport():
+    """Transport's success test reads the contact list as robosuite's check_contact does: a contact between one of the
+    payload's group-0 geoms and the target bin's base, and one between the trash's and the trash bin's base; touching a
+    wall or the other bin's base, or no contact, is not one. The list's entries past its count are not read."""
+    model, _, qpos, task = task_of("transport")
+    rest_payload, rest_trash = 0.81 + 0.01 - 0.0005, 0.81 + 0.02 - 0.0005  # on a base's top, 0.5 mm into it
+    cases = [  # where the payload and the trash are; robosuite's outcome
+        ({"payload_joint0": (0.18, 0.25, rest_payload), "trash_joint0": (0.2, -0.25, rest_trash)}, True),
+        ({"payload_joint0": (0.18, 0.25, 0.86), "trash_joint0": (0.2, -0.25, rest_trash)}, False),
+        ({"payload_joint0": (0.18, 0.25, rest_payload), "trash_joint0": (-0.2, -0.25, 0.8 + 0.02 - 0.0005)}, False),
+        ({"payload_joint0": (0.34 - 0.09 + 0.0005, 0.25, 0.86), "trash_joint0": (0.2, -0.25, rest_trash)}, False),  # the head on the wall
+        ({"payload_joint0": (0.15, -0.25, rest_payload), "trash_joint0": (0.3, -0.3, rest_trash)}, False),  # both in the trash bin
+    ]  # fmt: skip
+    d = mujoco.MjData(model)
+    xpos, site_xpos, geoms, worlds = [], [], [], []
+    for k, (where, outcome) in enumerate(cases):
+        d.qpos[:], d.qvel[:] = place(model, qpos[0], where), 0.0
+        mujoco.mj_forward(model, d)
+        assert d.ncon > 0 and robosuite_check_success(model, d, "transport") == outcome
+        xpos.append(d.xpos.copy()), site_xpos.append(d.site_xpos.copy())
+        geoms.append(np.array(d.contact.geom[: d.ncon])), worlds.append(np.full(d.ncon, k))
+    payload = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "payload_handle")
+    base = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "transport_target_bin_base")
+    geoms.append(np.array([[payload, base]])), worlds.append(np.array([1]))  # an entry past the list's count: case 1 stays a failure
+    valid = torch.ones(sum(len(w) for w in worlds), dtype=torch.bool)
+    valid[-1] = False
+    contacts = Contacts(torch.tensor(np.concatenate(geoms), dtype=torch.int32), torch.tensor(np.concatenate(worlds), dtype=torch.int32), valid)
+    xpos, site_xpos = torch.tensor(np.stack(xpos), dtype=torch.float32), torch.tensor(np.stack(site_xpos), dtype=torch.float32)
+    assert task.success(xpos, site_xpos, contacts).tolist() == [outcome for _, outcome in cases]
+    with pytest.raises(ValueError, match="contacts"):
+        task.success(xpos, site_xpos)
 
 
 def test_several_demonstrations(setup):
@@ -345,3 +520,43 @@ def test_simulator_matches_mujoco_and_resets():
     assert torch.equal(sim.f, frames + 1) and not term.any()
     s1n, _, _ = sim.step_nosync(task.setpoint(torch.zeros(n, task.nu, device=CUDA), sim.f))
     assert torch.isfinite(s1n).all()
+
+
+# each task's starts for the success test after a control step: where the objects are, robosuite's outcome
+REST = {"payload": 0.81 + 0.01 - 0.0005, "trash": 0.81 + 0.02 - 0.0005, "nut": 0.8 + 0.01 - 0.0005}
+SUCCESS_STARTS = {
+    "square": [({"SquareNut_joint0": (0.255, 0.1, REST["nut"])}, True), ({"SquareNut_joint0": (0.28, 0.1, REST["nut"])}, False),
+               ({"RoundNut_joint0": (0.257, -0.1, REST["nut"])}, True)],
+    "transport": [({"payload_joint0": (0.18, 0.25, REST["payload"]), "trash_joint0": (0.2, -0.25, REST["trash"])}, True),
+                  ({"payload_joint0": (0.18, 0.25, 0.84), "trash_joint0": (0.2, -0.25, REST["trash"])}, False),
+                  ({"payload_joint0": (0.18, 0.25, REST["payload"]), "trash_joint0": (-0.2, -0.25, 0.8 + 0.02 - 0.0005)}, False)],
+}  # fmt: skip
+
+
+@GPU
+@pytest.mark.parametrize("name", ["square", "transport"])
+def test_simulator_success_matches_robosuite(name):
+    """RobomimicSim.success after a control step is robosuite's test on MuJoCo's data after the same physics steps: the
+    bodies' and grip sites' positions and the contact list the last step left (also after the step's resets)."""
+    from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
+
+    model, _, qpos, task = task_of(name, device=CUDA)
+    starts = [place(model, qpos[0], where) for where, _ in SUCCESS_STARTS[name]]
+    n = len(starts)
+    sim = RobomimicSim(model, task, n, CUDA, joint_noise=0.0)
+    frames = torch.zeros(n, dtype=torch.long, device=CUDA)
+    sim.reset(torch.ones(n, dtype=torch.bool, device=CUDA), frames)
+    sim.qpos.copy_(torch.tensor(np.stack(starts), dtype=torch.float32, device=CUDA)), sim.qvel.zero_()
+    u = task.setpoint(torch.zeros(n, task.nu, device=CUDA), frames)
+    sim.step(u, reset=False)
+    got = sim.success().tolist()
+    sim.reset(torch.ones(n, dtype=torch.bool, device=CUDA), frames)  # (a reset writes the state, not what the test reads)
+    assert sim.success().tolist() == got and not sim.contact_overflow()
+    d = mujoco.MjData(model)
+    want = []
+    for q, uu in zip(starts, u.cpu().numpy(), strict=True):
+        d.qpos[:], d.qvel[:], d.ctrl[:] = q, 0.0, uu
+        for _ in range(sim.substeps):
+            mujoco.mj_step(model, d)
+        want.append(robosuite_check_success(model, d, name))
+    assert got == want == [outcome for _, outcome in SUCCESS_STARTS[name]]

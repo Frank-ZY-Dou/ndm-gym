@@ -11,6 +11,10 @@ last frame; ended worlds are reset in the same step. With ``stagger``, the first
 ``step_nosync`` (train_robomimic --no_sync, --collect_graph) is ``step`` without host synchronization, as HandSim's: on Warp's
 stream (``torch_stream``) or inside a capture with the physics as kernels (``physics``); the ended worlds are reset by mask
 (``reset_masked``) and the frame counter is advanced in place.
+
+``success()``: robosuite's success test of every world after a control step (tasks.robomimic_tracking.RobomimicTask.success),
+from the bodies' and sites' positions and the contact list of the step's last physics step, which MuJoCo-Warp keeps as
+MuJoCo does (robosuite reads them after its own step); a reset after the step does not change them.
 """
 
 from __future__ import annotations
@@ -24,8 +28,9 @@ require_simulator(__name__, modules=("warp", "mujoco_warp"))
 
 import mujoco_warp as mjw
 import warp as wp
+from mujoco_warp._src.types import ContactType
 
-from ...tasks.robomimic_tracking import CONTROL_DT, RobomimicTask, unflatten_state
+from ...tasks.robomimic_tracking import CONTROL_DT, Contacts, RobomimicTask, unflatten_state
 
 
 class RobomimicSim:
@@ -53,6 +58,11 @@ class RobomimicSim:
         self.graph = capture.graph
         self.qpos, self.qvel, self.ctrl = wp.to_torch(self.data.qpos), wp.to_torch(self.data.qvel), wp.to_torch(self.data.ctrl)
         self.warmstart = wp.to_torch(self.data.qacc_warmstart)
+        # what the success test reads (views of the simulator's arrays)
+        self.xpos, self.site_xpos, self.nacon = wp.to_torch(self.data.xpos), wp.to_torch(self.data.site_xpos), wp.to_torch(self.data.nacon)
+        self.contact_geom, self.contact_world = wp.to_torch(self.data.contact.geom), wp.to_torch(self.data.contact.worldid)
+        self.contact_type = wp.to_torch(self.data.contact.type)
+        self.contact_slot = torch.arange(self.contact_geom.shape[0], device=device)
         self.f = torch.zeros(num_envs, dtype=torch.long, device=device)
         self.last = torch.zeros(num_envs, dtype=torch.long, device=device)  # the frame each world's episode ends at
         self.reset(torch.ones(num_envs, dtype=torch.bool, device=device))
@@ -100,6 +110,22 @@ class RobomimicSim:
         with wp.ScopedDevice(self.device):
             for _ in range(self.substeps):
                 mjw.step(self.model, self.data)
+
+    @torch.no_grad()
+    def contacts(self) -> Contacts:
+        """The contact list of the last physics step: MuJoCo's contacts (those for the constraints; MuJoCo-Warp keeps
+        a collision sensor's apart), the list's first ``nacon`` entries."""
+        valid = (self.contact_slot < self.nacon) & ((self.contact_type & int(ContactType.CONSTRAINT)) != 0)
+        return Contacts(self.contact_geom, self.contact_world, valid)
+
+    @torch.no_grad()
+    def success(self) -> torch.Tensor:
+        """robosuite's success test of every world (N,) after the last control step (the module's docstring)."""
+        return self.task.success(self.xpos, self.site_xpos, self.contacts())
+
+    def contact_overflow(self) -> bool:
+        """Whether the last physics step found as many contacts as the list holds (some may be missing: a host read)."""
+        return int(self.nacon[0]) >= self.contact_geom.shape[0]
 
     @torch.no_grad()
     def state(self) -> torch.Tensor:

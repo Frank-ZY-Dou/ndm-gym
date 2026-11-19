@@ -8,7 +8,8 @@ as the servos' targets in the policy's place (zero actions, open loop); every de
 world to its own demonstration's last frame. A rollout succeeds if it never terminates and meets robosuite's success test at
 the demonstration's last frame. The errors are means over the frames of the rollouts that do not terminate;
 ``object_final_mm`` the tracked objects' mean error at the last frame; ``policy`` and ``reference_targets`` at the top level are
-the means over the demonstrations. One rollout from each demonstration's unperturbed first frame is saved as
+the means over the demonstrations; robosuite's success test is read from the simulator after the control step that reaches
+the last frame (RobomimicSim.success). One rollout from each demonstration's unperturbed first frame is saved as
 ``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets; the step of its
 termination, -1 without one, and whether it succeeds: tools/render_robomimic.py renders it). ``--demo``:
 other demonstrations of the task than the checkpoint's (held-out ones, of its scene).
@@ -26,7 +27,9 @@ def rollout(sim, algo, task, starts, policy: bool = True):
     """Every world from its frame of ``starts`` (N,) (perturbed as the simulator's noise says) to its demonstration's last,
     under the policy or, without it, under the reference's targets; the worlds whose demonstration ends earlier hold its last
     frame until the longest ends. Returns the states (T, N, D), each world's number of steps, whether it terminated within
-    them, the step of its termination (its number of steps without one) and whether it succeeds at its last frame."""
+    them, the step of its termination (its number of steps without one) and whether it succeeds at its last frame
+    (robosuite's test after the control step that reaches it, RobomimicSim.success). A step that fills the simulator's
+    contact list is an error (a contact the test reads could be missing)."""
     import torch
 
     from ndm_gym.tasks.robomimic_tracking import unflatten_state
@@ -37,19 +40,21 @@ def rollout(sim, algo, task, starts, policy: bool = True):
     a_prev = torch.zeros(sim.N, task.nu, device=sim.device)
     failed = torch.zeros(sim.N, dtype=torch.bool, device=sim.device)
     until = lens.clone()
-    states = [sim.state()]
+    states, successes = [sim.state()], []
     for t in range(int(lens.max())):
         f = sim.f.clone()
         a = algo.act(unflatten_state(states[-1], task.nq), a_prev, f) if policy else a_prev
         s1, term, _ = sim.step(task.setpoint(a, f), reset=False)
+        if sim.contact_overflow():
+            raise RuntimeError(f"step {t}: the simulator's contact list is full ({sim.contact_geom.shape[0]} contacts); raise its capacity")
+        successes.append(sim.success())
         term = term & (t < lens)  # (a world past its last frame holds it)
         until = torch.where(term & ~failed, t + 1, until)
         failed |= term
         a_prev = a
         states.append(s1)
     states = torch.stack(states)
-    last = states[lens, torch.arange(sim.N, device=sim.device)]
-    success = task.success(unflatten_state(last, task.nq)) & ~failed
+    success = torch.stack(successes)[lens - 1, torch.arange(sim.N, device=sim.device)] & ~failed
     return states, lens, failed, until, success
 
 
