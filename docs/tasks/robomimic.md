@@ -81,7 +81,8 @@ within 0.41 / 1.45 / 5.42 mm on Lift / Square / Transport, the target after 1.04
 100 / 69.5 / 54.9 %, 0.92 / 7.62 / 6.73 mm, 1.32 / 6.88 min (Square in 2 of 3 runs) / not reached (time to the target, not
 engineered). Success is robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking
 proxy; MuJoCo-Warp's contact order is not deterministic, and two evaluations of one checkpoint differ by about 4 points on
-Transport.
+Transport. As the simulator, the world models' bf16 copies run 765 times MuJoCo-Warp's control step on Transport at 4,096
+worlds (11.63 M and 11.01 M world-steps per second on one A100 40GB SXM4; not engineered).
 
 ![SuperTrack and SuperMimic on Lift, Square and Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/grid.webp)
 
