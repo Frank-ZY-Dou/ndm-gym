@@ -54,7 +54,7 @@ MuJoCo model.
 | Go2 tracking | `go2-supertrack-clip`, seed 0, on `play` (a Labrador's play, 10.1 s), trained on an RTX 6000 Ada; from the unperturbed start, its first 6 s, in real time | feet 7.66 mm (trunk frame), trunk 12.22 mm, joints 1.47° (the configuration's mean of seeds 0-2) |
 | Adroit door | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` (the door and latch started up to 0.3 rad open), training seed 0, 20,000 iterations on an A100 40GB SXM4: its evaluation's nominal start (door and latch closed, the hand unperturbed), in a brighter scene; half speed, its last frame held | that start: return 9.022, the door opened; the configuration: the door open on 99.3 % of 256 starts, return 8.165 ± 0.054 (seeds 0-2, A100 40GB) |
 | Adroit pen, hammer, relocate | SuperTrack's runs at 20,000 iterations in 2,048 worlds on an L40S: pen seed 0, hammer seed 1, relocate seed 0, each the lowest tracking error of its task's six runs; the nominal episode at half speed (the hammer from 1 s), last frames held | normalized tracking RMSE 0.049, 0.022 and 0.048; 251, 256 and 256 of 256 native final successes |
-| Wuji piano | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.959, 19 of 19 notes; the configuration: Eden F1 0.888 ± 0.092 on 256 starts (seeds 0-2, A100 40GB) |
+| Wuji piano | `supertrack --horizon 3 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.921, 19 of 19 notes; the configuration: Eden F1 0.903 ± 0.015 on 256 starts (seeds 0-2, A100 40GB) |
 
 </details>
 
@@ -71,7 +71,7 @@ MuJoCo model.
 | NDM simulation: HDMI's scenes ([details](benchmarks/ndm_speed/results.md)), two G1s ([details](benchmarks/g1_boxing/results.md#speed)); the RigidFormer on HDMI's scenes | time per step at 4,096 worlds (two G1s: 4,096 pairs), the MLP world model's bf16 copy and the RigidFormer with fused Triton blocks; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
 | NDM simulation: the Adroit door ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 16,384 worlds: SuperTrack's acceleration model as a bf16 copy, 27.62 M against MuJoCo Warp's 0.396 M (69.7x); SuperMimic's increment model 27.14 M against 0.422 M (64.3x); 1,629x / 1,600x the contributed native MuJoCo collector on eight CPU cores (16,962 world-steps/s). The bf16 step is 64 % / 66 % matrix products, the rest compiled elementwise kernels | one A100 40GB SXM4 |
 | NDM simulation: the racing quadrotor ([details](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds, the fused step in fp32 (TF32 products) with the network as one kernel: SuperTrack's acceleration model 74.3 M against MuJoCo Warp's 3.26 M (22.8x); SuperMimic's increment model 73.7 M against 3.27 M (22.6x); with the network compiled layer by layer 19.6x / 19.0x. The network is 85 % of the step | one A100 40GB SXM4 |
-| NDM simulation: the Wuji piano ([details](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds: the horizon-8 SuperTrack run's `PianoDynamics` with its networks in bf16 (compiled, one CUDA graph), 46.12 M against MuJoCo Warp's 21,819 for a control step of the full scene (2,114x; the four seed-0 models, both algorithms at both horizons, 2,106-2,121x). The model steps the policy's 192-number observed state; its due-key error is 0.14 / 0.14 / 0.19 of a key's travel at 1 / 3 / 10 steps | one A100 40GB SXM4 |
+| NDM simulation: the Wuji piano ([details](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds: the horizon-3 SuperTrack run's `PianoDynamics` with its networks in bf16 (compiled, one CUDA graph), 46.24 M against MuJoCo Warp's 30,213 for a control step of the full scene (1,530x; the four seed-0 models, both algorithms at both horizons, 1,523-1,530x). The model steps the policy's 192-number observed state; its due-key error is 0.15 / 0.19 / 0.26 of a key's travel at 1 / 3 / 10 steps, the horizon-3 SuperMimic model's 0.16 / 0.19 / 0.32 | one A100 40GB SXM4 |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | SuperTrack's MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
 | RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds on the acceleration and on the increment model, the median over twenty plans (planner seeds 0-9, twice); the simulation step's speedup beside the task | one A100 40GB SXM4 |
 | mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
@@ -115,14 +115,14 @@ the position within 20 mm. Quadruped: the target is a success of 0.99 with the t
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
-| **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | Eden F1 **0.888 ± 0.092** on 256 held-out starts (seeds 0-2, A100 40GB; SuperMimic's `--horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` 0.815 ± 0.024) |
+| **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
 | **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | **27.62 M world-steps/s**, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed collector on eight CPU cores; SuperMimic's increment model 27.14 M, 64.3x ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#quadrotor-trajectory-tracking)**, the racing quadrotor, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs, the fused step in fp32, the network as one kernel | **74.3 M** and **73.7 M world-steps/s**, 22.8x and 22.6x MuJoCo Warp's 3.26 M / 3.27 M; 34.2x / 34.1x at 1,024 worlds, 11.5x at 65,536 ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) |
-| **[NDM as the simulator](#wuji-hand-piano-playing)**, the Wuji piano, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | the task's `PianoDynamics`, its networks in bf16 (both algorithms' models within 1 %) | **46.1 M world-steps/s**, 2,114x MuJoCo Warp's 21,819 for a control step of the full scene; the model steps only the policy's 192-number observed state, a due key's depth off by 0.14 / 0.14 / 0.19 of its travel at 1 / 3 / 10 steps ([results](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) |
+| **[NDM as the simulator](#wuji-hand-piano-playing)**, the Wuji piano, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | the task's `PianoDynamics`, its networks in bf16 (both algorithms' models within 1 %) | **46.2 M world-steps/s**, 1,530x MuJoCo Warp's 30,213 for a control step of the full scene; the model steps only the policy's 192-number observed state, a due key's depth off by 0.15 / 0.19 / 0.26 of its travel at 1 / 3 / 10 steps (SuperTrack's horizon-3 model; SuperMimic's 0.16 / 0.19 / 0.32) ([results](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | ⏱ throughput, not engineered | the MLP world model (acceleration parameterization) as a bf16 copy | **16.28 M env-steps/s**, 45.9x the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5x ([results](benchmarks/ndm_speed/results.md)) |
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
@@ -167,8 +167,8 @@ options beside them); both methods are on offer for every task.
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
-| **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: Eden F1 0.888 (A100 40GB) | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.815 |
-| | horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: 0.804 | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.708 |
+| **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
+| | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -395,8 +395,8 @@ pip install -e '.[hand,contacts,render]'               # MuJoCo-Warp; the render
 python benchmarks/wuji_piano/download_assets.py          # the Wuji hands and the keyboard at pinned revisions into data/wuji_piano
 
 # seeds 0-2 of each algorithm (benchmarks/wuji_piano/run.sh passes the trainer's options), then replay seed 0 and render it
-benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 8 --st-imag-noise 0.1 --st-reg 0.01
-benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
+benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 3 --st-reg 0.01
+benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 3 --gamma 0.95 --bptt-decay 0.95
 benchmarks/wuji_piano/run.sh replay logs/piano_replay logs/piano_st/seed0/last.pt --eval-starts 32
 HANDS=data/wuji_piano/wuji-description-c2cd7f8d1ef8b6dc8cb907c17daa5a88b4442d95/hand2/hand2_beta2/body/mjcf
 MUJOCO_GL=egl python benchmarks/wuji_piano/render_fur_elise.py --song ode_to_joy --background light --hand-dir $HANDS \
@@ -1088,19 +1088,20 @@ press, and two residual networks correct the actuators' motion and the keys' dep
 
 | goal | configuration (`benchmarks/wuji_piano/run.sh`) | result |
 |---|---|---|
-| most accurate | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | Eden F1 0.888 ± 0.092 on 256 held-out starts, 17.8 of 19 notes reached (seeds 0-2, A100 40GB) |
+| most accurate | `supertrack --horizon 3 --st-reg 0.01` | Eden F1 0.903 ± 0.015 on 256 held-out starts, 18.5 of 19 notes reached (seeds 0-2, A100 40GB) |
 
-**In short:** with the same settings screen and budget, SuperTrack and SuperMimic reach Eden F1 0.888 ± 0.092 and
-0.815 ± 0.024 at horizon 8, 0.804 ± 0.140 and 0.708 ± 0.115 at horizon 3: SuperTrack's means are the higher, its seeds
-the more spread.
+**In short:** after the same settings screen and at the same budget, SuperTrack at horizon 3 is the most accurate, Eden F1
+0.903 ± 0.015 against SuperMimic's 0.833 ± 0.079 there. At horizon 8 SuperMimic's mean is the higher, 0.820 ± 0.135
+against 0.801 ± 0.027. At both horizons SuperTrack's seeds lie closer together and its runs take less time.
 
 <p align="center"><img src="docs/media/wuji_piano/ode.webp" alt="Two Wuji hands playing Ode to Joy on a simulated keyboard" width="640"/></p>
-<p align="center"><i>SuperTrack at horizon 8, seed 0, from the nominal start: 19 of 19 notes, F1 0.959. Green: a correct press;<br>blue: a due key up; red: an extra press.</i></p>
+<p align="center"><i>SuperTrack at horizon 3, seed 0, from the nominal start: 19 of 19 notes, F1 0.921. Green: a correct press;<br>blue: a due key up; red: an extra press.</i></p>
 <p align="center"><sub>The Wuji Hand 2 models are Wuji Technology's (MIT), the keyboard RoboPianist's through Eden's assets (Apache-2.0), the score Eden's (see <a href="THIRD_PARTY_NOTICES.md#wuji-hand-piano">notices</a>).</sub></p>
 
 - **Runs:** 20 rounds of 32 worlds × 160 control steps (102,400 transitions) per seed, each run alone on one A100 40GB
   SXM4. The last checkpoint plays the whole song from 256 starts: one nominal, 255 with every control perturbed by up to
-  0.20 of its scale. A run takes 6.9-10.8 min in the contributed implementation, not engineered for speed
+  0.20 of its scale. A run takes 7.2 and 7.7 min for SuperTrack (horizons 3 and 8) and 8.7 and 10.4 min for SuperMimic,
+  at the F1 above, in the contributed implementation, not engineered for speed
   ([every seed](benchmarks/wuji_piano/results_a100.md), [the contributed study](benchmarks/wuji_piano/README.md#results)).
 - **Selection:** each algorithm got the same screen from its starting configuration: the horizon (3 or 8) and three of
   its own settings, 16 configurations at one seed, then per horizon the two best and the starting configuration at two
@@ -1108,14 +1109,15 @@ the more spread.
   place of 0.99. A step's reward is at most 1, so a return is at most 100 at 0.99 and 20 at 0.95. In the starting
   configuration (0.99, horizon 3) the critic's estimates passed that bound on all three seeds (validation F1 0.17); at
   0.95 they stayed within it in every run (0.82 with the gradient decay 0.95).
-- **As the simulator:** at 4,096 worlds the world model steps 46.1 M world-steps/s with its networks in bf16, 2,114 times
-  MuJoCo Warp's 21,819 for a control step (10 physics steps of the full scene). It steps only the policy's observed state,
-  192 numbers: a due key's predicted depth is off by 0.14 / 0.14 / 0.19 of its travel after 1 / 3 / 10 steps (the
-  horizon-8 SuperTrack model; [speed and errors](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)).
+- **As the simulator:** at 4,096 worlds the world model steps 46.2 M world-steps/s with its networks in bf16, 1,530 times
+  MuJoCo Warp's 30,213 for a control step (10 physics steps of the full scene). It steps only the policy's observed state,
+  192 numbers: a due key's predicted depth is off by 0.15 / 0.19 / 0.26 of its travel after 1 / 3 / 10 steps with
+  SuperTrack's horizon-3 model, 0.16 / 0.19 / 0.32 with SuperMimic's
+  ([speed and errors](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)).
 
 ```bash
-benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 8 --st-imag-noise 0.1 --st-reg 0.01       # seeds 0-2
-benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
+benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 3 --st-reg 0.01                        # seeds 0-2
+benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 3 --gamma 0.95 --bptt-decay 0.95
 ```
 
 ### Quadruped motion tracking

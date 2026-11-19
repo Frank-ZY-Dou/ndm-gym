@@ -15,17 +15,20 @@ alone on one A100 40GB SXM4, the same 256 held-out starts ([every seed, the scre
 
 | configuration (`run.sh <algorithm> OUT <options>`) | Eden F1 | notes reached (of 19) | training per seed |
 |---|---:|---:|---:|
-| `supertrack --horizon 3 --st-reg 0.01` | 0.804 ± 0.140 | 17.64 | 7.1 min |
-| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0.708 ± 0.115 | 16.57 | 8.5 min |
-| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0.888 ± 0.092 | 17.84 | 7.7 min |
-| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.815 ± 0.024 | 14.26 | 10.6 min |
+| `supertrack --horizon 3 --st-reg 0.01` | 0.903 ± 0.015 | 18.53 | 7.2 min |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0.833 ± 0.079 | 17.42 | 8.7 min |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0.801 ± 0.027 | 16.57 | 7.7 min |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.820 ± 0.135 | 15.94 | 10.4 min |
+
+SuperTrack at horizon 3 is the most accurate, above SuperMimic at either horizon; at horizon 8 SuperMimic's mean F1 is
+the higher. SuperTrack's seeds lie closer together and its runs take less time at both horizons.
 
 The training times are the contributed implementation's (eager updates), not engineered for speed. The contributed study
 ran both algorithms' starting configurations on one RTX 3060 (seeds 0-2, the same budget): Eden F1 0.8490 ± 0.0705 for
 SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([the contributed study](ode_to_joy_results.md));
 there the scripted reference, with assigned fingers, scored 0.6325 ([note timing](note_timing_results.md)).
 
-![SuperTrack's horizon-8 policy, seed 0, playing the arrangement from the nominal start](../../docs/media/wuji_piano/ode.webp)
+![SuperTrack's horizon-3 policy, seed 0, playing the arrangement from the nominal start](../../docs/media/wuji_piano/ode.webp)
 
 ![Target notes and the measured presses of that episode](../../docs/media/wuji_piano/ode-roll.webp)
 
@@ -51,9 +54,10 @@ python -m pip install -e '.[hand,contacts,render]'
 python benchmarks/wuji_piano/download_assets.py          # 57 files at pinned revisions, each checked against assets.sha256
 bench=benchmarks/wuji_piano
 run=data/wuji_piano/ode-to-joy
-"$bench/run.sh" supertrack "$run/supertrack" --horizon 8 --st-imag-noise 0.1 --st-reg 0.01   # seeds 0-2
-"$bench/run.sh" supermimic "$run/supermimic" --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
-# at horizon 3: supertrack --horizon 3 --st-reg 0.01; supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95
+"$bench/run.sh" supertrack "$run/supertrack" --horizon 3 --st-reg 0.01                     # seeds 0-2
+"$bench/run.sh" supermimic "$run/supermimic" --horizon 3 --gamma 0.95 --bptt-decay 0.95
+# at horizon 8: supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01
+#               supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
 "$bench/run.sh" scripted "$run/scripted"                  # the scripted reference: assigned fingers, solved key poses
 python "$bench/summarize_ode_to_joy.py" "$run/supertrack"
 python "$bench/note_events.py" "$run"/{supertrack,supermimic}/seed{0,1,2}/evaluation.npz "$run/scripted/evaluation.npz"

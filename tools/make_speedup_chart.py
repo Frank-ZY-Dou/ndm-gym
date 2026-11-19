@@ -14,7 +14,7 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # the racing quadrotor's: the fused step in fp32 with the network as one kernel, on the acceleration and on the increment model, against MuJoCo Warp
 # (benchmarks/quadrotor_racing_tracking/results_a100.md),
 # the Wuji piano's: the task's PianoDynamics with its networks in bf16 (compiled, one CUDA graph) on the policy's observed state against
-# MuJoCo Warp's control step of the full scene, SuperTrack's horizon-8 model (the other three within 1 %; benchmarks/wuji_piano/results_a100.md),
+# MuJoCo Warp's control step of the full scene, SuperTrack's horizon-3 model (the other three within 1 %; benchmarks/wuji_piano/results_a100.md),
 # RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds on the acceleration and on the
 # increment model, the median over twenty plans (planner seeds 0-9, twice), with the simulation step's speedup in the second
 # line and the model in a third (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
@@ -27,7 +27,7 @@ ROWS = [
     ("NDM simulation", "Adroit door", 69.7, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nacceleration model", 22.8, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nincrement model", 22.6, "vs MuJoCo Warp"),
-    ("NDM simulation", "Wuji piano", 2113.8, "vs MuJoCo Warp"),
+    ("NDM simulation", "Wuji piano", 1530.5, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 carrying; step 10.0×\nacceleration model", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 carrying; step 8.7×\nincrement model", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 climbing; step 3.8×\nacceleration model", 1.8, "vs MuJoCo Warp"),

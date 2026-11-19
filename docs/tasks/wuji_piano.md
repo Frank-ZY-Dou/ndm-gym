@@ -22,8 +22,11 @@ configuration after the same settings screen:
 
 | horizon | SuperTrack | SuperMimic |
 |---:|---|---|
-| 8 | `--st-imag-noise 0.1 --st-reg 0.01`: 0.888 ± 0.092 | `--gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.815 ± 0.024 |
-| 3 | `--st-reg 0.01`: 0.804 ± 0.140 | `--gamma 0.95 --bptt-decay 0.95`: 0.708 ± 0.115 |
+| 3 | `--st-reg 0.01`: 0.903 ± 0.015 | `--gamma 0.95 --bptt-decay 0.95`: 0.833 ± 0.079 |
+| 8 | `--st-imag-noise 0.1 --st-reg 0.01`: 0.801 ± 0.027 | `--gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 ± 0.135 |
+
+SuperTrack at horizon 3 is the most accurate; at horizon 8 SuperMimic's mean is the higher. SuperTrack's seeds lie closer
+together and its runs take less time at both horizons (7.2 and 7.7 min, SuperMimic's 8.7 and 10.4).
 
 The contributed study ran both starting configurations on one RTX 3060 (seeds 0-2, the same budget): SuperTrack
 0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090.
@@ -33,8 +36,8 @@ The contributed study ran both starting configurations on one RTX 3060 (seeds 0-
 bench=benchmarks/wuji_piano
 run=data/wuji_piano/ode-to-joy
 python "$bench/download_assets.py"
-"$bench/run.sh" supertrack "$run/supertrack" --horizon 8 --st-imag-noise 0.1 --st-reg 0.01
-"$bench/run.sh" supermimic "$run/supermimic" --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
+"$bench/run.sh" supertrack "$run/supertrack" --horizon 3 --st-reg 0.01
+"$bench/run.sh" supermimic "$run/supermimic" --horizon 3 --gamma 0.95 --bptt-decay 0.95
 "$bench/run.sh" replay "$run/replay" "$run/supertrack/seed0/last.pt" --eval-starts 32
 ```
 

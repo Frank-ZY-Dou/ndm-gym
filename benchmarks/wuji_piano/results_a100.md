@@ -13,27 +13,31 @@ Eden F1 0.8490 ± 0.0705 for SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([th
 
 | configuration (`run.sh <algorithm> OUT <options>`) | Eden F1 | precision | recall | both due pitches down | exact two-note frames | notes reached (of 19) | training per seed |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| `supertrack --horizon 3 --st-reg 0.01` | 0.804 ± 0.140 | 0.916 ± 0.051 | 0.787 ± 0.152 | 0.618 ± 0.270 | 0.595 ± 0.264 | 17.64 ± 1.46 | 7.1 ± 0.3 min |
-| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0.708 ± 0.115 | 0.877 ± 0.174 | 0.676 ± 0.104 | 0.414 ± 0.196 | 0.396 ± 0.211 | 16.57 ± 1.63 | 8.5 ± 0.7 min |
-| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0.888 ± 0.092 | 0.920 ± 0.078 | 0.891 ± 0.087 | 0.770 ± 0.150 | 0.706 ± 0.180 | 17.84 ± 1.70 | 7.7 ± 0.2 min |
-| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.815 ± 0.024 | 0.932 ± 0.056 | 0.776 ± 0.013 | 0.430 ± 0.072 | 0.402 ± 0.104 | 14.26 ± 1.73 | 10.6 ± 0.2 min |
+| `supertrack --horizon 3 --st-reg 0.01` | 0.903 ± 0.015 | 0.940 ± 0.003 | 0.898 ± 0.018 | 0.778 ± 0.029 | 0.727 ± 0.054 | 18.53 ± 0.23 | 7.2 ± 0.3 min |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0.833 ± 0.079 | 0.931 ± 0.079 | 0.816 ± 0.071 | 0.607 ± 0.145 | 0.559 ± 0.186 | 17.42 ± 2.18 | 8.7 ± 0.4 min |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0.801 ± 0.027 | 0.854 ± 0.024 | 0.799 ± 0.031 | 0.590 ± 0.060 | 0.493 ± 0.074 | 16.57 ± 1.39 | 7.7 ± 0.1 min |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.820 ± 0.135 | 0.885 ± 0.135 | 0.805 ± 0.133 | 0.587 ± 0.273 | 0.574 ± 0.274 | 15.94 ± 3.50 | 10.4 ± 0.4 min |
+
+SuperTrack at horizon 3 is the most accurate configuration, above SuperMimic at either horizon. At horizon 8 SuperMimic's
+mean F1, precision, recall and exact two-note frames are the higher. At both horizons SuperTrack's seeds lie closer
+together, it reaches more notes (18.53 and 16.57 of 19, SuperMimic's 17.42 and 15.94) and its runs take less time.
 
 Every seed:
 
 | configuration | seed | Eden F1 | precision | recall | all 19 notes reached (of 256 starts) | training (min) |
 |---|---:|---:|---:|---:|---:|---:|
-| `supertrack --horizon 3 --st-reg 0.01` | 0 | 0.9468 | 0.9633 | 0.9426 | 172 | 7.0 |
-| `supertrack --horizon 3 --st-reg 0.01` | 1 | 0.8000 | 0.9224 | 0.7789 | 72 | 6.9 |
-| `supertrack --horizon 3 --st-reg 0.01` | 2 | 0.6660 | 0.8623 | 0.6383 | 0 | 7.4 |
-| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0 | 0.7380 | 0.9727 | 0.6776 | 0 | 9.1 |
-| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 1 | 0.5806 | 0.6762 | 0.5716 | 4 | 7.7 |
-| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 2 | 0.8051 | 0.9829 | 0.7800 | 63 | 8.7 |
-| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0 | 0.9464 | 0.9685 | 0.9428 | 215 | 7.7 |
-| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 1 | 0.7825 | 0.8310 | 0.7908 | 0 | 7.9 |
-| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 2 | 0.9361 | 0.9619 | 0.9389 | 215 | 7.6 |
-| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0 | 0.8043 | 0.8992 | 0.7718 | 0 | 10.7 |
-| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 1 | 0.8427 | 0.9968 | 0.7907 | 5 | 10.8 |
-| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 2 | 0.7975 | 0.9001 | 0.7659 | 0 | 10.3 |
+| `supertrack --horizon 3 --st-reg 0.01` | 0 | 0.9095 | 0.9418 | 0.9064 | 161 | 7.4 |
+| `supertrack --horizon 3 --st-reg 0.01` | 1 | 0.8858 | 0.9367 | 0.8771 | 81 | 6.9 |
+| `supertrack --horizon 3 --st-reg 0.01` | 2 | 0.9136 | 0.9418 | 0.9100 | 189 | 7.5 |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0 | 0.7623 | 0.8416 | 0.7633 | 1 | 8.3 |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 1 | 0.9183 | 0.9910 | 0.8974 | 248 | 8.7 |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 2 | 0.8177 | 0.9595 | 0.7881 | 123 | 9.1 |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0 | 0.7725 | 0.8287 | 0.7634 | 2 | 7.8 |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 1 | 0.8256 | 0.8763 | 0.8207 | 0 | 7.8 |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 2 | 0.8056 | 0.8566 | 0.8116 | 93 | 7.6 |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0 | 0.9427 | 0.9763 | 0.9355 | 0 | 10.9 |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 1 | 0.8424 | 0.9485 | 0.8099 | 1 | 10.1 |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 2 | 0.6760 | 0.7305 | 0.6697 | 0 | 10.3 |
 
 Training time is the trainer's own, CUDA-synchronized: collection, model and policy updates, validation after every round
 and checkpoint writes, of the contributed implementation (eager updates; not engineered for speed).
@@ -151,29 +155,29 @@ What each side steps:
 - **MuJoCo-Warp** steps the full scene for one 50 ms control step: 10 physics steps at 200 Hz of both hands and all 88
   keys with their contacts, then the observation.
 
-Both start from the same worlds: the SuperTrack (horizon 8) seed-0 policy's states 2 s into the song from the evaluation
+Both start from the same worlds: the SuperTrack (horizon 3) seed-0 policy's states 2 s into the song from the evaluation
 starts, each world holding that frame's action. Each number is the median of 5 runs of 200 steps after 20 warm-up steps
 and 5 s of calls, on one A100 40GB SXM4 with nothing else running. The four seed-0 models (both algorithms at both
 horizons) step within 1 % of each other, so each count has one row.
 
 | worlds | MuJoCo-Warp, the scene | world model, fp32, one CUDA graph | world model, bf16 networks, compiled, one CUDA graph |
 |---:|---:|---:|---:|
-| 1,024 | 17,379 world-steps/s (58.9 ms a step) | 3.95-3.96 M (228x) | 20.4-20.5 M (1,174-1,179x) |
-| 4,096 | 21,819 world-steps/s (187.7 ms a step) | 5.77-5.81 M (265-266x) | 45.9-46.3 M (2,106-2,121x) |
+| 1,024 | 21,087 world-steps/s (48.6 ms a step) | 3.95-3.96 M (187-188x) | 20.2-20.3 M (960-964x) |
+| 4,096 | 30,213 world-steps/s (135.6 ms a step) | 5.77-5.81 M (191-192x) | 46.0-46.2 M (1,523-1,530x) |
 | 16,384 | out of memory on the 40 GB card | | |
 
 At 16,384 worlds MuJoCo-Warp's convex collision step asks for a 13.67 GB buffer for the scene's contact capacity (384
 contacts a world), more than the card had left.
 
 The open-loop error beside it: the model rolled out under the recorded actions from every 10th frame of the 256
-evaluation episodes, the mean absolute error in fractions of a key's travel. The bf16 copies are within 0.0003 of fp32.
+evaluation episodes, the mean absolute error in fractions of a key's travel. The bf16 copies are within 0.0004 of fp32.
 
 | world model (seed 0) | due keys, 1 / 3 / 10 steps | all 88 keys, 1 / 3 / 10 steps |
 |---|---|---|
-| SuperTrack, horizon 8 | 0.142 / 0.139 / 0.192 | 0.043 / 0.049 / 0.049 |
-| SuperMimic, horizon 8 | 0.210 / 0.205 / 0.236 | 0.043 / 0.051 / 0.055 |
-| SuperTrack, horizon 3 | 0.130 / 0.086 / 0.135 | 0.046 / 0.054 / 0.057 |
-| SuperMimic, horizon 3 | 0.141 / 0.161 / 0.189 | 0.044 / 0.053 / 0.053 |
+| SuperTrack, horizon 3 | 0.149 / 0.190 / 0.255 | 0.042 / 0.052 / 0.060 |
+| SuperMimic, horizon 3 | 0.162 / 0.186 / 0.321 | 0.044 / 0.052 / 0.060 |
+| SuperTrack, horizon 8 | 0.189 / 0.175 / 0.187 | 0.043 / 0.052 / 0.055 |
+| SuperMimic, horizon 8 | 0.094 / 0.102 / 0.126 | 0.043 / 0.050 / 0.051 |
 
 So the speed-up is that of a model of what the policy observes, not of a replacement for the physics: after 1 to 10
-steps a due key's predicted depth is off by 9-24 % of its travel.
+steps a due key's predicted depth is off by 9-32 % of its travel.
