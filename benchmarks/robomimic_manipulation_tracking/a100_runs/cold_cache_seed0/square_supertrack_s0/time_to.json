@@ -1,0 +1,27 @@
+{
+  "minutes_to_target": 6.850189948081971,
+  "iteration_to_target": 500,
+  "checkpoints": [
+    {
+      "iteration": 500,
+      "minutes": 6.850189948081971,
+      "success_rate": 1.0,
+      "object_mm": 4.253343679010868,
+      "target": true
+    },
+    {
+      "iteration": 1000,
+      "minutes": 9.020963887373606,
+      "success_rate": 1.0,
+      "object_mm": 1.5815619844943285,
+      "target": true
+    },
+    {
+      "iteration": 1500,
+      "minutes": 11.211701969305674,
+      "success_rate": 1.0,
+      "object_mm": 1.6485374653711915,
+      "target": true
+    }
+  ]
+}
