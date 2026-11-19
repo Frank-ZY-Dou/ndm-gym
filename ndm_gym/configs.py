@@ -62,12 +62,12 @@ CONFIGS = {
                                    "LAFAN1: return 0.82 after 4.19 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
         "lafan1-supermimic-fast": (f"{SM_FAST} --pi_encode_once {LEAN}",
                                    "LAFAN1: return 0.82 after 3.53 +- 0.30 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
-        "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4}",
-                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.48 +- 0.13 min, 5.9 GPU-minutes "
-                                        "(seeds 0-2)"),
-        "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4}",
-                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.37 +- 0.05 min, 5.5 GPU-minutes "
-                                        "(seeds 0-2)"),
+        "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4} --fk_fused",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.47 +- 0.05 min, 5.9 GPU-minutes "
+                                        "(seeds 3-5; 1.52 +- 0.08 without --fk_fused in the same session)"),
+        "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4} --fk_fused",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.42 +- 0.09 min, 5.7 GPU-minutes "
+                                        "(seeds 3-5; 1.49 +- 0.05 without --fk_fused in the same session)"),
         "lafan1-supertrack-rf-accurate": (f"--algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 "
                                           f"{SPEED} {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.832 +- 0.003, MPJPE 21.0 +- 1.3 mm (seeds 7-9)"),
