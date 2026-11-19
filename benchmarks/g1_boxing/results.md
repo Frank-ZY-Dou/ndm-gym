@@ -135,7 +135,8 @@ On three GPUs (`--layout AWL`) each device's steps, ms:
 | `two-g1-supermimic-3gpu` | 75.5 | 52.0 | 26.7 | 70.0 |
 
 - Both reach 0.88 in the same iterations on average; SuperMimic's iteration is shorter, on one GPU and on three.
-- On one GPU the policy update is the largest phase: 85 against 71 ms.
+- On one GPU the policy update is the largest phase: 85 against 71 ms. SuperTrack's policy batch is twice SuperMimic's
+  (`--pi_batch` 4,096 against 2,048).
 - On three GPUs the collection and the world-model updates run beside the policy update, so the iteration is the policy update
   (84.9 and 70.0 ms): about half the time of one GPU, at 5.5 and 4.9 GPU-minutes against 3.66 and 3.26.
 - The goal encoded once (`--goal_table --pi_encode_once`) computes each policy update's values up to float rounding; it shortens

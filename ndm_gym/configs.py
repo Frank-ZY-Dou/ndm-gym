@@ -30,7 +30,7 @@ TWO_G1_ST = (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE
              "--ckpt_every 1000 --iterations 9396")  # fmt: skip
 TWO_G1_SM = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 --contact_reward 0.25 "
              f"--ref_contact_fix --sm_residual --wm_structured {ENCODE_ONCE} {SYSTEMS} {PAIRED} --ckpt_every 1000 --iterations 9396")  # fmt: skip
-AWL3 = "--layout AWL"  # three GPUs: actor | world-model learner | policy learner (the two-robot scene has no probe sweeps)
+AWL3 = "--layout AWL"  # three GPUs: actor | world-model learner | policy learner (the two-G1 configurations run no probe sweeps)
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
 MUSCLE_SYS = "--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"

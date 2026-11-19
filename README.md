@@ -636,8 +636,9 @@ Add `--motion_dir`; seeds 0-2, GPUs below.
 **In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
 the measure it optimizes (root-relative MPJPE 14.1 against 16.0 mm, return 0.9055 against 0.8925), and the global MPJPE is
 level (46.2 against 45.3 mm). Return 0.88 takes the same iterations on average, and SuperMimic's iteration is shorter: 3.66 against
-3.26 min on one GPU, 1.85 against 1.62 min on three (not engineered). The policy update sets the pace: 85 against 71 ms per
-iteration ([details](benchmarks/g1_boxing/results.md#time-to-return-088)).
+3.26 min on one GPU, 1.85 against 1.62 min on three (not engineered). The policy update is the longest step: 85 against 71 ms per
+iteration. SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,048;
+[details](benchmarks/g1_boxing/results.md#time-to-return-088)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack, MLP world model, on InterHuman clip 1566: seed 0's best checkpoint (iteration 7,000); blue ghosts: the references.<br>MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
