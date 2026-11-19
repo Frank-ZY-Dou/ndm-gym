@@ -33,7 +33,7 @@ textures resolved under the downloaded assets.
 | arms | one Panda | one Panda | two Pandas |
 | objects tracked | the cube | the square nut | the hammer, the trash, the start bin's lid |
 | demonstrations | 200, 1.8-3.2 s | 200, 5.4-11.8 s | 200, 18.7-35.7 s |
-| success (robosuite's test, from the state) | the cube 4 cm above the table | the nut on its peg | the hammer in its bin and the trash in the trash bin |
+| success (robosuite's test) | the cube more than 4 cm above the table | a nut on its peg, released (more than 4.24 cm from the grip sites) | the hammer touching the target bin's base, the trash the trash bin's |
 
 - **Actuators:** robosuite drives each arm's torque actuators by operational-space control with gravity compensation. Here
   each becomes a joint position servo, force = kp (target - q) - kd q̇ with kp of 600, 600, 600, 600, 250, 150 and

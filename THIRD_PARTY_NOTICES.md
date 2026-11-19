@@ -56,11 +56,12 @@ reads is downloaded by the user at pinned revisions (`tools/download_robomimic.p
   Manipulation", Mandlekar et al., CoRL 2021;
   [robomimic/robomimic_datasets](https://huggingface.co/datasets/robomimic/robomimic_datasets) @ `74fa018`, v1.5, MIT),
   each with the scene it was recorded in;
-- the meshes and textures of [robosuite](https://github.com/ARISE-Initiative/robosuite) @ `dc7fcf9` (v1.5.0, MIT) that
+- the meshes and textures of [robosuite](https://github.com/ARISE-Initiative/robosuite) @ `1a8701b` (the v1.5.0 tag, MIT) that
   those scenes name.
 
-`ndm_gym/robots/robomimic_scenes.py` writes robosuite's success tests (`_check_success` of Lift, NutAssemblySquare and
-TwoArmTransport) as functions of the state; robosuite itself is not imported.
+`ndm_gym/robots/robomimic_scenes.py` and `ndm_gym/tasks/robomimic_tracking.py` write robosuite's success tests
+(`_check_success` of Lift, NutAssemblySquare and TwoArmTransport) on the simulator's body and site positions and its contact
+list, as robosuite reads them; robosuite itself is not imported.
 
 ## Ported code
 
