@@ -36,6 +36,17 @@ def audio_from_keys(pressed, path):
         file.writeframes((sound / max(1.0, np.abs(sound).max()) * 28000).astype("<i2").tobytes())
 
 
+def backdrop(scene):
+    """A light floor under the keyboard, added to the scene after each update (--background light)."""
+    if scene.ngeom >= scene.maxgeom:
+        raise RuntimeError("No room in the scene for the backdrop")
+    rgba = np.array([0.76, 0.78, 0.81, 1], np.float32)
+    mujoco.mjv_initGeom(
+        scene.geoms[scene.ngeom], mujoco.mjtGeom.mjGEOM_BOX, np.array([3.0, 3.0, 0.001]), np.array([0, 0, -0.0011]), np.eye(3).ravel(), rgba
+    )
+    scene.ngeom += 1
+
+
 def note_name(pitch):
     return ("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")[pitch % 12] + str(pitch // 12 - 1)
 
@@ -50,6 +61,7 @@ def main():
     parser.add_argument("--keyboard", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--song", choices=("fur_elise", "five_finger_scale", "ode_to_joy"), default="fur_elise")
+    parser.add_argument("--background", choices=("dark", "light"), default="dark", help="light: a light floor under the keyboard")
     args = parser.parse_args()
     trace = np.load(args.rollout)
     cam = mujoco.MjvCamera()
@@ -92,6 +104,7 @@ def main():
 
         encoder = imageio_ffmpeg.get_ffmpeg_exe()
     fonts = {size: ImageFont.truetype("DejaVuSans.ttf", size) for size in (17, 21, 27)}
+    ink = ("white", "#bdc8d1", "#c1c9d0") if args.background == "dark" else ("#1f2933", "#4a5560", "#4a5560")  # title, label, mark
     with tempfile.TemporaryDirectory() as tmp, mujoco.Renderer(model, height=540, width=960) as renderer:
         audio = Path(tmp) / "keys.wav"
         audio_from_keys(pressed, audio)
@@ -136,18 +149,20 @@ def main():
                     else:
                         g.rgba[:] = colors[k]
                 renderer.update_scene(data, camera=cam, scene_option=opt)
+                if args.background == "light":
+                    backdrop(renderer.scene)
                 image = Image.fromarray(renderer.render().copy())
                 draw = ImageDraw.Draw(image)
-                draw.text((20, 16), title, font=fonts[27], fill="white")
+                draw.text((20, 16), title, font=fonts[27], fill=ink[0])
                 score_time = (frame - warmup) * DT
                 label = "Lead-in" if frame < warmup else "Release" if frame >= end else f"{score_time:.2f} s"
-                draw.text((20, 54), f"Wuji Hand 2   ·   MuJoCo-Warp   ·   {label}", font=fonts[17], fill="#bdc8d1")
+                draw.text((20, 54), f"Wuji Hand 2   ·   MuJoCo-Warp   ·   {label}", font=fonts[17], fill=ink[1])
                 expected = " + ".join(note_name(int(v)) for v in sorted(due)) or "Rest"
                 actual = " + ".join(note_name(int(v)) for v in sorted(played)) or "Rest"
                 draw.rectangle((0, 486, 960, 540), fill=(21, 28, 35))
                 draw.text((20, 500), f"Score   {expected}", font=fonts[21], fill="#9dc6ff")
                 draw.text((390, 500), f"Played   {actual}", font=fonts[21], fill="#aee8c7")
-                draw_mark(draw, 960, 540, fonts[17], fill="#c1c9d0")
+                draw_mark(draw, 960, 540, fonts[17], fill=ink[2])
                 proc.stdin.write(image.tobytes())
             proc.stdin.close()
             if proc.wait():
