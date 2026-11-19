@@ -1,0 +1,48 @@
+{
+  "minutes_to_target": 17.757522269090018,
+  "iteration_to_target": 2000,
+  "checkpoints": [
+    {
+      "iteration": 1000,
+      "minutes": 15.633309336503347,
+      "ended_share": 0.0,
+      "body_mm": 0.09471215307712555,
+      "target": false
+    },
+    {
+      "iteration": 2000,
+      "minutes": 17.757522269090018,
+      "ended_share": 0.0,
+      "body_mm": 0.051064632833004,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 19.879625296592714,
+      "ended_share": 0.0,
+      "body_mm": 0.04801372066140175,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 22.001814949512482,
+      "ended_share": 0.0,
+      "body_mm": 0.04575209692120552,
+      "target": true
+    },
+    {
+      "iteration": 5000,
+      "minutes": 24.124572944641113,
+      "ended_share": 0.0,
+      "body_mm": 0.04498928785324097,
+      "target": true
+    },
+    {
+      "iteration": 6000,
+      "minutes": 26.24846284389496,
+      "ended_share": 0.0,
+      "body_mm": 0.04496263340115547,
+      "target": true
+    }
+  ]
+}
