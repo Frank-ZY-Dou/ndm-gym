@@ -245,8 +245,8 @@ class RobomimicTask:
         from what it reads of the simulator after a control step: the bodies' and the sites' world positions (N, nbody, 3)
         and (N, nsite, 3), and for Transport the contact list (all of them as the physics' last step left them)."""
         kind = self.scene.success_kind
-        if kind == "lift":
-            return xpos[:, self.success_bodies[0], 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
+        if kind == "lift":  # (the body's id as a Python int: a tensor's would be read on the host, which the CUDA graph refuses)
+            return xpos[:, self.scene.success_bodies[0], 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
         if kind == "square":  # a nut on its own peg, released
             nut, peg = xpos[:, self.success_bodies], xpos[:, self.pegs]  # (N, 2, 3)
             on_peg = ((nut[..., :2] - peg[..., :2]).abs() < SQUARE_XY).all(-1) & (nut[..., 2] < SQUARE_TABLE_TOP + SQUARE_Z)

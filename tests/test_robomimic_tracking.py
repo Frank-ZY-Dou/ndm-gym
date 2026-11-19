@@ -678,6 +678,32 @@ def test_simulator_matches_mujoco_and_resets():
     assert torch.isfinite(s1n).all()
 
 
+@GPU
+@pytest.mark.parametrize("name", ["lift", "square", "transport"])
+def test_success_inside_a_cuda_graph(name):
+    """RobomimicSim.success reads nothing on the host, so the collection's CUDA graph (--collect_graph) holds it: captured
+    and replayed, it gives what it gives outside the graph."""
+    from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
+
+    model, _, _, task = task_of(name, device=CUDA)
+    sim = RobomimicSim(model, task, 4, CUDA, joint_noise=0.0)
+    sim.step(task.setpoint(torch.zeros(4, task.nu, device=CUDA), sim.f), reset=False)
+    want = sim.success().clone()
+    out = torch.zeros(4, dtype=torch.bool, device=CUDA)
+    s = torch.cuda.Stream()
+    s.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(s):
+        out.copy_(sim.success())  # (the first call outside the capture)
+    torch.cuda.current_stream().wait_stream(s)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph):
+        out.copy_(sim.success())
+    out.zero_()
+    graph.replay()
+    torch.cuda.synchronize()
+    assert torch.equal(out, want)
+
+
 # each task's starts for the success test after a control step: where the objects are, robosuite's outcome
 REST = {"payload": 0.81 + 0.01 - 0.0005, "trash": 0.81 + 0.02 - 0.0005, "nut": 0.8 + 0.01 - 0.0005}
 SUCCESS_STARTS = {
