@@ -119,6 +119,7 @@ animations: [walk](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/d
 (SuperTrack).*
 
 Tasks, rules and results: [`benchmarks/go2_lifelike_tracking`](../../benchmarks/go2_lifelike_tracking/README.md),
-[results](../../benchmarks/go2_lifelike_tracking/results.md). In short, on all 65 clips (three seeds, RTX 6000 Ada):
-SuperMimic (`--config go2-supermimic`) a success of 1.000, a return of 0.986, the feet within 5.3 mm, the target after
-1.31 min; SuperTrack (`--config go2-supertrack`) 0.999, 0.977, 7.3 mm, 4.43 min.
+[results](../../benchmarks/go2_lifelike_tracking/results.md). In short, on all 65 clips (seeds 0-2, 10,000 iterations,
+each run alone on an RTX 6000 Ada): SuperTrack (`--config go2-supertrack`) a success of 0.999, a return of 0.977, the
+feet within 7.3 mm, the target after 4.43 min; SuperMimic (`--config go2-supermimic`) 1.000, 0.986, 5.3 mm, 1.31 min
+(time to the target, not engineered).

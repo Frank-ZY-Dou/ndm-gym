@@ -26,7 +26,7 @@ the library, with flight phases and fast gaits.
 
 ## Rules
 
-Fixed after the plan's seed-0 trials and before the three-seed runs.
+Fixed before the three-seed runs.
 
 - **Tasks:** one policy on all 65 clips; and one clip of each kind, chosen for their gaits before their runs: a walk
   (`dog_quad_walk_002_1`, 6.0 s), a run (`dog_quad_run_002_0`, 5.5 s, up to 2.95 m/s) and a play clip
