@@ -71,7 +71,7 @@ Both algorithms use the NDM Gym hand actor, replay and native update methods. Th
 
 Each seed receives 1,800 two-step model updates and 1,000 policy updates with batches of 96. Replay spans six collection rounds. Collection starts with 32 random-action worlds, then uses 24 noisy-policy worlds and eight random-action worlds. Training starts vary by up to 0.14 of each normalized action scale. The reach error uses the closest of any ten tips, measured in units of 35 mm. Evaluation uses only physical keyboard travel.
 
-The validation set uses 32 fixed starts (RNG 456, perturbation up to 0.15 of scale). Each untrained baseline and round-20 checkpoint plays the full song from 256 fixed starts (RNG 789, up to 0.20 of scale), without exploration or mid-song resets. Validation was recorded after each training round. The target is the first recorded mean validation F1 ≥ 0.95. The six fixed-budget runs shared one configuration. The independent variable for their measurements was the update algorithm.
+The validation set uses 32 fixed starts (RNG 456, perturbation up to 0.15 of scale). Each untrained baseline and round-20 checkpoint plays the full song from 256 fixed starts (RNG 789, up to 0.20 of scale), without exploration or mid-song resets. Validation was recorded after each training round. The target is the first recorded mean validation F1 ≥ 0.95. The six fixed-budget runs shared one configuration apart from the update algorithm.
 
 | Collection round | Real transitions per seed | SuperTrack validation F1 | SuperMimic validation F1 |
 | ---: | ---: | ---: | ---: |
@@ -94,7 +94,7 @@ Training times are supplemental measurements on one RTX 3060 with 12 GiB. CUDA-s
 
 ## Timing the native training updates
 
-We compared eager updates with the hand trainer's CUDA graphs on one RTX 3060 (12 GB, PyTorch 2.13.0+cu129, MuJoCo-Warp 3.15.0). Every condition ran three rounds at seeds 0/1/2 and used its final checkpoint. Each seed collected 15,360 transitions (32 worlds × 160 steps × 3 rounds) and ran 90 world-model and 50 policy updates per round, with minibatches of 96. SuperMimic also trained its critic. Each round validated on 32 starts. Each final policy played the full score on the same 32 held-out starts.
+The study compared eager updates with the hand trainer's CUDA graphs on one RTX 3060 (12 GB, PyTorch 2.13.0+cu129, MuJoCo-Warp 3.15.0). Every condition ran three rounds at seeds 0/1/2 and used its final checkpoint. Each seed collected 15,360 transitions (32 worlds × 160 steps × 3 rounds) and ran 90 world-model and 50 policy updates per round, with minibatches of 96. SuperMimic also trained its critic. Each round validated on 32 starts. Each final policy played the full score on the same 32 held-out starts.
 
 | Trainer | Updates | Training s/seed | Collect s/round | Model s/round | Policy + critic¹ s/round | Validate s/round | Final Eden F1 |
 |---|---|---:|---:|---:|---:|---:|---:|
