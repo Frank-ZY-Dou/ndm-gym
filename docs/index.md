@@ -5,11 +5,12 @@
 NDM Gym trains controllers of physical agents through neural world models. Algorithms share one pipeline within each task: LAFAN1
 motion tracking, two G1s on a two-person clip, HDMI's human-object interaction (Isaac Lab 3 with MuJoCo-Warp, the Unitree G1 with
 29 DoF), MuscleVAE's muscle-actuated character (Newton with MuJoCo-Warp), hand-object tracking with the XHand, the Allegro hand
-and the Inspire hand, a racing quadrotor tracking flown trajectories, a Unitree Go2 tracking a dog's motion capture and two
-Wuji hands playing the piano (all four MuJoCo-Warp), and the Adroit hand tracking DAPG's door, pen, hammer and relocate
-demonstrations (MuJoCo on the CPU). The neural dynamics models (NDMs) also serve as simulators, for instance in RoboKit's MPC
-planner and mbrl-lib's CEM planner. On the G1 they step 16-17x faster than Steel's fastest passing setting and 40-42x faster
-than MuJoCo Warp at 4,096 worlds on an A100 ([results](../benchmarks/steel/results.md)).
+and the Inspire hand, a racing quadrotor tracking flown trajectories, a Unitree Go2 tracking a dog's motion capture, two
+Wuji hands playing the piano and Franka Panda arms tracking robomimic's human demonstrations (all five MuJoCo-Warp), and the
+Adroit hand tracking DAPG's door, pen, hammer and relocate demonstrations (MuJoCo on the CPU). The neural dynamics models
+(NDMs) also serve as simulators, for instance in RoboKit's MPC planner and mbrl-lib's CEM planner. On the G1 they step
+16-17x faster than Steel's fastest passing setting and 40-42x faster than MuJoCo Warp at 4,096 worlds on an A100
+([results](../benchmarks/steel/results.md)).
 
 - [Leaderboard](leaderboard.md): each task's fastest and most accurate configuration, and the named configurations.
 - [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`);
@@ -18,7 +19,7 @@ than MuJoCo Warp at 4,096 worlds on an A100 ([results](../benchmarks/steel/resul
 - [World models](world_models.md): acceleration and increment models, MLP and RigidFormer backbones, inference copies.
 - [Tasks](tasks.md): LAFAN1 tracking, two G1s, HDMI's 13 human-object interaction tasks, MuscleVAE's character, hand-object
   tracking, [quadrotor trajectory tracking](tasks/quadrotor.md), [quadruped motion tracking](tasks/quadruped.md),
-  [Wuji Hand piano playing](tasks/wuji_piano.md), the Adroit
+  [Wuji Hand piano playing](tasks/wuji_piano.md), [manipulation demonstration tracking](tasks/robomimic.md), the Adroit
   [door](tasks/adroit_door.md) and [pen, hammer and relocate](tasks/adroit_suite.md), and [RoboKit's](tasks/robokit.md) and
   [mbrl-lib's](tasks/mbrl.md) planners on a world model.
 - [Evaluation](quickstart.md): tracking errors, push robustness, held-out clips, videos and offline world-model fits.
