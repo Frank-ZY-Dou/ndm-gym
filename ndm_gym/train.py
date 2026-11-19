@@ -206,8 +206,8 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                              "every imagined step (equal up to rounding; 1.2 GB for LAFAN1)")
     parser.add_argument("--pi_encode_once", action="store_true",
                         help="supertrack, supermimic: the policy's goal encoder runs once per policy update, over every imagined step's goal (they "
-                             "depend on the reference frames only), and the steps its decoder (equal up to rounding: the encoder's products over all "
-                             "steps at once)")
+                             "depend on the reference frames only), and the steps its decoder; each update equals the default's up to float rounding "
+                             "(the encoder's products over all steps at once), one robot or two, so a run is not the default's bit for bit")
     if not rigidformer:
         return
     parser.add_argument("--rf_fused_train", action="store_true",

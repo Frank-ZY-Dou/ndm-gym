@@ -137,7 +137,8 @@ def test_paired_start_frames_and_resets(kin, tmp_path):
     ids = motion_pairs(m)
     a, b, off = pair_bins(m, ids)
     sim = SimpleNamespace(motion=m, pbin_a=a, pbin_b=b, pbin_off=off, bin_G=torch.rand(m.num_bins), G_max=1.0,
-                          bin_w_avg=torch.full((len(a),), 1.0 / len(a)), device=DEV, P=2)  # fmt: skip
+                          bin_w_avg=torch.full((len(a),), 1.0 / len(a)), device=DEV, P=2, fail_reset=0.0, focus_static=False,
+                          focus_q=None, focus_share=0.0)  # fmt: skip
     torch.manual_seed(0)
     fa, fb, ba, bb = PairedTrackingSim.sample_frames(sim, 3000)
     ca, cb = m.clip_id[fa], m.clip_id[fb]
@@ -147,6 +148,119 @@ def test_paired_start_frames_and_resets(kin, tmp_path):
     assert set(ca.tolist()) == set(ids[0].tolist())
     with pytest.raises(ValueError, match="reset together"):
         PairedTrackingSim.reset(sim, torch.tensor([0, 1, 2]))
+
+
+@pytest.mark.skipif(not HAVE_ISAACLAB, reason="the scene's module needs Isaac Lab")
+def test_paired_failure_resets(kin, tmp_path):
+    """--fail_reset in the two-robot scene: previous_pair_bins maps each pair bin to the one before it in its pair (a pair's
+    first bin to itself); a pair bin's failures are either side's termination rate at that time, and the part fail_reset of
+    the pairs' reset distribution goes to the pair bins before them; with no failure recorded the draws are those without
+    the option."""
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, motion_pairs, pair_bins, previous_pair_bins
+
+    m = _pair_motion(kin, tmp_path)
+    a, b, off = pair_bins(m, motion_pairs(m))
+    prev = previous_pair_bins(m, a)
+    first = torch.cat((torch.tensor([True]), m.bin_clip[a[1:]] != m.bin_clip[a[:-1]]))
+    assert torch.equal(prev, torch.where(first, torch.arange(len(a)), torch.arange(len(a)) - 1))
+    bin_G = torch.rand(m.num_bins)
+
+    def draw(**kw):
+        sim = SimpleNamespace(motion=m, pbin_a=a, pbin_b=b, pbin_off=off, bin_G=bin_G.clone(), G_max=1.0, device=DEV, P=2,
+                              bin_w_avg=torch.full((len(a),), 1.0 / len(a)), pbin_prev=prev, focus_static=False, focus_q=None,
+                              focus_share=0.0, **kw)  # fmt: skip
+        torch.manual_seed(0)
+        return PairedTrackingSim.sample_frames(sim, 4000)
+
+    plain = draw(fail_reset=0.0)
+    for x, y in zip(plain, draw(fail_reset=0.3, bin_fail=torch.zeros(m.num_bins))):
+        assert torch.equal(x, y)
+    k = int((~first).nonzero()[0])  # a pair bin with a previous one in its pair
+    bf = torch.zeros(m.num_bins)
+    bf[b[k]] = 1.0  # the second side's termination rate at that time
+    _, _, ba, _ = draw(fail_reset=0.3, bin_fail=bf)
+    soft = torch.softmax(-25.0 * 0.5 * (bin_G[a] + bin_G[b]), 0)
+    w = 0.999 / len(a) + 0.001 * soft
+    expected = 0.7 * float((0.5 / len(a) + 0.4 * soft + 0.1 * w / w.sum())[k - 1]) + 0.3
+    assert abs(float((ba == a[k - 1]).float().mean()) - expected) < 0.03
+
+
+@pytest.mark.skipif(not HAVE_ISAACLAB, reason="the scene's module needs Isaac Lab")
+def test_paired_focus(kin, tmp_path):
+    """--eprobe_share in the two-robot scene: the focus is a distribution over the pair bins, mixed into the pairs' reset
+    distribution as the one-robot scene mixes its own (the share of the draws goes to the focus's pair bins); in the fixed
+    tensors of use_static_focus the same draws; without a focus the draws of before; a focus over other bins is refused."""
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, motion_pairs, pair_bins
+
+    m = _pair_motion(kin, tmp_path)
+    a, b, off = pair_bins(m, motion_pairs(m))
+    bin_G = torch.rand(m.num_bins)
+
+    def draw(**kw):
+        sim = SimpleNamespace(motion=m, pbin_a=a, pbin_b=b, pbin_off=off, bin_G=bin_G.clone(), G_max=1.0, device=DEV, P=2,
+                              bin_w_avg=torch.full((len(a),), 1.0 / len(a)), fail_reset=0.0, **kw)  # fmt: skip
+        torch.manual_seed(0)
+        return PairedTrackingSim.sample_frames(sim, 4000)
+
+    plain = draw(focus_static=False, focus_q=None, focus_share=0.0)
+    k = len(a) // 2
+    q = torch.zeros(len(a))
+    q[k] = 1.0
+    dyn = draw(focus_static=False, focus_q=q, focus_share=0.3)
+    static = draw(focus_static=True, focus_q=q.clone(), focus_share_t=torch.full((), 0.3))
+    assert all(torch.equal(x, y) for x, y in zip(dyn, static))
+    soft = torch.softmax(-25.0 * 0.5 * (bin_G[a] + bin_G[b]), 0)
+    w = 0.999 / len(a) + 0.001 * soft
+    expected = 0.7 * float((0.5 / len(a) + 0.4 * soft + 0.1 * w / w.sum())[k]) + 0.3
+    assert abs(float((dyn[2] == a[k]).float().mean()) - expected) < 0.03
+    assert torch.equal(dyn[3][dyn[2] == a[k]], b[k].expand(int((dyn[2] == a[k]).sum())))  # the second robots at the same time
+    assert not torch.equal(plain[2], dyn[2])
+    with pytest.raises(ValueError):
+        PairedTrackingSim.set_focus(SimpleNamespace(pbin_a=a), torch.full((m.num_bins,), 1.0 / m.num_bins), 0.15)
+
+
+@pytest.mark.skipif(not HAVE_ISAACLAB, reason="the scene's module needs Isaac Lab")
+def test_paired_failure_statistics(kin, tmp_path):
+    """--fail_reset's and --bin_fix's statistics in the two-robot scene's masked training tail: each robot's, the values the
+    one-robot scene's tail gives for the same instances; a robot whose partner ended the episode counts as not terminated.
+    Without the options the bin returns are those of before."""
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, TrackingSim, motion_pairs, pair_bins
+
+    m = _pair_motion(kin, tmp_path)
+    a, b, off = pair_bins(m, motion_pairs(m))
+    torch.manual_seed(0)
+    k = torch.randperm(len(a))[:4]  # four envs on four pair bins (eight distinct bins)
+    f = torch.cat((m.bin_start[a[k]], m.bin_start[a[k]] + off[k]))
+    done = torch.tensor([True, True, False, True]).repeat(2)  # env 0: its first robot fell; env 1: a timeout; env 3: both fell
+    term = torch.tensor([True, False, False, True, False, False, False, True])
+    st = {"ep_step": torch.randint(1, 50, (8,)), "ep_ret": torch.rand(8) * 10, "ep_disc_ret": torch.rand(8) * 10,
+          "start_bin": torch.cat((a[k], b[k])), "bin_G": torch.rand(m.num_bins), "bin_fail": torch.rand(m.num_bins) * 0.1}  # fmt: skip
+    for bin_fix in (False, True):
+        for share in (0.0, 0.3):
+            res = []
+            for cls in (PairedTrackingSim, TrackingSim):
+                masks = []
+                ns = SimpleNamespace(motion=m, gamma=0.99, mdp=SimpleNamespace(max_step_reward=1.0), bin_fix=bin_fix, fail_reset=share,
+                                     reset_masked=masks.append, **{n: v.clone() for n, v in st.items()})  # fmt: skip
+                out = cls.step_tail_masked(ns, {"done": done, "term": term, "f": f})
+                res.append((ns, out, masks))
+            (p, po, pm), (t, to, tm) = res
+            assert torch.equal(p.bin_G, t.bin_G) and torch.equal(p.bin_fail, t.bin_fail) and torch.equal(pm[0], done), (bin_fix, share)
+            assert all(torch.equal(po[n], to[n]) for n in ("n_done", "ep_len_sum", "ep_ret_norm_sum"))
+            if share == 0:
+                assert torch.equal(p.bin_fail, st["bin_fail"])
+            else:  # the ended robots' bins move toward their own termination: env 0's partner and env 1's robots toward 0
+                bf = st["bin_fail"] * 0.999
+                for i in (0, 1, 3, 4, 5, 7):
+                    assert torch.isclose(p.bin_fail[m.frame_bin[f[i]]], 0.9 * bf[m.frame_bin[f[i]]] + 0.1 * float(term[i]))
+                for i in (2, 6):
+                    assert torch.equal(p.bin_fail[m.frame_bin[f[i]]], bf[m.frame_bin[f[i]]])
+            if not bin_fix:  # the plain update: as the code before the options
+                T = st["ep_step"].float()
+                G = st["ep_disc_ret"] + torch.where(term, 0.0, 0.99**T * (st["ep_ret"] / T) / (1 - 0.99))
+                exp = st["bin_G"].clone()
+                exp[st["start_bin"][done]] = 0.8 * st["bin_G"][st["start_bin"][done]] + 0.2 * G[done]
+                assert torch.allclose(p.bin_G, exp)
 
 
 def run(*cmd: str):
@@ -193,6 +307,28 @@ def test_paired_robots_collide(tmp_path):
     assert (d["near"][1] - d["near"][0]) - (d["far"][1] - d["far"][0]) > 0.1, d
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(not HAVE_SIM, reason="the scene needs a GPU and Isaac Lab")
+def test_paired_failure_statistics_in_steps(tmp_path):
+    """Training mode with --fail_reset 0.3 and --bin_fix, 3 envs, episodes of at most 30 steps, strong random actions (the
+    robots fall): each eager step's termination rates are TrackingSim's update over the robots whose episodes ended (both
+    robots of an env, each with its own termination), recomputed here from the step's record."""
+    from ndm_gym.sim.rigid.reset_stats import bin_ema
+
+    out = tmp_path / "fails.pt"
+    write_pairs(tmp_path / "pairs", 1.2)
+    run(os.path.abspath(__file__), "--worker", "fails", "--pairs", str(tmp_path / "pairs"), "--out", str(out))
+    rec = torch.load(out)
+    P = rec["f"].shape[1] // 2
+    assert (rec["term"][:, :P] != rec["term"][:, P:]).any(), "no robot fell alone: the test needs a partner's ended episode"
+    for t in range(len(rec["done"])):
+        ids = rec["done"][t].nonzero().squeeze(-1)
+        exp = rec["bin_fail"][t]
+        if len(ids):
+            exp = bin_ema(exp * 0.999, rec["frame_bin"][rec["f"][t][ids]], rec["term"][t][ids].float(), 0.9)
+        assert torch.allclose(rec["bin_fail"][t + 1], exp, atol=1e-6), t
+
+
 def worker(kind: str, pairs: list[str], out: str):
     sys.path.insert(0, REPO)
     from isaaclab.app import add_launcher_args, launch_simulation
@@ -225,6 +361,17 @@ def worker(kind: str, pairs: list[str], out: str):
                 rec["done"].append(tr["done"].cpu()), rec["s1"].append(tr["s1"].cpu())
             torch.save({k: torch.stack(v) for k, v in rec.items()}, out)
             return
+        if kind == "fails":  # --fail_reset 0.3 --bin_fix, the eager training step
+            motion = MotionLib(interhuman.load(pairs[0]), kin, dev)
+            mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev))
+            env = PairedTrackingSim(sim_cfg, 6, motion, mdp, max_episode_steps=30, fail_reset=0.3, bin_fix=True)
+            rec = {"f": [], "done": [], "term": [], "bin_fail": [env.bin_fail.cpu()]}
+            for _ in range(60):
+                tr = env.step(3.0 * torch.randn(6, 29, device=dev), env.state())
+                rec["f"].append(tr["f"].cpu()), rec["done"].append(tr["done"].cpu()), rec["term"].append(tr["term"].cpu())
+                rec["bin_fail"].append(env.bin_fail.cpu())
+            torch.save({**{k: torch.stack(v) for k, v in rec.items()}, "frame_bin": motion.frame_bin.cpu()}, out)
+            return
         # contact: each pair in its own scene (one env), evaluation mode, both robots holding their reference poses
         motion = MotionLib([c for d in pairs for c in interhuman.load(d)], kin, dev)
         mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev))
@@ -248,7 +395,7 @@ def worker(kind: str, pairs: list[str], out: str):
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--worker", choices=["steps", "contact"], required=True)
+    ap.add_argument("--worker", choices=["steps", "fails", "contact"], required=True)
     ap.add_argument("--pairs", nargs="+", required=True)
     ap.add_argument("--out", required=True)
     cli = ap.parse_args()
