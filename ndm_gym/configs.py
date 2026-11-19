@@ -156,11 +156,11 @@ CONFIGS = {
     },
     "train_robomimic": {
         "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations on an RTX 4090: success 100 / 100 / 89.8 %, "
-                                 "object 0.60 / 1.96 / 7.13 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts)"),
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 89.8 %, object 0.60 / 1.96 / "
+                                 "7.13 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, RTX 4090)"),
         "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations on an RTX 4090: success 100 / 100 / 37.1 %, "
-                                 "object 0.80 / 4.08 / 12.3 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts)"),
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 37.1 %, object 0.80 / 4.08 / "
+                                 "12.3 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, RTX 4090)"),
     },
 }
 
