@@ -1,11 +1,14 @@
 """Animal motion tracking on a small body written here (a free root, two hinges, a filtered torque actuator and a position
 servo): the activation filters' closed form against MuJoCo's step, the clips' resampling, the world model's control input
 with activations, the task at the reference (its errors, terminations and the actions' mapping), the updates of both
-algorithms and training's arguments; with MIMIC-MJX's data downloaded (tools/download_mimic_mjx.py), its bodies against their
+algorithms, training's arguments and the download's SHA-256 checks; with MIMIC-MJX's data downloaded (tools/download_mimic_mjx.py), its bodies against their
 reference clips."""
 
 import argparse
 import dataclasses
+import hashlib
+import importlib.util
+import json
 import os
 
 import mujoco
@@ -219,8 +222,7 @@ def test_training_arguments():
 @pytest.mark.skipif(not os.path.exists(os.path.join(DATA, "rat", "reference.h5")), reason="MIMIC-MJX's data not downloaded")
 @pytest.mark.parametrize("animal", ["rat", "fly", "stick"])
 def test_bodies_match_their_clips(animal):
-    import h5py
-
+    h5py = pytest.importorskip("h5py")
     from ndm_gym.robots.animals import build_model
 
     if not os.path.exists(os.path.join(DATA, animal, "reference.h5")):
@@ -238,3 +240,22 @@ def test_fused_kinematics_match():
     fused.fused = True
     q = task.ref.qpos[::7]
     assert torch.allclose(task.kin(q), fused(q), atol=1e-5)
+
+
+def test_download_checks_sha256(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("download_mimic_mjx", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools", "download_mimic_mjx.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    (tmp_path / "src").write_bytes(b"clip")
+    good = hashlib.sha256(b"clip").hexdigest()
+    url = (tmp_path / "src").as_uri()
+    tool.fetch(url, str(tmp_path / "a" / "ok"), good)  # downloaded and checked
+    tool.fetch(url, str(tmp_path / "a" / "ok"), good)  # already there, checked again
+    with pytest.raises(ValueError, match="SHA-256"):
+        tool.fetch(url, str(tmp_path / "a" / "bad"), "0" * 64)
+    assert not (tmp_path / "a" / "bad").exists() and not (tmp_path / "a" / "bad.part").exists()
+    with pytest.raises(ValueError, match="SHA-256"):
+        tool.fetch(url, str(tmp_path / "a" / "ok"), "0" * 64)
+    with open(tool.SHA256_FILE) as fh:
+        pinned = json.load(fh)
+    assert {"rat/reference.h5", "fly/reference.h5", "stick/reference.h5"} <= set(pinned) and all(len(v) == 64 for v in pinned.values())

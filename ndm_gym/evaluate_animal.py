@@ -35,6 +35,8 @@ def main():
     args = parser.parse_args()
     if (args.ckpt is None) == (args.ckpts is None):
         parser.error("give --ckpt or --ckpts")
+    if args.record and not args.out:
+        parser.error("--record writes <out>/rollout.npz: give --out")
     paths = args.ckpts or [args.ckpt]
 
     import numpy as np
@@ -64,6 +66,8 @@ def main():
     for path in paths:
         if path != paths[0]:
             ck = torch.load(path, map_location=dev, weights_only=False)
+            if ck["args"] != vars(run):
+                raise ValueError(f"{path} is not of the run of {paths[0]}: --ckpts takes one run's checkpoints")
         torch.manual_seed(args.seed)
         sim.reset(torch.ones(N, dtype=torch.bool, device=dev), frame=f0)
         if args.repeats:  # the perturbed starts: noise on the joints of the repeated worlds
