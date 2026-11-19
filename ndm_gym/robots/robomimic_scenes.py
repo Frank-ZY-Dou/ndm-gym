@@ -123,7 +123,8 @@ class RobomimicScene:
             if not m.jnt_limited[j]:
                 raise ValueError(f"actuator {name(mujoco.mjtObj.mjOBJ_ACTUATOR, a)}: its joint has no range (the targets' clip)")
             lo.append(float(m.jnt_range[j, 0])), hi.append(float(m.jnt_range[j, 1])), scale.append(ARM_SCALE if is_arm else FINGER_SCALE)
-        grippers = sorted({int(g) for g in re.findall(r"gripper(\d+)_right_eef", " ".join(name(mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(m.nbody)))})
+        body_names = " ".join(name(mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(m.nbody))
+        grippers = sorted({int(g) for g in re.findall(r"gripper(\d+)_right_eef", body_names)})
         bodies = []
         for g in grippers:
             for k in KEYPOINT_BODIES:
@@ -144,7 +145,8 @@ class RobomimicScene:
             success["success_bodies"] = tuple(_free_body(m, nut) for nut, _ in SQUARE_NUTS)
             success["pegs"] = tuple(_id(m, mujoco.mjtObj.mjOBJ_BODY, peg) for _, peg in SQUARE_NUTS)
         else:
-            success["contact_pairs"] = tuple((_contact_geoms(m, _free_body(m, o)), _id(m, mujoco.mjtObj.mjOBJ_GEOM, base)) for o, base in TRANSPORT_CONTACTS)
+            success["contact_pairs"] = tuple((_contact_geoms(m, _free_body(m, o)), _id(m, mujoco.mjtObj.mjOBJ_GEOM, base))
+                                             for o, base in TRANSPORT_CONTACTS)  # fmt: skip
         sites = tuple(_id(m, mujoco.mjtObj.mjOBJ_SITE, f"gripper{g}_right_grip_site") for g in grippers)
         return RobomimicScene(task=task, nq=m.nq, nv=m.nv, nu=m.nu, act_q=tuple(act_q), act_d=tuple(act_d), act_lo=tuple(lo), act_hi=tuple(hi),
                               act_scale=tuple(scale), arm=tuple(arm), keypoint_bodies=tuple(bodies), objects=objects,

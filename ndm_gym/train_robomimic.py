@@ -27,8 +27,9 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_COLUMNS = ("iteration", "wall_h", "sim_steps", "wm_loss", "pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival", "sim_r", "object_mm",
                "success", "ep_len", "term_frac", "it_per_s", "lr")  # fmt: skip
 # ndm_gym.train's defaults that this training replaces (hand-object tracking's)
-ROBOMIMIC_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_000, "lr_decay_iters": 20_000, "buffer_steps": 256, "warmup_steps": 32,
-                      "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4, "amp": "none"}  # fmt: skip
+ROBOMIMIC_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_000, "lr_decay_iters": 20_000, "buffer_steps": 256,
+                      "warmup_steps": 32, "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4,
+                      "amp": "none"}  # fmt: skip
 # the options a resumed run must share with its checkpoint: the algorithm and SuperTrack's weights, the optimizers' layouts
 # and states, the policy average
 RESUME_MATCH = ("algo", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
@@ -47,13 +48,15 @@ def parse_args(argv: list[str] | None = None):
     add_hand_fast_args(parser)  # the systems options
     parser.add_argument("--task", type=str, required=True, choices=["lift", "square", "transport"])
     parser.add_argument("--demo", type=int, nargs="+", default=[0],
-                        help="the demonstrations (demo_<i>) of the task's file; several: one policy on all of them, whose scenes must be one")  # fmt: skip
+                        help="the demonstrations (demo_<i>) of the task's file; several: one policy on all of them, whose scenes must be "
+                        "one")  # fmt: skip
     parser.add_argument("--data_dir", type=str, default=os.path.join(REPO, "data", "robomimic"), help="tools/download_robomimic.py's output")
     parser.add_argument("--episode", type=int, default=200, help="an episode's longest length in control steps (20 Hz)")
     parser.add_argument("--solver_iterations", type=int, default=0,
                         help="the constraint solver's iterations, in place of the scene's (robosuite's: MuJoCo's 100); a GPU step lasts as "
                         "long as its slowest world, so a cap shortens the collection (changes the physics; 0: the scene's)")  # fmt: skip
-    parser.add_argument("--solver_ls_iterations", type=int, default=0, help="the solver's line-search iterations with --solver_iterations (0: the scene's)")
+    parser.add_argument("--solver_ls_iterations", type=int, default=0,
+                        help="the solver's line-search iterations with --solver_iterations (0: the scene's)")  # fmt: skip
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each tracked quantity weighs, per unit of error, the task's reward weight over its "
                         "kernel's width")  # fmt: skip
@@ -103,8 +106,8 @@ def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: fl
           solver_ls_iterations: int = 0):  # fmt: skip
     """The scene with its servos, its layout for the task and the task of demonstrations (``demo``: an index or a list of them,
     whose recorded scenes must be the same: robosuite draws Lift's cube and Transport's hammer per demonstration), and
-    MuJoCo-Warp's per-world contact and constraint capacities for them. ``solver_iterations``, ``solver_ls_iterations``: the constraint solver's caps (0: the
-    scene's)."""
+    MuJoCo-Warp's per-world contact and constraint capacities for them. ``solver_iterations``, ``solver_ls_iterations``: the
+    constraint solver's caps (0: the scene's)."""
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo, split_states
     from ndm_gym.robots.robomimic_scenes import RobomimicScene, contact_capacity, load_scene
     from ndm_gym.tasks.robomimic_tracking import RewardCfg, RobomimicTask, SceneKinematics, build_reference

@@ -75,7 +75,8 @@ def bin_xml(name: str, pos: str) -> str:
 
 # each task's objects in robosuite's names (Square's nut a slab beside its peg: on_peg reads the body's position, not a hole)
 OBJECTS = {
-    "lift": '<body name="cube_main" pos="0 0 0.82"><freejoint name="cube_joint0"/><geom name="cube_g0" type="box" size="0.02 0.02 0.02" mass="0.07"/></body>',
+    "lift": ('<body name="cube_main" pos="0 0 0.82"><freejoint name="cube_joint0"/>'
+             '<geom name="cube_g0" type="box" size="0.02 0.02 0.02" mass="0.07"/></body>'),
     "square": ('<body name="peg1" pos="0.23 0.1 0.85"><geom type="box" size="0.016 0.016 0.1"/></body>'
                '<body name="peg2" pos="0.23 -0.1 0.85"><geom type="cylinder" size="0.02 0.1"/></body>'
                '<body name="SquareNut_main" pos="0 0.2 0.8095"><freejoint name="SquareNut_joint0"/>'
@@ -165,7 +166,8 @@ def test_servos_and_the_scene():
         RobomimicScene.from_model(build_spec(scene_xml().replace('axis="0 1 0" range="0 0.04"', 'axis="0 1 0"'), "/unused").compile(), "lift")
     with pytest.raises(ValueError, match="grip_site"):
         RobomimicScene.from_model(build_spec(scene_xml().replace("_grip_site", "_site"), "/unused").compile(), "lift")
-    assert resolve_assets('<texture file="/x/y/robosuite/models/assets/textures/a.png"/>', "/data/assets") == '<texture file="/data/assets/textures/a.png"/>'
+    resolved = resolve_assets('<texture file="/x/y/robosuite/models/assets/textures/a.png"/>', "/data/assets")
+    assert resolved == '<texture file="/data/assets/textures/a.png"/>'
     two = scene_spec("square", arms=2).compile()
     sq = RobomimicScene.from_model(two, "square")
     name = lambda kind, i: mujoco.mj_id2name(two, kind, i)  # noqa: E731
@@ -256,7 +258,8 @@ def test_kinematics_and_the_task_at_the_reference(setup):
     e = task.errors(S, fk, f)
     assert all(float(x.abs().max()) < 1e-5 for x in e.values())
     u = task.setpoint(torch.ones(ref.frames, task.nu), f)
-    assert torch.all(u <= task.u_hi) and torch.all(u >= task.u_lo) and torch.allclose(task.setpoint(a0, f), ref.ctrl[ref.next_frame(f)].clamp(task.u_lo, task.u_hi))
+    assert torch.all(u <= task.u_hi) and torch.all(u >= task.u_lo)
+    assert torch.allclose(task.setpoint(a0, f), ref.ctrl[ref.next_frame(f)].clamp(task.u_lo, task.u_hi))
     x = task.critic_features(S, fk, f, a0, 3)
     assert x.shape == (ref.frames, task.obs_dim + 3 * task.goal_frame_dim)
     moved = ref.qpos.clone()
@@ -289,7 +292,8 @@ def robosuite_check_success(m: mujoco.MjModel, d: mujoco.MjData, task: str) -> b
                 return True
         return False
 
-    return check_contact(["transport_target_bin_base"], ["payload_handle", "payload_head"]) and check_contact(["transport_trash_bin_base"], ["trash_g0"])
+    payload_in_target_bin = check_contact(["transport_target_bin_base"], ["payload_handle", "payload_head"])
+    return payload_in_target_bin and check_contact(["transport_trash_bin_base"], ["trash_g0"])
 
 
 def task_of(name: str, arms: int = 1, device: str = "cpu"):
@@ -321,7 +325,8 @@ def test_success_lift_and_square():
         d.qpos[:] = place(model, qpos[0], {"cube_joint0": (0.0, 0.0, z)})
         mujoco.mj_kinematics(model, d)
         rows.append((d.xpos.copy(), d.site_xpos.copy(), robosuite_check_success(model, d, "lift")))
-    got = task.success(torch.tensor(np.stack([r[0] for r in rows]), dtype=torch.float32), torch.tensor(np.stack([r[1] for r in rows]), dtype=torch.float32))
+    f32 = lambda xs: torch.tensor(np.stack(xs), dtype=torch.float32)  # noqa: E731
+    got = task.success(f32([r[0] for r in rows]), f32([r[1] for r in rows]))
     assert got.tolist() == [r[2] for r in rows] == [False, False, True, True]
 
     model, scene, qpos, task = task_of("square", arms=2)
@@ -434,11 +439,13 @@ def agent_and_replay(model, task, argv):
         s1 = torch.cat((ref.qpos[f + 1], ref.qvel[f + 1]), -1)
         u = ref.ctrl[f + 1]
         algo.update_wm_norms(unflatten_state(s, task.nq), unflatten_state(s1, task.nq), u)
-        buffer.add({"s": s, "s1": s1, "u": u, "a_prev": torch.zeros(args.num_envs, task.nu), "f": f, "done": torch.zeros(args.num_envs, dtype=torch.bool)})
+        buffer.add({"s": s, "s1": s1, "u": u, "a_prev": torch.zeros(args.num_envs, task.nu), "f": f,
+                    "done": torch.zeros(args.num_envs, dtype=torch.bool)})  # fmt: skip
     return args, algo, buffer
 
 
-@pytest.mark.parametrize("argv", [["--algo", "supermimic", "--critic_minibatches", "2"], ["--algo", "supertrack"], ["--algo", "supertrack", "--st_task_weights", "--st_fail_w", "2"]])
+@pytest.mark.parametrize("argv", [["--algo", "supermimic", "--critic_minibatches", "2"], ["--algo", "supertrack"],
+                                  ["--algo", "supertrack", "--st_task_weights", "--st_fail_w", "2"]])  # fmt: skip
 def test_updates(setup, monkeypatch, argv):
     monkeypatch.setattr(torch, "compile", lambda f, **_: f)
     model, _, _, _, _, task = setup
@@ -466,7 +473,8 @@ def test_training_arguments():
     assert names == set(SUPPORTED) | set(UNSUPPORTED) and not set(SUPPORTED) & set(UNSUPPORTED)
     assert set(ROBOMIMIC_DEFAULTS) <= set(SUPPORTED)
     args = parse_args(["--task", "square"])
-    assert all(getattr(args, name) == value for name, value in ROBOMIMIC_DEFAULTS.items()) and (args.task, args.demo, args.episode) == ("square", [0], 200)
+    assert all(getattr(args, name) == value for name, value in ROBOMIMIC_DEFAULTS.items())
+    assert (args.task, args.demo, args.episode) == ("square", [0], 200)
     for refused in (["--algo", "blinkmimic"], ["--wm_backbone", "rigidformer"], ["--st_fail_w", "2"], ["--st_task_weights"],
                     ["--algo", "supertrack", "--gamma", "0.995"], ["--episode", "1"], ["--no_sync"], ["--collect_graph"],
                     ["--solver_ls_iterations", "10"], ["--solver_iterations", "-1"]):  # fmt: skip
@@ -605,7 +613,8 @@ def test_evaluation_rollout_and_summary(setup):
 def test_time_to_the_target(tmp_path):
     """time_to.py: the wall time of the first kept checkpoint from which every later one meets the target (a success of
     0.99 with the objects within 10 mm), none if the last does not; the run's own evaluation of its last checkpoint."""
-    spec = importlib.util.spec_from_file_location("robomimic_time_to", os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "time_to.py"))
+    path = os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "time_to.py")
+    spec = importlib.util.spec_from_file_location("robomimic_time_to", path)
     time_to = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(time_to)
 

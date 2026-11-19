@@ -187,7 +187,7 @@ class RobomimicTask:
         qpos, qvel = S
         p, R, v, w = self._objects(S)
         eef = fk[..., 0 :: len(KEYPOINT_BODIES), :]  # each gripper's end effector, its first keypoint
-        rel =(p.unsqueeze(-2) - eef.unsqueeze(-3)).flatten(-3)  # (..., O * A * 3)
+        rel = (p.unsqueeze(-2) - eef.unsqueeze(-3)).flatten(-3)  # (..., O * A * 3)
         return torch.cat((qpos[..., self.act_q], 0.1 * qvel[..., self.act_d], fk.flatten(-2), rel, mat_to_6d(R).flatten(-2), v.flatten(-2),
                           0.1 * w.flatten(-2), a_prev), -1)  # fmt: skip
 

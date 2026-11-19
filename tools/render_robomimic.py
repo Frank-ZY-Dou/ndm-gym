@@ -214,7 +214,8 @@ def main():
 
             ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         ff = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{a.width}x{a.height}",
-                               "-r", f"{a.fps:g}", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out], stdin=subprocess.PIPE)  # fmt: skip
+                               "-r", f"{a.fps:g}", "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
+                              stdin=subprocess.PIPE)  # fmt: skip
     step = a.speed / (a.fps * dt)  # control steps per video frame
     look, t = None, float(first)
     while t < T:
