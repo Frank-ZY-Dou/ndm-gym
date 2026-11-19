@@ -758,6 +758,14 @@ def pair_bins(motion: MotionLib, pair_clips: torch.Tensor) -> tuple[torch.Tensor
     return torch.cat(ba), torch.cat(bb), torch.cat(off)
 
 
+def previous_pair_bins(motion: MotionLib, pbin_a: torch.Tensor) -> torch.Tensor:
+    """Each pair bin's previous pair bin in its pair (``pair_bins``' order: a pair's first-side bins in clip order); a
+    pair's first bin maps to itself (``previous_bins`` over the pair bins)."""
+    k = torch.arange(len(pbin_a), device=pbin_a.device)
+    prev = (k - 1).clamp(min=0)
+    return torch.where((k > 0) & (motion.bin_clip[pbin_a[prev]] == motion.bin_clip[pbin_a]), prev, k)
+
+
 class PairedTrackingSim(TrackingSim):
     """Two G1s per env, each tracking its own side of a two-person clip, in one scene where they collide
     (:class:`PairSceneCfg`). The rest of the pipeline sees 2P tracking instances: instance i < P is env i's first robot
@@ -771,7 +779,11 @@ class PairedTrackingSim(TrackingSim):
     """
 
     def __init__(self, sim_cfg, num_envs: int, motion: MotionLib, mdp: MDP, gamma: float = 0.99, eval_mode: bool = False,
-                 max_episode_steps: int = 500, reset_noise: bool = True, eval_friction: float | None = None, eval_payload: float = 0.0):
+                 max_episode_steps: int = 500, reset_noise: bool = True, eval_friction: float | None = None, eval_payload: float = 0.0,
+                 fail_reset: float = 0.0, bin_fix: bool = False):
+        """``fail_reset``, ``bin_fix``: train.py's options of those names, over the pairs' bins (``sample_frames``)."""
+        if not 0 <= fail_reset < 1 or (eval_mode and (fail_reset or bin_fix)):
+            raise ValueError(f"fail_reset {fail_reset} must be in [0, 1); fail_reset and bin_fix change training resets only")
         if num_envs % 2:
             raise ValueError(f"num_envs counts tracking instances, two per env: {num_envs} is odd")
         if motion.has_object:
@@ -840,7 +852,14 @@ class PairedTrackingSim(TrackingSim):
         self.failed_eval = torch.zeros(self.N, dtype=torch.bool, device=dev)
         self.reward_fn = mdp.reward
         self._mask_buf = self._mask_wp = None  # reset_masked's env mask (P,), a fixed buffer and its Warp view
-        self.fail_reset, self.bin_fix = 0.0, False  # refused for the two-robot scene (algos.blinkmimic.check_args); TrackingSim.step_tail reads them
+        # --fail_reset: each robot's termination rate per bin, as TrackingSim keeps it (step, step_tail_masked; --bin_fix: a
+        # step's episodes of one bin averaged), mixed into the pairs' reset distribution at the pair bins before the failures
+        self.fail_reset, self.bin_fix = fail_reset, bin_fix
+        if fail_reset > 0:
+            self.bin_fail = torch.zeros(motion.num_bins, device=dev)
+            self.pbin_prev = previous_pair_bins(motion, self.pbin_a)
+        # --eprobe_share (algos/eprobe.py): a reset distribution over the pair bins mixed in (set_focus, use_static_focus)
+        self.focus_q, self.focus_share, self.focus_static, self.focus_share_t = None, 0.0, False, None
         self.reset(torch.arange(self.N, device=dev))
 
     @property
@@ -872,10 +891,11 @@ class PairedTrackingSim(TrackingSim):
         return (p, R, vel[:, :3], vel[:, 3:6], d.joint_pos.torch.clone(), d.joint_vel.torch.clone())
 
     def state(self, vel=None):
-        """Both robots' states, the first robots' rows first (instances 0..P-1, then P..2P-1)."""
-        if vel is not None:
-            raise ValueError("the two-robot scene reads its own root velocities (no CUDA-graph steps)")
-        return tuple(torch.cat(x) for x in zip(self._robot_state(self.robot), self._robot_state(self.robot_b)))
+        """Both robots' states, the first robots' rows first (instances 0..P-1, then P..2P-1). ``vel``: the two robots' root
+        link velocities to read instead of Isaac Lab's properties, a pair (a probe sweep's CUDA graph passes the properties'
+        own buffers, recomputed or current: TrackingSim.state's ``vel``)."""
+        va, vb = (None, None) if vel is None else vel
+        return tuple(torch.cat(x) for x in zip(self._robot_state(self.robot, va), self._robot_state(self.robot_b, vb)))
 
     def capture_state(self):
         """``state`` inside train.py's collection graph (GraphedCollector): both robots' root velocities recomputed by Isaac
@@ -889,7 +909,8 @@ class PairedTrackingSim(TrackingSim):
     # ------------------------------------------------------------------ reset
     def sample_frames(self, n: int, gate: torch.Tensor | None = None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """n pairs' start frames and bins: (first sides' frames, second sides' frames, their bins, their bins);
-        TrackingSim's sampling over the first sides' bins, a bin's return the mean of its two sides'. ``gate``
+        TrackingSim's sampling over the first sides' bins, a bin's return the mean of its two sides' (--fail_reset: a bin's
+        failures either side's, ``previous_pair_bins``; --eprobe_share: the focus over the pair bins). ``gate``
         (reset_masked): a 0-dim bool; the running average bin_w_avg advances only where it holds."""
         m = self.motion
         G = 0.5 * (self.bin_G[self.pbin_a] + self.bin_G[self.pbin_b])
@@ -900,6 +921,12 @@ class PairedTrackingSim(TrackingSim):
             self.bin_w_avg.copy_(torch.where(gate, self.bin_w_avg * 0.999 + 0.001 * soft, self.bin_w_avg))
         nb = len(self.pbin_a)
         probs = 0.5 / nb + 0.4 * soft + 0.1 * self.bin_w_avg / self.bin_w_avg.sum()
+        if self.fail_reset > 0:  # a pair bin's failures: either side's termination rate at that time
+            probs = mix_failures(probs, self.bin_fail[self.pbin_a] + self.bin_fail[self.pbin_b], self.pbin_prev, self.fail_reset)
+        if self.focus_static:  # --eprobe_share: TrackingSim.sample_frames' focus, over the pair bins
+            probs = mix_focus(probs, self.focus_q, self.focus_share_t)
+        elif self.focus_q is not None and self.focus_share > 0:
+            probs = mix_focus(probs, self.focus_q, self.focus_share)
         k = torch.multinomial(probs, n, replacement=True)
         bins = self.pbin_a[k]
         start = m.bin_start[bins]
@@ -908,6 +935,19 @@ class PairedTrackingSim(TrackingSim):
         f = start + (torch.rand(n, device=self.device) * (end - start).float()).long()
         f = torch.minimum(f, last - 1)
         return f, f + self.pbin_off[k], bins, self.pbin_b[k]
+
+    def set_focus(self, q: torch.Tensor, share: float):
+        """TrackingSim.set_focus with ``q`` a distribution over the pair bins (``pair_bins``' order)."""
+        if q.shape != self.pbin_a.shape:
+            raise ValueError(f"the two-robot scene's focus is over its {len(self.pbin_a)} pair bins, not {tuple(q.shape)}")
+        super().set_focus(q, share)
+
+    def use_static_focus(self):
+        """TrackingSim.use_static_focus over the pair bins."""
+        nb = len(self.pbin_a)
+        q = torch.full((nb,), 1.0 / nb, device=self.device) if self.focus_q is None else self.focus_q.clone()
+        share = torch.full((), self.focus_share, device=self.device)
+        self.focus_q, self.focus_share_t, self.focus_static = q, share, True
 
     def reset(self, env_ids: torch.Tensor, frames: torch.Tensor | None = None):
         """``env_ids``: instances. Without ``frames`` they must be both robots of each of their envs, which reset together
@@ -1054,20 +1094,57 @@ class PairedTrackingSim(TrackingSim):
         self.a_prev.copy_(a)
         return out
 
+    def step_probe(self, a: torch.Tensor) -> dict:
+        """TrackingSim.step_probe for the two-robot scene (algos.eprobe, --eprobe_lean): both robots' setpoints, the state
+        after the step read by capture_state, each robot's termination test and end (evaluation: its own). Returns {"term"}."""
+        if not self.eval_mode:
+            raise ValueError("step_probe is the evaluation step")
+        P = self.P
+        f1 = self.f + 1
+        clip_end = self.motion.clip_end[self.motion.clip_id[self.f]]
+        target = self.default_q + self.xi[:, 1:30] + self.alpha * a
+        self.robot.set_joint_position_target_index(target=target[:P])
+        self.robot_b.set_joint_position_target_index(target=target[P:])
+        self.scene.write_data_to_sim()
+        self.sim.step(render=False)
+        self.scene.update(CONTROL_DT)
+        S1 = self.capture_state()
+        term = self.mdp.termination(S1, f1)
+        done = term | (f1 >= clip_end) | (self.ep_step + 1 >= self.max_episode_steps)
+        self.f.copy_(f1)
+        self.ep_step.add_(1)
+        self.a_prev.copy_(a)
+        self.failed_eval |= term & ~self.done_eval
+        self.done_eval |= done
+        return {"term": term}
+
     def step_tail_masked(self, out: dict) -> dict:
         """The episode ends of a training step without host-side ids (capturable; train.py --reset_masked): each robot's bin
         return written by index into the statistics extended by one discarded slot that the other instances write to (one
         arbitrary episode per bin kept, as step's index_put_), and reset_masked. ``out`` gets n_done and the sums
-        ep_len_sum and ep_ret_norm_sum over the ended episodes (TrackingSim.step_tail_masked's)."""
-        done, term = out["done"], out["term"]
+        ep_len_sum and ep_ret_norm_sum over the ended episodes (TrackingSim.step_tail_masked's). --bin_fix and --fail_reset as
+        TrackingSim.step_tail_masked keeps them, per robot: a robot whose partner ended the episode counts as not terminated."""
+        done, term, f = out["done"], out["term"], out["f"]
         dw = done.float()
         T = self.ep_step.float()
         boot = torch.where(term, 0.0, (self.gamma**T) * (self.ep_ret / T) / (1 - self.gamma))
         G = self.ep_disc_ret + boot
         nb = self.motion.num_bins
-        ext = torch.cat((self.bin_G, self.bin_G.new_zeros(1)))
-        ext.index_put_((torch.where(done, self.start_bin, nb),), 0.8 * self.bin_G[self.start_bin] + 0.2 * G)
-        self.bin_G.copy_(ext[:nb])
+        if self.bin_fix:
+            self.bin_G.copy_(bin_ema_w(self.bin_G, self.start_bin, G, dw, 0.8))
+        else:
+            ext = torch.cat((self.bin_G, self.bin_G.new_zeros(1)))
+            ext.index_put_((torch.where(done, self.start_bin, nb),), 0.8 * self.bin_G[self.start_bin] + 0.2 * G)
+            self.bin_G.copy_(ext[:nb])
+        if self.fail_reset > 0:  # each robot's termination rate in the bin its episode ended in
+            fb = self.motion.frame_bin[f]
+            bf = torch.where(done.any(), self.bin_fail * 0.999, self.bin_fail)
+            if self.bin_fix:
+                self.bin_fail.copy_(bin_ema_w(bf, fb, term.float(), dw, 0.9))
+            else:
+                ext = torch.cat((bf, bf.new_zeros(1)))
+                ext.index_put_((torch.where(done, fb, nb),), 0.9 * bf[fb] + 0.1 * term.float())
+                self.bin_fail.copy_(ext[:nb])
         out["n_done"] = dw.sum()
         out["ep_len_sum"] = (T * dw).sum()
         out["ep_ret_norm_sum"] = (self.ep_ret / (T * self.mdp.max_step_reward) * dw).sum()
@@ -1076,9 +1153,12 @@ class PairedTrackingSim(TrackingSim):
 
     def step(self, a: torch.Tensor, S: tuple | None = None, inplace: bool = False) -> dict:
         """One control step of both robots with setpoints ``a`` (2P, 29), the first robots' rows first. In training an
-        env's episode ends for both robots when either terminates or times out (``done``; ``term`` stays each robot's)."""
-        if inplace:
-            raise ValueError("the two-robot scene has no in-place (CUDA-graph) steps")
+        env's episode ends for both robots when either terminates or times out (``done``; ``term`` stays each robot's).
+        ``inplace`` (evaluation mode, the caller's S; a probe sweep's CUDA graph, algos.eprobe): the frame counter, episode
+        step and previous action updated in place, and the state after the step read by capture_state (TrackingSim.step's
+        ``inplace``; the same values)."""
+        if inplace and (not self.eval_mode or S is None):
+            raise ValueError("inplace steps are for evaluation, with the state passed")
         P = self.P
         S = self.state() if S is None else S
         f = self.f.clone()
@@ -1091,7 +1171,7 @@ class PairedTrackingSim(TrackingSim):
         self.scene.write_data_to_sim()
         self.sim.step(render=False)
         self.scene.update(CONTROL_DT)
-        S1 = self.state()
+        S1 = self.capture_state() if inplace else self.state()
         f1 = f + 1
         r, terms = self.reward_fn(S1, f1, a, a_prev, terms=True)
         term = self.mdp.termination(S1, f1)
@@ -1106,9 +1186,14 @@ class PairedTrackingSim(TrackingSim):
         }  # fmt: skip
         self.ep_disc_ret += (self.gamma ** ep_step.float()) * r
         self.ep_ret += r
-        self.f = f1
-        self.ep_step = ep_step + 1
-        self.a_prev = a.clone()
+        if inplace:
+            self.f.copy_(f1)
+            self.ep_step.copy_(ep_step + 1)
+            self.a_prev.copy_(a)
+        else:
+            self.f = f1
+            self.ep_step = ep_step + 1
+            self.a_prev = a.clone()
         if self.eval_mode:
             self.failed_eval |= term & ~self.done_eval
             self.done_eval |= own
@@ -1120,7 +1205,17 @@ class PairedTrackingSim(TrackingSim):
             boot = torch.where(term[ids], 0.0, (self.gamma**T) * (self.ep_ret[ids] / T) / (1 - self.gamma))
             G = self.ep_disc_ret[ids] + boot
             b = self.start_bin[ids]
-            self.bin_G.index_put_((b,), 0.8 * self.bin_G[b] + 0.2 * G)
+            if self.bin_fix:
+                self.bin_G.copy_(bin_ema(self.bin_G, b, G, 0.8))
+            else:
+                self.bin_G.index_put_((b,), 0.8 * self.bin_G[b] + 0.2 * G)
+            if self.fail_reset > 0:  # each robot's termination rate in the bin its episode ended in (TrackingSim.step's)
+                fb = self.motion.frame_bin[f[ids]]
+                self.bin_fail.mul_(0.999)
+                if self.bin_fix:
+                    self.bin_fail.copy_(bin_ema(self.bin_fail, fb, term[ids].float(), 0.9))
+                else:
+                    self.bin_fail.index_put_((fb,), 0.9 * self.bin_fail[fb] + 0.1 * term[ids].float())
             out["ep_len"] = T
             out["ep_ret_norm"] = self.ep_ret[ids] / (T * self.mdp.max_step_reward)
             self.reset(ids)

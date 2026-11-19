@@ -114,5 +114,5 @@ def default_joint_pos_list() -> list[float]:
     return out
 
 
-def kinematics(device: str, tracked: list[str] = TRACKED_BODIES) -> ArticulationKinematics:
-    return ArticulationKinematics(MJCF_PATH, G1_JOINT_NAMES, tracked, device)
+def kinematics(device: str, tracked: list[str] = TRACKED_BODIES, fused: bool = False) -> ArticulationKinematics:
+    return ArticulationKinematics(MJCF_PATH, G1_JOINT_NAMES, tracked, device, fused=fused)

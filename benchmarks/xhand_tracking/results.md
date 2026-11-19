@@ -80,14 +80,17 @@ it gives the same indices, kinematics, task outputs and training updates bit for
 
 Each algorithm's configurations of record, on `apple` / `oakink_a01002` / `can` (mean of training seeds 0-2; most
 accurate: object position at 20,000 iterations; fastest: minutes to a success of 0.99 with the object within 10 mm, over
-the seeds that reach it, on one A100 40GB with the [speed options](#training-time-with-the-speed-options)):
+the seeds that reach it, with the [speed options](#training-time-with-the-speed-options) on one A100 40GB and on three
+with [`--layout AWL`](#training-time-on-three-gpus)):
 
 | hand | | SuperTrack | SuperMimic |
 |---|---|---|---|
 | Inspire | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm at a success of 99.7 / 100.0 / 99.9 % | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm at 99.9 / 100.0 / 93.8 % |
 | | fastest, one GPU | `hand-supertrack-fast`: 1.0 / 0.8 / 2.0 min, 9 of its 9 runs at the target, mean 1.30 min | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min, 8 of 9, mean 2.19 min |
+| | fastest, three GPUs | `hand-supertrack-fast` with `--layout AWL`: 0.6 / 0.6 / 0.9 min, 9 of its 9 runs at the target, mean 0.70 min | `hand-supermimic-fast --lr 2e-4` with `--layout AWL`: 1.0 / 0.6 / 1.0 min, 7 of 9, mean 1.46 min |
 | Allegro | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm at a success of 100.0 / 100.0 / 99.7 % | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm at 100.0 / 82.7 / 99.6 % |
 | | fastest, one GPU | `hand-supertrack-fast --st_fail_w 5`: 1.1 / 0.8 / 3.9 min, 9 of its 9 runs at the target, mean 1.96 min | `hand-supermimic-fast`: 1.0 / 3.7 / 1.1 min, 9 of 9, mean 1.96 min |
+| | fastest, three GPUs | `hand-supertrack-fast --st_fail_w 5` with `--layout AWL`: 0.7 / 0.7 / 2.7 min, 8 of its 9 runs at the target, mean 1.40 min | `hand-supermimic-fast` with `--layout AWL`: 0.7 / 0.9 / 0.8 min, 7 of 9, mean 1.44 min |
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire
@@ -335,6 +338,53 @@ Per iteration, the phases on the Allegro hand's apple (training seed 0, 3,000 it
 The two update graphs are about 90 % of an iteration. Their kernels' number, not their arithmetic, makes most of their
 time outside the matrix products; compiling the remaining eager parts and the collection, launching small kernels
 together and choosing each matrix product's kernel by timing removes most of it.
+
+## Training time on three GPUs
+
+The same six configurations and speed options with `--layout AWL`: the collection with the simulator and the replay, the
+world model's updates and the policy's update each on its own A100 40GB, every step on the others' results of the
+previous iteration. One run at a time on three GPUs of a node, the other GPUs idle, after the same untimed warm-up;
+minutes, iterations/s and the object error as [with the speed options](#training-time-with-the-speed-options).
+
+Mean minutes over the nine runs, one GPU and three: Inspire 1.30 and 0.70 (SuperTrack), 2.19 and 1.46 (SuperMimic); Allegro
+1.96 and 1.40, 1.96 and 1.44; XHand 1.16 and 0.78, 1.03 and 0.72. Runs at the target on three GPUs: SuperTrack 9, 8 and 9
+of 9, SuperMimic 7, 7 and 9 (Inspire, Allegro, XHand).
+
+| task | | seeds | minutes to a success of 0.99 with the object within 10 mm ↓ | iterations/s ↑ | object position at 6,000 ↓ |
+|---|---|---|---|---|---|
+| `apple` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 0.7, 0.7, 0.5 | 39.8 | 2.8 ± 0.0 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 0.9, 0.7, 1.5 | 30.5 | 4.7 ± 0.1 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 0.8, 0.7, 0.7 | 39.6 | 2.4 ± 0.0 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 0.7, 0.7, 0.7 | 29.6 | 4.0 ± 0.2 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 0.6, 0.6, 0.6 | 39.4 | 2.5 ± 0.2 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 0.6, 0.6, 0.7 | 30.3 | 3.3 ± 0.1 mm |
+| `oakink_a01002` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 0.6, 0.6, 0.6 | 39.8 | 1.6 ± 0.0 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | 0.8, 0.6, 0.6 | 30.5 | 3.1 ± 0.3 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | 0.6, 0.7, 0.7 | 39.6 | 1.3 ± 0.0 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 0.9, -, - | 29.6 | 6.4 ± 2.7 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 0.6, 0.6, 0.6 | 39.4 | 1.5 ± 0.1 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 0.7, 0.8, 0.7 | 30.3 | 2.6 ± 0.1 mm |
+| `can` | Inspire, `hand-supertrack-fast` | 0, 1, 2 | 0.9, 0.7, 1.0 | 39.7 | 2.3 ± 0.2 mm |
+|  | Inspire, `hand-supermimic-fast --lr 2e-4` | 0, 1, 2 | -, -, 1.0 | 30.5 | 8.6 ± 2.6 mm |
+|  | Allegro, `hand-supertrack-fast --st_fail_w 5` | 0, 1, 2 | -, 2.9, 2.6 | 39.7 | 3.2 ± 1.0 mm |
+|  | Allegro, `hand-supermimic-fast` | 0, 1, 2 | 0.8, 0.8, 0.8 | 29.6 | 3.2 ± 0.6 mm |
+|  | XHand, `hand-supertrack-fast` | 0, 1, 2 | 1.0, 1.1, 1.4 | 39.4 | 2.1 ± 0.1 mm |
+|  | XHand, `hand-supermimic-fast` | 0, 1, 2 | 0.8, 0.8, 0.8 | 30.3 | 3.4 ± 0.0 mm |
+
+Per iteration on the Allegro hand's apple (training seed 0, 3,000 iterations, ms, means over iterations 1,001-3,000),
+with the code and GPUs of the timed runs. With three GPUs the phases are timed one after another, every device
+synchronized at each boundary, so their sum is not the running iteration:
+
+| phase | SuperTrack, one GPU | SuperTrack, three GPUs | SuperMimic, one GPU | SuperMimic, three GPUs |
+|---|---|---|---|---|
+| collection | 8.0 | 12.3 | 10.0 | 13.2 |
+| world model's updates | 24.8 | 24.9 | 25.1 | 26.8 |
+| policy's update (SuperMimic's with the critic's) | 24.8 | 24.6 | 33.4 | 33.3 |
+| exchange between the GPUs | - | 1.5 | - | 1.4 |
+| iterations/s of the timed runs on this clip | 17.5 | 39.6 | 14.7 | 29.6 |
+
+With three GPUs the steps run at once, so an iteration takes about as long as the slowest: 25.3 ms for SuperTrack (its
+two updates, 24.9 and 24.6 ms) and 33.8 ms for SuperMimic (its policy update with the critic's, 33.3 ms).
 
 ## Training time
 

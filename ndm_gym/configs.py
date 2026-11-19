@@ -25,6 +25,12 @@ ST_FAST = f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_
 SM_FAST = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 {RECIPE} --pi_ema 0.99 --pi_batch 1024 --pi_lr_mult 2 "
            f"--pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix --sm_residual --wm_structured {RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
 PAIRED = "--motions interhuman --paired"  # with --motion_dir: a two-person clip (tools/convert_interhuman.py)
+ENCODE_ONCE = "--goal_table --pi_encode_once"  # the policy's goal encoded once per update from every frame's goal (equal up to rounding)
+TWO_G1_ST = (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {ENCODE_ONCE} {SYSTEMS} {PAIRED} "
+             "--ckpt_every 1000 --iterations 9396")  # fmt: skip
+TWO_G1_SM = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 --contact_reward 0.25 "
+             f"--ref_contact_fix --sm_residual --wm_structured {ENCODE_ONCE} {SYSTEMS} {PAIRED} --ckpt_every 1000 --iterations 9396")  # fmt: skip
+AWL3 = "--layout AWL"  # three GPUs: actor | world-model learner | policy learner (the two-G1 configurations run no probe sweeps)
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
 MUSCLE_SYS = "--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
@@ -62,28 +68,36 @@ CONFIGS = {
                                    "LAFAN1: return 0.82 after 4.19 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
         "lafan1-supermimic-fast": (f"{SM_FAST} --pi_encode_once {LEAN}",
                                    "LAFAN1: return 0.82 after 3.53 +- 0.30 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
-        "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4}",
-                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.48 +- 0.13 min, 5.9 GPU-minutes "
-                                        "(seeds 0-2)"),
-        "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4}",
-                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.37 +- 0.05 min, 5.5 GPU-minutes "
-                                        "(seeds 0-2)"),
+        "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4} --fk_fused",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.47 +- 0.05 min, 5.9 GPU-minutes "
+                                        "(seeds 3-5; 1.52 +- 0.08 without --fk_fused in the same session)"),
+        "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4} --fk_fused",
+                                        "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.42 +- 0.09 min, 5.7 GPU-minutes "
+                                        "(seeds 3-5; 1.49 +- 0.05 without --fk_fused in the same session)"),
         "lafan1-supertrack-rf-accurate": (f"--algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 "
                                           f"{SPEED} {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.832 +- 0.003, MPJPE 21.0 +- 1.3 mm (seeds 7-9)"),
         "lafan1-supermimic-rf-accurate": (f"--algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 "
                                           f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
-        "two-g1-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {SYSTEMS} {PAIRED} "
-                              "--ckpt_every 1000 --iterations 9396",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / "
-                              "root-relative (seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4)"),
-        "two-g1-supermimic": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 "
-                              f"--contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured {SYSTEMS} {PAIRED} --ckpt_every 1000 "
-                              "--iterations 9396",
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / "
-                              "root-relative (seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: "
-                              "0.9042 +- 0.0015, 47.5 / 16.1 mm)"),
+        "two-g1-supertrack": (TWO_G1_ST,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.66 +- 0.00 min, root-relative MPJPE there "
+                              "16.8 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / root-relative "
+                              "(seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4; measured before "
+                              "the goal was encoded once, which computes the same values up to float rounding)"),
+        "two-g1-supermimic": (TWO_G1_SM,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.26 +- 0.00 min, root-relative MPJPE there "
+                              "19.9 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / root-relative "
+                              "(seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: 0.9042 +- 0.0015, "
+                              "47.5 / 16.1 mm; measured before the goal was encoded once, which computes the same values up to float rounding)"),
+        "two-g1-supertrack-3gpu": (f"{TWO_G1_ST} {AWL3}",
+                                   "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
+                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min, root-relative MPJPE there 16.1 mm "
+                                   "(seeds 0-2)"),
+        "two-g1-supermimic-3gpu": (f"{TWO_G1_SM} {AWL3}",
+                                   "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
+                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min, root-relative MPJPE there 20.0 mm "
+                                   "(seeds 0-2)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "

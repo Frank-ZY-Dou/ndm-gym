@@ -141,7 +141,7 @@ the simulator is stepped, which no option here changes.
 The learner's options (`--imag_hoist`, `--pi_deferred_grads`, `--wm_deferred_grads`, `--deferred_bf16`, `--muon_batched`,
 `--wm_presample`) apply to SuperTrack's and SuperMimic's updates with the MLP world model on the one-robot scene. They are
 refused with the RigidFormer world model, with `--paired`, and with `--wm_cudagraphs` or `--pi_cudagraphs` (`--update_graphs`
-captures whole updates). `--pi_encode_once` is the policy's alone and runs with either world model.
+captures whole updates). `--pi_encode_once` is the policy's alone and runs with either world model, one robot or two.
 
 This library's own, not from XMimic: `--eprobe_lean`. A probe sweep's step then computes what the sweep reads (the policy,
 the simulator's step, the termination test) and not the step's reward and flattened states; the sweeps record the same
@@ -157,8 +157,8 @@ ndm-train --algo blinkmimic --pi_encode_once --imag_hoist --muon_batched --wm_pr
 `--layout` (default `1GPU`: the loop as it is) runs an iteration's steps at the same time on the first GPUs the trainer
 sees, each on the others' results of the previous iteration. It needs the systems options `--no_sync --update_graphs
 --graph_early --collect_graph --reset_masked`, which `--algo blinkmimic` has, and covers SuperMimic and SuperTrack with the
-MLP world model. `--paired`, the RigidFormer, `--resume`, `--pi_updates` other than 1 and the learner's options of section 3
-are refused.
+MLP world model, in the one-robot and the two-robot scene (`--paired`: the split does not see the pairing). The RigidFormer,
+`--resume`, `--pi_updates` other than 1 and the learner's options of section 3 are refused.
 
 | | GPU 0: actor | GPU 1 | GPU 2 |
 |---|---|---|---|

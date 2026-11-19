@@ -18,4 +18,4 @@ This contribution covers Pen, Hammer and Relocate on the merged Door foundation.
 | Preview inspection | First/middle/last frames of every selected clip and the grid inspected for labels, framing, native appearance and mark; [visual QA](preview_qa.json). Reference-only clips stay out of the README. |
 | Data, assets and large outputs | Assets and demonstrations obtained externally with pinned versions and archive hashes; attribution in NOTICE. Checkpoints, raw recordings and operational logs remain outside git. Only reports, provenance and WebP previews are versioned. |
 
-[Software validation](software_validation.json) distinguishes checked source versions and skipped coverage. The scientific limitations include seed-sensitive SuperMimic performance, no overall tracking gain over the prior on Hammer/Relocate, and no held-out-motion evaluation. These remain part of the contribution.
+[Software validation](software_validation.json) distinguishes checked source versions and skipped coverage. The evaluation covers no held-out motions. Every seed's native success and tracking error, with the prior's, is in the [results](results.md).

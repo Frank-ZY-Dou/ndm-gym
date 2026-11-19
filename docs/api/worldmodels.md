@@ -18,6 +18,8 @@
 
 ::: ndm_gym.worldmodels.hand
 
+::: ndm_gym.worldmodels.piano
+
 ::: ndm_gym.worldmodels.quadrotor
 
 ::: ndm_gym.worldmodels.animal

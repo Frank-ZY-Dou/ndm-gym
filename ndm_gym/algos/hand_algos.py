@@ -51,6 +51,7 @@ def replay_fields(task: HandTask) -> dict:
 
 class HandSuperMimic:
     kind = "increment"  # the world model's parameterization
+    decode_replay_state = staticmethod(unflatten_state)  # the task state consumed by the imagined rollout
 
     def __init__(self, args: argparse.Namespace, kin: HandKinematics, task: HandTask, dev: str) -> None:
         self.args, self.kin, self.task, self.dev = args, kin, task, dev
@@ -234,7 +235,7 @@ class HandSuperMimic:
         (policy loss, value loss, imagined reward as a share of the maximum, gradient norm, imagined survival)."""
         args, horizon, B = self.args, self.horizon, self.args.pi_batch
         s, _ = self.sample_valid_starts_nosync(buffer, B)  # under --layout: the batch the actor drew
-        S, f, a_prev = unflatten_state(s["s"]), s["f"], s["a_prev"]
+        S, f, a_prev = self.decode_replay_state(s["s"]), s["f"], s["a_prev"]
         set_requires_grad(self.wm, False)
         set_requires_grad(self.critic, False)
         if self.rollout is not None:  # --compile_rollout: the rollout below as one compiled function
@@ -402,13 +403,13 @@ class HandSuperTrack(HandSuperMimic):
         of the maximum, gradient norm, imagined survival), the layout of SuperMimic's."""
         horizon, B = self.horizon, self.args.pi_batch
         s, _ = self.sample_valid_starts_nosync(buffer, B)  # under --layout: the batch the actor drew
-        S, f, a_prev = unflatten_state(s["s"]), s["f"], s["a_prev"]
+        S, f, a_prev = self.decode_replay_state(s["s"]), s["f"], s["a_prev"]
         set_requires_grad(self.wm, False)
         if self.rollout is not None:  # --compile_rollout: the rollout below as one compiled function, the noises drawn first
             noises = [self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev) for _ in range(horizon)]
             E, d, acts, rews = self.rollout(S, f, a_prev, noises)
         else:
-            fk = self.start_fk(S[0])  # --compile_updates: compiled
+            fk = self.start_fk(S[0]) if self.start_fk is not None else None  # --compile_updates: compiled for hand-object tracking
             errs, dones, acts, rews = [], [], [], []
             for _ in range(horizon):
                 noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)

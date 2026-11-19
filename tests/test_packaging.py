@@ -31,8 +31,9 @@ NEEDS_SIMULATOR = {
     "ndm_gym.algos.hoi_algos",  # ndm_constants from sim.rigid.hdmi_sim
     "ndm_gym.train_hoi",  # isaaclab.app
 }
-NEEDS_TRITON = {"ndm_gym.core.token_attention", "ndm_gym.kernels.mlp_fused", "ndm_gym.kernels.muscle_geometry", "ndm_gym.kernels.rf_block",
-                "ndm_gym.kernels.rf_train", "ndm_gym.worldmodels.g1_fused", "ndm_gym.worldmodels.hoi_fused", "ndm_gym.worldmodels.quad_fused"}  # fmt: skip  # GPU kernels, imported where a flag asks for them
+NEEDS_TRITON = {"ndm_gym.core.token_attention", "ndm_gym.kernels.fk", "ndm_gym.kernels.mlp_fused", "ndm_gym.kernels.muscle_geometry",
+                "ndm_gym.kernels.rf_block", "ndm_gym.kernels.rf_train", "ndm_gym.worldmodels.g1_fused", "ndm_gym.worldmodels.hoi_fused",
+                "ndm_gym.worldmodels.quad_fused"}  # fmt: skip  # GPU kernels, imported where a flag asks for them
 
 
 def run_blocked(code: str, tmp_path) -> dict:

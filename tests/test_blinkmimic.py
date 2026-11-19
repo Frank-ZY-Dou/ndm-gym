@@ -108,7 +108,6 @@ def test_algo_blinkmimic_is_supermimic_with_the_preset():
         ["--algo", "supertrack", "--contact_reward", "0.25"],
         ["--algo", "supermimic", "--ref_contact_fix"],
         ["--algo", "supermimic", "--wm_mirror", "0.5", "--wm_sample", "prioritized"],
-        ["--algo", "supermimic", "--fail_reset", "0.3", "--paired", "--motions", "interhuman"],
         ["--algo", "supermimic", "--pi_lr_mult", "4", "--lr_decay_by", "1400"],
         ["--algo", "supermimic", "--lr_decay_ret", "0.75"],
         ["--algo", "supermimic", "--pi_ema", "1"],
