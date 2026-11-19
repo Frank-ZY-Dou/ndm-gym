@@ -106,12 +106,12 @@ def test_kinematics_match_mujoco(fingers, palm_bodies, sides):
                                                  (XHAND_FINGERS, ("right", "left"), (36, 85, 3 * 36 + 3 * 10 + 2 * 21))])  # fmt: skip
 def test_sizes_follow_the_hands(monkeypatch, fingers, sides, sizes):
     """A four-fingered hand with sixteen finger joints, and two XHands: the state, the observation and the networks take
-    their sizes, and an update of each algorithm runs."""
+    their sizes, and an update of each algorithm runs, also with the world model on the palms' kinematics alone."""
     monkeypatch.setattr(torch, "compile", lambda f, **_: f)
     torch.manual_seed(0)
     kin, task = hand_task(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies=False, sides=sides)))
     assert (kin.num_joints, task.state_dim, task.obs_dim) == sizes
-    for argv in (["--algo", "supermimic"], ["--algo", "supertrack", "--st_task_weights"]):
+    for argv in (["--algo", "supermimic"], ["--algo", "supertrack", "--st_task_weights"], ["--algo", "supermimic", "--wm_palm_fk"]):
         args, algo, buffer = agent_and_replay(kin, task, argv)
         assert algo.pi.net[-1].out_features == kin.num_joints
         assert torch.isfinite(algo.wm_update(buffer))
@@ -877,14 +877,16 @@ def test_inductor_settings(monkeypatch):
     assert inductor.max_autotune_gemm and inductor.triton.cudagraphs == cudagraphs
 
 
-@pytest.mark.parametrize("fingers,palm_bodies", [(XHAND_FINGERS, True), (ALLEGRO_FINGERS, False)])
-def test_palm_kinematics(fingers, palm_bodies):
-    """HandKinematics.palm (--wm_palm_fk) is forward's palm keypoint and rotation bit for bit, from the palm's chain alone."""
-    kin = HandKinematics(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies)), "cpu")
+@pytest.mark.parametrize("fingers,palm_bodies,sides", [(XHAND_FINGERS, True, ("right",)), (ALLEGRO_FINGERS, False, ("right",)),
+                                                       (XHAND_FINGERS, True, ("right", "left"))])  # fmt: skip
+def test_palm_kinematics(fingers, palm_bodies, sides):
+    """HandKinematics.palm (--wm_palm_fk) is forward's palm keypoints and rotations bit for bit, from the palms' chains
+    alone, for one hand or two."""
+    kin = HandKinematics(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies, sides)), "cpu")
     q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(64, kin.num_joints, generator=torch.Generator().manual_seed(0))
     (keypoints, palm_R), (palm, palm_R1) = kin.forward(q), kin.palm(q)
-    assert palm.shape == (64, 1, 3) and torch.equal(palm[:, 0], keypoints[:, 0]) and torch.equal(palm_R1, palm_R)
-    assert len(kin.palm_chain) == (6 if palm_bodies else 1) < len(kin.steps)
+    assert palm.shape == (64, len(sides), 3) and torch.equal(palm, keypoints[:, kin.palm_keypoints]) and torch.equal(palm_R1, palm_R)
+    assert len(kin.palm_chains) == len(sides) * (6 if palm_bodies else 1) < len(kin.steps)
 
 
 @pytest.mark.parametrize("extra", [[], ST_ARM, ST_ARM[:6] + ["--st_task_weights"]], ids=["supermimic", "supertrack", "supertrack_task_weights"])

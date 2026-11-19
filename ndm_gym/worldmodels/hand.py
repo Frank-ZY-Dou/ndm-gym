@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 KINDS = ("increment", "accel")
-# the hand-object state tuple S = (q, qd, p, R, v, w) of tasks.hand_tracking: the hand's joint positions and velocities
+# the hand-object state tuple S = (q, qd, p, R, v, w) of tasks.hand_tracking: the hands' joint positions and velocities
 # (..., num_joints), the object's position (..., 3), rotation matrix (..., 3, 3), world linear and angular velocity (..., 3)
 HandState = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -59,8 +59,9 @@ class HandWorldModel(nn.Module):
     def inputs(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> torch.Tensor:
         q, qd, p, R, v, w = S
         keypoints, palm_R = fk
+        palms_alone = keypoints.shape[-2] == len(self.palm_keypoints)  # HandKinematics.palm's keypoints, not forward's
         about = []  # the object about each palm, in the palm's frame
-        for hand, k in enumerate(self.palm_keypoints):
+        for hand, k in enumerate(range(len(self.palm_keypoints)) if palms_alone else self.palm_keypoints):
             Rt = palm_R[..., hand, :, :].transpose(-1, -2)
             about += [(Rt @ (p - keypoints[..., k, :]).unsqueeze(-1)).squeeze(-1), mat_to_6d(Rt @ R)]
         return torch.cat((q[..., self.posed], qd, *about, v, w, p[..., 2:3], mat_to_6d(R), u - q), -1)
@@ -79,14 +80,9 @@ class HandWorldModel(nn.Module):
             return self.increments(S, S1)
         return torch.cat((S1[1] - S[1], S1[4] - S[4], S1[5] - S[5]), -1) / CONTROL_DT
 
-<<<<<<< HEAD
     def step(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> HandState:
         """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward, or its ``palm``: only the
-        palm's pose is read) and the targets ``u``."""
-=======
-    def step(self, S, fk, u: torch.Tensor):
-        """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward) and the targets ``u``."""
->>>>>>> 6c5de0f (Hand-object tracking with two hands: the hands' joints in one state, a palm frame per hand in the observation, the world model's inputs and the errors; tests)
+        palms' poses are read) and the targets ``u``."""
         q, qd, p, R, v, w = S
         y = run_mlp(self.net, self.in_norm(self.inputs(S, fk, u)))
         d = y * self.out_norm.std() + self.out_norm.mean

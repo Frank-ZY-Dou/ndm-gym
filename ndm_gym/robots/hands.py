@@ -102,11 +102,13 @@ class HandKinematics:
         self.body_pos = tensor(model.body_pos[order])
         self.body_rot = quat_to_mat(tensor(model.body_quat[order]))
         self.site_body = [local[int(model.site_bodyid[s])] for s in site_ids]
-        palm_chain, b = [], self.site_body[0]  # the bodies from the world to the palm's site, parents first (``palm``)
-        while b >= 0:
-            palm_chain.append(b)
-            b = self.steps[b]["parent"]
-        self.palm_chain = palm_chain[::-1]
+        palm_chains = set()  # the bodies between the world and the palms' sites (``palm``)
+        for start, _ in self.hand_keypoints:
+            b = self.site_body[start]
+            while b >= 0:
+                palm_chains.add(b)
+                b = self.steps[b]["parent"]
+        self.palm_chains = sorted(palm_chains)  # parents before children, as ``steps``
         self.site_pos = tensor(model.site_pos[site_ids])
         lo, hi = model.jnt_range[joint_ids].T
         self.q_lo, self.q_hi = tensor(lo), tensor(hi)
@@ -119,11 +121,12 @@ class HandKinematics:
         self.finger_joints = torch.tensor(fingers, device=device)  # the columns of the fingers' joints
         self.palm_translations = translations  # the columns of the palms' slides
 
-    def forward(self, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """Joint positions (..., num_joints) -> keypoint positions (..., num_keypoints, 3) and the palms' rotations
-        (..., num_hands, 3, 3). A body's joints act in their order, as in MuJoCo."""
-        pos, rot = [], []
-        for s, p0, R0 in zip(self.steps, self.body_pos, self.body_rot, strict=True):
+    def _bodies(self, q: torch.Tensor, bodies) -> tuple[dict, dict]:
+        """The positions and rotations of ``bodies`` (parents before children). A body's joints act in their order, as in
+        MuJoCo."""
+        pos, rot = {}, {}
+        for i in bodies:
+            s, p0, R0 = self.steps[i], self.body_pos[i], self.body_rot[i]
             if s["parent"] < 0:
                 p, R = p0.expand(q.shape[:-1] + (3,)), R0.expand(q.shape[:-1] + (3, 3))
             else:
@@ -135,9 +138,23 @@ class HandKinematics:
                     Rj = axis_angle_to_mat(joint["axis"], q[..., joint["column"]])
                     p = p + mat_vec(R, joint["anchor"] - mat_vec(Rj, joint["anchor"]))
                     R = mat_mat(R, Rj)
-            pos.append(p), rot.append(R)
+            pos[i], rot[i] = p, R
+        return pos, rot
+
+    def forward(self, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """Joint positions (..., num_joints) -> keypoint positions (..., num_keypoints, 3) and the palms' rotations
+        (..., num_hands, 3, 3)."""
+        pos, rot = self._bodies(q, range(len(self.steps)))
         keypoints = torch.stack([pos[b] + mat_vec(rot[b], self.site_pos[k]) for k, b in enumerate(self.site_body)], -2)
         return keypoints, torch.stack([rot[self.site_body[start]] for start, _ in self.hand_keypoints], -3)
+
+    def palm(self, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """``forward``'s palms alone: their keypoints (..., num_hands, 3) and rotations (..., num_hands, 3, 3), from the
+        bodies of the palms' chains (the same operations, so the same values); what the world model reads (train_hand
+        --wm_palm_fk)."""
+        pos, rot = self._bodies(q, self.palm_chains)
+        bodies = [(start, self.site_body[start]) for start, _ in self.hand_keypoints]
+        return torch.stack([pos[b] + mat_vec(rot[b], self.site_pos[k]) for k, b in bodies], -2), torch.stack([rot[b] for _, b in bodies], -3)
 
     def fingertips_about_palms(self, keypoints: torch.Tensor, palm_R: torch.Tensor) -> torch.Tensor:
         """Every fingertip about its hand's palm, in that palm's frame: (..., num_keypoints - num_hands, 3)."""
@@ -146,13 +163,6 @@ class HandKinematics:
             for hand, (start, stop) in enumerate(self.hand_keypoints)
         ]  # rows x^T R = (R^T x)^T
         return torch.cat(parts, -2)
-
-    def palm(self, q: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        """``forward``'s palm alone: its keypoint (..., 1, 3) and rotation (..., 3, 3), from the bodies of the palm's chain
-        (the same operations, so the same values); what the world model reads (train_hand --wm_palm_fk)."""
-        pos, rot = self._bodies(q, self.palm_chain)
-        b = self.site_body[0]
-        return (pos[b] + mat_vec(rot[b], self.site_pos[0])).unsqueeze(-2), rot[b]
 
 
 def scene_indices(model: mujoco.MjModel) -> dict[str, np.ndarray | int]:
