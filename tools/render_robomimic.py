@@ -75,7 +75,7 @@ def main():
     ap.add_argument("--ghost", default="all", choices=["all", "objects", "none"])
     ap.add_argument("--title", default="", help="bold label, e.g. the method")
     ap.add_argument("--speed", type=float, default=1.0)
-    ap.add_argument("--fps", type=float, default=20.0)
+    ap.add_argument("--fps", type=float, default=None, help="a WebP's or a video's frame rate (default 20)")
     ap.add_argument("--first", type=float, default=0.0, help="the window's start in the rollout's seconds")
     ap.add_argument("--seconds", type=float, default=None, help="the window's length in the rollout's seconds (default: to its end)")
     ap.add_argument("--width", type=int, default=640)
@@ -85,12 +85,20 @@ def main():
     ap.add_argument("--distance", type=float, default=None)
     ap.add_argument("--lookat", type=float, nargs=3, default=None)
     ap.add_argument("--follow", type=float, default=0.25, help="the share of the tracked objects' mean position in the camera's lookat")
-    ap.add_argument("--frames", type=int, default=8, help="a contact sheet's frames")
-    ap.add_argument("--cols", type=int, default=4, help="a contact sheet's columns")
-    ap.add_argument("--quality", type=int, default=70, help=".webp: the lossy WebP's quality")
+    ap.add_argument("--frames", type=int, default=None, help="a contact sheet's frames (default 8)")
+    ap.add_argument("--cols", type=int, default=None, help="a contact sheet's columns (default 4)")
+    ap.add_argument("--quality", type=int, default=None, help=".webp: the lossy WebP's quality (default 70)")
     ap.add_argument("--no_labels", action="store_true", help="the NDM Gym mark only")
     ap.add_argument("--no_mark", action="store_true")
     a = ap.parse_args()
+    ext = os.path.splitext(a.out)[1].lower()
+    sheet = ext in (".png", ".jpg")
+    given = [o for o, v in (("--frames", a.frames), ("--cols", a.cols)) if v is not None and not sheet]
+    given += [o for o, v in (("--fps", a.fps), ("--speed", None if a.speed == 1 else a.speed)) if v is not None and sheet]
+    given += ["--quality"] if a.quality is not None and ext != ".webp" else []
+    if given:
+        ap.error(f"{', '.join(given)} not used by an --out of {ext or 'no extension'}")
+    a.frames, a.cols, a.quality, a.fps = a.frames or 8, a.cols or 4, a.quality or 70, a.fps or 20.0
     check_egl_device()
 
     with np.load(a.rollout) as d:
@@ -183,9 +191,8 @@ def main():
 
     name = {"lift": "Lift", "square": "Square", "transport": "Transport"}[task]
     speed = "" if a.speed == 1 else f"   {a.speed:g}x"
-    ext = os.path.splitext(a.out)[1].lower()
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    if ext in (".png", ".jpg"):  # a contact sheet
+    if sheet:  # a contact sheet
         steps = np.linspace(first, T - 1, a.frames).round().astype(int)
         tiles = [frame(k, target(k), f"{name}   {k * dt:.2f} s") for k in steps]
         rows = (len(tiles) + a.cols - 1) // a.cols

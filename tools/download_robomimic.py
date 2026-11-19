@@ -5,13 +5,16 @@ and the meshes and textures of robosuite 1.5.0 that their scenes name (github.co
 
     python tools/download_robomimic.py [--out data/robomimic] [--tasks lift square transport]
 
-Lift's file is 37 MB, Square's 69 MB, Transport's 226 MB; the assets 46 MB. The files keep their upstream terms and stay out
-of Git.
+Lift's file is 37 MB, Square's 69 MB, Transport's 226 MB; the assets 46 MB. Every file is checked against its SHA-256 in
+``tools/download_robomimic.sha256.json`` (by its path under ``<out>``), also when it is already there; a file not listed
+there, or one that differs, raises. The files keep their upstream terms and stay out of Git.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import urllib.parse
@@ -21,17 +24,39 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HF_DATASET, HF_REVISION = "robomimic/robomimic_datasets", "74fa018461f479cd9fd15b924a16103012096203"
 ROBOSUITE, ROBOSUITE_COMMIT = "ARISE-Initiative/robosuite", "dc7fcf9fa6cdf0796f79b4c873166a8fb9fe8c9e"  # v1.5.0, as the data were recorded
 TASKS = ("lift", "square", "transport")
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "download_robomimic.sha256.json")) as _f:
+    SHA256 = json.load(_f)  # each file's path under --out: its SHA-256 at the pinned revisions
 
 
-def fetch(url: str, dest: str):
-    """Download ``url`` to ``dest`` through a ``.part`` file, unless ``dest`` exists."""
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 24):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def fetch(url: str, out: str, rel: str) -> str:
+    """Download ``url`` to ``<out>/<rel>`` through a ``.part`` file, unless it exists; either way check its SHA-256 against
+    ``SHA256[rel]``. A mismatching download is deleted. Returns the path."""
+    if rel not in SHA256:
+        raise ValueError(f"{rel}: no SHA-256 in download_robomimic.sha256.json")
+    dest = os.path.join(out, rel)
     if os.path.exists(dest):
-        return
+        got = sha256(dest)
+        if got != SHA256[rel]:
+            raise ValueError(f"{dest}: SHA-256 {got}, expected {SHA256[rel]}; delete it to download it again")
+        return dest
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     with urllib.request.urlopen(url) as r, open(dest + ".part", "wb") as f:
         while chunk := r.read(1 << 22):
             f.write(chunk)
+    got = sha256(dest + ".part")
+    if got != SHA256[rel]:
+        os.remove(dest + ".part")
+        raise ValueError(f"{url}: SHA-256 {got}, expected {SHA256[rel]}")
     os.replace(dest + ".part", dest)
+    return dest
 
 
 def asset_paths(path: str) -> set[str]:
@@ -54,13 +79,13 @@ def main():
     args = parser.parse_args()
     assets = set()
     for task in args.tasks:
-        dest = os.path.join(args.out, task, "demo_v15.hdf5")
-        fetch(f"https://huggingface.co/datasets/{HF_DATASET}/resolve/{HF_REVISION}/v1.5/{task}/ph/demo_v15.hdf5", dest)
+        dest = fetch(f"https://huggingface.co/datasets/{HF_DATASET}/resolve/{HF_REVISION}/v1.5/{task}/ph/demo_v15.hdf5", args.out,
+                     f"{task}/demo_v15.hdf5")
         assets |= asset_paths(dest)
         print(f"{task}: {dest}", flush=True)
     for p in sorted(assets):
         fetch(f"https://raw.githubusercontent.com/{ROBOSUITE}/{ROBOSUITE_COMMIT}/robosuite/models/assets/{urllib.parse.quote(p)}",
-              os.path.join(args.out, "robosuite_assets", p))
+              args.out, f"robosuite_assets/{p}")
     print(f"{len(assets)} robosuite asset files in {os.path.join(args.out, 'robosuite_assets')}", flush=True)
 
 

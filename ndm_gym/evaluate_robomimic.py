@@ -67,6 +67,8 @@ def main():
                         "else a cap (its line search: --solver_ls_iterations)")  # fmt: skip
     parser.add_argument("--solver_ls_iterations", type=int, default=0)
     args = parser.parse_args()
+    if args.solver_ls_iterations and args.solver_iterations <= 0:
+        parser.error("--solver_ls_iterations caps the line search of a --solver_iterations cap (> 0)")
 
     import numpy as np
     import torch

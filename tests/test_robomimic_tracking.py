@@ -7,7 +7,6 @@ import argparse
 import importlib.util
 import json
 
-import h5py
 import mujoco
 import numpy as np
 import pytest
@@ -113,6 +112,7 @@ def test_servos_and_the_scene():
 
 def test_demonstration_file(tmp_path):
     """A demonstration file in robomimic's layout: the states' time, qpos and qvel; the scene; the control frequency."""
+    h5py = pytest.importorskip("h5py")
     from tools.download_robomimic import asset_paths
 
     model = scene_spec().compile()
