@@ -28,11 +28,11 @@ import torch.nn as nn
 from ..buffer import ReplayBuffer
 from ..policies.critic import Critic
 from ..policies.quadruped_policy import QuadrupedPolicy
-from ..robots.go2 import NUM_J, Go2Kinematics
+from ..robots.go2 import Go2Kinematics
 from ..state import CONTROL_DT
 from ..tasks.hdmi import relative_rot, rot_angle
-from ..tasks.quadruped_tracking import GOAL_FRAME_DIM, OBS_DIM, STATE_DIM, QuadrupedTask, feet_local, unflatten_state
-from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel
+from ..tasks.quadruped_tracking import QuadrupedTask, feet_local
+from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel, mean_velocity_lead
 from .common import set_requires_grad
 from .hand_fast import Collector, finite_step, optimizer, survive
 from .supertrack import LossBalancer
@@ -40,22 +40,28 @@ from .supertrack import LossBalancer
 WINDOW_KEYS = ("s", "s1", "u", "done")
 
 
-def replay_fields() -> dict:
-    """A transition: the state, the position targets ``u``, the next state, the action before this step's, the frame."""
+def replay_fields(task=QuadrupedTask) -> dict:
+    """A transition: the state, the position targets ``u``, the next state, the action before this step's, the frame;
+    the sizes ``task``'s (the Go2's by default; a humanoid's, tasks.humanoid_tracking)."""
     return {
-        "s": (STATE_DIM, torch.float32),
-        "s1": (STATE_DIM, torch.float32),
-        "u": (NUM_J, torch.float32),
-        "a_prev": (NUM_J, torch.float32),
+        "s": (task.state_dim, torch.float32),
+        "s1": (task.state_dim, torch.float32),
+        "u": (task.num_joints, torch.float32),
+        "a_prev": (task.num_joints, torch.float32),
         "f": ((), torch.long),
         "done": ((), torch.bool),
     }
 
 
-def world_model(model: mujoco.MjModel, kind: str, hidden=(1024, 1024, 1024), act: str = "silu", layer_norm: bool = True) -> MjcfWorldModel:
-    """The world model of the Go2 scene ``model`` over one control step."""
+def world_model(model: mujoco.MjModel, kind: str, hidden=(1024, 1024, 1024), act: str = "silu", layer_norm: bool = True,
+                mean_velocity: bool = False) -> MjcfWorldModel:
+    """The world model of the scene ``model`` (the Go2's, or a humanoid's) over one control step. ``mean_velocity``
+    (SuperTrack's accelerations only; train_humanoid --accel_mean_velocity): the position advances with the mean velocity
+    of the control step's physics steps under a constant acceleration (worldmodels.mjcf.mean_velocity_lead), not the
+    step's last velocity."""
     lay = dataclasses.replace(MjcfLayout.from_model(model), dt=CONTROL_DT)
-    return MjcfWorldModel(lay, hidden=hidden, act=act, layer_norm=layer_norm, kind=kind)
+    lead = {"pos_lead": mean_velocity_lead(model, round(CONTROL_DT / model.opt.timestep))} if mean_velocity and kind == "accel" else {}
+    return MjcfWorldModel(lay, hidden=hidden, act=act, layer_norm=layer_norm, kind=kind, **lead)
 
 
 class QuadrupedSuperMimic:
@@ -69,10 +75,13 @@ class QuadrupedSuperMimic:
             raise ValueError(f"--bptt_decay must be in (0, 1], got {self.bptt_decay}")
         self.no_sync = bool(getattr(args, "no_sync", False))  # train_quadruped --no_sync: the policy update without host reads
         self.fk = kin.forward  # the collection's forward kinematics, run eagerly; train_quadruped --compile_eager compiles them
-        goal_dim = GOAL_FRAME_DIM * self.goal_frames
-        self.wm = world_model(model, self.kind, hidden=args.wm_hidden, act=args.wm_act, layer_norm=not args.wm_no_ln).to(dev)
-        self.pi = QuadrupedPolicy(OBS_DIM, goal_dim).to(dev)
-        self.critic = Critic(OBS_DIM + goal_dim).to(dev)
+        self.unflatten = task.unflatten  # the state's layout: the Go2's, or a humanoid's (tasks.humanoid_tracking)
+        goal_dim = task.goal_frame_dim * self.goal_frames
+        self.wm = world_model(model, self.kind, hidden=args.wm_hidden, act=args.wm_act, layer_norm=not args.wm_no_ln,
+                              mean_velocity=bool(getattr(args, "accel_mean_velocity", False))).to(dev)
+        self.bound = float(getattr(args, "action_bound", 1.0))  # train_humanoid --action_bound: the actions' range (the Go2's: 1)
+        self.pi = QuadrupedPolicy(task.obs_dim, goal_dim, num_actions=task.num_joints, bound=self.bound).to(dev)
+        self.critic = Critic(task.obs_dim + goal_dim).to(dev)
         self.opt_wm = optimizer(args, dev, self.wm, "wm")
         self.opt_pi = optimizer(args, dev, self.pi, "pi")
         self.opt_v = optimizer(args, dev, self.critic, "critic")
@@ -101,7 +110,7 @@ class QuadrupedSuperMimic:
         if noise > 0:
             self.pi.norm.update(torch.cat(x, -1))
         a = self.pi(*x)
-        return (a + noise * torch.randn_like(a)).clamp(-1, 1) if noise > 0 else a
+        return (a + noise * torch.randn_like(a)).clamp(-self.bound, self.bound) if noise > 0 else a
 
     @torch.no_grad()
     def update_wm_norms(self, S, S1, u: torch.Tensor):
@@ -111,10 +120,10 @@ class QuadrupedSuperMimic:
     def _wm_rollout(self, s0: torch.Tensor, u: torch.Tensor, s1: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
         """The k-step rollout from ``s0`` (B, D) under ``u`` (B, k, J) against ``s1`` (B, k, D): the normalized squared
         error summed over the valid steps, mean over windows."""
-        (qpos, qvel), loss = unflatten_state(s0), 0.0
+        (qpos, qvel), loss = self.unflatten(s0), 0.0
         for j in range(u.shape[1]):
             qpos, qvel = self.wm.step(qpos, qvel, u[:, j])
-            e = self.wm.error(qpos, qvel, *unflatten_state(s1[:, j])).pow(2).mean(-1)
+            e = self.wm.error(qpos, qvel, *self.unflatten(s1[:, j])).pow(2).mean(-1)
             loss = loss + (e * mask[:, j]).sum() / s0.shape[0]
         return loss
 
@@ -151,7 +160,7 @@ class QuadrupedSuperMimic:
         (policy loss, value loss, imagined reward as a share of the maximum, gradient norm, imagined survival)."""
         args, horizon, B = self.args, self.horizon, self.args.pi_batch
         age, env = buffer.sample_start_points(B)
-        S, f, a_prev = unflatten_state(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
+        S, f, a_prev = self.unflatten(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
         set_requires_grad(self.wm, False)
         set_requires_grad(self.critic, False)
         fk, x = self.start_features(S, f, a_prev)
@@ -218,18 +227,24 @@ class QuadrupedSuperTrack(QuadrupedSuperMimic):
             raise ValueError("--bptt_decay is SuperMimic's option here")
         self.critic = self.opt_v = None
         self.bal = LossBalancer(len(self.TERMS)).to(dev)
+        self.term_mult = torch.ones(len(self.TERMS), device=dev)  # each term's weight on top of the balancing (a subclass's)
         self.fail_w, self.reg, self.imag_noise = float(args.st_fail_w), float(args.st_reg), float(args.st_imag_noise)
         if self.fail_w < 0 or self.reg < 0 or self.imag_noise < 0:
             raise ValueError(f"--st_fail_w >= 0, --st_reg >= 0, --st_imag_noise >= 0, got {self.fail_w}, {self.reg}, {self.imag_noise}")
         self.step_worth = float(len(self.TERMS))  # a step's worth of loss, the failure penalty's unit: every term at its calibrated 1
         if getattr(args, "st_task_weights", False):  # the task's weights and widths in the calibration's place
-            c = task.cfg
-            per_unit = {"feet": c.w_feet / c.feet_std, "trunk_pos": c.w_trunk_pos / c.trunk_pos_std, "trunk_ori": c.w_trunk_ori / c.trunk_ori_std,
-                        "joint_pos": c.w_joint / c.joint_std, "lin_vel": c.w_lin_vel / c.lin_vel_std, "ang_vel": c.w_ang_vel / c.ang_vel_std}  # fmt: skip
+            per_unit, self.step_worth = self.task_weights(task.cfg)
             self.bal.w.copy_(torch.tensor([per_unit.get(t, 0.0) for t in self.TERMS], device=dev) / self.horizon)
             self.bal.ready.fill_(True)
-            self.step_worth = c.w_feet + c.w_trunk_pos + c.w_trunk_ori + c.w_joint + c.w_lin_vel + c.w_ang_vel
         self.st_step = torch.compile(self._st_step)
+
+    @staticmethod
+    def task_weights(c) -> tuple[dict, float]:
+        """--st_task_weights: per term of ``TERMS`` the task's reward weight over its kernel's width (the others nothing),
+        and a step's worth of loss, the reward's tracking weights' sum."""
+        per_unit = {"feet": c.w_feet / c.feet_std, "trunk_pos": c.w_trunk_pos / c.trunk_pos_std, "trunk_ori": c.w_trunk_ori / c.trunk_ori_std,
+                    "joint_pos": c.w_joint / c.joint_std, "lin_vel": c.w_lin_vel / c.lin_vel_std, "ang_vel": c.w_ang_vel / c.ang_vel_std}  # fmt: skip
+        return per_unit, c.w_feet + c.w_trunk_pos + c.w_trunk_ori + c.w_joint + c.w_lin_vel + c.w_ang_vel
 
     @property
     def optimizers(self):
@@ -269,19 +284,19 @@ class QuadrupedSuperTrack(QuadrupedSuperMimic):
         of the maximum, gradient norm, imagined survival), the layout of SuperMimic's."""
         horizon, B = self.horizon, self.args.pi_batch
         age, env = buffer.sample_start_points(B)
-        S, f, a_prev = unflatten_state(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
+        S, f, a_prev = self.unflatten(buffer.at("s", age, env)), buffer.at("f", age, env), buffer.at("a_prev", age, env)
         set_requires_grad(self.wm, False)
         fk = self.kin.forward(S[0])
         errs, dones, acts, rews = [], [], [], []
         for _ in range(horizon):
-            noise = self.imag_noise * torch.randn(B, NUM_J, device=self.dev)
+            noise = self.imag_noise * torch.randn(B, self.task.num_joints, device=self.dev)
             S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
             errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
         E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)
         terms = E.sum(0).mean(0)
         if not self.bal.calibrated:
             self.bal.calibrate(terms.detach().clamp(min=1e-6), torch.ones_like(terms))
-        loss = (self.bal.w * terms).sum()
+        loss = (self.bal.w * self.term_mult * terms).sum()
         alive = survive(d, self.no_sync)  # cumprod(1 - d, 0)
         if self.fail_w:  # every imagined step after a failure costs st_fail_w steps' worth of loss
             loss = loss + self.fail_w * (self.step_worth / horizon) * (1 - alive).sum(0).mean()
@@ -300,14 +315,19 @@ class QuadrupedSuperTrack(QuadrupedSuperMimic):
 
 
 class QuadrupedCollector(Collector):
-    """train_quadruped's collection step for --no_sync (hand_fast.Collector) with the quadruped task's state and log sums."""
+    """train_quadruped's collection step for --no_sync (hand_fast.Collector) with the task's state layout and log sums (the
+    Go2's trunk and feet errors, a humanoid's own: the task's ``log_errors``)."""
 
     acc_keys = ("r", "steps", "done", "term", "ep_len", "trunk_err", "feet_err")
-    unflatten = staticmethod(unflatten_state)
+
+    def __init__(self, sim, task, algo, buffer, args):
+        super().__init__(sim, task, algo, buffer, args)
+        self.unflatten = task.unflatten
 
     def log_errors(self, errors: dict):
-        self.acc["trunk_err"] += errors["trunk_pos"].sum()
-        self.acc["feet_err"] += errors["feet"].mean(-1).sum()
+        (_, first), (_, second) = self.task.log_errors
+        self.acc["trunk_err"] += errors[first].sum()
+        self.acc["feet_err"] += errors[second].mean(-1).sum()
 
 
 QUADRUPED_ALGOS = {"supertrack": QuadrupedSuperTrack, "supermimic": QuadrupedSuperMimic}

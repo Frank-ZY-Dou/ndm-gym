@@ -1,4 +1,5 @@
-"""The Go2 scene (robots.go2.load_scene) in N worlds on MuJoCo-Warp, for quadruped motion tracking.
+"""The Go2 scene (robots.go2.load_scene) in N worlds on MuJoCo-Warp, for quadruped motion tracking; also the humanoids'
+(robots.humanoid.load_scene, tasks.humanoid_tracking): the task gives the state's layout (``task.unflatten``).
 
 The scene is stepped by MuJoCo-Warp directly, as the hand-object task's (sim.rigid.hand_sim): one articulation with
 position servos on a floor. A control step (50 Hz) holds the joints' position targets for the physics steps of
@@ -25,7 +26,7 @@ import mujoco_warp as mjw
 import warp as wp
 
 from ...state import CONTROL_DT
-from ...tasks.quadruped_tracking import QuadrupedTask, unflatten_state
+from ...tasks.quadruped_tracking import QuadrupedTask
 
 
 class QuadrupedSim:
@@ -59,14 +60,30 @@ class QuadrupedSim:
         n = int(mask.sum())
         if n == 0:
             return
-        f = self.starts[torch.randint(0, self.starts.shape[0], (n,), device=self.device)] if frames is None else frames
+        f = self.sample_starts(n) if frames is None else frames
         qpos, qvel = self.ref.qpos[f].clone(), self.ref.qvel[f].clone()
         if noise:
-            qpos[:, 7:] = torch.clamp(qpos[:, 7:] + self.joint_noise * torch.randn_like(qpos[:, 7:]), self.task.kin.q_lo, self.task.kin.q_hi)
-            qvel += self.vel_noise * torch.randn_like(qvel)
+            qpos, qvel = self.perturb(qpos, qvel)
         self.qpos[mask], self.qvel[mask], self.ctrl[mask] = qpos, qvel, qpos[:, 7:]
         self.warmstart[mask] = 0
         self.f[mask] = f
+        self.started(mask, f)
+
+    def sample_starts(self, n: int, gate: torch.Tensor | None = None) -> torch.Tensor:
+        """``n`` episode start frames: every frame but a clip's last equally likely. ``gate``: (reset_masked) whether any
+        world resets (a subclass's statistics advance only then; sim.rigid.humanoid_sim)."""
+        return self.starts[torch.randint(0, self.starts.shape[0], (n,), device=self.device)]
+
+    def perturb(self, qpos: torch.Tensor, qvel: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        """The start state perturbed (in place): Gaussian noise on the joints' positions (clamped to their ranges) and on
+        every velocity."""
+        qpos[:, 7:] = torch.clamp(qpos[:, 7:] + self.joint_noise * torch.randn_like(qpos[:, 7:]), self.task.kin.q_lo, self.task.kin.q_hi)
+        qvel += self.vel_noise * torch.randn_like(qvel)
+        return qpos, qvel
+
+    def started(self, mask: torch.Tensor, f: torch.Tensor):
+        """Called after the worlds of ``mask`` start at ``f`` (one per world of the mask, or, from reset_masked, one per
+        world); a subclass's episode bookkeeping."""
 
     @torch.no_grad()
     def reset_masked(self, mask: torch.Tensor):
@@ -74,15 +91,14 @@ class QuadrupedSim:
         fixed shapes, the start frames and the perturbations drawn for every world (another random stream than ``reset``'s,
         which draws for the worlds it resets)."""
         m = mask.unsqueeze(-1)
-        f = self.starts[torch.randint(0, self.starts.shape[0], (self.N,), device=self.device)]
-        qpos, qvel = self.ref.qpos[f].clone(), self.ref.qvel[f].clone()
-        qpos[:, 7:] = torch.clamp(qpos[:, 7:] + self.joint_noise * torch.randn_like(qpos[:, 7:]), self.task.kin.q_lo, self.task.kin.q_hi)
-        qvel += self.vel_noise * torch.randn_like(qvel)
+        f = self.sample_starts(self.N, gate=mask.any())
+        qpos, qvel = self.perturb(self.ref.qpos[f].clone(), self.ref.qvel[f].clone())
         self.qpos.copy_(torch.where(m, qpos, self.qpos))
         self.qvel.copy_(torch.where(m, qvel, self.qvel))
         self.ctrl.copy_(torch.where(m, qpos[:, 7:], self.ctrl))
         self.warmstart.masked_fill_(m, 0.0)
         self.f.copy_(torch.where(mask, f, self.f))
+        self.started(mask, f)
 
     def torch_stream(self) -> torch.cuda.Stream:
         """Warp's stream of the device as a torch stream: torch's work on it is ordered with the physics graph's."""
@@ -96,25 +112,32 @@ class QuadrupedSim:
                 mjw.step(self.model, self.data)
 
     @torch.no_grad()
-    def step_nosync(self, u: torch.Tensor, physics=None, fk=None) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def step_nosync(self, u: torch.Tensor, physics=None, fk=None, reset: bool = True) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """``step`` without host synchronization (the module's docstring): on Warp's stream, or with ``physics`` (the
-        kernels) inside a capture. The ended worlds are reset by mask. ``fk``: the forward kinematics of the termination
-        (train_quadruped --compile_eager's compiled ones; None: the task's)."""
-        s = self.state()
+        kernels) inside a capture. The ended worlds are reset by mask unless ``reset`` is False (evaluation). ``fk``: the
+        forward kinematics of the termination (train_quadruped --compile_eager's compiled ones; None: the task's)."""
+        s, f = self.state(), self.f.clone()
         self.ctrl.copy_(u)
         if physics is None:
             wp.capture_launch(self.graph)
         else:
             physics()
         self.f.copy_(self.ref.next_frame(self.f))
+        s1, term, done = self.transition(s, f, self.task.kin.forward if fk is None else fk)
+        if reset:
+            self.reset_masked(done)
+        return s1, term, done
+
+    def transition(self, s: torch.Tensor, f: torch.Tensor, fk) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """After a control step from the state ``s`` at frame ``f`` (the frame counter advanced): the next state (``s`` for
+        a non-finite one), the termination (the task's, or a non-finite state) and the episode's end (a termination or
+        the clip's last frame). ``fk``: the forward kinematics of the termination."""
         s1 = self.state()
         bad = ~torch.isfinite(s1).all(-1)
         s1 = torch.where(bad.unsqueeze(-1), s, s1)
-        S1 = unflatten_state(s1)
-        term = bad | self.task.termination(S1, (self.task.kin.forward if fk is None else fk)(S1[0]), self.f)
-        done = term | (self.f >= self.ref.last[self.f])
-        self.reset_masked(done)
-        return s1, term, done
+        S1 = self.task.unflatten(s1)
+        term = bad | self.task.termination(S1, fk(S1[0]), self.f)
+        return s1, term, term | (self.f >= self.ref.last[self.f])
 
     @torch.no_grad()
     def state(self) -> torch.Tensor:
@@ -126,18 +149,13 @@ class QuadrupedSim:
         """Hold the joint position targets ``u`` (N, NUM_J) for one control step. Returns the next state, whether the
         episode terminated (also for a non-finite state, returned as the state before the step) and whether it ended (a
         termination or its clip's last frame); ended worlds are reset unless ``reset`` is False."""
-        s = self.state()
+        s, f = self.state(), self.f
         self.ctrl.copy_(u)
         torch.cuda.synchronize(self.device)
         wp.capture_launch(self.graph)
         wp.synchronize_device(self.device)
         self.f = self.ref.next_frame(self.f)
-        s1 = self.state()
-        bad = ~torch.isfinite(s1).all(-1)
-        s1 = torch.where(bad.unsqueeze(-1), s, s1)
-        S1 = unflatten_state(s1)
-        term = bad | self.task.termination(S1, self.task.kin.forward(S1[0]), self.f)
-        done = term | (self.f >= self.ref.last[self.f])
+        s1, term, done = self.transition(s, f, self.task.kin.forward)
         if reset:
             self.reset(done)
         return s1, term, done

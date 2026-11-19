@@ -1,15 +1,31 @@
-"""Compile the G1 URDF to an MJCF with a free-floating pelvis (same kinematics and inertias)."""
+"""Compile a Unitree humanoid's URDF to an MJCF with a free-floating pelvis (same kinematics and inertias).
 
+    python tools/urdf_to_mjcf.py              # the G1 (tools/download_data.sh)
+    python tools/urdf_to_mjcf.py --robot h1   # the H1 (tools/download_h1.sh)
+"""
+
+import argparse
 import os
 import re
 import sys
 
 import mujoco
 
-ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "g1_description")
-src = os.path.join(ROOT, "g1_29dof_rev_1_0.urdf")
-tmp = os.path.join(ROOT, "_g1_mj.urdf")
-out = os.path.join(ROOT, "g1_29dof.xml")
+DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
+# robot -> (its description's directory in data/, the URDF, the MJCF written beside it)
+ROBOTS = {
+    "g1": ("g1_description", "g1_29dof_rev_1_0.urdf", "g1_29dof.xml"),
+    "h1": ("h1_description", "h1.urdf", "h1.xml"),
+}
+
+parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+parser.add_argument("--robot", choices=sorted(ROBOTS), default="g1")
+args = parser.parse_args()
+directory, urdf, mjcf = ROBOTS[args.robot]
+ROOT = os.path.join(DATA, directory)
+src = os.path.join(ROOT, urdf)
+tmp = os.path.join(ROOT, f"_{args.robot}_mj.urdf")
+out = os.path.join(ROOT, mjcf)
 
 text = open(src).read()
 text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
