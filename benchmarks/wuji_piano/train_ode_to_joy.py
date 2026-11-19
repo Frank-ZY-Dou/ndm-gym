@@ -18,7 +18,7 @@ from ndm_gym.core.normalizer import RunningNorm
 from ndm_gym.worldmodels.piano import NUM_ACTUATORS as A, TipGeometry
 
 from training_options import training_defaults
-from piano_updates import OdeSuperMimic, OdeSuperTrack, make_replay
+from piano_updates import H, REACH_W, OdeSuperMimic, OdeSuperTrack, make_replay
 from ndm_gym.tasks.piano import CONTROL_SUBSTEPS
 from ode_to_joy import DIGITS, KEY_COUNT, SIDES, WRIST_SCALE, action_layout, build, piano_roll
 from ndm_gym.tasks.piano import KEY_DOWN_FRACTION, frame_metrics
@@ -235,13 +235,36 @@ def main():
     p.add_argument("--eval-starts", type=int, default=256)
     p.add_argument("--update-graphs", action="store_true", default=argparse.SUPPRESS,
                    help="Capture native model and policy updates in CUDA graphs. Replay sampling and rounding can change learning results.")
+    p.add_argument("--horizon", type=int, default=argparse.SUPPRESS, help="Imagined steps of the policy update, both algorithms (default 3).")
+    p.add_argument("--st-imag-noise", type=float, default=argparse.SUPPRESS, help="SuperTrack: Gaussian noise on the imagined actions (default 0).")
+    p.add_argument("--st-reg", type=float, default=argparse.SUPPRESS, help="SuperTrack: weight of the L2 and L1 action regularizer (default 0).")
+    p.add_argument("--st-reach-weight", type=float, default=argparse.SUPPRESS, help="SuperTrack: the reach term's weight in its loss (default 0.20).")
+    p.add_argument("--gamma", type=float, default=argparse.SUPPRESS, help="SuperMimic: the discount (default 0.99).")
+    p.add_argument("--bptt-decay", type=float, default=argparse.SUPPRESS, help="SuperMimic: the gradient through each imagined state, scaled by it (default 1).")
+    p.add_argument("--critic-epochs", type=int, default=argparse.SUPPRESS, help="SuperMimic: critic epochs per actor update (default 5).")
+    p.add_argument("--critic-minibatches", type=int, default=argparse.SUPPRESS, help="SuperMimic: critic minibatches per epoch (default 4).")
     p.add_argument("--replay", type=Path)
     a = p.parse_args()
-    training_defaults(p, a, training=a.replay is None, seeds=[0, 1, 2], rounds=20, wm_updates=90, pi_updates=50, steps=160, update_graphs=False)
+    supplied = set(vars(a))
+    training_defaults(p, a, training=a.replay is None, seeds=[0, 1, 2], rounds=20, wm_updates=90, pi_updates=50, steps=160, update_graphs=False,
+                      horizon=H, st_imag_noise=0.0, st_reg=0.0, st_reach_weight=REACH_W, gamma=0.99, bptt_decay=1.0, critic_epochs=5,
+                      critic_minibatches=4)  # fmt: skip
     replay = torch.load(a.replay, map_location="cpu", weights_only=True) if a.replay else None
     if replay and a.algo and a.algo != replay.get("algo", "supertrack"):
         p.error("The requested algorithm does not match the replay checkpoint")
     a.algo = a.algo or (replay.get("algo", "supertrack") if replay else "supertrack")
+    own = dict(supertrack=("st_imag_noise", "st_reg", "st_reach_weight"), supermimic=("gamma", "bptt_decay", "critic_epochs", "critic_minibatches"))
+    other = [k for k in own["supermimic" if a.algo == "supertrack" else "supertrack"] if k in supplied]
+    if other:
+        p.error(f"--{other[0].replace('_', '-')} is not an option of {a.algo}")
+    if a.horizon < 1 or a.st_imag_noise < 0 or a.st_reg < 0 or a.st_reach_weight < 0 or not 0 < a.gamma <= 1 or not 0 < a.bptt_decay <= 1:
+        p.error("--horizon >= 1, --st-imag-noise, --st-reg, --st-reach-weight >= 0, 0 < --gamma <= 1 and 0 < --bptt-decay <= 1 are required")
+    if min(a.critic_epochs, a.critic_minibatches) < 1 or a.critic_minibatches > a.horizon * 96:
+        p.error("--critic-epochs >= 1 and 1 <= --critic-minibatches <= the imagined states per update are required")
+    if a.algo == "supermimic":
+        options = dict(gamma=a.gamma, critic_epochs=a.critic_epochs, critic_minibatches=a.critic_minibatches, bptt_decay=a.bptt_decay)
+    else:
+        options = dict(imag_noise=a.st_imag_noise, reg=a.st_reg, reach_w=a.st_reach_weight)
     if min(a.worlds, a.rounds, a.wm_updates, a.pi_updates, a.steps, a.eval_starts) < 1 or a.steps < 2:
         p.error("Positive counts and at least two collection steps are required")
     if not torch.cuda.is_available():
@@ -266,7 +289,7 @@ def main():
             if (dest / "results.json").exists() or (not a.replay and (dest / "best.pt").exists()):
                 raise FileExistsError(dest)
             trainer = OdeSuperMimic if a.algo == "supermimic" else OdeSuperTrack
-            algo = trainer(geometry, roll, update_graphs=a.update_graphs)
+            algo = trainer(geometry, roll, horizon=a.horizon, update_graphs=a.update_graphs, **options)
             rec = dict(seed=seed, gpu=torch.cuda.get_device_name(), settings={k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()})
             rec["optimizer_settings"] = vars(algo.args)
             if not a.replay:

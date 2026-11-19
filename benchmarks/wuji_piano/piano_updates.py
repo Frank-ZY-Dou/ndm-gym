@@ -13,7 +13,8 @@ from ndm_gym.policies.hand_policy import HandPolicy
 from ndm_gym.worldmodels.piano import NUM_ACTUATORS as A, KEY_COUNT, PianoDynamics
 
 D = 2 * A + KEY_COUNT
-H = 3
+H = 3  # the imagined steps of both policy updates (--horizon)
+REACH_W = 0.20  # the reach term's weight, in SuperMimic's reward and SuperTrack's loss (--st-reach-weight)
 LOOK = 11
 
 
@@ -50,13 +51,13 @@ class PianoMimicUpdates(PianoReplay, HandSuperMimic):
 
 
 class OdePiano:
-    def __init__(self, geometry, roll, *, update_graphs=False):
+    def __init__(self, geometry, roll, *, horizon=H, update_graphs=False):
         self.dev = roll.device
         self.args = SimpleNamespace(
             wm_batches=1, wm_batch=96, wm_window=2, pi_batch=96, lr=0.0008, fused_adam=roll.is_cuda, update_graphs=update_graphs
         )
-        self.horizon = H
-        self.goal = torch.cat((roll, torch.zeros(LOOK + H, KEY_COUNT, device=self.dev, dtype=torch.bool))).float()
+        self.horizon = horizon
+        self.goal = torch.cat((roll, torch.zeros(LOOK + horizon, KEY_COUNT, device=self.dev, dtype=torch.bool))).float()
         self.length = len(roll)
         self.future = self.goal.unfold(0, LOOK, 1).transpose(1, 2).reshape(-1, LOOK * KEY_COUNT)
         self.wm = PianoDynamics(geometry).to(self.dev)
@@ -65,7 +66,7 @@ class OdePiano:
         self.opt_pi = optimizer(self.args, self.dev, self.pi, "pi")
         self.no_sync = update_graphs
         self.task = SimpleNamespace(max_step_reward=1.0)
-        self.weights = torch.tensor([1.0, 0.85, 0.20], device=self.dev)
+        self.weights = torch.tensor([1.0, 0.85, REACH_W], device=self.dev)
 
     def action(self, state, prev, f):
         return self.pi(torch.cat((state, prev), -1), self.future[f].expand(len(state), -1))
@@ -98,12 +99,15 @@ class OdePiano:
 
 
 class OdeSuperTrack(OdePiano, PianoTrackUpdates):
-    def __init__(self, geometry, roll, *, update_graphs=False):
-        super().__init__(geometry, roll, update_graphs=update_graphs)
-        self.imag_noise = self.fail_w = self.reg = 0.0
+    def __init__(self, geometry, roll, *, horizon=H, imag_noise=0.0, reg=0.0, reach_w=REACH_W, update_graphs=False):
+        super().__init__(geometry, roll, horizon=horizon, update_graphs=update_graphs)
+        # --st-imag-noise, --st-reg: the hand trainers' noise on the imagined actions and L2 + L1 action regularizer; no failure here
+        self.imag_noise, self.reg, self.fail_w = imag_noise, reg, 0.0
         self.term_scale = torch.ones(3, device=self.dev)
         self.bal = LossBalancer(3).to(self.dev)
-        self.bal.w.copy_(self.weights / H)
+        weights = self.weights.clone()
+        weights[2] = reach_w  # --st-reach-weight: the reach term in this loss only
+        self.bal.w.copy_(weights / self.horizon)
         self.bal.ready.fill_(True)
 
     def st_step(self, state, fk, f, prev, noise):
@@ -114,10 +118,11 @@ class OdeSuperTrack(OdePiano, PianoTrackUpdates):
 
 
 class OdeSuperMimic(OdePiano, PianoMimicUpdates):
-    def __init__(self, geometry, roll, *, update_graphs=False):
-        super().__init__(geometry, roll, update_graphs=update_graphs)
-        self.args.gamma, self.args.lam = 0.99, 0.95
-        self.args.critic_epochs, self.args.critic_minibatches = 5, 4
+    def __init__(self, geometry, roll, *, horizon=H, gamma=0.99, critic_epochs=5, critic_minibatches=4, bptt_decay=1.0, update_graphs=False):
+        super().__init__(geometry, roll, horizon=horizon, update_graphs=update_graphs)
+        self.args.gamma, self.args.lam = gamma, 0.95
+        self.args.critic_epochs, self.args.critic_minibatches = critic_epochs, critic_minibatches
+        self.bptt_decay = bptt_decay  # --bptt-decay: the gradient through each imagined state, scaled by it (the hand trainers')
         self.critic = Critic(D + A + LOOK * KEY_COUNT).to(self.dev)
         self.opt_v = optimizer(self.args, self.dev, self.critic, "critic")
 
@@ -127,6 +132,8 @@ class OdeSuperMimic(OdePiano, PianoMimicUpdates):
     def imag_step(self, state, fk, f, prev):
         act = self.action(state, prev, f)
         state = self.wm(state, act)
+        if self.bptt_decay != 1.0:
+            state = self.bptt_decay * state + (1 - self.bptt_decay) * state.detach()
         reward = 1.0 - (self.tracking_errors(state, self.goal[f]) * self.weights).sum(-1)
         done = (f >= self.length - 1).to(state.dtype)
         f = (f + 1).clamp(max=self.length)
