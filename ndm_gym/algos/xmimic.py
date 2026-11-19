@@ -100,8 +100,8 @@ def check_args(args: argparse.Namespace):
         raise ValueError(f"--{on[0]}: SuperTrack's and SuperMimic's updates only, not --algo {args.algo}")
     if on and args.wm_backbone != "mlp":
         raise ValueError(f"--{on[0]}: the MLP world model only, not --wm_backbone {args.wm_backbone}")
-    if args.paired and (on or (args.pi_encode_once and args.algo == "supermimic")):
-        raise ValueError(f"--{on[0] if on else 'pi_encode_once'}: the one-robot scene only, not checked with --paired")
+    if args.paired and on:  # (--pi_encode_once is checked there: a robot's imagined goals are its own clip's frames)
+        raise ValueError(f"--{on[0]}: the one-robot scene only, not checked with --paired")
     if args.pi_cudagraphs and (args.imag_hoist or args.pi_deferred_grads):
         raise ValueError("--imag_hoist, --pi_deferred_grads: not with --pi_cudagraphs (not checked under the compiled parts' CUDA graphs; "
                          "--update_graphs captures the whole update)")  # fmt: skip
@@ -128,8 +128,6 @@ def check_args(args: argparse.Namespace):
             raise ValueError(f"--layout {args.layout}: SuperMimic and SuperTrack (--algo blinkmimic included), not --algo {args.algo}")
         if args.wm_backbone != "mlp":
             raise ValueError(f"--layout {args.layout}: the MLP world model only")
-        if args.paired:
-            raise ValueError(f"--layout {args.layout}: not implemented for the two-robot scene (--paired)")
         if args.resume:
             raise ValueError(f"--layout {args.layout}: --resume is not implemented (a checkpoint's state goes to one device's object)")
         if args.pi_updates != 1:

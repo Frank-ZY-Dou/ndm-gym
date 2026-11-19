@@ -28,6 +28,8 @@ The algorithms share one pipeline within each task:
 - **Adroit hand:** Door, Pen, Hammer and Relocate tracking of DAPG demonstrations, with each task's native actuators
   (MuJoCo CPU physics and CUDA learning).
 - **Quadruped:** a Unitree Go2 tracking a Labrador's motion capture, one clip or all 65 (MuJoCo-Warp).
+- **Piano:** two floating Wuji Hand 2 hands playing Eden's *Ode to Joy* on 88 passive keys, with no fingering given
+  (MuJoCo-Warp).
 - **Manipulation:** one or two Franka Pandas tracking robomimic's human demonstrations of Lift, Square and Transport, the
   objects with them (MuJoCo-Warp).
 
@@ -35,9 +37,9 @@ World models also stand in for the physics inside planners: RoboKit's sampling M
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
 MuJoCo model.
 
-<p align="center"><img src="docs/media/teaser.webp" alt="Thirteen tasks, most with several cases: four LAFAN1 clips, two G1s, a muscle-actuated character walking and running, three robot hands with their objects, four of HDMI's human-object interaction tasks, RoboKit's three examples and mbrl-lib's cart-pole and pusher planned on a world model, a racing quadrotor on the autonomous and the piloted race track and the ellipse, a Go2 tracking a Labrador at play, and the Adroit hand opening a door, turning a pen, hammering a nail and relocating a ball" width="100%"/></p>
-<p align="center"><i>SuperTrack on four LAFAN1 clips, two G1s, the muscles' walk and run, a racing quadrotor, a Go2, and three hands and four Adroit tasks (half speed).<br>Four HDMI tasks trained in the world model (1.5x speed); RoboKit and mbrl-lib (half speed) planning on SuperTrack's world model.</i></p>
-<p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), MuscleVAE, InterHuman (CC BY-NC-SA 4.0), SPIDER's hand retargets, HDMI and RoboKit (with an OMOMO clip), for non-commercial illustration only, and of Race Against the Machine's flights (CC BY 4.0), a Labrador's motion capture from Lifelike agility and play (for research purposes only) and DAPG's door, pen, hammer and relocate demonstrations in Gymnasium-Robotics' scenes; not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
+<p align="center"><img src="docs/media/teaser.webp" alt="Fourteen tasks, most with several cases: four LAFAN1 clips, two G1s, a muscle-actuated character walking and running, three robot hands with their objects, four of HDMI's human-object interaction tasks, RoboKit's three examples and mbrl-lib's cart-pole and pusher planned on a world model, a racing quadrotor on the autonomous and the piloted race track and the ellipse, a Go2 tracking a Labrador at play, the Adroit hand opening a door, turning a pen, hammering a nail and relocating a ball, and two Wuji hands playing Ode to Joy" width="100%"/></p>
+<p align="center"><i>SuperTrack on four LAFAN1 clips, two G1s, the muscles' walk and run, a racing quadrotor, a Go2, the Wuji piano, and three hands and four Adroit tasks (half speed).<br>Four HDMI tasks trained in the world model (1.5x speed); RoboKit and mbrl-lib (half speed) planning on SuperTrack's world model.</i></p>
+<p align="center"><sub>Renders of LAFAN1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0), MuscleVAE, InterHuman (CC BY-NC-SA 4.0), SPIDER's hand retargets, HDMI and RoboKit (with an OMOMO clip), for non-commercial illustration only, and of Race Against the Machine's flights (CC BY 4.0), a Labrador's motion capture from Lifelike agility and play (for research purposes only), DAPG's door, pen, hammer and relocate demonstrations in Gymnasium-Robotics' scenes and Eden's <i>Ode to Joy</i> on RoboPianist's keyboard (Apache-2.0) with Wuji Technology's hands (MIT); not covered by this repository's MIT license (<a href="NOTICE">see NOTICE</a>).</sub></p>
 
 <details>
 <summary>The teaser's runs and errors</summary>
@@ -54,6 +56,7 @@ MuJoCo model.
 | Go2 tracking | `go2-supertrack-clip`, seed 0, on `play` (a Labrador's play, 10.1 s), trained on an RTX 6000 Ada; from the unperturbed start, its first 6 s, in real time | feet 7.66 mm (trunk frame), trunk 12.22 mm, joints 1.47° (the configuration's mean of seeds 0-2) |
 | Adroit door | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` (the door and latch started up to 0.3 rad open), training seed 0, 20,000 iterations on an A100 40GB SXM4: its evaluation's nominal start (door and latch closed, the hand unperturbed), in a brighter scene; half speed, its last frame held | that start: return 9.022, the door opened; the configuration: the door open on 99.3 % of 256 starts, return 8.165 ± 0.054 (seeds 0-2, A100 40GB) |
 | Adroit pen, hammer, relocate | SuperTrack's runs at 20,000 iterations in 2,048 worlds on an L40S: pen seed 0, hammer seed 1, relocate seed 0, each the lowest tracking error of its task's six runs; the nominal episode at half speed (the hammer from 1 s), last frames held | normalized tracking RMSE 0.049, 0.022 and 0.048; 251, 256 and 256 of 256 native final successes |
+| Wuji piano | `supertrack --horizon 3 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.921, 19 of 19 notes; the configuration: Eden F1 0.903 ± 0.015 on 256 starts (seeds 0-2, A100 40GB) |
 
 </details>
 
@@ -70,6 +73,7 @@ MuJoCo model.
 | NDM simulation: HDMI's scenes ([details](benchmarks/ndm_speed/results.md)), two G1s ([details](benchmarks/g1_boxing/results.md#speed)); the RigidFormer on HDMI's scenes | time per step at 4,096 worlds (two G1s: 4,096 pairs), the MLP world model's bf16 copy and the RigidFormer with fused Triton blocks; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
 | NDM simulation: the Adroit door ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 16,384 worlds: SuperTrack's acceleration model as a bf16 copy, 27.62 M against MuJoCo Warp's 0.396 M (69.7x); SuperMimic's increment model 27.14 M against 0.422 M (64.3x); 1,629x / 1,600x the contributed native MuJoCo collector on eight CPU cores (16,962 world-steps/s). The bf16 step is 64 % / 66 % matrix products, the rest compiled elementwise kernels | one A100 40GB SXM4 |
 | NDM simulation: the racing quadrotor ([details](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds, the fused step in fp32 (TF32 products) with the network as one kernel: SuperTrack's acceleration model 74.3 M against MuJoCo Warp's 3.26 M (22.8x); SuperMimic's increment model 73.7 M against 3.27 M (22.6x); with the network compiled layer by layer 19.6x / 19.0x. The network is 85 % of the step | one A100 40GB SXM4 |
+| NDM simulation: the Wuji piano ([details](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds: the horizon-3 SuperTrack run's `PianoDynamics` with its networks in bf16 (compiled, one CUDA graph), 46.24 M against MuJoCo Warp's 30,213 for a control step of the full scene (1,530x; the four seed-0 models, both algorithms at both horizons, 1,523-1,530x). The model steps the policy's 192-number observed state; its due-key error is 0.15 / 0.19 / 0.26 of a key's travel at 1 / 3 / 10 steps, the horizon-3 SuperMimic model's 0.16 / 0.19 / 0.32 | one A100 40GB SXM4 |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | SuperTrack's MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
 | RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds on the acceleration and on the increment model, the median over twenty plans (planner seeds 0-9, twice); the simulation step's speedup beside the task | one A100 40GB SXM4 |
 | mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
@@ -90,19 +94,23 @@ is the hand task's, a success of 0.99 (robosuite's test at the last frame, a tra
 
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
-| **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest, one GPU | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options)) | return 0.82 after **4.19 ± 0.18** and **3.53 ± 0.30 min** on an A100 40GB SXM4 (seeds 0-2) |
+| **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest, one GPU | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options)) | return 0.82 after **4.19 ± 0.18** and **3.53 ± 0.30 min**, MPJPE-local there **22.7 ± 0.9** and **27.4 ± 0.4 mm**, on an A100 40GB SXM4 (seeds 0-2) |
 |  | 🎯 lowest pose error | `lafan1-supertrack-accurate`, 3 h with the speed options on an A100 40GB SXM4 | MPJPE **15.2 ± 1.0 mm**, joint angle **2.02 ± 0.03°** (seeds 7-9) |
 |  | 📈 highest return | `lafan1-supermimic-accurate`, 3 h with the speed options on an A100 40GB SXM4 | return **0.872 ± 0.003** (seeds 7-9) |
-| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each) | return 0.82 after **1.48 ± 0.13** and **1.37 ± 0.05 min** on four A100 40GB SXM4 (seeds 0-2); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
+| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each; the kinematics as fused kernels) | return 0.82 after **1.47 ± 0.05** and **1.42 ± 0.09 min**, MPJPE-local there **21.9 ± 0.5** and **26.9 ± 0.4 mm**, on four A100 40GB SXM4 (seeds 3-5); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
-| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supermimic` | return 0.88 after **0.10 h** on an A100 80GB (seed 0; `two-g1-supertrack` 0.11 h) |
+| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supertrack` and `two-g1-supermimic` | return 0.88 after **3.66 ± 0.00** and **3.26 ± 0.00 min**, root-relative MPJPE there **16.8 ± 0.4** and **19.9 ± 1.4 mm**, on an A100 40GB SXM4 (MLP world model, seeds 0-2) |
+|  | ⏱ time to the target, not engineered, three GPUs | `two-g1-supertrack-3gpu` and `two-g1-supermimic-3gpu` (layout AWL: actor, world model and policy on a GPU each) | return 0.88 after **1.85 ± 0.21** and **1.62 ± 0.18 min**, root-relative MPJPE there **16.1 ± 0.5** and **20.0 ± 0.4 mm**, on three A100 40GB SXM4 (seeds 0-2) |
 |  | 🎯 lowest pose error (root-relative) | `two-g1-supertrack` | root-relative MPJPE **14.1 ± 0.2 mm** (MLP world model, seeds 0-2, 9,396 iterations) |
 |  | 📈 highest return | `two-g1-supermimic` | return **0.9055 ± 0.0011** (MLP world model, seeds 0-2, 9,396 iterations) |
 | **[Hand-object tracking](#hand-object-tracking)**, Inspire hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast` with the [speed options](#hand-object-tracking) | **1.0 / 0.8 / 2.0 min**, every run, mean 1.30 min (an A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 2.19 min) |
+|  | 🚀 fastest, three GPUs | `hand-supertrack-fast` with the speed options and `--layout AWL` | **0.6 / 0.6 / 0.9 min**, every run, mean 0.70 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 1.46 min) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **Hand-object tracking**, Allegro hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast --st_fail_w 5` and `hand-supermimic-fast` with the speed options, level | **1.1 / 0.8 / 3.9** and **1.0 / 3.7 / 1.1 min**, every run, both a mean of 1.96 min (an A100 40GB, seeds 0-2) |
+|  | 🚀 fastest, three GPUs | `hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL` | **0.7 / 0.7 / 2.7 min**, 8 of 9 runs, mean 1.40 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast` 1.44 min, 7 of 9) |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object position **2.6 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
 | **Hand-object tracking**, XHand, three clips | 🚀 fastest, one GPU | `hand-supermimic-fast` with the speed options | **0.8 / 1.1 / 1.2 min**, every run, mean 1.03 min (an A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.7 / 0.9 / 1.8 min, mean 1.16 min, faster per iteration (18.4 against 15.7 it/s) |
+|  | 🚀 fastest, three GPUs | `hand-supermimic-fast` with the speed options and `--layout AWL` | **0.6 / 0.7 / 0.8 min**, every run, mean 0.72 min (three A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.6 / 0.6 / 1.2 min, mean 0.78 min, faster per iteration (39.4 against 30.3 it/s) |
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
 | **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2) |
 |  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
@@ -110,6 +118,7 @@ is the hand task's, a success of 0.99 (robosuite's test at the last frame, a tra
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
+| **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
 | **[Manipulation demonstration tracking](#manipulation-demonstration-tracking)**, a Panda, robomimic's Lift / Square / Transport | ⏱ time to the target, not engineered | `robomimic-supertrack`, `robomimic-supermimic` | 2.5 / 4.9 min and 6.0 / 10.8 min on Lift / Square, every run; Transport not reached in 1,500 iterations (mean of seeds 0-2, three runs sharing one RTX 4090) |
 |  | 🎯 most accurate | `robomimic-supertrack`, `robomimic-supermimic` | object position 0.60 / 1.96 / 7.13 mm and 0.80 / 4.08 / 12.3 mm at a success of 100 / 100 / 89.8 % and 100 / 100 / 37.1 % (the reference's targets alone: 0 / 7 / 0 %; seeds 0-2, 1,500 iterations, RTX 4090) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
@@ -118,6 +127,7 @@ is the hand task's, a success of 0.99 (robosuite's test at the last frame, a tra
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
 | **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | **27.62 M world-steps/s**, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed collector on eight CPU cores; SuperMimic's increment model 27.14 M, 64.3x ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#quadrotor-trajectory-tracking)**, the racing quadrotor, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs, the fused step in fp32, the network as one kernel | **74.3 M** and **73.7 M world-steps/s**, 22.8x and 22.6x MuJoCo Warp's 3.26 M / 3.27 M; 34.2x / 34.1x at 1,024 worlds, 11.5x at 65,536 ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) |
+| **[NDM as the simulator](#wuji-hand-piano-playing)**, the Wuji piano, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | the task's `PianoDynamics`, its networks in bf16 (both algorithms' models within 1 %) | **46.2 M world-steps/s**, 1,530x MuJoCo Warp's 30,213 for a control step of the full scene; the model steps only the policy's 192-number observed state, a due key's depth off by 0.15 / 0.19 / 0.26 of its travel at 1 / 3 / 10 steps (SuperTrack's horizon-3 model; SuperMimic's 0.16 / 0.19 / 0.32) ([results](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | ⏱ throughput, not engineered | the MLP world model (acceleration parameterization) as a bf16 copy | **16.28 M env-steps/s**, 45.9x the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5x ([results](benchmarks/ndm_speed/results.md)) |
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
@@ -138,17 +148,22 @@ options beside them); both methods are on offer for every task.
 | Task | Goal | SuperTrack | SuperMimic |
 |---|---|---|---|
 | **LAFAN1**, MLP world model | lowest pose error, highest return | `lafan1-supertrack-accurate`: MPJPE 15.2 mm, joint angle 2.02°, return 0.857 (3 h with the speed options, A100 40GB SXM4) | `lafan1-supermimic-accurate`: 21.2 mm, 3.40°, return 0.872 (the same) |
-| | fastest, one GPU | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4) | `lafan1-supermimic-fast`: 3.53 min |
-| | fastest, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.48 min (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.37 min |
+| | fastest, one GPU | `lafan1-supertrack-fast`: return 0.82 in 4.19 min, MPJPE-local there 22.7 mm (A100 40GB SXM4) | `lafan1-supermimic-fast`: 3.53 min, 27.4 mm |
+| | fastest, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.47 min, 21.9 mm (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.42 min, 26.9 mm |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
 | **Two G1s**, MLP world model (add `--motion_dir`) | lowest pose error, highest return | `two-g1-supertrack`: MPJPE 46.2 / 14.1 mm, return 0.8925 (seeds 0-2, 9,396 iterations) | `two-g1-supermimic`: 45.3 / 16.0 mm, return 0.9055 (the same) |
+| | time to the target, not engineered, one GPU | `two-g1-supertrack`: return 0.88 in 3.66 ± 0.00 min, root-relative MPJPE there 16.8 mm (seeds 0-2, A100 40GB SXM4) | `two-g1-supermimic`: 3.26 ± 0.00 min, 19.9 mm |
+| | time to the target, not engineered, three GPUs (`--layout AWL`) | `two-g1-supertrack-3gpu`: 1.85 ± 0.21 min, 16.1 mm (three A100 40GB SXM4) | `two-g1-supermimic-3gpu`: 1.62 ± 0.18 min, 20.0 mm |
 | **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
 | **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast`: the target in 1.0 / 0.8 / 2.0 min (9 of 9 runs, mean 1.30) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min (8 of 9, mean 2.19) |
+| | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 0.9 min (9 of 9 runs, mean 0.70) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.6 / 1.0 min (7 of 9, mean 1.46) |
 | **Allegro hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast --st_fail_w 5`: the target in 1.1 / 0.8 / 3.9 min (9 of 9 runs, mean 1.96) | `hand-supermimic-fast`: 1.0 / 3.7 / 1.1 min (9 of 9, mean 1.96) |
+| | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast --st_fail_w 5`: the target in 0.7 / 0.7 / 2.7 min (8 of 9 runs, mean 1.40) | `hand-supermimic-fast`: 0.7 / 0.9 / 0.8 min (7 of 9, mean 1.44) |
 | **XHand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-accurate`: object 2.4 / 1.6 / 2.3 mm | `hand-supermimic-accurate`: 3.5 / 2.9 / 3.2 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast`: the target in 0.7 / 0.9 / 1.8 min (mean 1.16, 18.4 it/s) | `hand-supermimic-fast`: 0.8 / 1.1 / 1.2 min (mean 1.03, 15.7 it/s) |
+| | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 1.2 min (mean 0.78, 39.4 it/s) | `hand-supermimic-fast`: 0.6 / 0.7 / 0.8 min (mean 0.72, 30.3 it/s) |
 | **Muscles**, MLP world model (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
 | **Muscles**, RigidFormer | | `muscles-supertrack-rf`: MPJPE 34.9 mm | `muscles-supermimic-rf`: 60.2 mm |
 | **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.38 / 2.02 / 2.19 mm | `quadrotor-supermimic-accurate`: 6.55 / 4.96 / 5.08 mm |
@@ -158,6 +173,8 @@ options beside them); both methods are on offer for every task.
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
 | **Manipulation**, one demonstration (`train_robomimic`, add `--task`) | most accurate | `robomimic-supertrack`: object 0.60 / 1.96 / 7.13 mm at a success of 100 / 100 / 89.8 % (Lift / Square / Transport; seeds 0-2, RTX 4090) | `robomimic-supermimic`: 0.80 / 4.08 / 12.3 mm at 100 / 100 / 37.1 % |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
+| **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
+| | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -176,6 +193,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
   [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations,
   [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play,
+  [Wuji Hand piano playing](#wuji-hand-piano-playing): two hands play Eden's *Ode to Joy* with no fingering given,
   [manipulation demonstration tracking](#manipulation-demonstration-tracking): Panda arms on robomimic's human demonstrations.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; a body-token RigidFormer on the muscle-actuated
@@ -192,11 +210,13 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   ([BlinkMimic's](#blinkmimics-options)), multi-GPU layouts ([XMimic's](docs/algorithms/xmimic.md)) with four-GPU
   configurations of both algorithms; [time to return 0.82](#training-speed) on one and four GPUs, with
   [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside; the hands' [speed options](#hand-object-tracking),
-  the target 1.4-2.7x sooner on one GPU.
+  the target 1.4-2.7x sooner on one GPU and another 1.4-1.9x on three; [two G1s](#two-g1s-one-two-person-clip) on three GPUs,
+  return 0.88 in 1.85 and 1.62 min at root-relative MPJPE 16.1 and 20.0 mm (SuperTrack, SuperMimic).
 - **[2026-11] Contributed** by [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it;
   the Allegro and the Inspire hand, each read from its scene with no code of its own; by
   [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights; by
-  [Yifan Kang](https://github.com/YIFANK): Adroit Door tracking with SuperTrack and SuperMimic.
+  [Yifan Kang](https://github.com/YIFANK): Adroit Door tracking with SuperTrack and SuperMimic; by
+  [Anna Mei](https://github.com/annamei1): two Wuji hands playing Eden's *Ode to Joy*.
 - **[2026-11] Using it:** a [leaderboard](#-leaderboard), [named configurations](#-recommended-settings) (`--config`),
   trained weights of the G1 / LAFAN1 runs on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym), a library-only
   `pip` installation ([details](docs/installation.md)), a [documentation site](https://frank-zy-dou.github.io/ndm-gym/).
@@ -217,7 +237,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
-  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; one or two Panda arms tracking robomimic's
+  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; two
+  Wuji hands playing Eden's *Ode to Joy* with no fingering given; one or two Panda arms tracking robomimic's
   human demonstrations of lifting, nut assembly and a two-arm hand-over; RoboKit's G1 box carrying,
   G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
@@ -375,6 +396,24 @@ ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_
 </details>
 
 <details>
+<summary><b>Wuji Hand piano playing</b></summary>
+
+```bash
+pip install -e '.[hand,contacts,render]'               # MuJoCo-Warp; the render extra for the video
+python benchmarks/wuji_piano/download_assets.py          # the Wuji hands and the keyboard at pinned revisions into data/wuji_piano
+
+# seeds 0-2 of each algorithm (benchmarks/wuji_piano/run.sh passes the trainer's options), then replay seed 0 and render it
+benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 3 --st-reg 0.01
+benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 3 --gamma 0.95 --bptt-decay 0.95
+benchmarks/wuji_piano/run.sh replay logs/piano_replay logs/piano_st/seed0/last.pt --eval-starts 32
+HANDS=data/wuji_piano/wuji-description-c2cd7f8d1ef8b6dc8cb907c17daa5a88b4442d95/hand2/hand2_beta2/body/mjcf
+MUJOCO_GL=egl python benchmarks/wuji_piano/render_fur_elise.py --song ode_to_joy --background light --hand-dir $HANDS \
+       --keyboard data/wuji_piano/keyboard/piano.xml --rollout logs/piano_replay/seed0/rollout.npz --out piano.mp4
+```
+
+</details>
+
+<details>
 <summary><b>Quadrotor trajectory tracking</b></summary>
 
 ```bash
@@ -459,13 +498,14 @@ One policy on the G1 tracks all 40 LAFAN1 clips, retargeted to the robot; traini
 | highest return | `--config lafan1-supermimic-accurate` | return 0.872 ± 0.003 (3 h with the speed options, A100 40GB SXM4, seeds 7-9) |
 | most accurate, RigidFormer world model | `--config lafan1-supertrack-rf-accurate` | return 0.832 ± 0.003, MPJPE 21.0 ± 1.3 mm (3 h, A100 40GB, seeds 7-9) |
 | fewest failed clips under pushes, RigidFormer world model | `--config lafan1-supermimic-rf-accurate` | 1.3 / 9.0 of 40 clips under 1 / 2 m/s pushes (3 h, A100 40GB, seeds 7-9) |
-| fastest, one GPU | `--config lafan1-supertrack-fast` or `--config lafan1-supermimic-fast` | return 0.82 after 4.19 ± 0.18 and 3.53 ± 0.30 min on an A100 40GB SXM4 (seeds 0-2) |
-| fastest, four GPUs | `--config lafan1-supertrack-fast-4gpu` or `--config lafan1-supermimic-fast-4gpu`, with four GPUs visible | return 0.82 after 1.48 ± 0.13 and 1.37 ± 0.05 min on four A100 40GB SXM4 (seeds 0-2) |
+| fastest, one GPU | `--config lafan1-supertrack-fast` or `--config lafan1-supermimic-fast` | return 0.82 after 4.19 ± 0.18 and 3.53 ± 0.30 min on an A100 40GB SXM4, MPJPE-local there 22.7 ± 0.9 and 27.4 ± 0.4 mm (seeds 0-2) |
+| fastest, four GPUs | `--config lafan1-supertrack-fast-4gpu` or `--config lafan1-supermimic-fast-4gpu`, with four GPUs visible | return 0.82 after 1.47 ± 0.05 and 1.42 ± 0.09 min on four A100 40GB SXM4, MPJPE-local there 21.9 ± 0.5 and 26.9 ± 0.4 mm (seeds 3-5) |
 
 **In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
 the measure it optimizes (MPJPE 15.2 against 21.2 mm, return 0.872 against 0.857), and under 2 m/s pushes SuperMimic fails
-fewer clips (12.0 against 19.3 of 40). For speed, the fast configurations: 4.19 and 3.53 min on one GPU, 1.48 and
-1.37 min on four.
+fewer clips (12.0 against 19.3 of 40). For speed, the fast configurations: 4.19 and 3.53 min on one GPU, 1.47 and
+1.42 min on four; where return 0.82 is first reached, SuperTrack's MPJPE-local is lower (22.7 against 27.4 mm on one GPU,
+21.9 against 26.9 mm on four).
 
 <!-- videos:begin -->
 <p align="center"><img src="docs/media/final/grid.webp" alt="SuperTrack tracking six LAFAN1 clips, with the MLP world model and with the RigidFormer" width="773"/></p>
@@ -536,22 +576,27 @@ ndm-train --algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_
 ### Training speed
 
 Minutes to return 0.82 on LAFAN1: each algorithm's fastest configuration, MLP world model, BlinkMimic's recipe and
-systems options, seeds 0-2, one run at a time on A100 40GB SXM4 GPUs
+systems options, one run at a time on A100 40GB SXM4 GPUs, seeds 0-2 on one GPU and 3-5 on four
 ([per seed and phase](benchmarks/g1_lafan1_tracking/results.md#training-speed)).
 
 - **Clock:** from iteration 50, after compilation and graph capture, to the first checkpoint whose four evaluations on
   all 40 clips average 0.82.
 - **Evaluation:** every checkpoint, one per 100 iterations, after training.
 
-| minutes to return 0.82 | SuperTrack | SuperMimic |
+| minutes to return 0.82 (MPJPE-local there) | SuperTrack | SuperMimic |
 |---|---|---|
-| one GPU (`lafan1-*-fast`) | 4.19 ± 0.18 | 3.53 ± 0.30 |
-| four GPUs (`lafan1-*-fast-4gpu`) | 1.48 ± 0.13 | 1.37 ± 0.05 |
+| one GPU (`lafan1-*-fast`) | 4.19 ± 0.18 (22.7 ± 0.9 mm) | 3.53 ± 0.30 (27.4 ± 0.4 mm) |
+| four GPUs (`lafan1-*-fast-4gpu`) | 1.47 ± 0.05 (21.9 ± 0.5 mm) | 1.42 ± 0.09 (26.9 ± 0.4 mm) |
+
+- **Error at that point:** SuperTrack's MPJPE-local is lower on one and on four GPUs, by 4.7 and 4.9 mm; SuperMimic
+  reaches 0.82 sooner on one GPU, and on four the two are level.
 
 - **One GPU:** an iteration runs collection, the world-model updates and the policy update one after another, so it
   takes their sum: 127.4 ms (SuperTrack) and 116.4 ms (SuperMimic).
 - **Four GPUs:** the three run at once on separate GPUs, each on the others' results of the previous iteration, so an
-  iteration takes about as long as the slowest, the policy update: 51.5 and 52.0 ms.
+  iteration takes about as long as the slowest, the policy update: 51.0 and 51.6 ms. The forward kinematics run as two
+  fused kernels there (`--fk_fused`), which takes 0.4-0.9 ms off every iteration of both algorithms; on one GPU the same
+  saving stays within the seeds' spread, so the one-GPU configurations do without it.
 
 ```bash
 RECIPE="--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 \
@@ -568,7 +613,7 @@ ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_sta
           --pi_batch 1024 --pi_lr_mult 2 --pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix \
           --sm_residual --wm_structured $RESETS $SYSTEMS $TIMED --pi_encode_once $LEAN --log_dir logs/sm_fast   # --config lafan1-supermimic-fast
 ndm-eval --run_dir logs/st_fast --group 18 --repeats 4 --graph   # after training, every checkpoint; the same for logs/sm_fast
-# four GPUs, layout AWL (four GPUs visible): --config lafan1-supertrack-fast-4gpu, --config lafan1-supermimic-fast-4gpu
+# four GPUs, layout AWL and the fused kinematics (four GPUs visible): --config lafan1-supertrack-fast-4gpu, --config lafan1-supermimic-fast-4gpu
 ```
 
 **Training through an exact simulator.** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) backpropagates
@@ -648,21 +693,26 @@ redistributed). One policy controls both.
 |---|---|---|
 | lowest pose error (root-relative) | `--config two-g1-supertrack` | root-relative MPJPE 14.1 ± 0.2 mm (MLP world model, seeds 0-2, 9,396 iterations) |
 | highest return | `--config two-g1-supermimic` | return 0.9055 ± 0.0011 (MLP world model, seeds 0-2, 9,396 iterations) |
-| time to the target, not engineered | `--config two-g1-supermimic` | return 0.88 after 0.10 h (`two-g1-supertrack` 0.11 h; seed 0, A100 80GB) |
+| time to the target, not engineered | `--config two-g1-supertrack`, `--config two-g1-supermimic` | return 0.88 after 3.66 ± 0.00 and 3.26 ± 0.00 min; there MPJPE 79.9 / 16.8 and 67.8 / 19.9 mm, global / root-relative (MLP world model, seeds 0-2, A100 40GB SXM4) |
+| time to the target, not engineered, three GPUs | `--config two-g1-supertrack-3gpu`, `--config two-g1-supermimic-3gpu` | return 0.88 after 1.85 ± 0.21 and 1.62 ± 0.18 min; there MPJPE 72.2 / 16.1 and 81.4 / 20.0 mm, global / root-relative (seeds 0-2, three A100 40GB SXM4) |
 
 Add `--motion_dir`; seeds 0-2, GPUs below.
 
 **In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
 the measure it optimizes (root-relative MPJPE 14.1 against 16.0 mm, return 0.9055 against 0.8925), and the global MPJPE is
-level (46.2 against 45.3 mm). `two-g1-supermimic` reaches return 0.88 first (one seed: 0.10 h against 0.11 h, not
-engineered).
+level (46.2 against 45.3 mm). Both reach return 0.88 in the same iterations on average: SuperTrack with the lower root-relative
+MPJPE, SuperMimic sooner (16.8 against 19.9 mm and 3.66 against 3.26 min on one GPU, 16.1 against 20.0 mm and 1.85 against 1.62 min
+on three; not engineered). SuperMimic's iteration is shorter: the policy update, the longest step, takes 85 against 71 ms, and
+SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,048; [details](benchmarks/g1_boxing/results.md#time-to-return-088)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack, MLP world model, on InterHuman clip 1566: seed 0's best checkpoint (iteration 7,000); blue ghosts: the references.<br>MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 - **Selection:** with the MLP, two rounds with equal run counts; the small RigidFormer (SuperTrack-RF, SuperMimic-RF),
   from the first round's selections, in six further rounds of two runs per algorithm; then three training seeds.
-- **Table:** mean ± standard deviation over training seeds 0-2 of each run's best checkpoint, evaluated five times.
+- **Table:** mean ± standard deviation over training seeds 0-2 of each run's best checkpoint, evaluated five times. The accuracy
+  rows were measured before the two configurations took the goal encoded once (`--goal_table --pi_encode_once`), which computes
+  the same values up to float rounding.
 - **GPUs and budgets:** with the MLP both train 9,396 iterations: SuperTrack's seed 0 on an A100 80GB (0.5 h), its seeds 1
   and 2 on an A100 40GB SXM4, SuperMimic's seeds 0-2 on an A100 40GB SXM4 (for 0.3 h, 6,264 iterations: return 0.9042).
   The RigidFormer's seed 0 on an A100 80GB for 0.5 h, seeds 1 and 2 on an A100 40GB SXM4 to seed 0's iteration counts
@@ -675,7 +725,8 @@ engineered).
 | normalized return, RigidFormer | 0.8938 ± 0.0016 | 0.9038 ± 0.0010 |
 | MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 45.3 ± 3.3 / 16.0 ± 0.7 |
 | MPJPE, global / root-relative (mm), RigidFormer | 47.2 ± 5.2 / 14.7 ± 0.2 | 45.8 ± 2.5 / 17.0 ± 0.7 |
-| training to return 0.88 (h), seed 0, MLP world model, not engineered | 0.11 | 0.10 |
+| training to return 0.88 (min), MLP world model, one GPU / three GPUs, not engineered | 3.66 ± 0.00 / 1.85 ± 0.21 | 3.26 ± 0.00 / 1.62 ± 0.18 |
+| MPJPE there, global / root-relative (mm), one GPU; three GPUs | 79.9 ± 4.6 / 16.8 ± 0.4; 72.2 ± 2.0 / 16.1 ± 0.5 | 67.8 ± 7.2 / 19.9 ± 1.4; 81.4 ± 7.6 / 20.0 ± 0.4 |
 
 With the MLP, SuperTrack minus SuperMimic (Welch 95% intervals): return -0.0129 [-0.0154, -0.0105], global MPJPE +0.8
 [-15.0, +16.7] mm, root-relative MPJPE -2.0 [-3.4, -0.5] mm.
@@ -683,9 +734,12 @@ With the MLP, SuperTrack minus SuperMimic (Welch 95% intervals): return -0.0129 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
 # $RECIPE and $SYSTEMS as under Training speed
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 --log_dir logs/box_st
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 --goal_table --pi_encode_once $SYSTEMS $CLIP \
+          --iterations 9396 --ckpt_every 1000 --log_dir logs/box_st                                       # --config two-g1-supertrack
 ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
-          --ref_contact_fix --sm_residual --wm_structured $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 --log_dir logs/box_sm
+          --ref_contact_fix --sm_residual --wm_structured --goal_table --pi_encode_once $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 \
+          --log_dir logs/box_sm                                                                           # --config two-g1-supermimic
+# three GPUs: the same with --layout AWL (CUDA_VISIBLE_DEVICES of three GPUs), --config two-g1-supertrack-3gpu or two-g1-supermimic-3gpu
 # SuperTrack-RF and SuperMimic-RF: the named configurations (their options: ndm_gym/configs.py)
 ndm-train --config two-g1-supertrack-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_st_rf
 ndm-train --config two-g1-supermimic-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_sm_rf
@@ -783,12 +837,15 @@ kinematic retarget of the captured hand and of the object's pose.
 |---|---|---|---|
 | Inspire | most accurate | `--config hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object 2.4 / 1.3 / 2.0 mm at 99.7-100 % |
 | | fastest, one GPU | `--config hand-supertrack-fast` with the speed options | 1.0 / 0.8 / 2.0 min, every run |
+| | fastest, three GPUs | `--config hand-supertrack-fast` with the speed options and `--layout AWL` | 0.6 / 0.6 / 0.9 min, every run |
 | Allegro | most accurate | `--config hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object 2.6 / 1.3 / 2.0 mm at 99.7-100 % |
 | | fastest, one GPU | `--config hand-supertrack-fast --st_fail_w 5` and `--config hand-supermimic-fast`, each with the speed options, level | 1.1 / 0.8 / 3.9 and 1.0 / 3.7 / 1.1 min, every run, both a mean of 1.96 min |
+| | fastest, three GPUs | `--config hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL` | 0.7 / 0.7 / 2.7 min, 8 of 9 runs, mean 1.40 min; `hand-supermimic-fast` 0.7 / 0.9 / 0.8 min, 7 of 9, mean 1.44 min |
 | XHand | most accurate | `--config hand-supertrack-accurate` | object 2.4 / 1.6 / 2.3 mm at a success of 99.9-100 % |
 | | fastest, one GPU | `--config hand-supermimic-fast` with the speed options | 0.8 / 1.1 / 1.2 min, every run; `hand-supertrack-fast` 0.7 / 0.9 / 1.8 min, faster per iteration (18.4 against 15.7 it/s) |
+| | fastest, three GPUs | `--config hand-supermimic-fast` with the speed options and `--layout AWL` | 0.6 / 0.7 / 0.8 min, every run; `hand-supertrack-fast` 0.6 / 0.6 / 1.2 min, faster per iteration (39.4 against 30.3 it/s) |
 
-Mean of training seeds 0-2 on A100 40GB GPUs, each timed run alone on its GPU. Object: position error at the last of
+Mean of training seeds 0-2 on A100 40GB GPUs, each timed run alone on its GPU or its three GPUs. Object: position error at the last of
 20,000 iterations, over 256 perturbed starts; the XHand's fast configurations, not trained that long, read 2.5 / 1.5 /
 2.1 mm (`hand-supertrack-fast`) and 3.2 / 2.5 / 3.6 mm (`hand-supermimic-fast`) at 6,000. Time: minutes to a success of
 0.99 with the object within 10 mm, with the speed options and a warm compile cache (a configuration's first run on a
@@ -797,8 +854,8 @@ machine compiles for about 3 minutes more): `--compile_updates --elementwise_3x3
 its nine runs.
 
 **In short:** SuperTrack's configurations have the lower object error on all three hands. With the speed options, the
-lower mean time to the target over the nine runs is SuperTrack's on the Inspire hand; the two are level on the Allegro
-hand, and `hand-supermimic-fast`'s is lower on the XHand.
+lower mean time to the target over the nine runs is SuperTrack's on the Inspire hand and `hand-supermimic-fast`'s on the
+XHand, on one GPU and on three; on the Allegro hand the two are level (1.96 min each on one GPU, 1.40 and 1.44 on three).
 
 <p align="center"><img src="docs/media/hand/grid.webp" alt="The XHand, the Allegro hand and the Inspire hand tracking the apple, the spray bottle and the can with SuperTrack and SuperMimic" width="100%"/></p>
 <p align="center"><i>Three hands on the apple, the spray bottle and the can, with SuperTrack and with SuperMimic (half speed, the reference in blue).<br>Per cell the lowest-error run, from the unperturbed start; a tile holds its last frame (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs</a>).</i></p>
@@ -869,6 +926,24 @@ second of every run: [with the speed options](benchmarks/xhand_tracking/results.
 before them for the [XHand](benchmarks/xhand_tracking/results.md#training-time) and the
 [Allegro and Inspire hand](benchmarks/xhand_tracking/results.md#time-to-the-target-6000-iterations).
 
+**Three GPUs** (`--layout AWL`): the collection with the simulator, the world model's updates and the policy's update
+run at once, each on its own GPU and on the others' results of the previous iteration. An iteration then takes about as
+long as its slowest step instead of their sum. Per phase on the Allegro hand's apple, three A100 40GB (ms, the phases
+timed one after another):
+
+| phase | SuperTrack | SuperMimic |
+|---|---|---|
+| collection | 12.3 | 13.2 |
+| world model's updates | 24.9 | 26.8 |
+| policy's update (SuperMimic's with the critic's) | 24.6 | 33.3 |
+| exchange between the GPUs | 1.5 | 1.4 |
+| iterations/s, the steps at once | 39.6 | 29.6 |
+
+The iterations/s rise 2.1-2.2x (SuperTrack) and 1.9x (SuperMimic) over one GPU; the mean time to the target drops another
+1.4-1.9x. Reading the previous iteration's results changes the training: the object error moves by -0.05 to +0.12 mm
+(SuperTrack) and +0.09 to +1.19 mm (SuperMimic); runs at the target, SuperTrack / SuperMimic: Inspire 9 / 7, Allegro 8 / 7,
+XHand 9 / 9 of 9 ([every run](benchmarks/xhand_tracking/results.md#training-time-on-three-gpus)).
+
 ```bash
 HAND_SYSTEMS="--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
 CLIP=data/spider/processed/hrdexdb_24f/xhand/right/apple-0/0
@@ -887,6 +962,7 @@ python -m ndm_gym.train_hand --config hand-supertrack-fast --st_fail_w 5 $HAND_S
        --log_dir logs/allegro/apple_st_fast_s0   # seeds 0-2
 python -m ndm_gym.train_hand --config hand-supermimic-fast $HAND_SPEED --sm_reuse_input --clip $CLIP --seed 0 \
        --log_dir logs/allegro/apple_sm_fast_s0   # seeds 0-2
+# three GPUs visible: the same with --layout AWL
 ```
 
 ### Quadrotor trajectory tracking
@@ -1016,13 +1092,60 @@ Three native Adroit tasks extend the shared Door collector and learning infrastr
 | Hammer | 51.2% | 100.0 ± 0.0% | 73.0 ± 45.0% |
 | Relocate | 100.0% | 100.0 ± 0.0% | 100.0 ± 0.0% |
 
-Pen SuperTrack improves normalized tracking RMSE from the prior's 0.4024 to 0.0519 ± 0.0043. SuperMimic is seed-sensitive: Pen's native success is 99.6%, 46.9%, 91.8%; Hammer's is 21.1%, 100%, 98.0%. Hammer's selected 1 mm training kernel did not establish a robust repair. Neither method improves mean overall tracking error over the prior on Hammer or Relocate, and Relocate's prior already succeeds everywhere. Native success and tracking error must therefore both be reported. These are single-reference online tracking results, not D4RL offline-RL scores.
+- Normalized tracking RMSE, the prior / SuperTrack / SuperMimic: Pen 0.4024 / 0.0519 ± 0.0043 / 0.2380 ± 0.1386, Hammer
+  0.0389 / 0.0485 ± 0.0231 / 0.0762 ± 0.0155, Relocate 0.0316 / 0.0508 ± 0.0027 / 0.2059 ± 0.0255.
+- Native final success by training seed (0, 1, 2), SuperTrack and SuperMimic: Pen 98.0, 95.7, 96.5% and 99.6, 46.9, 91.8%;
+  Hammer 100, 100, 100% and 21.1, 100, 98.0%; Relocate 100% for the prior and all six runs.
+
+These are single-reference online tracking results, not D4RL offline-RL scores.
 
 <p align="center"><img src="docs/media/adroit_suite/v2/grid.webp" alt="Trained Adroit Pen, Hammer and Relocate policies" width="1000"/></p>
 <p align="center"><i>Native Hand accurate adaptation / SuperTrack: Pen seed 0, Hammer seed 1, Relocate seed 0, each final 20k checkpoint. Per case, the lowest fixed tracking-error final run among all six method/seed combinations; fixed nominal episode 0. Full nonterminal windows, native speed; shorter clips hold their last displayed frame. These selected previews do not replace the seed averages above.</i></p>
 <p align="center"><sub>DAPG references and native Gymnasium-Robotics 1.3.1 scenes/assets; see <a href="NOTICE">NOTICE</a>.</sub></p>
 
 Training takes 93.7–154.9 minutes per seed on one L40S and eight physical CPU cores. See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
+
+### Wuji Hand piano playing
+
+Two floating Wuji Hand 2 hands play Eden's *Ode to Joy*, the melody and a held bass (19 notes, an 11.5 s episode with a
+one-second lead-in), on 88 passive keys in MuJoCo Warp: 52 independent wrist and finger controls at 20 Hz, the score's
+next half second as the goal, no fingering given. Both algorithms train through the task's own world model,
+`PianoDynamics`: a polynomial fit of the fingertip geometry and hand-set contact constants find the keys a fingertip can
+press, and two residual networks correct the actuators' motion and the keys' depths.
+
+| goal | configuration (`benchmarks/wuji_piano/run.sh`) | result |
+|---|---|---|
+| most accurate | `supertrack --horizon 3 --st-reg 0.01` | Eden F1 0.903 ± 0.015 on 256 held-out starts, 18.5 of 19 notes reached (seeds 0-2, A100 40GB) |
+
+**In short:** after the same settings screen and at the same budget, SuperTrack at horizon 3 is the most accurate, Eden F1
+0.903 ± 0.015 against SuperMimic's 0.833 ± 0.079 there. At horizon 8 SuperMimic's mean is the higher, 0.820 ± 0.135
+against 0.801 ± 0.027. At both horizons SuperTrack's seeds lie closer together and its runs take less time.
+
+<p align="center"><img src="docs/media/wuji_piano/ode.webp" alt="Two Wuji hands playing Ode to Joy on a simulated keyboard" width="640"/></p>
+<p align="center"><i>SuperTrack at horizon 3, seed 0, from the nominal start: 19 of 19 notes, F1 0.921. Green: a correct press;<br>blue: a due key up; red: an extra press.</i></p>
+<p align="center"><sub>The Wuji Hand 2 models are Wuji Technology's (MIT), the keyboard RoboPianist's through Eden's assets (Apache-2.0), the score Eden's (see <a href="THIRD_PARTY_NOTICES.md#wuji-hand-piano">notices</a>).</sub></p>
+
+- **Runs:** 20 rounds of 32 worlds × 160 control steps (102,400 transitions) per seed, each run alone on one A100 40GB
+  SXM4. The last checkpoint plays the whole song from 256 starts: one nominal, 255 with every control perturbed by up to
+  0.20 of its scale. A run takes 7.2 and 7.7 min for SuperTrack (horizons 3 and 8) and 8.7 and 10.4 min for SuperMimic,
+  at the F1 above, in the contributed implementation, not engineered for speed
+  ([every seed](benchmarks/wuji_piano/results_a100.md), [the contributed study](benchmarks/wuji_piano/README.md#results)).
+- **Selection:** each algorithm got the same screen from its starting configuration: the horizon (3 or 8) and three of
+  its own settings, 16 configurations at one seed, then per horizon the two best and the starting configuration at two
+  more ([the screen](benchmarks/wuji_piano/results_a100.md#the-settings-screen)). SuperMimic needed a discount of 0.95 in
+  place of 0.99. A step's reward is at most 1, so a return is at most 100 at 0.99 and 20 at 0.95. In the starting
+  configuration (0.99, horizon 3) the critic's estimates passed that bound on all three seeds (validation F1 0.17); at
+  0.95 they stayed within it in every run (0.82 with the gradient decay 0.95).
+- **As the simulator:** at 4,096 worlds the world model steps 46.2 M world-steps/s with its networks in bf16, 1,530 times
+  MuJoCo Warp's 30,213 for a control step (10 physics steps of the full scene). It steps only the policy's observed state,
+  192 numbers: a due key's predicted depth is off by 0.15 / 0.19 / 0.26 of its travel after 1 / 3 / 10 steps with
+  SuperTrack's horizon-3 model, 0.16 / 0.19 / 0.32 with SuperMimic's
+  ([speed and errors](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)).
+
+```bash
+benchmarks/wuji_piano/run.sh supertrack logs/piano_st --horizon 3 --st-reg 0.01                        # seeds 0-2
+benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 3 --gamma 0.95 --bptt-decay 0.95
+```
 
 ### Quadruped motion tracking
 
@@ -1405,6 +1528,8 @@ Pull requests from outside contributors, each merged with its runs and results:
   ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
 - [Yifan Kang](https://github.com/YIFANK): native Adroit Door tracking with SuperTrack and SuperMimic
   ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+- [Anna Mei](https://github.com/annamei1): two Wuji Hand 2 hands playing Eden's *Ode to Joy* on MuJoCo-Warp, with
+  SuperTrack and SuperMimic ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
 
 ## 📄 Papers and repositories
 
@@ -1492,6 +1617,9 @@ Data:
 - **DAPG** (the Adroit door, pen, hammer and relocate demonstrations): A. Rajeswaran, V. Kumar, A. Gupta, G. Vezzani, J. Schulman, E. Todorov,
   S. Levine. *Learning Complex Dexterous Manipulation with Deep Reinforcement Learning and Demonstrations.* RSS 2018.
   [arXiv:1709.10087](https://arxiv.org/abs/1709.10087) · [code and demonstrations](https://github.com/aravindr93/hand_dapg)
+- **Eden** (the piano task: its *Ode to Joy* arrangement, framewise scoring and keyboard assets): Eden Authors. *Eden:
+  One Task Definition from Simulation to Real Robots.* 2026. [code](https://github.com/embodied-ai-nexus/Eden) ·
+  [assets](https://huggingface.co/datasets/Kashu7100/eden_assets)
 
 Robot models:
 - **Unitree G1:** Unitree Robotics. [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/g1_description`,
@@ -1504,6 +1632,10 @@ Robot models:
 - **mjlab** (the G1 of the differentiable-simulator comparison, as NablaEngine bundles it): K. Zakka, Q. Liao, B. Yi,
   L. Le Lay, K. Sreenath, P. Abbeel. *mjlab: A Lightweight Framework for GPU-Accelerated Robot Learning.* arXiv preprint,
   2026. [arXiv:2601.22074](https://arxiv.org/abs/2601.22074) · [code](https://github.com/mujocolab/mjlab)
+- **RoboPianist** (the keyboard model, through Eden's assets): K. Zakka, P. Wu, L. Smith, N. Gileadi, T. Howell, X. B. Peng,
+  S. Singh, Y. Tassa, P. Florence, A. Zeng, P. Abbeel. *RoboPianist: Dexterous Piano Playing with Deep Reinforcement
+  Learning.* CoRL 2023. [paper](https://proceedings.mlr.press/v229/zakka23a.html) · [code](https://github.com/google-research/robopianist)
+- **Wuji Hand 2** (the piano task's hand models, beta2): Wuji Technology. [code](https://github.com/wuji-technology/wuji-description)
 - **Gymnasium-Robotics** (the Adroit hand and its door, pen, hammer and relocate scenes): R. de Lazcano, K. Andreas, J. J. Tai, S. R. Lee,
   J. Terry. *Gymnasium Robotics.* 2024. [code](https://github.com/Farama-Foundation/Gymnasium-Robotics) ·
   [documentation](https://robotics.farama.org/)

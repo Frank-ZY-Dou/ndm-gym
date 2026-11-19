@@ -86,6 +86,11 @@ Both methods and the control use the same 256 fixed starts: one nominal and 255 
 
 ## Observed limitations
 
-The [complete three-seed results](../../benchmarks/adroit_suite/v2/results.md) show that Pen SuperTrack improves tracking and native success over the explicit prior. SuperMimic is variable: Pen succeeds on 99.61%, 46.88% and 91.80% of starts, and Hammer on 21.09%, 100% and 98.05%. The selected 1 mm nail kernel does not establish a robust repair. All six Relocate policies succeed everywhere, as the prior already does, while mean tracking error worsens. Hammer and Relocate show no mean overall tracking improvement over the prior for either method.
+[Complete three-seed results](../../benchmarks/adroit_suite/v2/results.md), SuperTrack and SuperMimic:
+
+- native final success by training seed (0, 1, 2): Pen 98.05, 95.70, 96.48% and 99.61, 46.88, 91.80%; Hammer 100, 100,
+  100% and 21.09, 100, 98.05%; Relocate 100% for the prior and all six runs;
+- normalized tracking RMSE against the prior's: Pen 0.0519 and 0.2380 against 0.4024, Hammer 0.0485 and 0.0762 against
+  0.0389, Relocate 0.0508 and 0.2059 against 0.0316.
 
 The original strict native predicates and fixed reporting widths remain unchanged. Every failure is retained. The [historical single-seed results](../../benchmarks/adroit_suite/results_v1.md) are separate evidence and are not pooled into the three-seed averages. These results do not establish robustness to larger passive-object perturbations or unseen demonstrations.

@@ -155,8 +155,6 @@ def check_args(args: argparse.Namespace):
         raise ValueError("--ref_contact_fix needs --contact_reward")
     if not 0 <= args.fail_reset < 1:
         raise ValueError(f"--fail_reset must be in [0, 1), got {args.fail_reset}")
-    if (args.fail_reset > 0 or args.bin_fix) and args.paired:
-        raise ValueError("--fail_reset and --bin_fix: not implemented for the two-robot scene (--paired)")
     if args.pi_lr_mult <= 0 or args.lr_decay_ret < 0 or args.lr_decay_len < 1 or args.lr_decay_by < 0:
         raise ValueError("--pi_lr_mult > 0, --lr_decay_ret >= 0, --lr_decay_len >= 1, --lr_decay_by >= 0")
     if args.lr_decay_ret > 0 and args.pi_lr_mult == 1:

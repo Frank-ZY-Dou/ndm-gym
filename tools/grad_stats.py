@@ -437,7 +437,7 @@ def main():
         elementwise_3x3_products()
     if a["combo_kernels"]:
         combo_kernels()
-    kin = g1.kinematics(dev)
+    kin = g1.kinematics(dev, fused=a["fk_fused"])  # --fk_fused: the run's forward kinematics
     clips = lafan1.load_dir(args.motion_dir)
     if a["clips"]:  # the clips the run trained on, as train.py recorded them
         clips = select(clips, read_clip_list(os.path.join(run_dir, "clips.txt")))

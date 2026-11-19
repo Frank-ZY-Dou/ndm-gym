@@ -101,6 +101,7 @@ nav:
           - tasks/muscles.md
           - Design: musclevae_design.md
       - Hand-object tracking: tasks/hand.md
+      - Wuji Hand piano: tasks/wuji_piano.md
       - Quadrotor trajectory tracking: tasks/quadrotor.md
       - Adroit Door tracking: tasks/adroit_door.md
       - Adroit manipulation suite: tasks/adroit_suite.md
