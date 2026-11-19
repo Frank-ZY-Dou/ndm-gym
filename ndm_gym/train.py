@@ -206,8 +206,12 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                              "every imagined step (equal up to rounding; 1.2 GB for LAFAN1)")
     parser.add_argument("--pi_encode_once", action="store_true",
                         help="supertrack, supermimic: the policy's goal encoder runs once per policy update, over every imagined step's goal (they "
-                             "depend on the reference frames only), and the steps its decoder (equal up to rounding: the encoder's products over all "
-                             "steps at once)")
+                             "depend on the reference frames only), and the steps its decoder; each update equals the default's up to float rounding "
+                             "(the encoder's products over all steps at once), one robot or two, so a run is not the default's bit for bit")
+    parser.add_argument("--fk_fused", action="store_true",
+                        help="the forward kinematics of training (ArticulationKinematics.forward: the world-model and policy losses, the "
+                             "rewards, the critic's input, the reference's bodies) as two Triton kernels with a hand-written backward pass "
+                             "(kernels/fk.py; changes results by rounding; a RigidFormer world model's own kinematics: --rf_fused_inputs)")
     if not rigidformer:
         return
     parser.add_argument("--rf_fused_train", action="store_true",
@@ -394,7 +398,7 @@ def main():
     os.makedirs(args.log_dir, exist_ok=True)
     json.dump(vars(args), open(os.path.join(args.log_dir, "args.json"), "w"), indent=2)
 
-    kin = g1.kinematics(dev)
+    kin = g1.kinematics(dev, fused=args.fk_fused)
     if args.motions == "interhuman":
         from ndm_gym.motion.sources import interhuman
 
@@ -454,7 +458,7 @@ def main():
             from ndm_gym.algos.layouts import Split
 
             def algo_on(d: str):  # the algorithm's object for another device, with the task's tables there
-                k = g1.kinematics(d)
+                k = g1.kinematics(d, fused=args.fk_fused)
                 m = MotionLib(clips, k, d)
                 if args.goal_table:
                     m.cache_goals(args.goal_frames)

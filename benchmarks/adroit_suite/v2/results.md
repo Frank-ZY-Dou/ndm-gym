@@ -20,7 +20,12 @@ All reporting uses the original tracking widths and native success predicates. H
 | Relocate | SuperTrack | 14.0428 ± 0.0040 | 0.0508 ± 0.0027 | 100.00 ± 0.00 | 94.3 ± 0.8 |
 | Relocate | SuperMimic | 13.5146 ± 0.1276 | 0.2059 ± 0.0255 | 100.00 ± 0.00 | 109.3 ± 3.0 |
 
-Pen SuperTrack improves both mean tracking error and native success over the explicit prior. Pen SuperMimic is variable: seed 1 succeeds on only 46.88% of starts. Hammer SuperTrack reaches 100% native success in every seed, but neither method improves mean overall tracking error over the prior. Hammer SuperMimic remains highly seed-sensitive. Relocate already succeeds on every prior start; the learned policies retain success but worsen mean tracking error. Native success alone is therefore not evidence of better tracking or learned feedback.
+- Native final success by training seed (0, 1, 2), SuperTrack and SuperMimic: Pen 98.05, 95.70, 96.48% and 99.61, 46.88,
+  91.80%; Hammer 100, 100, 100% and 21.09, 100, 98.05%; Relocate 100% for the prior and all six runs.
+- Normalized tracking RMSE, SuperTrack and SuperMimic against the prior's: Pen 0.0519 and 0.2380 against 0.4024, Hammer
+  0.0485 and 0.0762 against 0.0389, Relocate 0.0508 and 0.2059 against 0.0316.
+
+Native success and tracking error are reported together.
 
 ## Every complete seed
 

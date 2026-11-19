@@ -104,11 +104,13 @@ without them. Each applies to both algorithms.
 | `--autotune_gemm` | each compiled matrix product from the faster of cuBLAS and compiled Triton templates, timed per shape at compilation (longer compilations) | rounding |
 | `--wm_palm_fk` | the world model's fit computes the palm's kinematics alone, the only part of them it reads | none |
 | `--sm_reuse_input` | SuperMimic: an imagined step's policy input is the critic's input computed the step before | rounding |
+| `--layout AL`, `--layout AWL` | the iteration's steps at the same time on the first two or three GPUs the trainer sees, each on the others' results of the previous iteration: AL the actor (simulator, collection, replay, world model) and the policy's learner; AWL also the world model's learner, on a copy of the replay; `--layout_devices` places them otherwise (needs `--no_sync --update_graphs`) | the training: each step reads the others' results of the previous iteration |
 | `--pi_lr_mult m` | the policy's learning rate is `--lr` times `m`, ramped to 1 over `--lr_decay_len` iterations from the log row where `sim_r` reaches `--lr_decay_ret`, at the latest from `--lr_decay_by` | the policy's schedule |
 
 The speed options of the fastest configurations are `--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk
 --compile_collect --autotune_gemm`, with SuperMimic also `--sm_reuse_input`
 ([why they are fast](../../README.md#hand-object-tracking)); a configuration's first run compiles for about 3 minutes.
+The three-GPU times add `--layout AWL`.
 `--phase_times` writes each iteration's phases (collection, world-model updates, policy update, critic update, log rows,
 checkpoints, the host's rest), the device synchronized at every boundary, to `phase_times.csv`.
 `--amp bf16` (the MLPs' products in bf16) combines with all of them. `HAND_PROFILE=1` prints, with every log row, the

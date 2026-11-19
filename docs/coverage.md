@@ -34,7 +34,7 @@ this repository yet.
 | LCP | [paper](https://arxiv.org/abs/2410.11825), in MimicKit | timed with the systems options; accelerated *(ongoing)* |
 | ADD | [paper](https://doi.org/10.1145/3757377.3763819), in MimicKit | timed with the systems options; accelerated *(ongoing)* |
 | CFC | [project page](https://people.csail.mit.edu/frankzydou/projects/CFC/) | two-level world model with forces as the interface *(ongoing)* |
-| Eden | [embodied-ai-nexus/Eden](https://github.com/embodied-ai-nexus/Eden) | its tasks on world models *(ongoing)* |
+| Eden | [embodied-ai-nexus/Eden](https://github.com/embodied-ai-nexus/Eden) | its piano task's *Ode to Joy* and framewise scoring, on MuJoCo-Warp ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)); its other tasks on world models *(ongoing)* |
 
 ## Simulators and engines
 
@@ -79,6 +79,8 @@ this repository yet.
 | Allegro hand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
 | Inspire hand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
 | Wuji Hand 1, Wuji Hand 2.2 | dexterous hands | [openrobokit/robokit](https://github.com/openrobokit/robokit) | hand-object tracking with our own retargets, RoboKit's cube *(ongoing)* |
+| Wuji Hand 2 (beta2) | dexterous hand, two floating | [wuji-technology/wuji-description](https://github.com/wuji-technology/wuji-description) | piano playing, Eden's *Ode to Joy* ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)) |
+| RoboPianist's keyboard | 88 passive keys | [google-research/robopianist](https://github.com/google-research/robopianist), through [Eden's assets](https://huggingface.co/datasets/Kashu7100/eden_assets) | piano playing |
 | Sharpa hand | dexterous hand | [openrobokit/robokit](https://github.com/openrobokit/robokit) | RoboKit's pen *(ongoing)* |
 | Adroit hand | dexterous hand, 24-30 actuators by task | [Farama-Foundation/Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics) | door opening ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)); pen turning, hammering and ball relocation ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)); from DAPG demonstrations |
 | MIMIC-MJX's rat, stick insect | anatomically detailed animal bodies (67 and 41 joints, torque actuators) | [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) | animal motion tracking |

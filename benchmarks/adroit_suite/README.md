@@ -14,7 +14,15 @@ Full preparation commands, verified archive hashes, units, training settings and
 
 ## Results and limitations
 
-Pen SuperTrack improves tracking and native success over the prior. SuperMimic has substantial seed variability on Pen and Hammer. Relocate's prior already succeeds on every start; both learned methods retain success but worsen mean tracking error. These limitations and every unsuccessful evaluation remain in the report.
+Normalized tracking RMSE and native final success, means over training seeds 0-2 ([every seed](v2/results.md)):
+
+| task | the prior | SuperTrack | SuperMimic |
+|---|---|---|---|
+| Pen | 0.4024, 58.6% | 0.0519, 96.7% | 0.2380, 79.4% |
+| Hammer | 0.0389, 51.2% | 0.0485, 100.0% | 0.0762, 73.0% |
+| Relocate | 0.0316, 100.0% | 0.0508, 100.0% | 0.2059, 100.0% |
+
+Every evaluation, successful or not, remains in the report.
 
 The [Hammer precision experiment](v2/README.md) selected a 1 mm reward kernel in a matched 6,000-iteration development screen. Its full-budget results did not pass the initially specified ≥95%-success-on-every-seed quality gate. The [scope addendum](v2/publication-scope-addendum.json) retains that negative result and completes all originally planned tasks without changing budgets, references, metrics or success predicates. Algorithm performance is not conflated with software validity.
 
