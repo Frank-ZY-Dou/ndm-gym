@@ -1025,7 +1025,12 @@ Three native Adroit tasks extend the shared Door collector and learning infrastr
 | Hammer | 51.2% | 100.0 ± 0.0% | 73.0 ± 45.0% |
 | Relocate | 100.0% | 100.0 ± 0.0% | 100.0 ± 0.0% |
 
-Pen SuperTrack improves normalized tracking RMSE from the prior's 0.4024 to 0.0519 ± 0.0043. SuperMimic is seed-sensitive: Pen's native success is 99.6%, 46.9%, 91.8%; Hammer's is 21.1%, 100%, 98.0%. Hammer's selected 1 mm training kernel did not establish a robust repair. Neither method improves mean overall tracking error over the prior on Hammer or Relocate, and Relocate's prior already succeeds everywhere. Native success and tracking error must therefore both be reported. These are single-reference online tracking results, not D4RL offline-RL scores.
+- Normalized tracking RMSE, the prior / SuperTrack / SuperMimic: Pen 0.4024 / 0.0519 ± 0.0043 / 0.2380 ± 0.1386, Hammer
+  0.0389 / 0.0485 ± 0.0231 / 0.0762 ± 0.0155, Relocate 0.0316 / 0.0508 ± 0.0027 / 0.2059 ± 0.0255.
+- Native final success by training seed (0, 1, 2), SuperTrack and SuperMimic: Pen 98.0, 95.7, 96.5% and 99.6, 46.9, 91.8%;
+  Hammer 100, 100, 100% and 21.1, 100, 98.0%; Relocate 100% for the prior and all six runs.
+
+These are single-reference online tracking results, not D4RL offline-RL scores.
 
 <p align="center"><img src="docs/media/adroit_suite/v2/grid.webp" alt="Trained Adroit Pen, Hammer and Relocate policies" width="1000"/></p>
 <p align="center"><i>Native Hand accurate adaptation / SuperTrack: Pen seed 0, Hammer seed 1, Relocate seed 0, each final 20k checkpoint. Per case, the lowest fixed tracking-error final run among all six method/seed combinations; fixed nominal episode 0. Full nonterminal windows, native speed; shorter clips hold their last displayed frame. These selected previews do not replace the seed averages above.</i></p>
