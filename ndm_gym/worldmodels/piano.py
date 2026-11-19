@@ -1,4 +1,10 @@
-"""Differentiable contact dynamics for two Wuji hands and an 88-key piano."""
+"""The Wuji piano task's own world model (benchmarks/wuji_piano): differentiable contact dynamics for two Wuji hands and
+an 88-key piano. It is task-specific, not the library's acceleration or increment model (worldmodels.accel,
+worldmodels.increment). ``PianoDynamics`` steps what the policy observes, 192 numbers (the 52 actuator positions, their
+last changes and the 88 key depths), not the physics state: the actuators take a first-order step plus a residual
+network; ``TipGeometry``, a polynomial fit of each fingertip to the hand model's kinematics, places the ten fingertips;
+hand-set contact constants turn their distances to the keys into key depths, which a second residual network corrects.
+``FingerDynamics`` is the five-finger exercise's model."""
 
 import itertools
 import math

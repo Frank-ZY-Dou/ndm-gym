@@ -1,4 +1,8 @@
-"""Eden's monophonic five-finger exercise and a split-keyboard Wuji Hand 2 scene."""
+"""Eden's monophonic five-finger exercise and a split-keyboard Wuji Hand 2 scene.
+
+The exercise is adapted from Eden's ``eden/tasks/piano/songs.py`` (Apache-2.0, Copyright 2026 Kashu Yamazaki;
+https://github.com/embodied-ai-nexus/Eden at 148d972): its nine notes at 80 BPM, 0.75-beat notes and 0.25-beat gaps after
+a one-second lead-in, sampled at the 20 Hz control rate."""
 
 from pathlib import Path
 

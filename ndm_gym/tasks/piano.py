@@ -1,4 +1,11 @@
-"""Physical sampling constants and the timed, unassigned Eden Ode to Joy score."""
+"""The Wuji piano task's physical sampling constants, Eden's framewise scoring and the timed, unassigned Eden Ode to Joy
+score (benchmarks/wuji_piano).
+
+The score is adapted from Eden's ``eden/tasks/piano/songs.py`` (``ode_to_joy``; Apache-2.0, Copyright 2026 Kashu Yamazaki;
+https://github.com/embodied-ai-nexus/Eden at 148d972): the same melody, bass notes, durations, rests and tempo, written here
+as note intervals sampled at the 20 Hz control rate after a one-second lead-in, without Eden's ``Song`` and ``Note``
+types. ``frame_metrics`` scores as Eden's ``custom_terms/metrics.py``: framewise precision, recall and F1 over all 88
+keys, a zero denominator counting as 1."""
 
 import numpy as np
 import torch
