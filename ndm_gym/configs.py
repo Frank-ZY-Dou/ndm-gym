@@ -86,10 +86,10 @@ CONFIGS = {
                               "the goal was encoded once, which computes the same values up to float rounding)"),
         "two-g1-supertrack-3gpu": (f"{TWO_G1_ST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after TBD_ST3G min (seeds 0-2)"),
+                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min (seeds 0-2)"),
         "two-g1-supermimic-3gpu": (f"{TWO_G1_SM} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after TBD_SM3G min (seeds 0-2)"),
+                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min (seeds 0-2)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "

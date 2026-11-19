@@ -25,8 +25,8 @@ Setup:
 ## Selected on the clip
 
 Two rounds with equal run counts start from LAFAN1's selections. Five evaluations of each run's best checkpoint determine
-the ranking. Learning curves use one evaluation per checkpoint to select that checkpoint and measure time to return 0.88
-(the selections: one checkpoint per 1,000 iterations).
+the ranking. Learning curves use one evaluation per checkpoint to select that checkpoint (the selections: one checkpoint per
+1,000 iterations).
 
 | | SuperTrack | SuperMimic |
 |---|---|---|
@@ -37,13 +37,12 @@ the ranking. Learning curves use one evaluation per checkpoint to select that ch
 | normalized return | 0.893 | 0.905 |
 | global MPJPE (mm) | 39 | 40 |
 | root-relative MPJPE (mm) | 14.2 | 16.4 |
-| training to return 0.88 (h), not engineered | 0.11 (2,000 iterations) | 0.10 (2,000 iterations) |
 | last checkpoint: return, global, root-relative MPJPE (mm) | 0.892, 57, 14.3 | 0.905, 40, 16.4 |
 
 On the learning curves, the selected SuperTrack run holds 0.889-0.894 from 2,000 iterations on; the selected SuperMimic run reaches
 0.905 at its end. Round 1's SuperTrack holds 0.888-0.895 from 3,000 iterations to 1 h; round 1's SuperMimic holds 0.901-0.906 from 4,000
 to 14,000 iterations and falls to 0.83 at 1 h. Ranking uses each run's best checkpoint because BlinkMimic's preset trains for 3,500 iterations.
-Times to return 0.88 are seed 0's, on one evaluation per 1,000 iterations: time to the target, not engineered.
+The time to return 0.88 is measured on its own, [below](#time-to-return-088).
 
 Best-checkpoint return, global and root-relative MPJPE (mm); selections in bold:
 
@@ -107,6 +106,40 @@ Last checkpoints, evaluated five times:
 Means over the five evaluations, their range in parentheses. Per robot (normalized return): SuperTrack-MLP 0.881 and
 0.892, SuperMimic-MLP 0.879 and 0.892. SuperTrack-MLP's evaluation ran on an A100 40GB, SuperMimic-MLP's on the A100 80GB
 it trained on.
+
+## Time to return 0.88
+
+Minutes of training from iteration 50 to the first checkpoint whose evaluations (the mean of two) return at least 0.88; seeds 0-2;
+a checkpoint every 250 iterations, evaluated after training; A100 40GB SXM4 GPUs that ran nothing else. Times to the target, not
+engineered.
+
+| configuration | GPUs | minutes to 0.88, seeds 0 / 1 / 2 | mean ± sd | iterations to 0.88 | ms per iteration, 500-2000 |
+|---|---|---|---|---|---|
+| `two-g1-supertrack` | 1 | 3.66 / 3.66 / 3.66 | 3.66 ± 0.00 | 1,250, 1,250, 1,250 | 182.4 |
+| `two-g1-supermimic` | 1 | 3.26 / 3.26 / 3.26 | 3.26 ± 0.00 | 1,250, 1,250, 1,250 | 162.1 |
+| `two-g1-supertrack-3gpu` | 3 | 1.73 / 2.08 / 1.73 | 1.85 ± 0.21 | 1,250, 1,500, 1,250 | 86.3 |
+| `two-g1-supermimic-3gpu` | 3 | 1.51 / 1.52 / 1.83 | 1.62 ± 0.18 | 1,250, 1,250, 1,500 | 75.3 |
+
+Time per iteration by phase, seed 0, iterations 200-1000, ms:
+
+| configuration | total | collection | world-model updates | policy update with the critic |
+|---|---|---|---|---|
+| `two-g1-supertrack` | 182.2 | 62.0 | 35.0 | 85.0 |
+| `two-g1-supermimic` | 162.5 | 65.0 | 26.0 | 71.0 |
+
+On three GPUs (`--layout AWL`) each device's steps, ms:
+
+| configuration | total | actor: collection | world-model learner: updates | policy learner: update |
+|---|---|---|---|---|
+| `two-g1-supertrack-3gpu` | 86.3 | 48.9 | 35.1 | 84.9 |
+| `two-g1-supermimic-3gpu` | 75.5 | 52.0 | 26.7 | 70.0 |
+
+- Both reach 0.88 in the same iterations on average; SuperMimic's iteration is shorter, on one GPU and on three.
+- On one GPU the policy update is the largest phase: 85 against 71 ms.
+- On three GPUs the collection and the world-model updates run beside the policy update, so the iteration is the policy update
+  (84.9 and 70.0 ms): about half the time of one GPU, at 5.5 and 4.9 GPU-minutes against 3.66 and 3.26.
+- The goal encoded once (`--goal_table --pi_encode_once`) computes each policy update's values up to float rounding; it shortens
+  the update by 14 ms (SuperTrack) and 12 ms (SuperMimic), because the goal encoder runs once over all imagined steps.
 
 ## Speed
 
