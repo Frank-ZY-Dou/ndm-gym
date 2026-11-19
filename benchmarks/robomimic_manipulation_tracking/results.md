@@ -102,7 +102,7 @@ lower object error on Lift (0.60 against 2.30 mm) and about the same on Square (
 Each algorithm's configuration is one of four, chosen by one rule before these runs: the hand task's accurate preset and
 three single changes of the same kinds for both, each trained on the three tasks with the stop rule above (training seed 5)
 and evaluated at its stop on 256 starts of evaluation seed 2; the highest mean success over the three tasks wins, and
-within one point of it the lower mean object error. Selection runs, on an RTX 2080 Ti:
+within one point of it the lower mean object error. These runs ran on RTX 2080 Ti GPUs and serve the selection only:
 
 | configuration | Lift: success, object, stop | Square | Transport | mean success | mean object |
 |---|---|---|---|---|---|
