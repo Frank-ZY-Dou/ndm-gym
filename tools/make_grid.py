@@ -52,8 +52,11 @@ third: three tools/render_quadrotor.py renders (the chase camera at 1.25 m, --le
 started open (--door-latch-offset 0.3, seed 0, the nominal start), drawn brighter at half speed, and SuperTrack's Adroit pen,
 hammer and relocate renders ($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each
 frame shown twice as long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its
-rollout:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 --tile 256 192 --seconds 6 --quality 52 --max_mb 12 \\
+rollout. The fifth: the manipulation tracking renders (tools/render_robomimic.py --no_labels, 1040 x 780, as
+robomimic_<task>.mp4) of robomimic-supertrack's finals with the lowest object error per task, from the unperturbed start:
+Lift in real time, Square at 1.5 times the speed, Transport at four times over 12-36 s of its demonstration; their marks
+left out:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 1 --tile 256 192 --seconds 6 --quality 46 --max_mb 12 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -72,7 +75,9 @@ rollout:
       --block "Adroit door" 1 1 414 388 --clip door.mkv 0 104 0 421 395 --block "Adroit pen" 1 1 414 388 --clip pen_half.mkv 0 120 70 400 375 \\
       --block "Adroit hammer" 1 1 414 388 --clip hammer_half.mkv 2 120 70 400 375 \\
       --block "Adroit relocate" 1 1 414 388 --clip relocate_half.mkv 0 80 70 400 375 \\
-      --block "Wuji piano" 1 1 414 388 --clip piano.mkv 0 0 0 433 406
+      --block "Wuji piano" 1 1 414 388 --clip piano.mkv 0 0 0 433 406 \\
+      --block Manipulation 3 1 522 388 --clip robomimic_lift.mp4 0 35 0 969 720 --clip robomimic_square.mp4 0 35 0 969 720 \\
+      --clip robomimic_transport.mp4 0 35 0 969 720
 """
 
 import argparse
