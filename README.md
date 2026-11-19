@@ -425,14 +425,14 @@ pip install -e '.[hand]'                             # MuJoCo-Warp
 python tools/download_mimic_mjx.py                   # MIMIC-MJX's clips and vnl-playground's bodies, pinned, into data/mimic_mjx
 
 # one body on clips 0-9: train, evaluate on them and on held-out clips, render a clip over the reference
-python -m ndm_gym.train_animal --config stick-supermimic --log_dir logs/stick_sm     # also fly-, rat-; -supertrack
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --repeats 4 --record --out logs/stick_sm/evaluation
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --clip_ids 10-19 --repeats 4 --out logs/stick_sm/heldout
-MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_sm/evaluation/rollout.npz --world 3 --out stick.webp
+python -m ndm_gym.train_animal --config stick-supertrack --log_dir logs/stick_st     # also fly-, rat-; -supermimic
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 4 --record --out logs/stick_st/evaluation
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --repeats 4 --out logs/stick_st/heldout
+MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/evaluation/rollout.npz --world 3 --out stick.webp
 
 # the benchmark's runs of one algorithm (three bodies, seeds 0-2), then a run's time to the target
-benchmarks/mimic_mjx_animal_tracking/run_formal.sh supermimic
-python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/stick_supermimic_s0
+benchmarks/mimic_mjx_animal_tracking/run_formal.sh supertrack   # and supermimic
+python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/stick_supertrack_s0
 ```
 
 </details>

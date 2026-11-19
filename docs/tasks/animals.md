@@ -9,10 +9,10 @@ the clips of its dataset ([talmolab/MIMIC-MJX](https://huggingface.co/datasets/t
 ```bash
 pip install -e '.[hand]'                                         # MuJoCo-Warp
 python tools/download_mimic_mjx.py                               # the clips and the bodies at pinned revisions into data/mimic_mjx (2.9 GB)
-python -m ndm_gym.train_animal --config stick-supermimic --log_dir logs/stick_sm     # <animal>-<algorithm>: the benchmark's settings
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --repeats 4 --record --out logs/stick_sm/eval
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_sm/last.pt --clip_ids 10-19 --out logs/stick_sm/eval_heldout   # held-out clips
-MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_sm/eval/rollout.npz --world 3 --out stick.webp   # or .mp4
+python -m ndm_gym.train_animal --config stick-supertrack --log_dir logs/stick_st     # <animal>-<algorithm>: the benchmark's settings
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 4 --record --out logs/stick_st/eval
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --out logs/stick_st/eval_heldout   # held-out clips
+MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/eval/rollout.npz --world 3 --out stick.webp   # or .mp4
 ```
 
 ## The bodies
