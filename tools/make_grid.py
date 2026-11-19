@@ -51,7 +51,7 @@ left out). The fourth: the Adroit door's rollout of SuperTrack with the door and
 0.3, seed 0, the nominal start), drawn brighter at half speed, and SuperTrack's Adroit pen, hammer and relocate renders
 ($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each frame shown twice as
 long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its rollout:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 2 4 --tile 256 192 --seconds 6 --quality 55 --max_mb 12 \\
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 2 5 --tile 256 192 --seconds 6 --quality 52 --max_mb 12 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -67,9 +67,10 @@ long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the ham
       --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4 \\
       --block "Racing quadrotor" 3 1 522 388 --clip race_track.mp4 0 44 0 961 714 --clip race_track_piloted.mp4 0 44 0 961 714 \\
       --clip ellipse.mp4 0 44 0 961 714 --block "Go2 tracking" 1 1 522 388 --clip $M/go2/play_st.webp 0 108 0 444 330 \\
-      --block "Adroit door" 1 1 522 388 --clip door.mkv 0 0 2 525 390 --block "Adroit pen" 1 1 522 388 --clip pen_half.mkv 0 91 72 549 408 \\
-      --block "Adroit hammer" 1 1 522 388 --clip hammer_half.mkv 2 91 72 549 408 \\
-      --block "Adroit relocate" 1 1 522 388 --clip relocate_half.mkv 0 91 72 549 408
+      --block "Adroit door" 1 1 414 388 --clip door.mkv 0 104 0 421 395 --block "Adroit pen" 1 1 414 388 --clip pen_half.mkv 0 120 70 400 375 \\
+      --block "Adroit hammer" 1 1 414 388 --clip hammer_half.mkv 2 120 70 400 375 \\
+      --block "Adroit relocate" 1 1 414 388 --clip relocate_half.mkv 0 80 70 400 375 \\
+      --block "Wuji piano" 1 1 414 388 --clip piano.mkv 0 0 0 433 406
 """
 
 import argparse
