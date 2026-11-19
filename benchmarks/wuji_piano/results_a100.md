@@ -42,6 +42,20 @@ Every seed:
 Training time is the trainer's own, CUDA-synchronized: collection, model and policy updates, validation after every round
 and checkpoint writes, of the contributed implementation (eager updates; not engineered for speed).
 
+Training on the GPU does not repeat bit for bit: two runs of one seed on the same code differ from their first round on.
+An earlier set of finals, with the same configurations, seeds and starts on the contributed code before it moved into the
+library, gave:
+
+| configuration | Eden F1, these finals | Eden F1, the earlier finals | the earlier finals, seeds 0 / 1 / 2 |
+|---|---:|---:|---:|
+| `supertrack --horizon 3 --st-reg 0.01` | 0.903 ± 0.015 | 0.804 ± 0.140 | 0.9468 / 0.8000 / 0.6660 |
+| `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95` | 0.833 ± 0.079 | 0.708 ± 0.115 | 0.7380 / 0.5806 / 0.8051 |
+| `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01` | 0.801 ± 0.027 | 0.888 ± 0.092 | 0.9464 / 0.7825 / 0.9361 |
+| `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.820 ± 0.135 | 0.815 ± 0.024 | 0.8043 / 0.8427 / 0.7975 |
+
+In both sets SuperTrack's best configuration is the most accurate: at horizon 3 in these finals, at horizon 8 in the
+earlier ones.
+
 ## The settings screen
 
 Each algorithm got the same screen from its starting configuration: the shared horizon (3 or 8) and three settings of its
