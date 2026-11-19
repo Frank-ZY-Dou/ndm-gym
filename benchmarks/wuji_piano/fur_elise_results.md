@@ -11,7 +11,7 @@ lets the keys return. Both intervals are excluded from the metrics. The simulato
 models physical key depression without a sustain pedal or velocity target.
 [Mutopia score and source](https://www.mutopiaproject.org/cgibin/piece-info.cgi?id=931)
 
-Hardware was one NVIDIA GeForce RTX 3060 (12 GiB) with an i7-12700F host.
+Hardware was one NVIDIA GeForce RTX 3060 (12 GiB).
 Software was PyTorch 2.13.0+cu129, MuJoCo 3.15.0, MuJoCo-Warp 3.15.0 and
 Warp 1.17.0. Physics ran at 200 Hz, with a 20 Hz controller. The Wuji Hand 2
 beta2 hand models and Eden's 88 passive keys were simulated together with hand
@@ -60,7 +60,7 @@ The standard SuperTrack and SuperMimic algorithms were outside this run.
 
 This follows PR #7's hardware, seed, time-to-target, baseline and perturbed-start
 reporting conventions. PR #7 used its last checkpoints and benchmarked two
-algorithms on a different task and GPU. [PR #7 results](https://github.com/Yzmblog/ndm-gym/blob/c26810196aa99b93fd0a73f00df9f27778eed620/benchmarks/quadrotor_racing_tracking/results.md)
+algorithms on a different task and GPU. [PR #7 results](../quadrotor_racing_tracking/results.md)
 
 ## Results
 

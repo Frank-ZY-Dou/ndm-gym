@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 from note_events import intervals, TICK_MS
 
 
-from piano_score import KEY_DOWN_FRACTION
+from ndm_gym.tasks.piano import KEY_DOWN_FRACTION
 
 
 def draw_roll(goal, played, path):

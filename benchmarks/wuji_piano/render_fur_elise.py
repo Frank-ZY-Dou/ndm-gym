@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from train_fur_elise import DT, KEY_DOWN_FRACTION, LOWEST_PITCH, MUSIC_FRAMES, WARMUP, build
+from exercises.train_fur_elise import DT, KEY_DOWN_FRACTION, LOWEST_PITCH, MUSIC_FRAMES, WARMUP, build
 
 
 def audio_from_keys(pressed, path):

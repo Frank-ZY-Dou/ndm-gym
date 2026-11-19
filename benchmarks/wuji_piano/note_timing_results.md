@@ -1,6 +1,6 @@
 # Note timing and the scripted baseline
 
-All seven evaluations used the same 256 starting poses and full 230-frame score. The primary result uses Eden framewise F1. This diagnostic counts each written and played note once. A single held note can cover several correct frames and still miss a repeated attack.
+All seven evaluations ran on an RTX 3060 and used the same 256 starting poses and full 230-frame score. The primary result uses Eden framewise F1. This diagnostic counts each written and played note once. A single held note can cover several correct frames and still miss a repeated attack.
 
 ## Note events
 
@@ -18,11 +18,11 @@ Match equal MIDI pitches within one control tick (±50 ms), maximizing the numbe
 
 The score-driven reference solves static hover and press joint positions for seven pitches. Its left wrist shifts 70 mm, and each command leads the score by one control tick. Both hands use the same actuator limits and physical key-down threshold as the policies. These hand and finger assignments belong only to the scripted controller. It was evaluated once without training.
 
-The script scored **0.6325 Eden F1**, precision 0.9977 and recall 0.5717. It reached 12.0/19 note events and held both pitches on 23.8% of two-note frames. Both onsets were timely on 512/1,024 written paired attacks. Evaluation took 26.3 seconds on the RTX 3060, excluding scene and IK setup.
+The script scored 0.6325 Eden F1, precision 0.9977 and recall 0.5717. It reached 12.0/19 note events and held both pitches on 23.8% of two-note frames. Both onsets were timely on 512/1,024 written paired attacks. Evaluation took 26.3 seconds on the RTX 3060, excluding scene and IK setup.
 
 ## Validation under a shared time limit
 
-As a secondary check against the original wall-clock proposal, take the last completed round at or before 300 synchronized training seconds for each seed. This cutoff was chosen after training. It uses the logged 32-start validation result at that round. The primary tables use the 256-start final evaluations after equal experience.
+For a secondary timing diagnostic, take the last completed round at or before 300 synchronized training seconds for each seed. This cutoff was chosen after training. It uses the logged 32-start validation result at that round. The primary tables use the 256-start final evaluations after equal experience.
 
 | Method | Rounds (seeds 0/1/2) | Validation F1 (seeds 0/1/2) | Mean ± sample SD |
 |---|---|---|---:|
@@ -42,4 +42,4 @@ From every valid starting frame of each final policy’s held-out nominal physic
 | supermimic | 150 ms | 225 | 174 | 65 | 0.374 | 0.289 | 15.4 |
 | supermimic | 500 ms | 744 | 433 | 130 | 0.300 | 0.175 | 24.2 |
 
-[Training and reproduction](README.md) · [SuperTrack key-depth errors](ode_to_joy_results.md) · [SuperMimic key-depth errors](ode_to_joy_supermimic_results.md)
+[Training and reproduction](README.md) · [Key-depth errors for both models](ode_to_joy_results.md#recorded-rollouts)

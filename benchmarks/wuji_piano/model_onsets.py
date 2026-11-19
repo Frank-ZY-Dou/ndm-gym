@@ -8,7 +8,8 @@ import numpy as np
 import torch
 
 from note_events import TICK_MS, match_notes
-from train_ode_to_joy import A, DEV, KEY_DOWN_FRACTION, PianoDynamics, build
+from ndm_gym.worldmodels.piano import NUM_ACTUATORS as A, PianoDynamics
+from train_ode_to_joy import DEV, KEY_DOWN_FRACTION, build, fit_geometry
 
 
 def attacks(frames):
@@ -49,7 +50,7 @@ def main():
     p.add_argument("seeds", type=Path, nargs="+")
     args = p.parse_args()
     torch.backends.cuda.matmul.allow_tf32 = True
-    model = PianoDynamics(build(args.hand_dir, args.keyboard)).to(DEV)
+    model = PianoDynamics(fit_geometry(build(args.hand_dir, args.keyboard))).to(DEV)
     for seed in args.seeds:
         ck = torch.load(seed / "last.pt", map_location=DEV, weights_only=True)
         model.load_state_dict(ck["wm"])

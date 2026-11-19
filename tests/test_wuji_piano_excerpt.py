@@ -1,6 +1,7 @@
 """Verify bar boundaries, hand assignments and frame grading for the two-hand excerpt."""
 
 from pathlib import Path
+import sys
 
 import numpy as np
 import pytest
@@ -11,7 +12,7 @@ import torch
 def excerpt(monkeypatch):
     pytest.importorskip("mujoco_warp")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "benchmarks" / "wuji_piano"))
-    import train_fur_elise
+    from exercises import train_fur_elise
 
     return train_fur_elise
 
@@ -47,6 +48,7 @@ def test_excerpt_grades_the_music_without_padding(excerpt):
 
 
 def test_eden_five_finger_score(monkeypatch):
+    pytest.importorskip("scipy")
     pytest.importorskip("mujoco")
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "benchmarks" / "wuji_piano"))
     from five_finger_scale import piano_roll
@@ -59,9 +61,8 @@ def test_eden_five_finger_score(monkeypatch):
     np.testing.assert_array_equal(target, expected)
 
 
-def test_ode_is_polyphonic_with_edens_rests_and_durations(monkeypatch):
-    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "benchmarks" / "wuji_piano"))
-    from piano_score import piano_roll
+def test_ode_is_polyphonic_with_edens_rests_and_durations():
+    from ndm_gym.tasks.piano import piano_roll
 
     roll = piano_roll()
     assert roll.shape == (230, 88)
@@ -72,3 +73,26 @@ def test_ode_is_polyphonic_with_edens_rests_and_durations(monkeypatch):
     assert (np.flatnonzero(roll[20]) + 21).tolist() == [48, 64]
     assert np.all(roll[20:70, 48 - 21])
     assert not roll[30, 64 - 21] and roll[34, 64 - 21]
+
+
+def test_eden_frame_metrics_cover_rests_misses_and_extra_keys():
+    from ndm_gym.tasks.piano import frame_metrics
+
+    goal = torch.tensor([[0, 0], [1, 0], [1, 0], [1, 0], [0, 0]], dtype=torch.bool)
+    played = torch.tensor([[0, 0], [0, 0], [0, 1], [1, 1], [0, 1]], dtype=torch.bool)
+    expected = torch.tensor([[1, 1, 1], [1, 0, 0], [0, 0, 0], [0.5, 1, 2 / 3], [0, 1, 0]])
+    torch.testing.assert_close(frame_metrics(played, goal), expected)
+
+
+@pytest.mark.parametrize("trainer", ["train_ode_to_joy", "train_five_finger_scale"])
+def test_replay_refuses_explicit_training_options_before_loading(trainer, monkeypatch, capsys):
+    import importlib
+
+    pytest.importorskip("scipy")
+    pytest.importorskip("mujoco_warp")
+    monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[1] / "benchmarks" / "wuji_piano"))
+    monkeypatch.setattr(sys, "argv", [trainer, "--hand-dir", ".", "--keyboard", "p.xml", "--out", ".", "--replay", "missing.pt", "--rounds", "2"])
+    with pytest.raises(SystemExit) as exc:
+        importlib.import_module(trainer).main()
+    assert exc.value.code == 2
+    assert "Training options cannot be used during evaluation: --rounds" in capsys.readouterr().err

@@ -11,9 +11,9 @@ import torch
 from torch import nn
 import warp as wp
 
-from check_contact import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, MIDDLE_C, PHYSICS_STEP, build_scene
+from .check_contact import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, MIDDLE_C, PHYSICS_STEP, build_scene
 
-from piano_score import KEY_DOWN_FRACTION
+from ndm_gym.tasks.piano import KEY_DOWN_FRACTION, frame_metrics
 
 DEVICE = "cuda:0"
 STEPS = 50
@@ -84,17 +84,6 @@ def imagined_key_reward(travel, due):
     hard_down = (travel >= KEY_DOWN_FRACTION).to(travel.dtype)
     down = hard_down + (soft_down - soft_down.detach())
     return 0.5 * due * due_credit + 0.5 * (1 - (~due) * down)
-
-
-def frame_metrics(played, goal):
-    hits = (played & goal).sum(-1)
-    down = played.sum(-1)
-    due = goal.sum(-1)
-
-    def ratio(count, total):
-        return torch.where(total > 0, count / total.clamp_min(1), 1.0)
-
-    return torch.stack((ratio(hits, down), ratio(hits, due), ratio(2 * hits, down + due)), dim=-1)
 
 
 def network(inputs, outputs):
@@ -199,15 +188,18 @@ def mean_scores(cases):
 
 
 def main():
+    from benchmarks.wuji_piano.training_options import training_defaults
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hand", type=Path, required=True)
     parser.add_argument("--keyboard", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--world-model-updates", type=int, default=1800)
-    parser.add_argument("--policy-updates", type=int, default=900)
+    parser.add_argument("--seed", type=int, default=argparse.SUPPRESS)
+    parser.add_argument("--world-model-updates", type=int, default=argparse.SUPPRESS)
+    parser.add_argument("--policy-updates", type=int, default=argparse.SUPPRESS)
     parser.add_argument("--evaluate", type=Path, metavar="CHECKPOINT")
     args = parser.parse_args()
+    training_defaults(parser, args, training=args.evaluate is None, seed=0, world_model_updates=1800, policy_updates=900)
     if args.world_model_updates <= 0 or args.policy_updates <= 0:
         parser.error("training update counts must be positive")
     if not torch.cuda.is_available():
@@ -224,7 +216,9 @@ def main():
         evaluation = RepeatedNoteSim(model, len(starts))
         policy = network(8, 1).to(DEVICE)
         if args.evaluate:
-            policy.load_state_dict(torch.load(args.evaluate, map_location=DEVICE, weights_only=True)["policy"])
+            checkpoint = torch.load(args.evaluate, map_location=DEVICE, weights_only=True)
+            policy.load_state_dict(checkpoint["policy"])
+            args.seed = checkpoint.get("seed")
         else:
             validation = RepeatedNoteSim(model, len(validation_starts))
             sim = RepeatedNoteSim(model, 256)
@@ -242,7 +236,7 @@ def main():
                 if f1 > best:
                     best = f1
                     torch.save(
-                        {"policy": policy.state_dict(), "world_model": dynamics.state_dict(), "score": SCORE, "update": update},
+                        {"policy": policy.state_dict(), "world_model": dynamics.state_dict(), "score": SCORE, "update": update, "seed": args.seed},
                         args.out / "checkpoint.pt",
                     )
 

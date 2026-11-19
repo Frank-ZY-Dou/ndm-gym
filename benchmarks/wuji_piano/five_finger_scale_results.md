@@ -24,4 +24,4 @@ Across the 768 episodes, 33 produced exactly the nine pitches in order with no e
 
 The video uses seed 2, round 4, selected for the highest validation F1 (0.9978) across the three training runs. Replaying that checkpoint in a separate process gave **0.9958 F1** on the 256 held-out starts. 179/256 episodes matched every frame and 182/256 produced exactly the nine written onsets in order. Its nominal episode matched all 152 frames, including the rests. At the middle of each note the saved physical pose showed contact between the assigned finger and the intended key. This diagnostic uses the finger links and adds no contact requirement to the score.
 
-The runs used PyTorch 2.13.0+cu129, MuJoCo 3.15.0, MuJoCo-Warp 3.15.0 and Warp 1.17.0. The untrained policies received F1 credit on the 44 silent frames. Training results, key masks, learned models and the selected replay are in the local output directory `data/wuji_piano/five-finger-scale/`.
+The runs used PyTorch 2.13.0+cu129, MuJoCo 3.15.0, MuJoCo-Warp 3.15.0 and Warp 1.17.0. The untrained policies received F1 credit on the 44 silent frames.

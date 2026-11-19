@@ -12,6 +12,7 @@ BENCH = ROOT / "benchmarks" / "wuji_piano"
 
 def test_events_one_to_one_and_censored_release(monkeypatch):
     monkeypatch.syspath_prepend(str(BENCH))
+    pytest.importorskip("scipy")
     from note_events import event_stats, match_notes
 
     # Both matches take precedence over one exact match. Each detected strike is used at most once.
@@ -35,6 +36,7 @@ def test_batched_ode_strike_release_and_reset(monkeypatch):
     torch = pytest.importorskip("torch")
     if not torch.cuda.is_available():
         pytest.skip("requires CUDA")
+    pytest.importorskip("scipy")
     pytest.importorskip("mujoco_warp")
     monkeypatch.syspath_prepend(str(BENCH))
     from download_assets import HAND_REV

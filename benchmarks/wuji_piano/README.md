@@ -1,15 +1,10 @@
 # Wuji Hand piano playing
 
-Two freely moving Wuji Hand 2 beta2 hands play Eden’s 90 BPM *Ode to Joy* on 88 passive keys in MuJoCo-Warp. Both NDM Gym policies receive the same score, independent wrist and finger controls, and physical key state. The scripted reference uses the same scene and evaluator.
+| Goal | Configuration | Result |
+|---|---|---|
+| Play Eden’s *Ode to Joy* with melody and bass | Two floating Wuji Hand 2 hands, 52 controls, 20 rounds, three seeds on an RTX 3060 | SuperTrack 0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090 Eden F1 |
 
-| Final measurement | SuperTrack | SuperMimic | Script |
-|---|---:|---:|---:|
-| Eden framewise F1 | 0.8490 ± 0.0705 | 0.4123 ± 0.2090 | 0.6325 |
-| Both pitches down during two-note frames | 69.4% | 10.5% | 23.8% |
-| Timely paired attacks | 44.7% | 1.6% | 50.0% |
-| Timed training per seed on RTX 3060 | 323.1 s | 361.3 s | — |
-
-Each final checkpoint played 256 identical starts. The learned results average three training seeds. Paired attacks require both onsets within 50 ms of the score and one another. [SuperTrack](ode_to_joy_results.md) · [SuperMimic](ode_to_joy_supermimic_results.md) · [Per-note timing, baseline and world-model predictions](note_timing_results.md)
+On the same 256 starts per checkpoint, both due keys were down during 69.4% of the two-note frames with SuperTrack, 10.5% with SuperMimic and 23.8% with the scripted reference. [Per-seed results and training settings](ode_to_joy_results.md) · [Attack and release timing](note_timing_results.md)
 
 ![SuperTrack seed 0 playing the 11.5-second arrangement](../../docs/media/wuji_piano/ode-supertrack.webp)
 
@@ -18,7 +13,7 @@ Each final checkpoint played 256 identical starts. The learned results average t
 On Linux with Python 3.12+, install a CUDA build of PyTorch appropriate for the GPU (the runs used 2.13.0+cu129), then install the hand simulator, SciPy and the rendering dependencies in the same environment. FFmpeg or imageio-ffmpeg and the DejaVu Sans fonts are needed for MP4. From the repository root:
 
 ```bash
-python -m pip install -e '.[hand,contacts]' pillow imageio-ffmpeg
+python -m pip install -e '.[hand,contacts,render]'
 python benchmarks/wuji_piano/download_assets.py
 bench=benchmarks/wuji_piano
 run=data/wuji_piano/ode-to-joy
@@ -45,13 +40,13 @@ python "$bench/model_onsets.py" --hand-dir "$hands" --keyboard "$assets/keyboard
   "$run"/{supertrack,supermimic}/seed{0,1,2}
 ```
 
-![Target notes and measured presses in the preview](../../docs/media/wuji_piano/ode-roll.webp)
+<img src="../../docs/media/wuji_piano/ode-roll.webp" width="750" alt="Target notes and measured presses in the preview">
 
-## Protocol and changes from the claim
+## Evaluation
 
-- The completed single-hand learning exercise was two strikes of middle C. The subsequent scale used two hands. These exercises replaced the proposed single-hand *Twinkle Twinkle* phrase. The opening of *Für Elise* and the five-finger scale below are earlier experiments with restricted controls. The reported *Ode to Joy* policies use the full 52-dimensional action space.
-- The pre-run target was a validation Eden F1 of 0.95. None of the six runs reached it. The comparison used equal experience (102,400 physical transitions per seed) and equal counts of world-model and actor updates. SuperMimic also fitted a critic. Elapsed training times differed from the equal wall-clock budget in the initial claim. Timing includes collection, training and validation.
-- Eden framewise scoring uses all 88 keys at 87% of their travel, including rests. The secondary event evaluation works at the 50 ms recording interval. Contact location, finger identity and wrist posture earn no evaluation credit. The passive-key contact smoke check below uses hysteresis at the 5 ms physics interval for a separate mechanical check.
+Eden framewise F1 compares all 88 keys at 87% of their travel, including rests. Each 20-round checkpoint is evaluated on the same 256 starts. The optional event diagnostic evaluates key attacks at the 50 ms control interval. The physical contact smoke check uses hysteresis at the 5 ms physics interval. Fingering and contact location are unrestricted during policy evaluation.
+
+Use `--update-graphs` to capture the native model and policy updates in CUDA graphs. Device-side replay sampling can change learning outcomes. [RTX 3060 timing and reproduction commands](ode_to_joy_results.md#timing-the-native-training-updates)
 
 ## Earlier integration exercises
 
@@ -62,7 +57,7 @@ run the following with the repository's hand extra installed. Replace the paths
 with the locations of the downloaded assets.
 
 ```bash
-python benchmarks/wuji_piano/check_contact.py \
+python -m benchmarks.wuji_piano.exercises.check_contact \
   --hand /path/to/wuji/hand2/hand2_beta2/body/mjcf/right.xml \
   --keyboard /path/to/eden/objects/piano/piano.xml
 ```
@@ -84,7 +79,7 @@ This diagnostic reads back key state every physics step to detect crossings.
 With CUDA-enabled PyTorch and the same assets, run:
 
 ```bash
-python benchmarks/wuji_piano/train_repeated_note.py \
+python -m benchmarks.wuji_piano.exercises.train_repeated_note \
   --hand /path/to/wuji/hand2/hand2_beta2/body/mjcf/right.xml \
   --keyboard /path/to/eden/objects/piano/piano.xml \
   --out data/wuji_piano/repeated-note-eden
@@ -118,7 +113,7 @@ and durations. Use quarter note = 72 from Stelios Samelis's public-domain
 This keyboard task measures depressed keys and omits the sustain pedal.
 
 ```bash
-python benchmarks/wuji_piano/train_fur_elise.py \
+python -m benchmarks.wuji_piano.exercises.train_fur_elise \
   --hand-dir /path/to/hand2/hand2_beta2/body/mjcf \
   --keyboard /path/to/objects/piano/piano.xml \
   --out data/wuji_piano/elise-72bpm

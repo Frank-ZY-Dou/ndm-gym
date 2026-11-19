@@ -5,33 +5,26 @@ import itertools
 import json
 import os
 from pathlib import Path
-from types import SimpleNamespace
 
 import mujoco as mj
 import mujoco_warp as mjw
 import numpy as np
 import torch
-from torch import nn
 import warp as wp
 
-from ndm_gym.algos.hand_algos import HandSuperMimic, HandSuperTrack
-from ndm_gym.algos.hand_fast import optimizer, update_functions
-from ndm_gym.algos.supertrack import LossBalancer
-from ndm_gym.buffer import ReplayBuffer
-from ndm_gym.core.nets import mlp
-from ndm_gym.policies.critic import Critic
-from ndm_gym.policies.hand_policy import HandPolicy
+from ndm_gym.algos.common import set_lr
+from ndm_gym.algos.hand_fast import update_functions
+from ndm_gym.core.normalizer import RunningNorm
+from ndm_gym.worldmodels.piano import NUM_ACTUATORS as A, TipGeometry
 
-from piano_score import CONTROL_SUBSTEPS
+from training_options import training_defaults
+from piano_updates import OdeSuperMimic, OdeSuperTrack, make_replay
+from ndm_gym.tasks.piano import CONTROL_SUBSTEPS
 from ode_to_joy import DIGITS, KEY_COUNT, SIDES, WRIST_SCALE, action_layout, build, piano_roll
-from train_repeated_note import KEY_DOWN_FRACTION, frame_metrics
+from ndm_gym.tasks.piano import KEY_DOWN_FRACTION, frame_metrics
 from train_five_finger_scale import seconds
 
 DEV = "cuda:0"
-A = 52
-D = 2 * A + KEY_COUNT
-H = 3
-LOOK = 11
 
 
 def ten_sites(m):
@@ -90,171 +83,29 @@ class FreeHands:
         return state
 
 
-class TipGeometry(nn.Module):
-    """A differentiable local FK fit to each physical digit, with arbitrary wrist translation and rotation."""
-
-    def __init__(self, model):
-        super().__init__()
-        ids, rest, scale = action_layout(model)
-        d = mj.MjData(model)
-        sites = ten_sites(model)
-        axes = np.array([i for i, a in enumerate(ids) if model.actuator_trntype[a] == mj.mjtTrn.mjTRN_JOINT])
-        qids = model.jnt_qposadr[model.actuator_trnid[ids[axes], 0]]
-        rng = np.random.default_rng(514)
-        samples = rng.uniform(-1.25, 1.25, (256, 4))
-        pairs = list(itertools.combinations_with_replacement(range(4), 2))
-        self.ii = [i for i, _ in pairs]
-        self.jj = [j for _, j in pairs]
-        design = np.c_[np.ones(len(samples)), samples, samples[:, self.ii] * samples[:, self.jj]]
-        origin = np.array([model.qpos0[int(model.joint(s + "_free").qposadr[0]) : int(model.joint(s + "_free").qposadr[0]) + 3] for s in SIDES])
-        xyz = []
-        for x in samples:
-            d.qpos[qids] = rest[axes] + np.tile(x, 10) * scale[axes]
-            mj.mj_kinematics(model, d)
-            xyz.append(d.site_xpos[sites] - origin.repeat(5, axis=0))
-        coeff = np.linalg.lstsq(design, np.array(xyz).reshape(len(samples), -1), rcond=None)[0].reshape(-1, 2, 5, 3)
-        self.register_buffer("coeff", tensor(coeff.transpose(1, 2, 0, 3)))
-        self.register_buffer("origin", tensor(origin))
-        self.register_buffer("scales", tensor(WRIST_SCALE))
-        self.register_buffer("centers", tensor([model.body(f"key_{i}").pos.tolist() for i in range(KEY_COUNT)]))
-        self.register_buffer("sizes", tensor([model.geom(f"key_{i}_geom").size.tolist() for i in range(KEY_COUNT)]))
-
-    def forward(self, q):
-        hands = q.reshape(-1, 2, 26)
-        digits = hands[:, :, 6:].reshape(-1, 2, 5, 4)
-        poly = torch.cat((torch.ones_like(digits[..., :1]), digits, digits[..., self.ii] * digits[..., self.jj]), -1)
-        local = (poly[..., None, :] @ self.coeff).squeeze(-2)
-        pose = hands[:, :, :6] * self.scales
-        r = pose[:, :, None, 3:].expand_as(local)
-        theta = r.norm(dim=-1, keepdim=True)
-        cross = torch.cross(r, local, dim=-1)
-        rot = local + torch.sinc(theta / np.pi) * cross + 0.5 * torch.sinc(theta / (2 * np.pi)).square() * torch.cross(r, cross, dim=-1)
-        return (rot + (self.origin + pose[:, :, :3])[:, :, None, :]).flatten(1, 2)
-
-    def distances(self, tips):
-        diff = tips[:, :, None, :] - self.centers
-        # Approximate distance to reachable points on every key surface. Any of the ten tips can approach any key.
-        dx = (diff[..., 0].abs() - self.sizes[:, 0] * 0.80).clamp_min(0)
-        dy = diff[..., 1]
-        dz = diff[..., 2] - self.sizes[:, 2]
-        return dx, dy, dz
-
-
-class PianoDynamics(nn.Module):
-    def __init__(self, m):
-        super().__init__()
-        self.geom = TipGeometry(m)
-        self.actuator = mlp(3 * A, [128, 128], A, act=nn.SiLU)
-        self.key_residual = mlp(3 * A + KEY_COUNT, [192, 128], KEY_COUNT, act=nn.SiLU)
-        self.tip_cal = nn.Parameter(torch.zeros(10))
-        for net in (self.actuator, self.key_residual):
-            nn.init.zeros_(net[-1].weight)
-            nn.init.zeros_(net[-1].bias)
-
-    def forward(self, state, action):
-        q, v, last = torch.split(state, [A, A, KEY_COUNT], -1)
-        features = torch.cat((q, v, action), -1)
-        vel = 0.5 * (action - q) + 0.12 * v + self.actuator(features)
-        q1 = q + vel
-        tips = self.geom(q1 + 0.18 * (action - q1))
-        dx, dy, dz = self.geom.distances(tips)
-        yerr = (dy.abs() - self.geom.sizes[:, 1] * 0.50).clamp_min(0)
-        align = torch.exp(-((yerr / 0.007).square() + (dx / 0.012).square()).clamp_max(35))
-        depth = torch.sigmoid((-dz - 0.004 + self.tip_cal[:, None] * 0.012) / 0.0027)
-        contact = (align * depth).amax(1)
-        keys = 0.91 * contact + 0.09 * last + self.key_residual(torch.cat((features, last), -1))
-        return torch.cat((q1, vel, keys), -1)
-
-
-class OdePiano:
-    def __init__(self, m, roll):
-        self.dev = DEV
-        self.args = SimpleNamespace(wm_batches=1, wm_batch=96, wm_window=2, pi_batch=96, lr=0.0008, fused_adam=True, update_graphs=False)
-        self.horizon = H
-        self.goal = torch.cat((roll, torch.zeros(LOOK + H, KEY_COUNT, device=DEV, dtype=torch.bool))).float()
-        self.length = len(roll)
-        self.future = self.goal.unfold(0, LOOK, 1).transpose(1, 2).reshape(-1, LOOK * KEY_COUNT)
-        self.wm = PianoDynamics(m).to(DEV)
-        self.pi = HandPolicy(D + A, LOOK * KEY_COUNT, A, hidden=(192, 128)).to(DEV)
-        self.opt_wm = optimizer(self.args, DEV, self.wm, "wm")
-        self.opt_pi = optimizer(self.args, DEV, self.pi, "pi")
-        self.no_sync = False
-        self.task = SimpleNamespace(max_step_reward=1.0)
-        self.weights = tensor([1.0, 0.85, 0.20])
-
-    def action(self, state, prev, f):
-        return self.pi(torch.cat((state, prev), -1), self.future[f].expand(len(state), -1))
-
-    def _sample_policy_start(self, buffer, batch):
-        age, e = buffer.sample_start_points(batch)
-        return buffer.at("s", age, e), buffer.at("f", age, e), buffer.at("a_prev", age, e)
-
-    def tracking_errors(self, state, target):
-        k = state[:, 2 * A :]
-        count = target.sum(-1).clamp_min(1)
-        due = ((k - 1).abs() * target).sum(-1) / count
-        wrong = (k.abs() * (1 - target)).amax(-1)
-        dx, dy, dz = self.wm.geom.distances(self.wm.geom(state[:, :A]))
-        dist = (dx.square() + dy.square() + dz.square() + 1e-8).amin(1).sqrt()
-        reach = (dist * target).sum(-1) / count / 0.035
-        return torch.stack((due, wrong, reach), -1)
-
-    def wm_rollout(self, state, actions, truth, mask):
-        loss = 0
-        for j in range(actions.shape[1]):
-            state = self.wm(state, actions[:, j])
-            err = (state - truth[:, j]).square()
-            depth = truth[:, j, 2 * A :]
-            keyerr = err[:, 2 * A :]
-            term = (
-                err[:, : 2 * A].mean(-1)
-                + keyerr.mean(-1)
-                + 0.6 * keyerr.amax(-1)
-                + (keyerr * depth.clamp(0, 1)).sum(-1) / depth.clamp(0, 1).sum(-1).clamp_min(1)
-            )
-            loss += (term * mask[:, j]).mean()
-        return loss
-
-
-class OdeSuperTrack(OdePiano, HandSuperTrack):
-    def __init__(self, m, roll):
-        super().__init__(m, roll)
-        self.imag_noise = self.fail_w = self.reg = 0.0
-        self.term_scale = torch.ones(3, device=DEV)
-        self.bal = LossBalancer(3).to(DEV)
-        self.bal.w.copy_(self.weights / H)
-        self.bal.ready.fill_(True)
-
-    def _policy_start(self, buffer, batch):
-        state, f, prev = self._sample_policy_start(buffer, batch)
-        return state, None, f, prev
-
-    def st_step(self, state, fk, f, prev, noise):
-        act = self.action(state, prev, f)
-        state = self.wm(state, act + noise)
-        errors = self.tracking_errors(state, self.goal[f])
-        return state, None, (f + 1).clamp(max=self.length), act, errors, torch.zeros_like(f, dtype=state.dtype), 1.0 - errors.mean(-1)
-
-
-class OdeSuperMimic(OdePiano, HandSuperMimic):
-    def __init__(self, m, roll):
-        super().__init__(m, roll)
-        self.args.gamma, self.args.lam = 0.99, 0.95
-        self.args.critic_epochs, self.args.critic_minibatches = 5, 4
-        self.critic = Critic(D + A + LOOK * KEY_COUNT).to(DEV)
-        self.opt_v = optimizer(self.args, DEV, self.critic, "critic")
-
-    def start_features(self, state, f, prev):
-        return None, torch.cat((state, prev, self.future[f]), -1)
-
-    def imag_step(self, state, fk, f, prev):
-        act = self.action(state, prev, f)
-        state = self.wm(state, act)
-        reward = 1.0 - (self.tracking_errors(state, self.goal[f]) * self.weights).sum(-1)
-        done = (f >= self.length - 1).to(state.dtype)
-        f = (f + 1).clamp(max=self.length)
-        _, x = self.start_features(state, f, act)
-        return state, None, f, act, reward, done, x
+def fit_geometry(model):
+    """Fit the digit polynomials to the MJCF sites once, before training."""
+    ids, rest, scale = action_layout(model)
+    d = mj.MjData(model)
+    sites = ten_sites(model)
+    axes = np.array([i for i, a in enumerate(ids) if model.actuator_trntype[a] == mj.mjtTrn.mjTRN_JOINT])
+    qids = model.jnt_qposadr[model.actuator_trnid[ids[axes], 0]]
+    rng = np.random.default_rng(514)
+    samples = rng.uniform(-1.25, 1.25, (256, 4))
+    pairs = list(itertools.combinations_with_replacement(range(4), 2))
+    ii = [i for i, _ in pairs]
+    jj = [j for _, j in pairs]
+    design = np.c_[np.ones(len(samples)), samples, samples[:, ii] * samples[:, jj]]
+    origin = np.array([model.qpos0[int(model.joint(s + "_free").qposadr[0]) : int(model.joint(s + "_free").qposadr[0]) + 3] for s in SIDES])
+    xyz = []
+    for x in samples:
+        d.qpos[qids] = rest[axes] + np.tile(x, 10) * scale[axes]
+        mj.mj_kinematics(model, d)
+        xyz.append(d.site_xpos[sites] - origin.repeat(5, axis=0))
+    coeff = np.linalg.lstsq(design, np.array(xyz).reshape(len(samples), -1), rcond=None)[0].reshape(-1, 2, 5, 3)
+    centers = [model.body(f"key_{i}").pos.tolist() for i in range(KEY_COUNT)]
+    sizes = [model.geom(f"key_{i}_geom").size.tolist() for i in range(KEY_COUNT)]
+    return TipGeometry(coeff.transpose(1, 2, 0, 3), origin, WRIST_SCALE, centers, sizes)
 
 
 def starts(n, seed, amplitude):
@@ -375,15 +226,18 @@ def main():
     p.add_argument("--keyboard", required=True, type=Path)
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--algo", choices=("supertrack", "supermimic"), help="Defaults to SuperTrack or the replay checkpoint's algorithm.")
-    p.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2])
+    p.add_argument("--seeds", nargs="+", type=int, default=argparse.SUPPRESS)
     p.add_argument("--worlds", type=int, default=32)
-    p.add_argument("--rounds", type=int, default=20)
-    p.add_argument("--wm-updates", type=int, default=90)
-    p.add_argument("--pi-updates", type=int, default=50)
-    p.add_argument("--steps", type=int, default=160)
+    p.add_argument("--rounds", type=int, default=argparse.SUPPRESS)
+    p.add_argument("--wm-updates", type=int, default=argparse.SUPPRESS)
+    p.add_argument("--pi-updates", type=int, default=argparse.SUPPRESS)
+    p.add_argument("--steps", type=int, default=argparse.SUPPRESS)
     p.add_argument("--eval-starts", type=int, default=256)
+    p.add_argument("--update-graphs", action="store_true", default=argparse.SUPPRESS,
+                   help="Capture native model and policy updates in CUDA graphs. Replay sampling and rounding can change learning results.")
     p.add_argument("--replay", type=Path)
     a = p.parse_args()
+    training_defaults(p, a, training=a.replay is None, seeds=[0, 1, 2], rounds=20, wm_updates=90, pi_updates=50, steps=160, update_graphs=False)
     replay = torch.load(a.replay, map_location="cpu", weights_only=True) if a.replay else None
     if replay and a.algo and a.algo != replay.get("algo", "supertrack"):
         p.error("The requested algorithm does not match the replay checkpoint")
@@ -392,6 +246,7 @@ def main():
         p.error("Positive counts and at least two collection steps are required")
     if not torch.cuda.is_available():
         p.error("A CUDA GPU is required")
+    RunningNorm.no_sync = a.update_graphs
     wp.init()
     torch.cuda.set_stream(torch.cuda.Stream())
     wp.set_stream(wp.stream_from_torch(torch.cuda.current_stream()))
@@ -402,8 +257,7 @@ def main():
         roll = torch.as_tensor(piano_roll(), device=DEV)
         val = starts(a.worlds, 456, 0.15)
         test = starts(a.eval_starts, 789, 0.20)
-        fields = {k: (dim, torch.float32) for k, dim in (("s", D), ("s1", D), ("u", A), ("a_prev", A))}
-        fields.update(f=((), torch.long), done=((), torch.bool))
+        geometry = fit_geometry(m)
         seeds = [replay["seed"]] if replay else a.seeds
         for seed in seeds:
             torch.manual_seed(seed)
@@ -411,23 +265,23 @@ def main():
             dest.mkdir(parents=True, exist_ok=True)
             if (dest / "results.json").exists() or (not a.replay and (dest / "best.pt").exists()):
                 raise FileExistsError(dest)
-            algo = OdeSuperMimic(m, roll) if a.algo == "supermimic" else OdeSuperTrack(m, roll)
+            trainer = OdeSuperMimic if a.algo == "supermimic" else OdeSuperTrack
+            algo = trainer(geometry, roll, update_graphs=a.update_graphs)
             rec = dict(seed=seed, gpu=torch.cuda.get_device_name(), settings={k: str(v) if isinstance(v, Path) else v for k, v in vars(a).items()})
             rec["optimizer_settings"] = vars(algo.args)
             if not a.replay:
-                buffer = ReplayBuffer(6 * a.steps, a.worlds, DEV, fields=fields, priorities=False)
-                buffer.window_keys = ("s", "u", "s1", "done")
+                buffer = make_replay(6 * a.steps, a.worlds, DEV, update_graphs=a.update_graphs)
                 wm_update, pi_update = update_functions(algo, buffer, algo.args)
                 baseline, _, _ = evaluate(sim, algo, roll, test)
                 rec["baseline"] = baseline
+                rec["time_to_target_s"] = None
                 hist = []
                 best = -1
                 start = seconds()
                 for i in range(1, a.rounds + 1):
                     # Decay the actor learning rate in the second half of the fixed budget.
                     lr = algo.args.lr * (1 - 0.8 * max(0.0, 2 * i / a.rounds - 1))
-                    for group in algo.opt_pi.param_groups:
-                        group["lr"] = lr
+                    set_lr(algo.opt_pi, lr)
                     t0 = seconds()
                     collect(sim, algo, buffer, i, a.steps)
                     t1 = seconds()
@@ -460,6 +314,9 @@ def main():
                     ck = dict(algo=a.algo, seed=seed, round=i, pi=algo.pi.state_dict(), wm=algo.wm.state_dict())
                     if a.algo == "supermimic":
                         ck["critic"] = algo.critic.state_dict()
+                    if best < 0.95 <= stats["f1"]:
+                        save(dest / "target.pt", ck)
+                        rec["time_to_target_s"] = item["seconds"]
                     if stats["f1"] > best:
                         save(dest / "best.pt", ck)
                         best = stats["f1"]

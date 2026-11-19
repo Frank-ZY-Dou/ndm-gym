@@ -1,6 +1,7 @@
 """Physical sampling constants and the timed, unassigned Eden Ode to Joy score."""
 
 import numpy as np
+import torch
 
 PHYSICS_STEP = 0.005
 CONTROL_SUBSTEPS = 10
@@ -23,3 +24,14 @@ def piano_roll():
     for p, t, d in notes:
         goal[boundary(t) : boundary(t + d), p - LOWEST_PITCH] = True
     return goal
+
+
+def frame_metrics(played, goal):
+    hits = (played & goal).sum(-1)
+    down = played.sum(-1)
+    due = goal.sum(-1)
+
+    def ratio(count, total):
+        return torch.where(total > 0, count / total.clamp_min(1), 1.0)
+
+    return torch.stack((ratio(hits, down), ratio(hits, due), ratio(2 * hits, down + due)), dim=-1)

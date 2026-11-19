@@ -11,18 +11,17 @@ import mujoco
 import mujoco_warp as mjw
 import numpy as np
 import torch
-from torch import nn
 import warp as wp
 
-from ndm_gym.algos.hand_algos import HandSuperTrack
 from ndm_gym.algos.hand_fast import optimizer, update_functions
 from ndm_gym.algos.supertrack import LossBalancer
-from ndm_gym.buffer import ReplayBuffer
-from ndm_gym.core.nets import mlp
+from ndm_gym.worldmodels.piano import FingerDynamics
 from ndm_gym.policies.hand_policy import HandPolicy
 
+from training_options import training_defaults
+from piano_updates import PianoTrackUpdates, make_replay
 from five_finger_scale import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, MELODY, PITCHES, build, finger_ranges, piano_roll
-from train_repeated_note import KEY_DOWN_FRACTION, frame_metrics
+from ndm_gym.tasks.piano import KEY_DOWN_FRACTION, frame_metrics
 
 DEV = "cuda:0"
 N = len(PITCHES)
@@ -80,52 +79,31 @@ class PianoSim:
         return state
 
 
-class FingerDynamics(nn.Module):
-    """Shared acceleration MLP conditioned on digit identity. Units are normalized to one control step."""
-
-    def __init__(self):
-        super().__init__()
-        self.net = mlp(5 + N, [64, 64], 2, act=nn.SiLU)
-        self.register_buffer("identity", torch.eye(N))
-
-    def forward(self, state, action):
-        q, k, v, w = state.split(N, -1)
-        features = torch.stack((q, k, v, w, action), -1)
-        accel = self.net(torch.cat((features, self.identity.expand(len(q), -1, -1)), -1))
-        v1 = v + accel[:, :, 0]
-        w1 = w + accel[:, :, 1]
-        return torch.cat((q + v1, k + w1, v1, w1), dim=-1)
-
-
-class PianoSuperTrack(HandSuperTrack):
+class PianoSuperTrack(PianoTrackUpdates):
     """Inherit the hand trainer's replay-window model update and imagined policy update with piano-specific states and losses."""
 
     def __init__(self, roll):
-        self.args = SimpleNamespace(wm_batches=1, wm_batch=256, wm_window=WINDOW, pi_batch=192, lr=0.0015, fused_adam=True, update_graphs=False)
-        self.dev = DEV
+        self.args = SimpleNamespace(wm_batches=1, wm_batch=256, wm_window=WINDOW, pi_batch=192, lr=0.0015, fused_adam=roll.is_cuda, update_graphs=False)
+        self.dev = roll.device
         self.horizon = HORIZON
-        self.goal = torch.cat((roll[:, K], torch.zeros(LOOKAHEAD + HORIZON, N, device=DEV, dtype=torch.bool))).float()
+        self.goal = torch.cat((roll[:, K], torch.zeros(LOOKAHEAD + HORIZON, N, device=self.dev, dtype=torch.bool))).float()
         self.future = self.goal.unfold(0, LOOKAHEAD, 1).transpose(1, 2).reshape(-1, LOOKAHEAD * N)
         self.length = len(roll)
-        self.wm = FingerDynamics().to(DEV)
-        self.pi = HandPolicy(STATE_DIM + N, LOOKAHEAD * N, N, hidden=(128, 96)).to(DEV)
-        self.opt_wm = optimizer(self.args, DEV, self.wm, "wm")
-        self.opt_pi = optimizer(self.args, DEV, self.pi, "pi")
+        self.wm = FingerDynamics(N).to(self.dev)
+        self.pi = HandPolicy(STATE_DIM + N, LOOKAHEAD * N, N, hidden=(128, 96)).to(self.dev)
+        self.opt_wm = optimizer(self.args, self.dev, self.wm, "wm")
+        self.opt_pi = optimizer(self.args, self.dev, self.pi, "pi")
         self.no_sync = False
         self.reg = 0.001
         self.imag_noise = self.fail_w = 0
         self.task = SimpleNamespace(max_step_reward=1.0)
-        self.term_scale = torch.ones(2, device=DEV)
-        self.bal = LossBalancer(2).to(DEV)
-        self.bal.w.copy_(torch.tensor([1.0, 0.6], device=DEV) / HORIZON)
+        self.term_scale = torch.ones(2, device=self.dev)
+        self.bal = LossBalancer(2).to(self.dev)
+        self.bal.w.copy_(torch.tensor([1.0, 0.6], device=self.dev) / HORIZON)
         self.bal.ready.fill_(True)
 
     def action(self, state, prev, f):
         return self.pi(torch.cat((state, prev), -1), self.future[f].expand(len(state), -1))
-
-    def _policy_start(self, buffer, batch):
-        age, env = buffer.sample_start_points(batch)
-        return buffer.at("s", age, env), None, buffer.at("f", age, env), buffer.at("a_prev", age, env)
 
     def st_step(self, state, fk, f, prev, noise):
         action = self.action(state, prev, f)
@@ -215,14 +193,15 @@ def main():
     parser.add_argument("--hand-dir", required=True, type=Path)
     parser.add_argument("--keyboard", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
-    parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2])
+    parser.add_argument("--seeds", nargs="+", type=int, default=argparse.SUPPRESS)
     parser.add_argument("--worlds", type=int, default=32)
-    parser.add_argument("--rounds", type=int, default=8)
-    parser.add_argument("--wm-updates", type=int, default=105)
-    parser.add_argument("--pi-updates", type=int, default=75)
+    parser.add_argument("--rounds", type=int, default=argparse.SUPPRESS)
+    parser.add_argument("--wm-updates", type=int, default=argparse.SUPPRESS)
+    parser.add_argument("--pi-updates", type=int, default=argparse.SUPPRESS)
     parser.add_argument("--eval-starts", type=int, default=256)
     parser.add_argument("--replay", type=Path)
     args = parser.parse_args()
+    training_defaults(parser, args, training=args.replay is None, seeds=[0, 1, 2], rounds=8, wm_updates=105, pi_updates=75)
     if min(args.worlds, args.rounds, args.wm_updates, args.pi_updates, args.eval_starts) < 1:
         parser.error("All counts must be positive")
     if not torch.cuda.is_available():
@@ -237,14 +216,6 @@ def main():
         roll = torch.as_tensor(piano_roll(), device=DEV)
         val = perturbations(args.worlds, m, 456, 0.018)
         held = perturbations(args.eval_starts, m, 789, 0.025)
-        fields = {
-            "s": (STATE_DIM, torch.float32),
-            "s1": (STATE_DIM, torch.float32),
-            "a_prev": (N, torch.float32),
-            "u": (N, torch.float32),
-            "f": ((), torch.long),
-            "done": ((), torch.bool),
-        }
         seeds = [torch.load(args.replay, map_location="cpu", weights_only=True)["seed"]] if args.replay else args.seeds
         for seed in seeds:
             torch.manual_seed(seed)
@@ -256,8 +227,7 @@ def main():
             if (dest / "results.json").exists():
                 raise FileExistsError(dest / "results.json")
             if not args.replay:
-                buffer = ReplayBuffer(4 * len(roll), args.worlds, DEV, fields=fields, priorities=False)
-                buffer.window_keys = ("s", "u", "s1", "done")
+                buffer = make_replay(4 * len(roll), args.worlds, DEV, state_dim=STATE_DIM, num_actions=N)
                 wm_update, pi_update = update_functions(algo, buffer, algo.args)
                 if ckpath.exists():
                     raise FileExistsError(ckpath)

@@ -6,7 +6,7 @@ from pathlib import Path
 import mujoco
 import numpy as np
 
-from piano_score import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, PHYSICS_STEP
+from ndm_gym.tasks.piano import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, PHYSICS_STEP
 
 MIDDLE_C = 60
 WHITE_KEY_PITCH = 0.0235

@@ -6,8 +6,8 @@ import mujoco as mj
 import numpy as np
 from scipy.spatial.transform import Rotation
 
-from piano_score import KEY_COUNT, PHYSICS_STEP
-from piano_score import LOWEST_PITCH as LOWEST_PITCH, piano_roll as piano_roll
+from ndm_gym.tasks.piano import KEY_COUNT, PHYSICS_STEP
+from ndm_gym.tasks.piano import LOWEST_PITCH as LOWEST_PITCH, piano_roll as piano_roll
 from five_finger_scale import DIGITS
 
 SIDES = ("left", "right")

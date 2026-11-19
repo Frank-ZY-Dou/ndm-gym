@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
-from piano_score import DT, LOWEST_PITCH
+from ndm_gym.tasks.piano import DT, LOWEST_PITCH
 
 TICK_MS = round(1000 * DT)
 

@@ -7,7 +7,7 @@ import numpy as np
 from scipy.optimize import least_squares
 from scipy.spatial.transform import Rotation
 
-from check_contact import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, PHYSICS_STEP
+from ndm_gym.tasks.piano import CONTROL_SUBSTEPS, KEY_COUNT, LOWEST_PITCH, PHYSICS_STEP
 
 DT = CONTROL_SUBSTEPS * PHYSICS_STEP
 PITCHES = (60, 62, 64, 65, 67)

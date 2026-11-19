@@ -11,8 +11,9 @@ import numpy as np
 import torch
 import warp as wp
 
-from check_contact import CONTROL_SUBSTEPS, LOWEST_PITCH, KEY_COUNT, PHYSICS_STEP, mount_hand
-from train_repeated_note import frame_metrics, KEY_DOWN_FRACTION, network
+from .check_contact import CONTROL_SUBSTEPS, LOWEST_PITCH, KEY_COUNT, PHYSICS_STEP, mount_hand
+from ndm_gym.tasks.piano import KEY_DOWN_FRACTION, frame_metrics
+from .train_repeated_note import network
 
 # Mutopia 931. Sixteenth-note slots, 0 = rest. Adjacent equal pitches here are tied durations.
 RIGHT = [76, 75, 76, 75, 76, 71, 74, 72, 69, 69, 0, 60, 64, 69, 71, 71, 0, 64, 68, 71, 72, 72, 0, 64, 76, 75, 76, 75, 76, 71, 74, 72]
@@ -335,18 +336,21 @@ def learn(scene, ref, goal, worlds, rounds, seed, out):
 
 
 def main():
+    from benchmarks.wuji_piano.training_options import training_defaults
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--hand-dir", type=Path, required=True)
     parser.add_argument("--keyboard", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--seeds", nargs="+", type=int, default=[0, 1, 2])
+    parser.add_argument("--seeds", nargs="+", type=int, default=argparse.SUPPRESS)
     parser.add_argument("--worlds", type=int, default=32)
-    parser.add_argument("--rounds", type=int, default=12)
+    parser.add_argument("--rounds", type=int, default=argparse.SUPPRESS)
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--replay", type=Path)
     mode.add_argument("--reference", action="store_true", help="Evaluate the untrained geometric wrist controller")
 
     args = parser.parse_args()
+    training_defaults(parser, args, training=args.replay is None and not args.reference, rounds=12, seeds=[0, 1, 2])
     if args.worlds < 8 or 256 % args.worlds:
         parser.error("--worlds must be at least 8 and divide 256")
     if args.rounds < 1:
