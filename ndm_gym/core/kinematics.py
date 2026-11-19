@@ -57,7 +57,7 @@ def farthest_point_sample(vertices: np.ndarray, k: int) -> np.ndarray:
 
 
 class ArticulationKinematics:
-    def __init__(self, mjcf_path: str, joint_names: list[str], tracked: list[str], device: str):
+    def __init__(self, mjcf_path: str, joint_names: list[str], tracked: list[str], device: str, fused: bool = False):
         m = mujoco.MjModel.from_xml_path(mjcf_path)
         self.device, self.mjcf_path = device, mjcf_path
         jname_to_idx = {n: i for i, n in enumerate(joint_names)}
@@ -118,6 +118,14 @@ class ArticulationKinematics:
             mc[i] += m.body_mass[b] * pos
         self.body_mass = torch.tensor(mass, dtype=torch.float32, device=device)
         self.body_com = torch.tensor(mc / mass[:, None], dtype=torch.float32, device=device)
+        # optional (train.py --fk_fused): ``forward`` is ``forward_fused``, the Triton kernels of kernels/fk.py; the class's
+        # ``forward`` stays the default path
+        self.fused = fused
+        if fused:
+            from ..kernels import fk
+
+            self.fk_tree = fk.register(self)
+            self.forward = self.forward_fused
 
     def visual_vertices(self) -> list[np.ndarray]:
         """Every moving body's visual-mesh vertices (mesh geoms of group 1), with those of the fixed bodies attached to
@@ -189,6 +197,14 @@ class ArticulationKinematics:
             torch.stack([V[i] for i in idx], -2),
             torch.stack([W[i] for i in idx], -2),
         )
+
+    def forward_fused(self, p: torch.Tensor, R: torch.Tensor, v: torch.Tensor, w: torch.Tensor, q: torch.Tensor, qd: torch.Tensor,
+                      all_bodies: bool = False) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:  # fmt: skip
+        """``forward`` by two Triton kernels with a hand-written backward pass (kernels/fk.py; ``fused``): fp32 CUDA tensors
+        of one batch shape, differentiable in all six, equal to ``forward`` up to float rounding; anything else raises."""
+        from ..kernels.fk import forward_kinematics
+
+        return forward_kinematics(self.fk_tree, list(range(self.num_bodies)) if all_bodies else self.tracked_idx, p, R, v, w, q, qd)
 
     def com(self, bp, bR, bv, bw):
         """Whole-body center of mass position and velocity from all-body FK (``forward(..., all_bodies=True)``)."""

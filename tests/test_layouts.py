@@ -875,6 +875,7 @@ def test_layout_is_off_by_default_and_parses():
     for layout in ("AL", "AWL"):
         for algo in ("supermimic", "supertrack"):
             check_args(_layout_args(layout=layout, algo=algo))
+            check_args(_layout_args(layout=layout, algo=algo, paired=True))  # the two-robot scene: the split does not see the pairing
     check_args(_layout_args(layout="1GPU", no_sync=False, update_graphs=False, graph_early=False, collect_graph=False, reset_masked=False,
                             algo="other", wm_backbone="rigidformer", paired=True, resume="x.pt", pi_updates=2))  # fmt: skip
 
@@ -882,7 +883,7 @@ def test_layout_is_off_by_default_and_parses():
 @pytest.mark.parametrize(
     "kw",
     [dict(no_sync=False), dict(update_graphs=False), dict(graph_early=False), dict(collect_graph=False), dict(reset_masked=False), dict(algo="other"),
-     dict(wm_backbone="rigidformer"), dict(paired=True), dict(resume="last.pt"), dict(pi_updates=2), dict(wm_presample=True),
+     dict(wm_backbone="rigidformer"), dict(resume="last.pt"), dict(pi_updates=2), dict(wm_presample=True),
      dict(wm_deferred_grads=True), dict(muon_batched=True), dict(pi_encode_once=True, imag_hoist=True),
      dict(pi_encode_once=True, imag_hoist=True, pi_deferred_grads=True, deferred_bf16=True)],
 )  # fmt: skip

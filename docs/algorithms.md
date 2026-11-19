@@ -39,7 +39,7 @@ the original behavior, checked bit for bit by upstream equivalence and SuperTrac
 | optimization | `--lr`, `--pi_lr_mult`, `--lr_decay_iters`, `--lr_decay_hours`, `--pi_opt`, `--wm_opt`, `--pi_ema`, `--pi_updates` |
 | resets | `--fail_reset`, `--bin_fix`, `--eprobe_*` (evaluation-guided resets) |
 | motions | `--motions`, `--motion_dir`, `--clips`, `--paired` |
-| speed (same results up to rounding, except `--fused_adam`, `--elementwise_3x3` and `--critic_cudagraphs`; `ndm-train --help`) | `--fused_adam`, `--elementwise_3x3`, `--combo_kernels`, `--compile_eager`, `--wm_cudagraphs`, `--pi_cudagraphs`, `--critic_cudagraphs`, `--goal_table`, `--pi_encode_once`, `--rf_fused_train`, `--rf_fit_keep_ops`, `--rf_bptt_keep_blocks` |
+| speed (same results up to rounding, except `--fused_adam`, `--elementwise_3x3` and `--critic_cudagraphs`; `ndm-train --help`) | `--fused_adam`, `--elementwise_3x3`, `--combo_kernels`, `--compile_eager`, `--wm_cudagraphs`, `--pi_cudagraphs`, `--critic_cudagraphs`, `--goal_table`, `--pi_encode_once`, `--fk_fused`, `--rf_fused_train`, `--rf_fit_keep_ops`, `--rf_bptt_keep_blocks` |
 | systems (BlinkMimic) | `--no_sync`, `--update_graphs`, `--graph_early`, `--collect_graph`, `--reset_masked`, `--ckpt_light` (with `--last_every_min`) |
 | machinery (XMimic; [details](algorithms/xmimic.md)) | `--layout`, `--eprobe_gpu`, `--njmax`, `--gc_freeze`, `--imag_hoist`, `--pi_deferred_grads`, `--wm_deferred_grads`, `--deferred_bf16`, `--muon_batched`, `--wm_presample` |
 

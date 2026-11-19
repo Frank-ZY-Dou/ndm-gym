@@ -176,9 +176,9 @@ off by default. Each trainer rejects unsupported options; HOI training (`ndm_gym
 | `--ckpt_light`, `--last_every_min`, `--fused_adam`, `--elementwise_3x3`, `--combo_kernels` | yes | yes |
 | `--pi_ema`, `--pi_opt muon`, `--wm_opt muon` | yes (`--wm_opt muon`: the MLP and the RigidFormer) | yes |
 | `--pi_lr_mult` with `--lr_decay_len` | ramped at `--lr_decay_by` (the log has no normalized training return) | as LAFAN1 (`--lr_decay_ret` too) |
-| `--fail_reset`, `--bin_fix` | no: MuscleSim draws its resets inside its reset graph | no |
+| `--fail_reset`, `--bin_fix` | no: MuscleSim draws its resets inside its reset graph | yes, over the pair bins (a pair bin's failures either robot's; `PairedTrackingSim.sample_frames`) |
 | `--wm_mirror` | no: no mirror map of the 284 muscles | allowed |
-| `--eprobe_*` | no | no |
+| `--eprobe_*` | no | yes: a probe env per tile of a pair's first side, both robots at the same time of their clips; the focus over the pair bins (`algos/eprobe.py`) |
 | `--wm_structured`, `--contact_reward` | no (LAFAN1 SuperMimic's model and foot-contact term) | allowed |
 
 Milliseconds per iteration, synchronized profiles after the world-model-only iterations (collection / model update /

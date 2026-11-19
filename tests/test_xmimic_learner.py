@@ -100,12 +100,14 @@ def test_learner_options_are_off_by_default_and_parse_together():
         assert all(getattr(a, n) for n in LEARNER)
         check_args(a)
     check_args(_parse(["--pi_encode_once"]))  # SuperMimic's imagination: no longer SuperTrack's alone
+    for algo in ("supermimic", "supertrack"):  # and in the two-robot scene, for both
+        check_args(_parse(["--algo", algo, "--paired", "--pi_encode_once"]))
 
 
 @pytest.mark.parametrize(
     "argv",
     [["--algo", "other", "--wm_presample"], ["--algo", "other", "--wm_deferred_grads"], ["--wm_backbone", "rigidformer", "--wm_deferred_grads"],
-     ["--wm_backbone", "rigidformer", "--wm_presample"], ["--paired", "--wm_presample"], ["--paired", "--pi_encode_once"],
+     ["--wm_backbone", "rigidformer", "--wm_presample"], ["--paired", "--wm_presample"], ["--paired", "--pi_encode_once", "--imag_hoist"],
      ["--paired", "--muon_batched", "--pi_opt", "muon"], ["--imag_hoist"], ["--pi_encode_once", "--pi_deferred_grads"],
      ["--pi_encode_once", "--pi_rollout_clip", "2"], ["--deferred_bf16"], ["--wm_deferred_grads", "--deferred_bf16", "--amp", "none"],
      ["--muon_batched"], ["--wm_presample", "--wm_sample", "prioritized"], ["--wm_presample", "--wm_fail_windows", "0.25"],
@@ -156,6 +158,47 @@ def test_encode_once_is_supermimics_policy_update(eager, kin, synthetic_motion, 
         assert algo.encode_once == once and not algo.hoist
         out[once] = _policy_update(algo, buf, graphable)
     for a, b in zip(out[False][0] + out[False][1], out[True][0] + out[True][1]):
+        _close(b, a, 1e-4)
+
+
+def test_encode_once_is_supermimics_policy_update_paired(eager, kin, tmp_path):
+    """--paired: the motion library holds the pairs' sides as clips and the policy update does not see the pairing, a robot's
+    imagined goals being its own clip's frames; with the pairs' library (tests/test_paired_tracking.write_pairs) SuperMimic's
+    policy update with --pi_encode_once gives the default's loss, imagined reward, gradient norm, survival and policy gradient
+    up to float rounding (the tolerance 1e-4), as on one robot."""
+    from test_paired_tracking import _pair_motion
+
+    from ndm_gym.robots import g1
+    from ndm_gym.tasks.tracking import MDP
+
+    motion = _pair_motion(kin, tmp_path)
+    mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=DEV))
+    out = {}
+    for once in (False, True):
+        algo, buf = _algo("supermimic", kin, motion, mdp, pi_encode_once=once, sm_residual=True)
+        out[once] = _policy_update(algo, buf, False)
+    for a, b in zip(out[False][0] + out[False][1], out[True][0] + out[True][1]):
+        _close(b, a, 1e-4)
+
+
+def test_encode_once_is_supertracks_policy_update_paired(eager, kin, tmp_path):
+    """--paired, SuperTrack: with the pairs' library its policy update with --pi_encode_once gives the default's loss, gradient norm
+    and policy gradient up to float rounding (the tolerance 1e-4), as SuperMimic's above and as on one robot (two-g1-supertrack
+    takes the option); its update reports no imagined reward or survival (nan in both)."""
+    from test_paired_tracking import _pair_motion
+
+    from ndm_gym.robots import g1
+    from ndm_gym.tasks.tracking import MDP
+
+    motion = _pair_motion(kin, tmp_path)
+    mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=DEV))
+    out = {}
+    for once in (False, True):
+        algo, buf = _algo("supertrack", kin, motion, mdp, pi_encode_once=once)
+        out[once] = _policy_update(algo, buf, False)
+    (loss0, *rest0), (loss1, *rest1) = out[False][0], out[True][0]
+    assert all(torch.isnan(x) for x in rest0 + rest1)
+    for a, b in zip([loss0] + out[False][1], [loss1] + out[True][1]):
         _close(b, a, 1e-4)
 
 

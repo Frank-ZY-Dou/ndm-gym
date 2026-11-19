@@ -4,7 +4,8 @@ the reset distribution, the deterministic probe policy, the options' checks and 
 probe simulator itself runs in the GPU smoke runs (docs/blinkmimic.md); at the defaults nothing changes
 (test_algo_equivalence, test_supertrack_golden). --eprobe_lean (this library's): the sweep takes the simulator's lean step and
 records the same failures (a stand-in simulator, on CPU); the lean step against the default one in the simulator (a process
-of this file, ``--worker``, on the synthetic clips; marked slow, needs a GPU and Isaac Lab)."""
+of this file, ``--worker``, on the synthetic clips; marked slow, needs a GPU and Isaac Lab). The two-robot scene's sweeps: tiles,
+offsets, focus and frames on CPU; its steps and sweeps in the simulator (``--worker --pairs``, slow)."""
 
 import argparse
 import importlib.util
@@ -148,7 +149,7 @@ def _args(**kw):
 
 @pytest.mark.parametrize(
     "kw",
-    [dict(pi_ema=0.0), dict(eprobe_graph=False), dict(eprobe_async=5), dict(paired=True), dict(eprobe_share=1.0), dict(eprobe_tile=0),
+    [dict(pi_ema=0.0), dict(eprobe_graph=False), dict(eprobe_async=5), dict(eprobe_share=1.0), dict(eprobe_tile=0),
      dict(eprobe_lead_min=500), dict(eprobe_share=0.0), dict(eprobe_decay=1.5),
      dict(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0, eprobe_lean=True)],
 )  # fmt: skip
@@ -166,6 +167,7 @@ def test_probe_settings_accepted():
     check_eprobe_args(_args(eprobe_graph=False, eprobe_async=0))  # synchronous, eager sweeps
     check_eprobe_args(_args(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0))  # off
     check_eprobe_args(_args(eprobe_lean=True))  # the lean sweep step
+    check_eprobe_args(_args(paired=True))  # the two-robot scene
 
 
 def test_lean_step_is_off_by_default():
@@ -183,10 +185,16 @@ class _SweepEnv:
 
     def __init__(self, motion, f0, fail):
         n = len(f0)
-        self.device, self.motion, self.fail = DEV, motion, fail
+        self.N, self.device, self.motion, self.fail = n, DEV, motion, fail
         self.f, self.a_prev, self.xi = f0.clone(), torch.zeros(n, 29), torch.zeros(n, 33)
-        self.done_eval = torch.zeros(n, dtype=torch.bool)
+        self.done_eval, self.failed_eval = torch.zeros(n, dtype=torch.bool), torch.zeros(n, dtype=torch.bool)
         self.calls = {"step": 0, "step_probe": 0}
+
+    def reset(self, ids, frames):
+        self.f[ids] = frames
+
+    def state(self, vel=None):
+        return self.motion.ref_state(self.f)
 
     def _advance(self, a):
         self.f.copy_(self.f + 1)
@@ -236,6 +244,89 @@ def test_lean_sweep_takes_the_lean_step_and_records_the_same_failures(motion, md
     fail_f = res[True][0]
     assert fail_f.tolist() == [-1, int(f0[1]) + 2, -1, -1, int(f0[4]) + 16, -1]  # the frame each failing step started at
     assert bool(res[True][2].all()) and torch.equal(res[True][1], cap)
+
+
+HAVE_ISAACLAB = importlib.util.find_spec("isaaclab") is not None
+
+
+@pytest.mark.skipif(not HAVE_ISAACLAB, reason="the pairing of the clips is the scene module's")
+def test_paired_tiles_offsets_and_focus(kin, tmp_path):
+    """The two-robot scene's sweeps: tiles on the pairs' first sides, each with the offset to the same time of its second
+    side's clip; next_pair_bins is the inverse of previous_pair_bins within a pair; a failure of either robot counts in its
+    own clip's bin, and the focus over the pair bins weighs each pair bin's two sides' counts and those of the win pair bins
+    after it in its pair (BlinkMimic's focus over the pair bins)."""
+    from test_paired_tracking import _pair_motion
+
+    from ndm_gym.algos.eprobe import FailureFocus, next_pair_bins, pair_offsets, probe_tiles
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import motion_pairs, pair_bins, previous_pair_bins
+
+    m = _pair_motion(kin, tmp_path)
+    pc = motion_pairs(m)
+    a, b, _ = pair_bins(m, pc)
+    tiles = probe_tiles(m, 30, pc[0])
+    assert torch.equal(tiles, torch.cat([torch.arange(int(m.clip_start[c]), int(m.clip_end[c]) - 1, 30) for c in pc[0].tolist()]))
+    off = pair_offsets(m, pc, tiles)
+    ca, cb = m.clip_id[tiles], m.clip_id[tiles + off]
+    assert torch.equal(cb, pc[1][(pc[0].unsqueeze(1) == ca).float().argmax(0)])  # each tile's partner clip
+    assert torch.equal(tiles + off - m.clip_start[cb], tiles - m.clip_start[ca])
+    with pytest.raises(ValueError):
+        pair_offsets(m, pc, tiles + off)  # second sides' frames are not tiles
+    nxt, prev = next_pair_bins(m, a), previous_pair_bins(m, a)
+    moved = nxt != torch.arange(len(a))
+    assert torch.equal(prev[nxt[moved]], torch.arange(len(a))[moved]) and int((~moved).sum()) == pc.shape[1]  # one last bin per pair
+    win, decay = 3, 0.7
+    focus = FailureFocus(m, win, decay, (a, b))
+    k = int(moved.nonzero()[0])  # a pair bin with a next one
+    fail_f = torch.tensor([-1, int(m.bin_start[b[k]]) + 1, -1, int(m.bin_start[a[nxt[k]]])])  # the second robot at k, the first at k + 1
+    q = focus.update(fail_f)
+    c = torch.zeros(len(a))
+    c[k] += 1
+    c[nxt[k]] += 1
+    exp = c.clone()
+    w = c.clone()
+    for _ in range(win):
+        w = w[nxt] * (nxt != torch.arange(len(a))).float()
+        exp += w
+    assert torch.allclose(q, exp / exp.sum()) and q[k] > q[nxt[k]] > 0
+    q2 = focus.update(torch.full((4,), -1))  # no failure: the counts decay, the focus stays
+    assert torch.allclose(q2, q) and torch.isclose(focus.counts.sum(), torch.tensor(2 * decay))
+
+
+@pytest.mark.skipif(not HAVE_ISAACLAB, reason="the sweep imports the scene module")
+def test_paired_sweep_starts_both_robots_at_the_same_time(kin, tmp_path):
+    """ProbeSweep in the two-robot scene: the second robots start, stop and are capped at their partner clips' same times
+    (the first robots' rows first), each robot's first failure is its own, and a failing robot does not end its partner's
+    probe."""
+    from test_paired_tracking import _pair_motion
+
+    from ndm_gym.algos.common import reference_setpoints
+    from ndm_gym.algos.eprobe import ProbeSweep, pair_offsets, probe_tiles, sweep_frames
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.robots import g1
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import motion_pairs
+    from ndm_gym.tasks.tracking import MDP, OBS_DIM
+
+    torch.manual_seed(0)
+    m = _pair_motion(kin, tmp_path)
+    mdp = MDP(kin, m, torch.tensor(g1.default_joint_pos_list(), device=DEV))
+    pc = motion_pairs(m)
+    K, H, tile, lead = 4, 4, 30, 10
+    tiles = probe_tiles(m, 10**6, pc[0])  # one tile per pair, at its start: no two probes share a frame
+    off = pair_offsets(m, pc, tiles)
+    f0, stop, cap = sweep_frames(m, tiles, lead, tile)
+    fail = torch.stack((f0[1] + 3, f0[0] + off[0] + 17))  # the first robot of probe 1 at its 3rd step, the second of probe 0 at its 17th
+    T = len(tiles)
+    env = _SweepEnv(m, torch.zeros(2 * T, dtype=torch.long), fail)
+    pi = TrackingPolicy(OBS_DIM, 73 * K, hist=H).to(DEV).eval()
+    sweep = ProbeSweep(env, pi, m, mdp, K, H, True, reference_setpoints(m, mdp.default_q, torch.ones(29)), tiles, tile, graph=False,
+                       pair_off=off)  # fmt: skip
+    fail_f = sweep.run(lead)
+    expected = [-1] * (2 * T)
+    expected[1], expected[T] = int(f0[1]) + 2, int(f0[0] + off[0]) + 16  # the frame each failing step started at
+    assert fail_f.tolist() == expected
+    assert torch.equal(env.f, torch.cat((cap, cap + off))) and bool(env.done_eval.all())
+    with pytest.raises(ValueError):
+        ProbeSweep(env, pi, m, mdp, K, H, True, None, tiles, tile, graph=False)  # 2T worlds for T one-robot probes
 
 
 class _Env:
@@ -413,8 +504,110 @@ def test_lean_step_is_the_default_step_without_its_reward(tmp_path):
     assert int((a["fail_f"] >= 0).sum()) > 0
 
 
+def worker_paired(pairs: str, out: str):
+    """The two-robot scene in evaluation mode (PairedTrackingSim) on the synthetic pairs, one probe env per tile of 40 frames of
+    the pairs' first sides, with termination thresholds of 2 cm and 0.02. (1) From the same reset and with the same actions,
+    8 steps each of the evaluation step, the in-place step and the lean step (PairedTrackingSim.step_probe). (2) Sweeps of
+    the default and the lean step, eager and as CUDA graphs (ProbeSweep), 15 steps."""
+    sys.path.insert(0, REPO)
+    from isaaclab.app import add_launcher_args, launch_simulation
+
+    from ndm_gym.algos.common import reference_setpoints
+    from ndm_gym.algos.eprobe import ProbeSweep, pair_offsets, probe_tiles, sweep_frames
+    from ndm_gym.motion.library import MotionLib
+    from ndm_gym.motion.sources import interhuman
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.robots import g1
+    from ndm_gym.sim.rigid.isaaclab_mjwarp import PairedTrackingSim, make_sim, motion_pairs
+    from ndm_gym.tasks.tracking import MDP, OBS_DIM, RewardCfg
+
+    p = argparse.ArgumentParser()
+    add_launcher_args(p)
+    launcher = p.parse_args([])
+    torch.manual_seed(0)
+    dev, K, Hh, tile, lead = "cuda:0", 10, 10, 40, 10
+    kin = g1.kinematics(dev)
+    motion = MotionLib(interhuman.load(pairs), kin, dev)
+    mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev), RewardCfg(term_height=0.02, term_tilt=0.02))
+    pc = motion_pairs(motion).to(dev)
+    tiles = probe_tiles(motion, tile, pc[0])
+    off = pair_offsets(motion, pc, tiles)
+    f0, _, _ = sweep_frames(motion, tiles, lead, tile)
+    f0 = torch.cat((f0, f0 + off))
+    sim_cfg = make_sim(dev, launcher, paired=True)
+    res = {}
+    with launch_simulation(sim_cfg, launcher), torch.no_grad():
+        env = PairedTrackingSim(sim_cfg, 2 * len(tiles), motion, mdp, eval_mode=True)
+        ids = torch.arange(env.N, device=dev)
+        acts = 0.5 * torch.randn(8, env.N, 29, device=dev)
+
+        def run(kind):  # 8 steps from the reset: the flags after every step, the terminations, the states
+            env.done_eval[:] = False
+            env.failed_eval[:] = False
+            env.reset(ids, f0)
+            rec = {k: [] for k in ("term", "q", "p", "f", "ep_step", "a_prev", "done", "failed")}
+            for a in acts:
+                S = env.state()
+                tr = env.step(a, S) if kind == "eval" else env.step(a, S, inplace=True) if kind == "inplace" else env.step_probe(a)
+                S1 = env.state()
+                rec["term"].append(tr["term"].clone()), rec["q"].append(S1[4].clone()), rec["p"].append(S1[0].clone())
+                for k, v in (("f", env.f), ("ep_step", env.ep_step), ("a_prev", env.a_prev), ("done", env.done_eval), ("failed", env.failed_eval)):
+                    rec[k].append(v.clone())
+            return {k: torch.stack(v).cpu() for k, v in rec.items()}
+
+        for kind in ("eval", "inplace", "lean"):
+            res[kind] = run(kind)
+        pi = TrackingPolicy(OBS_DIM, 73 * K, hist=Hh).to(dev).eval()
+        pi.dec[-1].weight.mul_(50.0)
+        ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
+        for graph in (False, True):
+            for lean in (False, True):
+                sweep = ProbeSweep(env, pi, motion, mdp, K, Hh, True, ref_u, tiles, 5, graph=graph, lean=lean, pair_off=off)
+                res[("graph" if graph else "eager", lean)] = {"fail_f": sweep.run(lead), "f": env.f.cpu(), "done": env.done_eval.cpu()}
+        res["P"] = len(tiles)
+    torch.save(res, out)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAVE_SIM, reason="the simulator needs a GPU and Isaac Lab")
+def test_paired_probe_steps_and_sweeps(tmp_path):
+    """The two-robot scene's probe steps: the in-place step and the lean step keep the evaluation step's frame counters, flags
+    and terminations exactly and its states within the simulator's run-to-run differences; the sweeps, eager and as CUDA
+    graphs, of the default and the lean step record the same failures of either robot."""
+    from test_paired_tracking import write_pairs
+
+    out = tmp_path / "paired.pt"
+    write_pairs(tmp_path / "pairs", 1.2)
+    r = subprocess.run([sys.executable, os.path.abspath(__file__), "--worker", "--pairs", str(tmp_path / "pairs"), "--out", str(out)],
+                       cwd=REPO, capture_output=True, text=True, timeout=1800)  # fmt: skip
+    err = r.stderr[r.stderr.find("Traceback") :] if "Traceback" in r.stderr else r.stderr
+    assert r.returncode == 0, r.stdout[-2000:] + err[:4000]
+    res = torch.load(out)
+    d = res["eval"]
+    for kind in ("inplace", "lean"):
+        for k in ("f", "ep_step", "a_prev", "done", "failed", "term"):
+            assert torch.equal(res[kind][k], d[k]), (kind, k)
+        for k in ("q", "p"):
+            torch.testing.assert_close(res[kind][k], d[k], rtol=1e-4, atol=1e-4)
+    assert bool(d["term"].any()) and not bool(d["term"].all())
+    P = res["P"]
+    assert bool((d["term"][:, :P] != d["term"][:, P:]).any())  # a robot fails while its partner plays on
+    ref = res[("graph", False)]
+    assert int((ref["fail_f"] >= 0).sum()) > 0
+    for key in (("graph", True), ("eager", False), ("eager", True)):
+        assert torch.equal(res[key]["fail_f"], ref["fail_f"]), key
+    for key in (("graph", True),):
+        assert torch.equal(res[key]["f"], ref["f"]) and torch.equal(res[key]["done"], ref["done"])
+    assert torch.equal(res[("eager", True)]["f"], res[("eager", False)]["f"])
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--worker", action="store_true", required=True)
+    ap.add_argument("--pairs", default=None, help="the two-robot scene's worker, on the two-person clips of this directory")
     ap.add_argument("--out", required=True)
-    worker(ap.parse_args().out)
+    cli = ap.parse_args()
+    if cli.pairs:
+        worker_paired(cli.pairs, cli.out)
+    else:
+        worker(cli.out)
