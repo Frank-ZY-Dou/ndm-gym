@@ -1,15 +1,10 @@
-# Animal motion tracking: a rat, a fruit fly and a stick insect on MIMIC-MJX's data (plan)
-
-This file claims the task (CONTRIBUTING.md, "Claiming a task") and fixes what will be measured before the runs. It is a plan:
-no results yet.
-
-## Task
+# Animal motion tracking: a rat, a fruit fly and a stick insect on MIMIC-MJX's data
 
 Anatomically detailed bodies of three animals track their animals' recorded kinematics in physics: a rat (walking, rearing,
-grooming), a fruit fly (walking) and a stick insect (walking). SuperTrack and SuperMimic train the policy through an MLP
-world model of the simulator, as in the library's other tracking tasks. It adds the library's first non-human animal bodies,
-torque-driven skeletons with many passive degrees of freedom, and a task whose published training is slow: MIMIC-MJX's PPO
-converges in 6 to 20 hours on one GPU (over 30 hours on CPUs).
+grooming), a fruit fly (walking) and a stick insect (walking), with SuperTrack and SuperMimic on MuJoCo-Warp
+([the task](../../docs/tasks/animals.md), [results](results.md)). It adds the library's first non-human animal bodies,
+torque-driven skeletons with many passive degrees of freedom; MIMIC-MJX's PPO trains them in 6 to 20 hours on one GPU, as
+published.
 
 - **Kinematics:** the reference clips of MIMIC-MJX (Zhang, Yang et al., "MIMIC-MJX: Neuromechanical Emulation of Animal
   Behavior", arXiv 2511.20532), [talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX) on Hugging Face
@@ -27,44 +22,24 @@ converges in 6 to 20 hours on one GPU (over 30 hours on CPUs).
   clips' layouts exactly, and one control step on MuJoCo-Warp matches MuJoCo's to 1e-8 (median) from the clips' frames.
 - **Simulator:** MuJoCo-Warp at MIMIC-MJX's rates (the rat and the stick insect: 100 Hz control, 2 ms steps; the fly:
   500 Hz control, 0.2 ms steps), the control step as one CUDA graph. No Isaac Lab, no MJX.
-- **Baseline:** [talmolab/track-mjx](https://github.com/talmolab/track-mjx) (BSD-3-Clause), MIMIC-MJX's PPO, run unmodified
-  with its published configuration on the same GPU, and its published numbers.
+- **Baseline:** [talmolab/track-mjx](https://github.com/talmolab/track-mjx) (BSD-3-Clause), MIMIC-MJX's PPO: its published
+  numbers are quoted; it was not run here.
 
-## Deliverables
+## Rules
 
-- `tools/download_mimic_mjx.py` (the clips and the bodies at pinned revisions) and a loader of the clips
-  (`ndm_gym/motion/sources/mimic_mjx.py`).
-- The task, behind the library's interfaces: the bodies, the simulator, the tracking task (observation, goal, reward,
-  termination), policies, both algorithms with the existing generalized-coordinate world model (`worldmodels/mjcf.py`),
-  training and evaluation scripts, the hand task's systems options, and a per-phase time table of the training loop.
-- Speed options of the G1 path that the MuJoCo-Warp trainers do not take yet (among them a world-model learning rate of its
-  own, the goal table and the goal encoder run once per update), each behind a flag whose default keeps the behaviour, each
-  timed against the path it replaces on the same GPU.
-- Tests in `tests/` that run without a simulator where the library's do, and GPU tests for the simulator paths.
-- A task page in `docs/`, `configs.py` entries, renders with the reference as a blue ghost, and the entries in `NOTICE` and
-  the README's "Papers and repositories" for the sources above.
+Fixed before the three-seed runs.
 
-## What will be measured
+- **Clips:** one policy per body on clips 0-9 of its reference; clips 10-19 held out, never trained on.
+- **Configurations:** one per algorithm, the same for the three bodies apart from the budget (`--config <body>-<algorithm>`,
+  [results](results.md#how-the-numbers-were-obtained)).
+- **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat); a
+  checkpoint kept every 1,000.
+- **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD; the GPU stated.
+- **Evaluation:** the last checkpoint plays every clip from its first frame and four more times from perturbed starts
+  (0.02 rad on the joints), without exploration noise, to the clip's end: the share of episodes ended by MIMIC-MJX's
+  terminations, the tracked bodies', the end effectors' and the root's position errors and the joints' error, over the steps
+  the episodes lived; the same on the held-out clips.
 
-Rules to be fixed here before the runs they apply to; the items marked "to fix" are open until the data audit.
-
-- **Tasks:** one policy per body: the rat on its training clips (MIMIC-MJX's split; to fix: how the split is defined, which
-  the paper does not state), the fly and the stick insect on their walking clips (to fix: which clips, after the audit).
-- **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD; the GPU and settings stated.
-- **Run lengths:** every run capped at 1 h of training; a configuration that needs longer is treated as a bug to find.
-- **Evaluation:** rollouts of the whole clip from perturbed starts, without exploration noise. Per body and configuration:
-  the median keypoint error (mm) against the stac-mjx keypoints, as MIMIC-MJX reports it (the rat: about 10 mm on held-out
-  clips), the joint-angle error, the root position and orientation errors, and the share of episodes ended early; for the
-  rat, the same on the held-out clips.
-- **Training time:** the training wall clock at the first checkpoint from which every later one has a median keypoint error
-  below a threshold and no more than 5 % of episodes ended (to fix: the threshold per body), and iterations/s.
-- **Against the baseline:** track-mjx's median keypoint error at the same wall clock (1 h) on the same GPU, beside its
-  published time to convergence; not ranked with the library's table where its evaluator differs.
-- **Reference:** the same rollouts with the reference's joint positions as PD targets, without a policy.
-
-## Progress
-
-- The data, the bodies and the baseline are public under the licences above and pinned (MIMIC-MJX revision `b4e53a72802f`,
-  vnl-playground `c15480577636`, flybody `d015e9bfe441`, track-mjx `f4791c0b4d4e`).
-- Next: the download script, the bodies loaded in MuJoCo-Warp and checked step for step against MuJoCo, the data audit
-  that fixes the open items above.
+The target of the time to the target (at most 2 % of the episodes ended, the bodies within 3 % of the body's size) was set
+after these runs, on their kept checkpoints. MIMIC-MJX's median keypoint error against stac-mjx's keypoints is not computed
+here: the bodies' error is a mean over the body frames' origins.

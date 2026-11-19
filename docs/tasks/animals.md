@@ -36,8 +36,8 @@ step on MuJoCo-Warp from the clips' frames matches MuJoCo's to 1e-8 (median).
 qvel are not its whole state. Over a control step with the control held, MuJoCo's Euler step of the filter has a closed form
 (`robots.animals.activation_filter`): from a0 under u the step ends at u + (a0 - u) r and its physics steps' forces see the
 mean activation u + (a0 - u) r̄, exact against MuJoCo to 1e-8. The task carries the activations in its state and steps them in
-closed form; the world model (`worldmodels.animal`, MjcfWorldModel on the body without its filters) reads the mean and the
-start activation in the controls' place, which fix the forces' course over the step.
+closed form; the world model (`worldmodels.animal`, this task's own: the library's MjcfWorldModel on the body without its
+filters) reads the mean and the start activation in the controls' place, which fix the forces' course over the step.
 
 ## Task
 
@@ -68,5 +68,5 @@ measured. Results: [benchmarks/mimic_mjx_animal_tracking](../../benchmarks/mimic
 ![SuperTrack and SuperMimic on a stick insect, a fruit fly and a rat clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/grid.webp)
 
 Each case's run with the lowest bodies' error on a clip it lives through (the fly at a quarter of real time), the reference
-in translucent blue. The animations: [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_sm.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_sm.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_sm.webp)
-(SuperMimic); [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_st.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_st.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_st.webp) (SuperTrack).
+in translucent blue. The animations: [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_st.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_st.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_st.webp)
+(SuperTrack); [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_sm.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_sm.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_sm.webp) (SuperMimic).
