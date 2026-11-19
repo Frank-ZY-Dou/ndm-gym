@@ -46,15 +46,24 @@ docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch
 its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans
 made on this library's world model, drawn with this library's lights, floor and sky.
 
-docs/media/teaser.webp puts 6 s of such renders in nine blocks. The LAFAN1 tracking block is under the terms of the
+docs/media/wuji_piano holds a render of a policy trained here playing Eden's Ode to Joy arrangement
+(https://github.com/embodied-ai-nexus/Eden; Copyright 2026 Kashu Yamazaki, Apache-2.0) on the passive keyboard of Eden's
+assets (from RoboPianist, Copyright 2023 The RoboPianist Authors, Apache-2.0) with Wuji Technology's Wuji Hand 2 models
+(https://github.com/wuji-technology/wuji-description; MIT), and the piano roll of that episode. The sources' notices and
+terms, listed in THIRD_PARTY_NOTICES.md, are not replaced by this repository's LICENSE.
+
+docs/media/teaser.webp puts 6 s of such renders in fourteen blocks. The LAFAN1 tracking block is under the terms of the
 docs/media/final paragraph, the Two G1s block under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles block under those of
 docs/media/musclevae and the Hand-object block under those of docs/media/hand. The Human-object interaction block, renders of
 four of HDMI's tasks, is under the terms of the docs/media/hoi paragraph, and the RoboKit planning block, the docs/media/robokit
 renders of its three examples (G1 box carrying tracks the OMOMO clip), under the sources and terms that paragraph names. The
-Racing quadrotor block holds renders like docs/media/quadrotor's, under CC BY 4.0 as that paragraph says, and the Adroit door
-block a render of another policy trained here on the same demonstration and scene as the docs/media/adroit_door preview, under
-the sources and terms of the Adroit Door paragraph below. The mbrl-lib planning block holds the docs/media/mbrl renders; no
-other part of it is covered by the MIT license in LICENSE.
+Racing quadrotor block holds renders like docs/media/quadrotor's, under CC BY 4.0 as that paragraph says, the Go2 tracking
+block a docs/media/go2 render, under the terms of that paragraph, and the Adroit door block a render of another policy trained
+here on the same demonstration and scene as the docs/media/adroit_door preview, under the sources and terms of the Adroit Door
+paragraph below. The Adroit pen, hammer and relocate blocks hold docs/media/adroit_suite renders, under the sources and terms
+of the Adroit suite paragraph below, and the Wuji piano block a render of the docs/media/wuji_piano policy, under the sources
+and terms that paragraph names. The mbrl-lib planning block holds the docs/media/mbrl renders; no other part of it is
+covered by the MIT license in LICENSE.
 
 The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
 clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit

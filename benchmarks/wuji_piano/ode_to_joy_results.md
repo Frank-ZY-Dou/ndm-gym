@@ -1,8 +1,8 @@
-# Two Wuji hands playing Eden’s Ode to Joy
+# Wuji Hand piano: the contributed study on an RTX 3060
 
-| Goal | Configuration | Result |
-|---|---|---|
-| Track the complete 88-key score | 20 rounds, 102,400 transitions per seed, SuperTrack and SuperMimic, seeds 0–2, RTX 3060 | Round-20 Eden F1 of 0.8490 ± 0.0705 and 0.4123 ± 0.2090 |
+The contributed study: both algorithms' starting configurations (seeds 0-2, one RTX 3060 12 GB, 20 rounds, 102,400
+transitions per seed). The A100 runs of both algorithms, each after the same settings screen, are in
+[results_a100.md](results_a100.md).
 
 Neither algorithm reached the validation target of 0.95 within the fixed budget. These measurements describe performance at round 20. Each checkpoint played the same 256 held-out starts, including the nominal start. Uncertainties are sample standard deviations across training seeds.
 
@@ -58,7 +58,7 @@ Two floating Wuji Hand 2 beta2 hands have six wrist pose targets and 20 independ
 
 ## Training and evaluation
 
-Both algorithms use the NDM Gym hand actor, replay and native update methods. The actor has hidden widths 192/128. The shared, piano-specific world model integrates actuator motion and estimates travel of each passive key using a differentiable fit to the ten fingertip positions, an actuator MLP of widths 128/128 and a key residual MLP of widths 192/128. [Piano dynamics](../../ndm_gym/worldmodels/piano.py) · [Hand algorithms](../../ndm_gym/algos/hand_algos.py)
+Both algorithms use the NDM Gym hand actor, replay and native update methods. The actor has hidden widths 192/128. The shared, task-specific world model (not the library's acceleration or increment model) integrates actuator motion and estimates travel of each passive key using a differentiable fit to the ten fingertip positions, an actuator MLP of widths 128/128 and a key residual MLP of widths 192/128. [Piano dynamics](../../ndm_gym/worldmodels/piano.py) · [Hand algorithms](../../ndm_gym/algos/hand_algos.py)
 
 | Setting | SuperTrack | SuperMimic |
 |---|---|---|
@@ -81,14 +81,6 @@ The validation set uses 32 fixed starts (RNG 456, perturbation up to 0.15 of sca
 | 15 | 76,800 | 0.8303 ± 0.0775 | 0.3454 ± 0.0622 |
 | 20 | 102,400 | 0.8401 ± 0.0778 | 0.4158 ± 0.2118 |
 
-Each method also received a six-round pilot on seed 5 with identical eager settings, 30,720 training transitions and 32 held-out starts. The SuperTrack pilot preceded the three-seed study. The matching SuperMimic pilot ran after it. Neither pilot is included in the main estimate, and the retrospective pilot did not select any reported setting or checkpoint.
-
-| Pilot, seed 5 on RTX 3060 | SuperTrack | SuperMimic |
-|---|---:|---:|
-| Training seconds | 94.4 | 94.9 |
-| Round-6 validation F1 | 0.8159 | 0.2315 |
-| Round-6 held-out F1 | 0.8102 | 0.2302 |
-
 ## Timing on the contributor’s RTX 3060
 
 Training times are supplemental measurements on one RTX 3060 with 12 GiB. CUDA-synchronized training includes collection, updates, round-end validation and checkpoint writes. Scene initialization, untrained baseline, held-out evaluation and rendering are outside the timer. Runs used Python 3.12, PyTorch 2.13.0+cu129, MuJoCo 3.15.0, MuJoCo-Warp 3.15.0 and Warp 1.17.0.
@@ -102,7 +94,7 @@ Training times are supplemental measurements on one RTX 3060 with 12 GiB. CUDA-s
 
 ## Timing the native training updates
 
-We compared eager updates with the hand trainer's CUDA graphs on one RTX 3060 (12 GB, PyTorch 2.13.0+cu129, MuJoCo-Warp 3.15.0). Before the runs we fixed three rounds, seeds 0/1/2 and the final checkpoint for every condition. Each seed collected 15,360 transitions (32 worlds × 160 steps × 3 rounds) and ran 90 world-model and 50 policy updates per round, with minibatches of 96. SuperMimic also trained its critic. Each round validated on 32 starts. Each final policy played the full score on the same 32 held-out starts.
+We compared eager updates with the hand trainer's CUDA graphs on one RTX 3060 (12 GB, PyTorch 2.13.0+cu129, MuJoCo-Warp 3.15.0). Every condition ran three rounds at seeds 0/1/2 and used its final checkpoint. Each seed collected 15,360 transitions (32 worlds × 160 steps × 3 rounds) and ran 90 world-model and 50 policy updates per round, with minibatches of 96. SuperMimic also trained its critic. Each round validated on 32 starts. Each final policy played the full score on the same 32 held-out starts.
 
 | Trainer | Updates | Training s/seed | Collect s/round | Model s/round | Policy + critic¹ s/round | Validate s/round | Final Eden F1 |
 |---|---|---:|---:|---:|---:|---:|---:|
@@ -171,4 +163,4 @@ The critic’s predictions below use each round-20 nominal physical trajectory. 
 | 1 | 34.74 | 41.87 | +14.46 | 15.39 |
 | 2 | 46.86 | -24.97 | +60.47 | 60.47 |
 
-[Training, evaluation and replay commands](README.md#eden-ode-to-joy-with-52-independent-controls)
+[Training, evaluation and replay commands](README.md#commands)

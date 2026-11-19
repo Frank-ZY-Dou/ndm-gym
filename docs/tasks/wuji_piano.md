@@ -1,33 +1,41 @@
 # Wuji Hand piano playing
 
-| Goal | Configuration | Result |
-|---|---|---|
-| Play Eden’s *Ode to Joy* with melody and bass | Two floating Wuji Hand 2 hands, 52 controls, 20 rounds, three seeds on an RTX 3060 | SuperTrack 0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090 Eden F1 |
-
-On the same 256 starts per checkpoint, both due keys were down during 69.4% of the two-note frames with SuperTrack, 10.5% with SuperMimic and 23.8% with the scripted reference. [Per-seed results and training settings](../../benchmarks/wuji_piano/ode_to_joy_results.md) · [Attack and release timing](../../benchmarks/wuji_piano/note_timing_results.md)
-
-Two floating Wuji Hand 2 beta2 hands play a 90 BPM arrangement of *Ode to Joy*. It contains 15 melody attacks and four bass attacks. Two notes are due during 164 of the 230 control frames. The full episode is 11.5 seconds, including a one-second lead-in. [Benchmark and recorded rollout](../../benchmarks/wuji_piano/README.md)
+Two floating Wuji Hand 2 beta2 hands play Eden's 90 BPM arrangement of *Ode to Joy*: 15 melody notes and four held bass
+notes, two pitches due together on 164 of the 230 control frames, 11.5 s with a one-second lead-in.
+[Benchmark, commands and results](../../benchmarks/wuji_piano/README.md)
 
 | Component | Configuration |
 |---|---|
 | Physics | MuJoCo-Warp at 200 Hz, gravity-compensated hands and 88 independently hinged passive keys |
-| Controls | 20 finger targets and six wrist pose targets per hand at 20 Hz |
-| Observation | 52 actuator positions, their last changes, 88 key depths, and the previous action |
-| Score | Current 88-key target and the next ten targets, without fingering or hand assignments |
-| Learned dynamics | Actuator motion, approximate fingertip geometry and a learned residual predicting the physical key depths |
-| Training | NDM Gym hand SuperTrack and SuperMimic, three imagined steps, real transitions from 32 GPU worlds |
-| Evaluation | Last checkpoint, 256 fixed starts including nominal, complete song, policy exploration disabled |
+| Controls | 20 finger targets and six wrist pose targets per hand at 20 Hz: 52 independent controls |
+| Observation | 52 actuator positions, their last changes, 88 key depths and the previous action |
+| Score | the current 88-key target and the next ten, without fingering or hand assignments |
+| World model | `PianoDynamics` (`ndm_gym/worldmodels/piano.py`), task-specific and the same for both algorithms, not the library's acceleration or increment model: a polynomial fit of the fingertip geometry and hand-set contact constants, with residual networks for the actuators and the keys |
+| Training | SuperTrack and SuperMimic through the hand trainers' updates, real transitions from 32 GPU worlds, 102,400 per run |
+| Evaluation | the last checkpoint, 256 fixed starts including the nominal one, the whole song, without exploration |
 
-Eden precision, recall and F1 compare measured key states with the target on each frame. A key is down at 87% travel. The separate event diagnostic measures individual attacks and releases at 50 ms resolution. The fractions of timely paired attacks were 44.7% for SuperTrack, 1.6% for SuperMimic and 50.0% for the scripted reference (same RTX 3060 evaluation). The held-out starts test sensitivity to initial hand placement on one score. [Event timing and reference controller](../../benchmarks/wuji_piano/note_timing_results.md)
+Eden's precision, recall and F1 compare the measured key states with the score on each frame; a key is down at 87 % of
+its travel. The event diagnostic counts attacks and releases at 50 ms resolution.
 
-From a checkout with the assets installed, run one training configuration or reproduce a checkpoint rollout:
+Eden F1 on the same 256 held-out starts (mean ± sample SD, seeds 0-2, one A100 40GB SXM4 per run), each algorithm's
+configuration after the same settings screen:
+
+| horizon | SuperTrack | SuperMimic |
+|---:|---|---|
+| 8 | `--st-imag-noise 0.1 --st-reg 0.01`: 0.888 ± 0.092 | `--gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.815 ± 0.024 |
+| 3 | `--st-reg 0.01`: 0.804 ± 0.140 | `--gamma 0.95 --bptt-decay 0.95`: 0.708 ± 0.115 |
+
+The contributed study ran both starting configurations on one RTX 3060 (seeds 0-2, the same budget): SuperTrack
+0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090.
+[Every seed, the settings screen and the world model's speed](../../benchmarks/wuji_piano/results_a100.md)
 
 ```bash
 bench=benchmarks/wuji_piano
 run=data/wuji_piano/ode-to-joy
 python "$bench/download_assets.py"
-"$bench/run.sh" supertrack "$run/supertrack"
-"$bench/run.sh" replay "$run/replay" "$run/supertrack/seed0/last.pt"
+"$bench/run.sh" supertrack "$run/supertrack" --horizon 8 --st-imag-noise 0.1 --st-reg 0.01
+"$bench/run.sh" supermimic "$run/supermimic" --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10
+"$bench/run.sh" replay "$run/replay" "$run/supertrack/seed0/last.pt" --eval-starts 32
 ```
 
-The benchmark includes the exact environment, perturbation distribution, training times, per-seed results, and audio rendering commands. [Setup and reproduction](../../benchmarks/wuji_piano/README.md#eden-ode-to-joy-with-52-independent-controls)
+[Setup and reproduction](../../benchmarks/wuji_piano/README.md#commands)
