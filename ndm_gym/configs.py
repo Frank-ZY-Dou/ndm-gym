@@ -47,6 +47,18 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
+# the H1's SuperTrack (train_humanoid): the Go2's options (GO2_ST); its tuning started from --horizon 32 (the library G1's
+# SuperTrack's; the Go2's is 16) and --pi_batch 2048 (the Go2's is 4096) and selected --horizon 48, --lr 8e-4 (4e-4),
+# --st_fail_w 1 (2), --st_imag_noise 0.4 (0.2) and --action_noise 0.2 (0.1): benchmarks/h1_lafan1_tracking
+H1_ST = (f"--algo supertrack {HAND_SYSTEMS} --st_task_weights --pi_batch 2048 --horizon 48 --lr 8e-4 --st_fail_w 1 --st_imag_noise 0.4 "
+         "--action_noise 0.2")
+# the H1's training options, as the library G1's training has them: its termination (the default), episodes of 10 s started
+# in 1 s bins by return and before failures, position-target offsets of up to 4 action scales, and the servos' position
+# targets unclamped (--target_range free: sim.rigid.isaaclab_mjwarp.TrackingSim.step sends the G1's targets unclamped)
+HUMANOID = "--action_bound 4 --max_episode_steps 500 --bin_starts --fail_reset 0.3 --target_range free"
+# the H1's clips: LAFAN1 without its six fallAndGetUp clips, by the benchmark's rule (benchmarks/h1_lafan1_tracking: "Clips")
+H1_CLIPS = "--clips dance*,fight*,jumps*,run*,sprint*,walk*"
+H1_SM = f"{GO2_SM} --gamma 0.97"  # the H1's SuperMimic: the Go2's with the discount its tuning round selected
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -161,6 +173,13 @@ CONFIGS = {
         "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
                                 "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
+    },
+    # benchmarks/h1_lafan1_tracking: the Go2's selected settings as the starting points, 8,000 iterations as the fixed budget
+    "train_humanoid": {
+        "h1-supertrack": (f"--robot h1 {H1_ST} {HUMANOID} {H1_CLIPS} --iterations 8000 --lr_decay_iters 8000 {GO2_TIMED}",
+                          "H1, one policy on 34 LAFAN1 clips (all but fallAndGetUp), 8,000 iterations: benchmarks/h1_lafan1_tracking"),
+        "h1-supermimic": (f"--robot h1 {H1_SM} {HUMANOID} {H1_CLIPS} --iterations 8000 --lr_decay_iters 8000 {GO2_TIMED}",
+                          "H1, one policy on 34 LAFAN1 clips (all but fallAndGetUp), 8,000 iterations: benchmarks/h1_lafan1_tracking"),
     },
 }
 

@@ -131,6 +131,12 @@ class RewardCfg:
 
 
 class QuadrupedTask:
+    # the sizes and the state's layout that the floating-base trainers read (algos.quadruped_algos, sim.rigid.quadruped_sim,
+    # train_quadruped; tasks.humanoid_tracking has its own), and the errors of the training log (their columns, in mm)
+    obs_dim, goal_frame_dim, state_dim, num_joints = OBS_DIM, GOAL_FRAME_DIM, STATE_DIM, NUM_J
+    unflatten = staticmethod(unflatten_state)
+    log_errors = (("trunk_mm", "trunk_pos"), ("feet_mm", "feet"))
+
     def __init__(self, kin: Go2Kinematics, ref: QuadrupedReference, cfg: RewardCfg = RewardCfg()):
         self.kin, self.ref, self.cfg = kin, ref, cfg
         self.scale = torch.tensor(ACTION_SCALE, device=ref.qpos.device)

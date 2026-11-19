@@ -51,8 +51,8 @@ this repository yet.
 
 | Data | Link | Here |
 |---|---|---|
-| LAFAN1 | [ubisoft/ubisoft-laforge-animation-dataset](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | the G1's 40 tracking clips |
-| LAFAN1 Retargeting Dataset | [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset) | LAFAN1 on the G1, and the G1's URDF |
+| LAFAN1 | [ubisoft/ubisoft-laforge-animation-dataset](https://github.com/ubisoft/ubisoft-laforge-animation-dataset) | the G1's 40 tracking clips; the H1's 34 |
+| LAFAN1 Retargeting Dataset | [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset) | LAFAN1 on the G1 and on the H1, and the robots' URDFs |
 | InterHuman (InterGen) | [tr3e/InterGen](https://github.com/tr3e/InterGen) | the two-person clip |
 | SMPL | [paper](https://doi.org/10.1145/2816795.2818013) | InterHuman's body model, read from the user's licensed copy |
 | OMOMO | [lijiaman/omomo_release](https://github.com/lijiaman/omomo_release) | RoboKit's G1 box carrying |
@@ -72,6 +72,7 @@ this repository yet.
 | Unitree G1 | humanoid, 29 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros) | tracking, two G1s, human-object interaction, RoboKit's G1 tasks |
 | Unitree G1, mjlab's model | humanoid, primitive colliders | [mujocolab/mjlab](https://github.com/mujocolab/mjlab) | the differentiable-simulator comparison |
 | Unitree Go2 | quadruped | [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie) | RoboKit's Go2 jumping; quadruped motion tracking |
+| Unitree H1 | humanoid, 19 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros), gains from [unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym) | humanoid motion tracking on MuJoCo-Warp |
 | LimX TRON 1 | wheel-legged biped | [limxdynamics/tron1-robot-description](https://github.com/limxdynamics/tron1-robot-description) | driving and a ramp, planned on world models *(ongoing)* |
 | XHand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
 | Allegro hand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |
@@ -94,4 +95,4 @@ this repository yet.
 | supermimic_vibed | [zita-ch/supermimic_vibed](https://github.com/zita-ch/supermimic_vibed) | the code this library started from |
 | MASS | [lsw9021/MASS](https://github.com/lsw9021/MASS) | the bone meshes of the muscle renders |
 | supermimic-quadruped (`quadmotion`) | [Houserz/supermimic-quadruped](https://github.com/Houserz/supermimic-quadruped) | retargets the Labrador's motion capture to the Go2, from the user's checkout |
-| unitree_mujoco | [unitreerobotics/unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco) | the Go2's joint damping |
+| unitree_mujoco | [unitreerobotics/unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco) | the Go2's joint damping; the H1's joint armature and damping |

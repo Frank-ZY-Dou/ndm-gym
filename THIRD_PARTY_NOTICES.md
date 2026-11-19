@@ -47,6 +47,41 @@ reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`)
 the results used `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
 of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
 
+## Humanoid motion tracking (H1)
+
+The humanoid tracking task ([`docs/tasks/humanoid.md`](docs/tasks/humanoid.md)) copies no third-party file. What it reads
+is downloaded by the user at the pinned revision of the G1's data (`tools/download_h1.sh`, checked against
+`tools/download_h1.sha256`) and is not redistributed:
+
+- the H1 retargets of LAFAN1 (Ubisoft La Forge, CC BY-NC-ND 4.0) in the
+  [LAFAN1 Retargeting Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset) @ `ce15729` (`h1/`,
+  CC BY-NC-ND 4.0);
+- the Unitree H1 description of the same dataset (`robot_description/h1`), Unitree's
+  [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/h1_description`, BSD-3-Clause): the H1's
+  geometry, masses, inertias, joint ranges and torque limits.
+
+The H1's servo gains in `ndm_gym/robots/humanoid.py` are the values of Unitree's own H1 training configuration
+([unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym), `legged_gym/envs/h1/h1_config.py`, BSD-3-Clause),
+and its joints' armature (0.1 kg m²) and damping (1 N m s / rad) those of Unitree's own MuJoCo model of the H1
+([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/h1/h1.xml`, BSD-3-Clause;
+[MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)'s `unitree_h1/h1.xml`, BSD-3-Clause, has the same).
+The training options `--bin_starts` and `--fail_reset` of `ndm_gym/train_humanoid.py` (`ndm_gym/sim/rigid/humanoid_sim.py`)
+reuse the library G1's reset statistics (`ndm_gym/sim/rigid/reset_stats.py`, ported from BlinkMimic and InstantTrack; see
+below).
+
+Two options kept for comparison, off by default, take values from other projects and no code:
+
+- `--gains tracking`: the H1's servo gains of [HumanoidVerse](https://github.com/LeCAR-Lab/HumanoidVerse) @ `101492b`
+  (`humanoidverse/config/robot/h1/h1.yaml`, MIT License) and of
+  [ProtoMotions](https://github.com/NVlabs/ProtoMotions) @ `4a905b9` (`protomotions/config/robot/h1.yaml`; NVIDIA
+  License, non-commercial), which give the same values;
+- `--foot menagerie`: the end points and radii of the three foot capsules of
+  [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie)'s `unitree_h1/h1.xml` (BSD-3-Clause, Unitree
+  Robotics).
+
+The exclusion of the `fallAndGetUp` clips follows a practice of other humanoid tracking work, cited on the results page:
+H2O (T. He et al., 2024) and GMT (Z. Chen et al., 2025) remove motions that their robot cannot perform.
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from

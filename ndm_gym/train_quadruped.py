@@ -48,9 +48,21 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
                "motion_dir", "motions", "paired")  # fmt: skip
 
 
-def parse_args(argv: list[str] | None = None):
-    from ndm_gym.algos.hand_fast import add_hand_fast_args, check_hand_fast_args
+def add_go2_args(parser: argparse.ArgumentParser):
+    """The Go2's servo and start options."""
     from ndm_gym.robots.go2 import JOINT_DAMPING, KD, KP
+
+    parser.add_argument("--kp", type=float, default=KP, help="the joints' position servos' stiffness (N m / rad)")
+    parser.add_argument("--joint_damping", type=float, default=JOINT_DAMPING, help="the joints' damping (N m s / rad); negative: the model's own (Menagerie: 2)")
+    parser.add_argument("--kd", type=float, default=KD, help="the servos' damping (N m s / rad), on top of the model's joint damping")
+
+
+def parse_args(argv: list[str] | None = None, trainer: str = "train_quadruped", add_robot_args=add_go2_args, clips_help: str | None = None,
+               supported: tuple[str, ...] = (), defaults: dict | None = None):
+    """The arguments of ``trainer`` (its configurations, configs.CONFIGS): ndm_gym.train's and the systems options, with the
+    robot's own (``add_robot_args``: the Go2's; train_humanoid's). ``supported``: names of UNSUPPORTED that the trainer
+    implements (train_humanoid's), ``defaults``: its own defaults over QUADRUPED_DEFAULTS."""
+    from ndm_gym.algos.hand_fast import add_hand_fast_args, check_hand_fast_args
 
     parser = argparse.ArgumentParser()
     add_train_args(parser)
@@ -61,33 +73,31 @@ def parse_args(argv: list[str] | None = None):
         if action.dest == "algo":
             action.required = False
         if action.dest == "clips":
-            action.help = "the clips: names or globs in data/lifelike_go2 (comma-separated), paths, or a directory (default: every clip)"
-    parser.add_argument("--kp", type=float, default=KP, help="the joints' position servos' stiffness (N m / rad)")
-    parser.add_argument("--joint_damping", type=float, default=JOINT_DAMPING, help="the joints' damping (N m s / rad); negative: the model's own (Menagerie: 2)")
-    parser.add_argument("--kd", type=float, default=KD, help="the servos' damping (N m s / rad), on top of the model's joint damping")
+            action.help = clips_help or "the clips: names or globs in data/lifelike_go2 (comma-separated), paths, or a directory (default: every clip)"
+    add_robot_args(parser)
     parser.add_argument("--joint_noise", type=float, default=0.05, help="the joints' perturbation at an episode's start (rad, std)")
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each of the task's six tracked quantities weighs, per unit of error, the task's "
                         "reward weight over its kernel's width")  # fmt: skip
-    parser.set_defaults(**QUADRUPED_DEFAULTS)
+    parser.set_defaults(**QUADRUPED_DEFAULTS, **(defaults or {}))
     from ndm_gym import configs
 
     configs.add_config_arg(parser)
     try:  # --config: a named configuration's options first
-        argv = configs.expand(sys.argv[1:] if argv is None else list(argv), "train_quadruped")
+        argv = configs.expand(sys.argv[1:] if argv is None else list(argv), trainer)
     except ValueError as e:
         parser.error(str(e))
     args = parser.parse_args(argv)
     if args.algo not in ("supertrack", "supermimic"):
-        parser.error("quadruped training implements --algo supertrack and --algo supermimic")
+        parser.error(f"{trainer} implements --algo supertrack and --algo supermimic")
     st_only = {"st_task_weights": False, **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w")}}
     sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches")}  # its critic and return
     for name, default in (st_only if args.algo == "supermimic" else sm_only).items():
         if getattr(args, name) != default:
             parser.error(f"--{name} is {'SuperTrack' if args.algo == 'supermimic' else 'SuperMimic'}'s option")
     for name in UNSUPPORTED:
-        if getattr(args, name) != parser.get_default(name):
-            parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that quadruped training does not implement")
+        if name not in supported and getattr(args, name) != parser.get_default(name):
+            parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that {trainer} does not implement")
     try:
         check_hand_fast_args(args)
     except ValueError as e:
@@ -110,21 +120,38 @@ def build(clips: str | list[str] | None, device: str, reward_std_scale: float = 
     return model, kin, QuadrupedTask(kin, ref, RewardCfg().scaled(reward_std_scale)), [c["name"] for c in loaded]
 
 
+def log_columns(task) -> tuple[str, ...]:
+    """The training log's columns: LOG_COLUMNS with the task's two errors (``task.log_errors``; the Go2's trunk_mm and feet_mm)."""
+    i = LOG_COLUMNS.index("trunk_mm")
+    return LOG_COLUMNS[:i] + tuple(c for c, _ in task.log_errors) + LOG_COLUMNS[i + 2 :]
+
+
 def main():
     args = parse_args()
+    from ndm_gym.algos.quadruped_algos import QUADRUPED_ALGOS
+    from ndm_gym.sim.rigid.quadruped_sim import QuadrupedSim
 
+    def build_task(dev: str):
+        return build(args.clips, dev, args.reward_std_scale, args.kp, args.kd, args.joint_damping if args.joint_damping >= 0 else None)
+
+    train(args, build_task, QUADRUPED_ALGOS, lambda model, task, n, dev: QuadrupedSim(model, task, n, dev, joint_noise=args.joint_noise))
+
+
+def train(args, build_task, algos: dict, make_sim, utd: float = 1.0, wm_lr: float | None = None):
+    """The training loop (the module's docstring) of the floating-base tracking tasks: ``build_task(device)`` gives the scene,
+    kinematics, task and clip names (``build``'s), ``algos`` the agents by --algo, ``make_sim(model, task, worlds, device)`` the
+    simulator (QuadrupedSim). train_humanoid runs it with a humanoid's, and with its ``utd`` (updates per collection step,
+    LAFAN1 training's --utd: 1 / utd collection steps per iteration on average; the Go2's: 1) and ``wm_lr`` (the world
+    model's learning rate on the same schedule; None: --lr)."""
     import torch
 
     import ndm_gym.core.nets as nets
     from ndm_gym.algos import hand_fast
     from ndm_gym.algos.blinkmimic import PolicyLR
     from ndm_gym.algos.common import lr_at, set_lr
-    from ndm_gym.algos.quadruped_algos import QUADRUPED_ALGOS, WINDOW_KEYS, QuadrupedCollector, replay_fields
+    from ndm_gym.algos.quadruped_algos import WINDOW_KEYS, QuadrupedCollector, replay_fields
     from ndm_gym.buffer import ReplayBuffer
     from ndm_gym.core.normalizer import RunningNorm
-    from ndm_gym.robots.go2 import NUM_J
-    from ndm_gym.sim.rigid.quadruped_sim import QuadrupedSim
-    from ndm_gym.tasks.quadruped_tracking import unflatten_state
 
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
@@ -133,37 +160,40 @@ def main():
     RunningNorm.no_sync = args.no_sync  # --no_sync: the normalizers' freeze test on the device, their statistics written in place
     dev = "cuda:0"
     os.makedirs(args.log_dir, exist_ok=True)
-    log_path, header = os.path.join(args.log_dir, "train_log.csv"), ",".join(LOG_COLUMNS)
+    log_path = os.path.join(args.log_dir, "train_log.csv")
     resume_ck = torch.load(args.resume, map_location=dev, weights_only=False) if args.resume else None
     if resume_ck is not None:
         hand_fast.check_resume(resume_ck["args"], args)
+
+    model, kin, task, names = build_task(dev)
+    columns = log_columns(task)
+    header = ",".join(columns)
     if os.path.exists(log_path):
         if resume_ck is None:
             raise ValueError(f"{log_path} exists: continue that run with --resume (its last.pt) or use another --log_dir")
         with open(log_path) as f:
             if f.readline().strip() != header:
                 raise ValueError(f"{log_path} has other columns than {header!r}; continue in another --log_dir")
-
-    model, kin, task, names = build(args.clips, dev, args.reward_std_scale, args.kp, args.kd, args.joint_damping if args.joint_damping >= 0 else None)
     with open(os.path.join(args.log_dir, "args.json"), "w") as f:
         json.dump({**vars(args), "clip_names": names}, f, indent=2)
     print(f"{len(names)} clips, {task.ref.frames} frames ({task.ref.frames * 0.02:.1f} s)", flush=True)
-    sim = QuadrupedSim(model, task, args.num_envs, dev, joint_noise=args.joint_noise)
-    algo = QUADRUPED_ALGOS[args.algo](args, model, kin, task, dev)
+    sim = make_sim(model, task, args.num_envs, dev)
+    algo = algos[args.algo](args, model, kin, task, dev)
     average = hand_fast.PolicyAverage(algo.pi, args.pi_ema) if args.pi_ema > 0 else None  # --pi_ema
     pi_lr = PolicyLR(args)  # --pi_lr_mult
-    start_it, wall_offset = 0, 0.0
+    start_it, wall_offset, start_steps = 0, 0.0, 0
     if resume_ck is not None:
         algo.load_state_dict(resume_ck if average is None else average.resume(resume_ck))
         pi_lr.load_state_dict(resume_ck)
         start_it, wall_offset = resume_ck["iteration"], resume_ck["wall_time"]
+        start_steps = resume_ck.get("sim_steps", start_it * args.num_envs)  # not the iterations times the worlds with --utd
         del resume_ck
-    buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev, fields=replay_fields(), priorities=False)
+    buffer = ReplayBuffer(args.buffer_steps, args.num_envs, dev, fields=replay_fields(task), priorities=False)
     buffer.window_keys = WINDOW_KEYS
     if args.collect_graph or args.update_graphs:  # the graphs read the replay's write head and fill level on the device
         buffer.use_device_ptr(device_size=True)
     N = args.num_envs
-    a_prev = torch.zeros(N, NUM_J, device=dev)
+    a_prev = torch.zeros(N, task.num_joints, device=dev)
     ep_len = torch.zeros(N, device=dev)
     acc = {k: torch.zeros((), device=dev) for k in ("r", "steps", "done", "term", "ep_len", "trunk_err", "feet_err")}
 
@@ -171,21 +201,21 @@ def main():
     def collect():
         nonlocal a_prev
         s, f = sim.state(), sim.f.clone()
-        S = unflatten_state(s)
+        S = task.unflatten(s)
         a = algo.act(S, a_prev, f, noise=args.action_noise)
         u = task.setpoint(a, f)
         s1, term, done = sim.step(u, reset=not args.reset_masked)
         if args.reset_masked:  # the ended worlds reset by masked writes, the draws made for all worlds
             sim.reset_masked(done)
-        S1, f1 = unflatten_state(s1), task.ref.next_frame(f)
+        S1, f1 = task.unflatten(s1), task.ref.next_frame(f)
         fk1 = kin.forward(S1[0])
         algo.update_wm_norms(S, S1, u)
         buffer.add({"s": s, "s1": s1, "u": u, "a_prev": a_prev, "f": f, "done": done})
         ep_len.add_(1)
         e = task.errors(S1, fk1, f1)
         acc["r"] += task.reward(S1, fk1, f1, a, a_prev).sum() / task.max_step_reward
-        acc["trunk_err"] += e["trunk_pos"].sum()
-        acc["feet_err"] += e["feet"].mean(-1).sum()
+        acc["trunk_err"] += e[task.log_errors[0][1]].sum()  # the task's two errors (the Go2's trunk and feet)
+        acc["feet_err"] += e[task.log_errors[1][1]].mean(-1).sum()
         acc["steps"] += N
         acc["done"] += done.sum()
         acc["term"] += term.sum()
@@ -203,7 +233,7 @@ def main():
         timers = collect, wm_update, policy_update = [hand_fast.Timed(f) for f in (collect, wm_update, policy_update)]
 
     def save_last(iteration: int, keep: bool = False):
-        ck = {**algo.state_dict(), **pi_lr.state_dict(), "iteration": iteration, "wall_time": time.time() - t_start, "sim_steps": iteration * N,
+        ck = {**algo.state_dict(), **pi_lr.state_dict(), "iteration": iteration, "wall_time": time.time() - t_start, "sim_steps": sim_steps,
               "args": vars(args)}  # fmt: skip
         if average is not None:  # --pi_ema: 'pi' is the average (the policy evaluated), 'pi_live' the trained policy
             ck = average.checkpoint(ck)
@@ -223,14 +253,20 @@ def main():
     t_log = time.time()
     t_start = t_log - wall_offset
     agg = {k: [] for k in ("wm_loss", "pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival")}
-    it = start_it
+    it, step_acc, sim_steps = start_it, 0.0, start_steps
     for it in range(start_it + 1, args.iterations + 1):
         lr = lr_at(it, args.lr, args.lr_decay_iters)
         for opt in algo.optimizers:
             set_lr(opt, lr)
+        if wm_lr is not None:
+            set_lr(algo.opt_wm, lr * wm_lr / args.lr)
         if pi_lr.on:  # --pi_lr_mult
             set_lr(algo.opt_pi, lr * pi_lr.at(it - 1))
-        collect()
+        step_acc += 1.0 / utd
+        for _ in range(int(step_acc)):
+            collect()
+            sim_steps += N
+        step_acc -= int(step_acc)
         agg["wm_loss"].append(wm_update())
         if it > args.wm_only_iters:
             for k, x in zip(("pi_loss", "v_loss", "imag_r", "pi_gradnorm", "imag_survival"), policy_update(), strict=True):
@@ -241,14 +277,14 @@ def main():
                                 acc["trunk_err"] / acc["steps"], acc["feet_err"] / acc["steps"], acc["ep_len"], acc["term"]]).tolist()  # fmt: skip
             means, (n_done, sim_r, trunk_err, feet_err, ep_sum, n_term) = vals[: len(agg)], vals[len(agg) :]
             done, now = max(n_done, 1.0), time.time()
-            row = [it, (now - t_start) / 3600, it * N, *means, sim_r, 1000 * trunk_err, 1000 * feet_err, ep_sum / done, n_term / done,
+            row = [it, (now - t_start) / 3600, sim_steps, *means, sim_r, 1000 * trunk_err, 1000 * feet_err, ep_sum / done, n_term / done,
                    args.log_every / (now - t_log), lr]  # fmt: skip
             log_f.write(",".join(f"{x:.6g}" for x in row) + "\n")
             log_f.flush()
-            print(" ".join(f"{k}={x:.4g}" for k, x in zip(LOG_COLUMNS, row, strict=True)), flush=True)
+            print(" ".join(f"{k}={x:.4g}" for k, x in zip(columns, row, strict=True)), flush=True)
             if timers is not None:
                 print("[prof] collect {:.1f} ms | model {:.1f} ms | policy {:.1f} ms".format(*(t.take() for t in timers)), flush=True)
-            msg = pi_lr.observe(it, row[LOG_COLUMNS.index("sim_r")])  # --lr_decay_ret's trigger
+            msg = pi_lr.observe(it, row[columns.index("sim_r")])  # --lr_decay_ret's trigger
             if msg:
                 print(msg, flush=True)
             t_log = now
