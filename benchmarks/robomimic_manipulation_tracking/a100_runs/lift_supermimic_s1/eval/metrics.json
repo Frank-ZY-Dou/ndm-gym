@@ -1,0 +1,74 @@
+{
+  "task": "lift",
+  "demos": [
+    0
+  ],
+  "iteration": 1500,
+  "wall_time_s": 206.8656530380249,
+  "control_dt": 0.05,
+  "num_envs": 256,
+  "solver_iterations": [
+    20,
+    50
+  ],
+  "per_demo": {
+    "0": {
+      "frames": 69,
+      "nominal": {
+        "success_rate": 1.0,
+        "terminated": 0.0,
+        "tracked_s": 3.4000000953674316,
+        "object_mm": 0.8509487961418927,
+        "object_final_mm": 3.2300183083862066,
+        "object_deg": 0.48816135730448046,
+        "keypoint_mm": 3.0310815200209618,
+        "joint_rad": 0.015770798549056053,
+        "finger_mm": 3.1204246915876865
+      },
+      "policy": {
+        "success_rate": 1.0,
+        "terminated": 0.0,
+        "tracked_s": 3.4000000953674316,
+        "object_mm": 0.8662332547828555,
+        "object_final_mm": 2.883626613765955,
+        "object_deg": 0.52033523019409,
+        "keypoint_mm": 3.2641084399074316,
+        "joint_rad": 0.01608327589929104,
+        "finger_mm": 3.088743891566992
+      },
+      "reference_targets": {
+        "success_rate": 0.0,
+        "terminated": 0.0,
+        "tracked_s": 3.4000000953674316,
+        "object_mm": 10.482890531420708,
+        "object_final_mm": 54.71478030085564,
+        "object_deg": 0.8377349746982288,
+        "keypoint_mm": 8.016261272132397,
+        "joint_rad": 0.02434401586651802,
+        "finger_mm": 1.7008009599521756
+      }
+    }
+  },
+  "policy": {
+    "success_rate": 1.0,
+    "terminated": 0.0,
+    "tracked_s": 3.4000000953674316,
+    "object_mm": 0.8662332547828555,
+    "object_final_mm": 2.883626613765955,
+    "object_deg": 0.52033523019409,
+    "keypoint_mm": 3.2641084399074316,
+    "joint_rad": 0.01608327589929104,
+    "finger_mm": 3.088743891566992
+  },
+  "reference_targets": {
+    "success_rate": 0.0,
+    "terminated": 0.0,
+    "tracked_s": 3.4000000953674316,
+    "object_mm": 10.482890531420708,
+    "object_final_mm": 54.71478030085564,
+    "object_deg": 0.8377349746982288,
+    "keypoint_mm": 8.016261272132397,
+    "joint_rad": 0.02434401586651802,
+    "finger_mm": 1.7008009599521756
+  }
+}
