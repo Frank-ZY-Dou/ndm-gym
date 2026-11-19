@@ -1,0 +1,34 @@
+{
+  "minutes_to_target": 1.7225510835647584,
+  "iteration_to_target": 1000,
+  "checkpoints": [
+    {
+      "iteration": 1000,
+      "minutes": 1.7225510835647584,
+      "ended_share": 0.0,
+      "body_mm": 0.5250129103660583,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 3.3100815057754516,
+      "ended_share": 0.0,
+      "body_mm": 0.43352076411247253,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 4.897744651635488,
+      "ended_share": 0.0,
+      "body_mm": 0.40463191270828247,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 6.484839340051015,
+      "ended_share": 0.0,
+      "body_mm": 0.3978230059146881,
+      "target": true
+    }
+  ]
+}
