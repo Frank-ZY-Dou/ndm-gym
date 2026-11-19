@@ -106,6 +106,7 @@ nav:
       - Adroit Door tracking: tasks/adroit_door.md
       - Adroit manipulation suite: tasks/adroit_suite.md
       - Quadruped motion tracking: tasks/quadruped.md
+      - Humanoid motion tracking on MuJoCo-Warp (H1): tasks/humanoid.md
       - RoboKit's planner on a world model: tasks/robokit.md
       - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:
@@ -129,6 +130,7 @@ nav:
       - Quadrotor: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/quadrotor_racing_tracking/results.md
       - Adroit door: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/adroit_door/results_a100.md
       - Quadruped: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/go2_lifelike_tracking/results.md
+      - Humanoid (H1): https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/h1_lafan1_tracking/results.md
       - NDMs as simulators: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/ndm_speed/results.md
       - RoboKit: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md
       - mbrl-lib: https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/mbrl_lib/results.md

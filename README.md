@@ -30,6 +30,7 @@ The algorithms share one pipeline within each task:
 - **Quadruped:** a Unitree Go2 tracking a Labrador's motion capture, one clip or all 65 (MuJoCo-Warp).
 - **Piano:** two floating Wuji Hand 2 hands playing Eden's *Ode to Joy* on 88 passive keys, with no fingering given
   (MuJoCo-Warp).
+- **Unitree H1** (19 DoF): one policy tracking 34 LAFAN1 clips (MuJoCo-Warp, without Isaac Lab).
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -116,6 +117,8 @@ the position within 20 mm. Quadruped: the target is a success of 0.99 with the t
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
+| **[Humanoid motion tracking on MuJoCo-Warp](#humanoid-motion-tracking-on-mujoco-warp-h1)**, a Unitree H1, one policy on 34 LAFAN1 clips | 🎯 lowest pose error | `h1-supertrack` | MPJPE about the pelvis **22.7 ± 0.7 mm**, joints 2.38°, return 0.786, success 0.820 (seeds 0-2, a fixed budget of 8,000 iterations, 14.5 min on an RTX 6000 Ada) |
+|  | 📈 highest return | `h1-supermimic` | return **0.827 ± 0.008**, success 0.771, MPJPE about the pelvis 30.7 mm (seeds 0-2, a fixed budget of 8,000 iterations, 12.0 min on an RTX 6000 Ada) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -135,7 +138,7 @@ with its published configuration on an A100 80GB SXM4, and after 18.48 ± 1.72 m
 Each training task's best settings, as measured here, are named configurations (on the Allegro and the Inspire hand with
 options beside them); both methods are on offer for every task.
 
-- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor` and `train_quadruped` take `--config` too;
+- `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor`, `train_quadruped` and `train_humanoid` take `--config` too;
   `train_door_full` takes the options as given in its rows.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
@@ -169,6 +172,7 @@ options beside them); both methods are on offer for every task.
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
+| **H1**, 34 LAFAN1 clips (`train_humanoid`) | a fixed budget of 8,000 iterations | `h1-supertrack`: return 0.786, success 0.820, MPJPE about the pelvis 22.7 mm; 14.5 min (RTX 6000 Ada) | `h1-supermimic`: 0.827, 0.771, 30.7 mm; 12.0 min |
 
 What the experiments showed (details under [Ablations](#-ablations) and [Training speed](#training-speed)):
 
@@ -187,7 +191,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
   [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations,
   [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play,
-  [Wuji Hand piano playing](#wuji-hand-piano-playing): two hands play Eden's *Ode to Joy* with no fingering given.
+  [Wuji Hand piano playing](#wuji-hand-piano-playing): two hands play Eden's *Ode to Joy* with no fingering given,
+  [humanoid motion tracking on MuJoCo-Warp](#humanoid-motion-tracking-on-mujoco-warp-h1): a Unitree H1 on LAFAN1.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
   on fresh seeds ([results](#-results)), and its inference kernels; a body-token RigidFormer on the muscle-actuated
   character, its most accurate configuration ([results](#muscle-actuated-character)); world models of MuJoCo models in
@@ -442,6 +447,25 @@ MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_sm/evaluation/
 
 # a task and seed of the benchmark (benchmarks/go2_lifelike_tracking/tasks.json: all, walk, run, play)
 benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic
+```
+
+</details>
+
+<details>
+<summary><b>Humanoid motion tracking on MuJoCo-Warp (H1)</b></summary>
+
+```bash
+pip install -e '.[hand]'                             # MuJoCo-Warp
+tools/download_h1.sh                                 # LAFAN1 on the H1 and the H1's description, pinned and hash-checked, into data/
+
+# one policy on 34 LAFAN1 clips: train (SuperTrack, then SuperMimic), evaluate with pushes, render a clip
+python -m ndm_gym.train_humanoid --config h1-supertrack --log_dir logs/h1_st
+python -m ndm_gym.train_humanoid --config h1-supermimic --log_dir logs/h1_sm
+python -m ndm_gym.evaluate_humanoid --ckpt logs/h1_sm/last.pt --out logs/h1_sm/evaluation --num_envs 64 --push 1 2 --save_rollout
+MUJOCO_GL=egl python tools/render_humanoid.py --robot h1 --rollout logs/h1_sm/evaluation/rollout.npz --clip run1_subject2 --start 59 --seconds 8 --out run.webp
+
+# a task and seed of the benchmark (selected: the 34 clips; train: subjects 1 to 4, subject 5 held out; all: 40 clips)
+benchmarks/h1_lafan1_tracking/run.sh selected 0 logs/h1_sm --config h1-supermimic
 ```
 
 </details>
@@ -1166,6 +1190,62 @@ benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimi
 benchmarks/go2_lifelike_tracking/run.sh walk 0 logs/go2_sm --config go2-supermimic-clip  # walk, run, play; go2-supertrack-clip
 ```
 
+### Humanoid motion tracking on MuJoCo-Warp (H1)
+
+A Unitree H1 tracks LAFAN1 clips retargeted to it, on MuJoCo-Warp without Isaac Lab: 19 joint position servos at 50 Hz
+with Unitree's gains and the description's torque limits, one ankle joint per leg and no wrists. The references are the
+kinematic retargets of the [LAFAN1 Retargeting Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
+(`h1/`). One policy tracks 34 of the 40 clips, all but the six `fallAndGetUp` clips, with the library's MLP world model
+of generalized coordinates.
+
+| goal | configuration (`train_humanoid`) | result |
+|---|---|---|
+| one policy on 34 LAFAN1 clips, a fixed budget of 8,000 iterations | `--config h1-supertrack` | return 0.786 ± 0.011, success 0.820 ± 0.037, MPJPE about the pelvis 22.7 mm; 14.5 min of training (seeds 0-2, RTX 6000 Ada) |
+| | `--config h1-supermimic` | return 0.827 ± 0.008, success 0.771 ± 0.016, MPJPE about the pelvis 30.7 mm; 12.0 min of training (seeds 0-2, RTX 6000 Ada) |
+
+**In short:** on the 34 clips SuperTrack / SuperMimic reach a return of 0.786 / 0.827 and complete 82 % / 77 % of the
+rollouts of whole clips (2.2 to 4.6 minutes each) after 14.5 / 12.0 min of training on an RTX 6000 Ada; on the 27 clips
+whose reference stays upright they complete 96 % / 95 %.
+
+<p align="center"><img src="docs/media/h1/grid.webp" alt="SuperTrack and SuperMimic tracking three LAFAN1 clips with a Unitree H1" width="100%"/></p>
+<p align="center"><i>8 s of a walk, a run and a dance clip (<code>walk1_subject1</code>, <code>run1_subject2</code>, <code>dance2_subject3</code>) with SuperTrack and SuperMimic; seed 0, real time, rollouts from the unperturbed start.<br>The retargeted reference laid over the robot in translucent blue: where the robot's black shows, it is off the reference (<a href="docs/tasks/humanoid.md">the task</a>).</i></p>
+<p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the H1 (LAFAN1 Retargeting Dataset), with Unitree's H1 description (see <a href="NOTICE">NOTICE</a>).</sub></p>
+
+- **Runs:** 8,000 iterations with 4,096 worlds on one RTX 6000 Ada each, the budget fixed and the same for both; the
+  last checkpoint plays 64 rollouts per clip of the whole clip from perturbed starts, and a rollout succeeds if it never
+  meets the library G1's termination. The reference's joint positions as the targets, open loop, complete no rollout.
+  The times are of training only, each run alone on its GPU, not engineered
+  ([results](benchmarks/h1_lafan1_tracking/results.md), [rules](benchmarks/h1_lafan1_tracking/README.md),
+  [task](docs/tasks/humanoid.md)).
+- **Selection:** both start from the Go2 task's options with the library G1's episodes, its termination and position
+  targets that are not clamped to the joints' ranges. Each algorithm then had one round of eleven single-option runs
+  on seed 0 under one rule: SuperTrack's selected a longer imagined window, a higher learning rate, a lower failure
+  weight and more noise (return 0.712 to 0.804, success 0.721 to 0.831), SuperMimic's a discount of 0.97 (0.780 to
+  0.820, 0.757 to 0.757; [beside the starting point](benchmarks/h1_lafan1_tracking/results.md#beside-the-starting-point)).
+- **Where the rollouts end:** in 7 of the 34 clips the reference's pelvis tips past the horizontal (cartwheels, rolls,
+  lying on the floor); there the success is 0.275 / 0.097, in the other 27 clips 0.962 / 0.946. On all 40 clips (seed
+  0) the return is 0.695 / 0.695 and the success on the six `fallAndGetUp` clips 0.148 / 0.000.
+- **Clips not seen in training** (LAFAN1's split, subject 5 held out): return 0.724 / 0.511, success 0.839 / 0.350.
+- **The budget:** the return still rises by 0.006 / 0.011 over the last 1,000 iterations. With twice the budget (seed
+  0) it is 0.830 / 0.854 and the success 0.909 / 0.818, flat over the last 2,000 iterations; the numbers above are the
+  8,000-iteration budget's.
+- **Pushes,** not trained for: at 1 m/s every 2 s the success is 0.562 / 0.236, at 2 m/s 0.096 / 0.008.
+
+| | 34 clips | subject 5's clips, held out | all 40 clips |
+|---|---|---|---|
+| seeds | 0, 1, 2 | 0, 1, 2 | 0 |
+| return ↑, SuperTrack / SuperMimic | 0.786 ± 0.011 / 0.827 ± 0.008 | 0.724 ± 0.022 / 0.511 ± 0.046 | 0.695 / 0.695 |
+| success ↑, SuperTrack / SuperMimic | 0.820 ± 0.037 / 0.771 ± 0.016 | 0.839 ± 0.124 / 0.350 ± 0.099 | 0.676 / 0.625 |
+| reference's targets, open loop: success | 0 | | 0 |
+| MPJPE about the pelvis ↓, SuperTrack / SuperMimic | 22.7 / 30.7 mm | | 26.6 / 33.7 mm |
+| joints ↓, SuperTrack / SuperMimic | 2.38 / 4.01° | | 2.55 / 4.35° |
+| training, 8,000 iterations, SuperTrack / SuperMimic | 14.5 / 12.0 min | | |
+
+```bash
+benchmarks/h1_lafan1_tracking/run.sh selected 0 logs/h1/h1-supertrack --config h1-supertrack   # seeds 0-2; h1-supermimic
+benchmarks/h1_lafan1_tracking/run.sh train 0 logs/h1/h1-supertrack --config h1-supertrack      # subjects 1 to 4, subject 5 held out
+```
+
 ### BlinkMimic's options
 
 `--algo blinkmimic` applies BlinkMimic's released recipe (`PRESET[main]`; [options](docs/blinkmimic.md)): training
@@ -1493,11 +1573,17 @@ Implemented:
   [arXiv:2312.07340](https://arxiv.org/abs/2312.07340) · [code](https://github.com/wangchek/MuscleVAE_)
 - **DiffMimic** (the demonstration replay of `--st_ref_replay`): J. Ren, C. Yu, S. Chen, X. Ma, L. Pan, Z. Liu. *DiffMimic:
   Efficient Motion Mimicking with Differentiable Physics.* ICLR 2023. [arXiv:2304.03274](https://arxiv.org/abs/2304.03274)
+- **H2O** and **GMT** (they leave out motions their robot cannot perform, as the H1 task leaves out LAFAN1's
+  `fallAndGetUp` clips): T. He, Z. Luo, W. Xiao, C. Zhang, K. Kitani, C. Liu, G. Shi. *Learning Human-to-Humanoid
+  Real-Time Whole-Body Teleoperation.* IROS 2024. [arXiv:2403.04436](https://arxiv.org/abs/2403.04436) · Z. Chen, M. Ji,
+  X. Cheng, X. Peng, X. B. Peng, X. Wang. *GMT: General Motion Tracking for Humanoid Whole-Body Control.* arXiv
+  preprint, 2025. [arXiv:2506.14770](https://arxiv.org/abs/2506.14770)
 
 Data:
 - **LAFAN1** (motions and the held-out split, subject 5): F. G. Harvey, M. Yurick, D. Nowrouzezahrai, C. Pal. *Robust
   Motion In-betweening.* SIGGRAPH 2020. [DOI](https://doi.org/10.1145/3386569.3392480)
-- **LAFAN1 Retargeting Dataset** (LAFAN1 on the G1, and the G1's URDF that `tools/download_data.sh` fetches):
+- **LAFAN1 Retargeting Dataset** (LAFAN1 on the G1 and on the H1, and the robots' URDFs that `tools/download_data.sh`
+  and `tools/download_h1.sh` fetch):
   [Hugging Face](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
 - **InterHuman** (the two-person clip): H. Liang, W. Zhang, W. Li, J. Yu, L. Xu. *InterGen: Diffusion-based
   Multi-human Motion Generation under Complex Interactions.* International Journal of Computer Vision, 2024.
@@ -1553,10 +1639,16 @@ Data:
 Robot models:
 - **Unitree G1:** Unitree Robotics. [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/g1_description`,
   BSD-3-Clause)
-- **MuJoCo Menagerie** (the Go2 of RoboKit's Go2 jumping and of quadruped tracking): K. Zakka, Y. Tassa, MuJoCo Menagerie Contributors. *MuJoCo
+- **Unitree H1** (humanoid tracking on MuJoCo-Warp): Unitree Robotics.
+  [unitree_ros](https://github.com/unitreerobotics/unitree_ros) (`robots/h1_description`, BSD-3-Clause), with the servo
+  gains of its H1 training configuration in [unitree_rl_gym](https://github.com/unitreerobotics/unitree_rl_gym)
+  (BSD-3-Clause)
+- **MuJoCo Menagerie** (the Go2 of RoboKit's Go2 jumping and of quadruped tracking; the H1's foot capsules of
+  `train_humanoid --foot menagerie`): K. Zakka, Y. Tassa, MuJoCo Menagerie Contributors. *MuJoCo
   Menagerie: A collection of high-quality simulation models for MuJoCo.* 2022.
   [code](https://github.com/google-deepmind/mujoco_menagerie)
-- **unitree_mujoco** (the Go2's joint damping of quadruped tracking): Unitree Robotics.
+- **unitree_mujoco** (the Go2's joint damping of quadruped tracking; the H1's joint armature and damping of humanoid
+  tracking): Unitree Robotics.
   [code](https://github.com/unitreerobotics/unitree_mujoco)
 - **mjlab** (the G1 of the differentiable-simulator comparison, as NablaEngine bundles it): K. Zakka, Q. Liao, B. Yi,
   L. Le Lay, K. Sreenath, P. Abbeel. *mjlab: A Lightweight Framework for GPU-Accelerated Robot Learning.* arXiv preprint,
@@ -1600,6 +1692,10 @@ Tools:
 - **HoloMotion** (its HoloRetarget retargets InterHuman's clip to two G1s): M. Chen et al. *HoloMotion-1 Technical
   Report.* arXiv preprint, 2026. [arXiv:2605.15336](https://arxiv.org/abs/2605.15336) ·
   [code](https://github.com/HorizonRobotics/HoloMotion)
+- **HumanoidVerse** and **ProtoMotions** (the H1's servo gains of `train_humanoid --gains tracking`, values only): CMU
+  LeCAR Lab. *HumanoidVerse: A Multi-Simulator Framework for Humanoid Robot Sim-to-Real Learning.* 2025.
+  [code](https://github.com/LeCAR-Lab/HumanoidVerse) · C. Tessler et al. (NVIDIA). ProtoMotions.
+  [code](https://github.com/NVlabs/ProtoMotions)
 - **supermimic_vibed** (the code this library started from): C. Zhang. An unofficial SuperMimic reproduction, 2026.
   [code](https://github.com/zita-ch/supermimic_vibed)
 - **supermimic-quadruped** (its `quadmotion` retargets the Labrador's motion capture to the Go2, run from the user's

@@ -41,6 +41,9 @@ The README's grids, from the repository's root:
   python tools/make_grid.py $M/go2/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 --col_labels walk run play \\
       --row_labels SuperTrack SuperMimic $(for r in st sm; do for t in walk run play; do echo --clip $M/go2/${t}_$r.webp; done; done)
       (tools/render_quadruped.py's renders of seed 0's single-clip runs, 640 x 360)
+  python tools/make_grid.py $M/h1/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 --col_labels walk run dance \\
+      --row_labels SuperTrack SuperMimic $(for r in st sm; do for t in walk run dance; do echo --clip $M/h1/${t}_$r.webp; done; done)
+      (tools/render_humanoid.py's renders of seed 0's rollouts, 8 s windows of walk1_subject1, run1_subject2, dance2_subject3, 640 x 360, --quality 55)
       (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
