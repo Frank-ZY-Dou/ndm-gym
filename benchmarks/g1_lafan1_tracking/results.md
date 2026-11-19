@@ -64,18 +64,37 @@ SuperTrack's configuration scored 0.861 ± 0.003 and 14.5 ± 0.2 mm in its earli
 ## Training speed
 
 Minutes to return 0.82 with MLP world models, BlinkMimic's recipe and systems options, and each algorithm's fastest
-configuration ([commands](../../README.md#training-speed)): seeds 0-2, one run at a time on A100 40GB SXM4 GPUs with nothing
-else running, the two algorithms' runs of each GPU count in one session. Every run trained 3,000 iterations with a checkpoint
+configuration ([commands](../../README.md#training-speed)): one run at a time on A100 40GB SXM4 GPUs with nothing else
+running, the two algorithms' runs of each GPU count in one session (seeds 0-2 on one GPU, 3-5 on four, with the same-session
+runs without `--fk_fused` below). Every run trained 3,000 iterations with a checkpoint
 every 100, evaluated after training (`ndm-eval --group 18 --repeats 4 --graph`); time starts at iteration 50, after
 compilation and graph capture, and ends at the first checkpoint whose four evaluations on all 40 clips average at least 0.82.
 Means and standard deviations use unrounded times.
 
-| configuration | GPUs | minutes to 0.82, seeds 0 / 1 / 2 | mean ± std | iterations to 0.82 | ms per iteration, 200-1000 / 1000-1500 |
-|---|---|---|---|---|---|
-| `lafan1-supertrack-fast` | 1 | 4.29 / 3.99 / 4.30 | 4.19 ± 0.18 | 1700, 1600, 1700 | 127.4 / 188.7 |
-| `lafan1-supermimic-fast` | 1 | 3.23 / 3.54 / 3.82 | 3.53 ± 0.30 | 1500, 1600, 1700 | 116.4 / 165.0 |
-| `lafan1-supertrack-fast-4gpu` | 4 | 1.50 / 1.33 / 1.59 | 1.48 ± 0.13 | 1800, 1600, 1900 | 51.5 / 51.6 |
-| `lafan1-supermimic-fast-4gpu` | 4 | 1.34 / 1.43 / 1.35 | 1.37 ± 0.05 | 1600, 1700, 1600 | 52.0 / 52.0 |
+| configuration | GPUs | minutes to 0.82, per seed | mean ± std | iterations to 0.82 | return there | MPJPE-local there (mm) | ms per iteration, 200-1000 / 1000-1500 |
+|---|---|---|---|---|---|---|---|
+| `lafan1-supertrack-fast` | 1 | 4.29 / 3.99 / 4.30 | 4.19 ± 0.18 | 1700, 1600, 1700 | 0.828 ± 0.007 | 22.7 ± 0.9 | 127.4 / 188.7 |
+| `lafan1-supermimic-fast` | 1 | 3.23 / 3.54 / 3.82 | 3.53 ± 0.30 | 1500, 1600, 1700 | 0.824 ± 0.003 | 27.4 ± 0.4 | 116.4 / 165.0 |
+| `lafan1-supertrack-fast-4gpu` | 4 | 1.41 / 1.49 / 1.50 | 1.47 ± 0.05 | 1700, 1800, 1800 | 0.827 ± 0.001 | 21.9 ± 0.5 | 51.0 / 51.2 |
+| `lafan1-supermimic-fast-4gpu` | 4 | 1.42 / 1.34 / 1.51 | 1.42 ± 0.09 | 1700, 1600, 1800 | 0.826 ± 0.002 | 26.9 ± 0.4 | 51.6 / 51.7 |
+
+The return and MPJPE-local are those of the checkpoint where the time is read (its four evaluations' means). There
+SuperTrack's MPJPE-local is lower, on one GPU and on four (by 4.7 and 4.9 mm); the global MPJPE at that point is above 1 m
+for both, the roots having drifted on the long clips (SuperTrack 1.25 and 1.23 m, SuperMimic 1.11 and 1.06 m).
+
+The four-GPU configurations compute the forward kinematics as two Triton kernels with a hand-written backward pass
+(`--fk_fused`; equal to the default up to float rounding). In their session every run with it was faster per iteration than
+every run without, for both algorithms and in both windows:
+
+| four GPUs, seeds 3-5 | without `--fk_fused` | with it |
+|---|---|---|
+| SuperTrack: minutes to 0.82; ms per iteration, 200-1000 / 1000-1500 | 1.52 ± 0.08; 51.8 / 52.1 | 1.47 ± 0.05; 51.0 / 51.2 |
+| SuperMimic: minutes to 0.82; ms per iteration, 200-1000 / 1000-1500 | 1.49 ± 0.05; 52.0 / 52.2 | 1.42 ± 0.09; 51.6 / 51.7 |
+
+Why it helps there: on four GPUs the iteration is the policy learner's step, whose imagined steps and losses run the
+kinematics, and the seeds' times per iteration agree within 0.3 ms, so the 0.4-0.9 ms the fused kernels save shows in every
+run. On one GPU the same saving (4.2 ms of SuperTrack's 127, 1.0 ms of SuperMimic's 116) stays within the seeds' spread
+in iterations to 0.82, so the one-GPU configurations do without it.
 
 Time per iteration by phase on one GPU, iterations 200-1000, ms (the same configurations, synchronized profiles):
 
@@ -99,9 +118,9 @@ Both algorithms were timed with and without the lean options in one session, und
 SuperTrack's two times are level within the seeds' spread, so its configuration stays without them; SuperMimic's
 configuration carries them.
 
-The four-GPU path by device, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each device's stream around the
-iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of each configuration, the lines of
-iterations 200-1000 averaged, ms per timed iteration:
+The four-GPU path by device before `--fk_fused`, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each
+device's stream around the iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of
+each configuration, the lines of iterations 200-1000 averaged, ms per timed iteration:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 LAYOUT_PROFILE=1 ndm-train --config lafan1-supertrack-fast-4gpu --seed 0 --iterations 1000

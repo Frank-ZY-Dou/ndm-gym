@@ -87,10 +87,10 @@ the position within 20 mm. Quadruped: the target is a success of 0.99 with the t
 
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
-| **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest, one GPU | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options)) | return 0.82 after **4.19 ± 0.18** and **3.53 ± 0.30 min** on an A100 40GB SXM4 (seeds 0-2) |
+| **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest, one GPU | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options)) | return 0.82 after **4.19 ± 0.18** and **3.53 ± 0.30 min**, MPJPE-local there **22.7 ± 0.9** and **27.4 ± 0.4 mm**, on an A100 40GB SXM4 (seeds 0-2) |
 |  | 🎯 lowest pose error | `lafan1-supertrack-accurate`, 3 h with the speed options on an A100 40GB SXM4 | MPJPE **15.2 ± 1.0 mm**, joint angle **2.02 ± 0.03°** (seeds 7-9) |
 |  | 📈 highest return | `lafan1-supermimic-accurate`, 3 h with the speed options on an A100 40GB SXM4 | return **0.872 ± 0.003** (seeds 7-9) |
-| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each) | return 0.82 after **1.48 ± 0.13** and **1.37 ± 0.05 min** on four A100 40GB SXM4 (seeds 0-2); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
+| **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | ⏱ time to the target, not engineered | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each; the kinematics as fused kernels) | return 0.82 after **1.47 ± 0.05** and **1.42 ± 0.09 min**, MPJPE-local there **21.9 ± 0.5** and **26.9 ± 0.4 mm**, on four A100 40GB SXM4 (seeds 3-5); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
 | **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supertrack` and `two-g1-supermimic` | return 0.88 after **3.66 ± 0.00** and **3.26 ± 0.00 min**, root-relative MPJPE there **16.8 ± 0.4** and **19.9 ± 1.4 mm**, on an A100 40GB SXM4 (MLP world model, seeds 0-2) |
 |  | ⏱ time to the target, not engineered, three GPUs | `two-g1-supertrack-3gpu` and `two-g1-supermimic-3gpu` (layout AWL: actor, world model and policy on a GPU each) | return 0.88 after **1.85 ± 0.21** and **1.62 ± 0.18 min**, root-relative MPJPE there **16.1 ± 0.5** and **20.0 ± 0.4 mm**, on three A100 40GB SXM4 (seeds 0-2) |
@@ -137,8 +137,8 @@ options beside them); both methods are on offer for every task.
 | Task | Goal | SuperTrack | SuperMimic |
 |---|---|---|---|
 | **LAFAN1**, MLP world model | lowest pose error, highest return | `lafan1-supertrack-accurate`: MPJPE 15.2 mm, joint angle 2.02°, return 0.857 (3 h with the speed options, A100 40GB SXM4) | `lafan1-supermimic-accurate`: 21.2 mm, 3.40°, return 0.872 (the same) |
-| | fastest, one GPU | `lafan1-supertrack-fast`: return 0.82 in 4.19 min (A100 40GB SXM4) | `lafan1-supermimic-fast`: 3.53 min |
-| | fastest, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.48 min (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.37 min |
+| | fastest, one GPU | `lafan1-supertrack-fast`: return 0.82 in 4.19 min, MPJPE-local there 22.7 mm (A100 40GB SXM4) | `lafan1-supermimic-fast`: 3.53 min, 27.4 mm |
+| | time to the target, not engineered, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.47 min, 21.9 mm (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.42 min, 26.9 mm |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
 | **Two G1s**, MLP world model (add `--motion_dir`) | lowest pose error, highest return | `two-g1-supertrack`: MPJPE 46.2 / 14.1 mm, return 0.8925 (seeds 0-2, 9,396 iterations) | `two-g1-supermimic`: 45.3 / 16.0 mm, return 0.9055 (the same) |
 | | time to the target, not engineered, one GPU | `two-g1-supertrack`: return 0.88 in 3.66 ± 0.00 min, root-relative MPJPE there 16.8 mm (seeds 0-2, A100 40GB SXM4) | `two-g1-supermimic`: 3.26 ± 0.00 min, 19.9 mm |
@@ -442,13 +442,14 @@ One policy on the G1 tracks all 40 LAFAN1 clips, retargeted to the robot; traini
 | highest return | `--config lafan1-supermimic-accurate` | return 0.872 ± 0.003 (3 h with the speed options, A100 40GB SXM4, seeds 7-9) |
 | most accurate, RigidFormer world model | `--config lafan1-supertrack-rf-accurate` | return 0.832 ± 0.003, MPJPE 21.0 ± 1.3 mm (3 h, A100 40GB, seeds 7-9) |
 | fewest failed clips under pushes, RigidFormer world model | `--config lafan1-supermimic-rf-accurate` | 1.3 / 9.0 of 40 clips under 1 / 2 m/s pushes (3 h, A100 40GB, seeds 7-9) |
-| fastest, one GPU | `--config lafan1-supertrack-fast` or `--config lafan1-supermimic-fast` | return 0.82 after 4.19 ± 0.18 and 3.53 ± 0.30 min on an A100 40GB SXM4 (seeds 0-2) |
-| fastest, four GPUs | `--config lafan1-supertrack-fast-4gpu` or `--config lafan1-supermimic-fast-4gpu`, with four GPUs visible | return 0.82 after 1.48 ± 0.13 and 1.37 ± 0.05 min on four A100 40GB SXM4 (seeds 0-2) |
+| fastest, one GPU | `--config lafan1-supertrack-fast` or `--config lafan1-supermimic-fast` | return 0.82 after 4.19 ± 0.18 and 3.53 ± 0.30 min on an A100 40GB SXM4, MPJPE-local there 22.7 ± 0.9 and 27.4 ± 0.4 mm (seeds 0-2) |
+| time to the target, not engineered, four GPUs | `--config lafan1-supertrack-fast-4gpu` or `--config lafan1-supermimic-fast-4gpu`, with four GPUs visible | return 0.82 after 1.47 ± 0.05 and 1.42 ± 0.09 min on four A100 40GB SXM4, MPJPE-local there 21.9 ± 0.5 and 26.9 ± 0.4 mm (seeds 3-5) |
 
 **In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
 the measure it optimizes (MPJPE 15.2 against 21.2 mm, return 0.872 against 0.857), and under 2 m/s pushes SuperMimic fails
-fewer clips (12.0 against 19.3 of 40). For speed, the fast configurations: 4.19 and 3.53 min on one GPU, 1.48 and
-1.37 min on four.
+fewer clips (12.0 against 19.3 of 40). For speed, the fast configurations: 4.19 and 3.53 min on one GPU, 1.47 and
+1.42 min on four; where return 0.82 is first reached, SuperTrack's MPJPE-local is lower (22.7 against 27.4 mm on one GPU,
+21.9 against 26.9 mm on four).
 
 <!-- videos:begin -->
 <p align="center"><img src="docs/media/final/grid.webp" alt="SuperTrack tracking six LAFAN1 clips, with the MLP world model and with the RigidFormer" width="773"/></p>
@@ -519,22 +520,27 @@ ndm-train --algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_
 ### Training speed
 
 Minutes to return 0.82 on LAFAN1: each algorithm's fastest configuration, MLP world model, BlinkMimic's recipe and
-systems options, seeds 0-2, one run at a time on A100 40GB SXM4 GPUs
+systems options, one run at a time on A100 40GB SXM4 GPUs, seeds 0-2 on one GPU and 3-5 on four
 ([per seed and phase](benchmarks/g1_lafan1_tracking/results.md#training-speed)).
 
 - **Clock:** from iteration 50, after compilation and graph capture, to the first checkpoint whose four evaluations on
   all 40 clips average 0.82.
 - **Evaluation:** every checkpoint, one per 100 iterations, after training.
 
-| minutes to return 0.82 | SuperTrack | SuperMimic |
+| minutes to return 0.82 (MPJPE-local there) | SuperTrack | SuperMimic |
 |---|---|---|
-| one GPU (`lafan1-*-fast`) | 4.19 ± 0.18 | 3.53 ± 0.30 |
-| four GPUs (`lafan1-*-fast-4gpu`) | 1.48 ± 0.13 | 1.37 ± 0.05 |
+| one GPU (`lafan1-*-fast`) | 4.19 ± 0.18 (22.7 ± 0.9 mm) | 3.53 ± 0.30 (27.4 ± 0.4 mm) |
+| four GPUs (`lafan1-*-fast-4gpu`) | 1.47 ± 0.05 (21.9 ± 0.5 mm) | 1.42 ± 0.09 (26.9 ± 0.4 mm) |
+
+- **Error at that point:** SuperTrack's MPJPE-local is lower on one and on four GPUs, by 4.7 and 4.9 mm; SuperMimic
+  reaches 0.82 sooner on one GPU, and on four the two are level.
 
 - **One GPU:** an iteration runs collection, the world-model updates and the policy update one after another, so it
   takes their sum: 127.4 ms (SuperTrack) and 116.4 ms (SuperMimic).
 - **Four GPUs:** the three run at once on separate GPUs, each on the others' results of the previous iteration, so an
-  iteration takes about as long as the slowest, the policy update: 51.5 and 52.0 ms.
+  iteration takes about as long as the slowest, the policy update: 51.0 and 51.6 ms. The forward kinematics run as two
+  fused kernels there (`--fk_fused`), which takes 0.4-0.9 ms off every iteration of both algorithms; on one GPU the same
+  saving stays within the seeds' spread, so the one-GPU configurations do without it.
 
 ```bash
 RECIPE="--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 \
@@ -551,7 +557,7 @@ ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_sta
           --pi_batch 1024 --pi_lr_mult 2 --pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix \
           --sm_residual --wm_structured $RESETS $SYSTEMS $TIMED --pi_encode_once $LEAN --log_dir logs/sm_fast   # --config lafan1-supermimic-fast
 ndm-eval --run_dir logs/st_fast --group 18 --repeats 4 --graph   # after training, every checkpoint; the same for logs/sm_fast
-# four GPUs, layout AWL (four GPUs visible): --config lafan1-supertrack-fast-4gpu, --config lafan1-supermimic-fast-4gpu
+# four GPUs, layout AWL and the fused kinematics (four GPUs visible): --config lafan1-supertrack-fast-4gpu, --config lafan1-supermimic-fast-4gpu
 ```
 
 **Training through an exact simulator.** [NablaMimic](https://github.com/sailab-ai/NablaMimic) (∇Mimic) backpropagates
