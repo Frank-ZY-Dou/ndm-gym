@@ -58,6 +58,27 @@ def rollout(sim, algo, task, starts, policy: bool = True):
     return states, lens, failed, until, success
 
 
+def summarize(task, out, worlds, start: int) -> dict:
+    """The metrics of the ``worlds`` (all of one demonstration, starting at frame ``start``) of a rollout's output: the
+    success rate, the share terminated, the time tracked (s), and the errors over the frames of the rollouts that do not
+    terminate (NaN if all do): the tracked objects' position (mm; at the last frame too) and rotation (degrees), the
+    keypoints (mm), the arms' joints (rad, RMS) and the fingers (mm, RMS)."""
+    import torch
+
+    from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, unflatten_state
+
+    states, lens, failed, until, success = (x[:, worlds] if x.dim() > 1 else x[worlds] for x in out)
+    n = int(lens[0])
+    S = unflatten_state(states[: n + 1], task.nq)
+    e = task.errors(S, task.fk(S[0]), torch.arange(start, start + n + 1, device=states.device).unsqueeze(-1))
+    ok = ~failed
+    mean = lambda x: float(x[:, ok].mean()) if bool(ok.any()) else math.nan  # noqa: E731
+    return {"success_rate": float(success.float().mean()), "terminated": float(failed.float().mean()),
+            "tracked_s": float(until.float().mean() * CONTROL_DT), "object_mm": 1000 * mean(e["object_pos"].mean(-1)),
+            "object_final_mm": 1000 * float(e["object_pos"][-1].mean()), "object_deg": math.degrees(mean(e["object_ori_sq"].sqrt().mean(-1))),
+            "keypoint_mm": 1000 * mean(e["keypoint"].mean(-1)), "joint_rad": mean(e["joint"]), "finger_mm": 1000 * mean(e["finger"])}  # fmt: skip
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--ckpt", type=str, required=True)
@@ -83,7 +104,7 @@ def main():
     from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo
     from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
-    from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, unflatten_state
+    from ndm_gym.tasks.robomimic_tracking import CONTROL_DT
     from ndm_gym.train_robomimic import build
 
     torch.manual_seed(args.seed)
@@ -116,19 +137,6 @@ def main():
     algo = ROBOMIMIC_ALGOS[targs.algo](targs, model, task, dev, substeps=sim.substeps)
     algo.wm.load_state_dict(ck["wm"]), algo.pi.load_state_dict(ck["pi"])
 
-    def summarize(out, worlds: torch.Tensor, start: int) -> dict:
-        """The metrics of the ``worlds`` (all of one demonstration, starting at ``start``) of a rollout's output."""
-        states, lens, failed, until, success = (x[:, worlds] if x.dim() > 1 else x[worlds] for x in out)
-        n = int(lens[0])
-        S = unflatten_state(states[: n + 1], task.nq)
-        e = task.errors(S, task.fk(S[0]), torch.arange(start, start + n + 1, device=dev).unsqueeze(-1))
-        ok = ~failed
-        mean = lambda x: float(x[:, ok].mean()) if bool(ok.any()) else math.nan  # noqa: E731
-        return {"success_rate": float(success.float().mean()), "terminated": float(failed.float().mean()),
-                "tracked_s": float(until.float().mean() * CONTROL_DT), "object_mm": 1000 * mean(e["object_pos"].mean(-1)),
-                "object_final_mm": 1000 * float(e["object_pos"][-1].mean()), "object_deg": math.degrees(mean(e["object_ori_sq"].sqrt().mean(-1))),
-                "keypoint_mm": 1000 * mean(e["keypoint"].mean(-1)), "joint_rad": mean(e["joint"]), "finger_mm": 1000 * mean(e["finger"])}  # fmt: skip
-
     os.makedirs(args.out, exist_ok=True)
     metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": CONTROL_DT,
                "num_envs": args.num_envs, "solver_iterations": [int(model.opt.iterations), int(model.opt.ls_iterations)], "per_demo": {}}  # fmt: skip
@@ -139,10 +147,10 @@ def main():
         runs["reference_targets"] = rollout(sim, algo, task, firsts[group], policy=False)
     for d, (name, start) in enumerate(zip(demos, firsts.tolist(), strict=True)):
         end = int(ref.end[start])
-        m = {"frames": end - start + 1, "nominal": summarize(runs["nominal"], torch.tensor([d], device=dev), start)}
+        m = {"frames": end - start + 1, "nominal": summarize(task, runs["nominal"], torch.tensor([d], device=dev), start)}
         for key in ("policy", "reference_targets"):
             if key in runs:
-                m[key] = summarize(runs[key], torch.nonzero(group == d).squeeze(-1), start)
+                m[key] = summarize(task, runs[key], torch.nonzero(group == d).squeeze(-1), start)
         n = end - start
         _, _, failed, until, success = runs["nominal"]
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),

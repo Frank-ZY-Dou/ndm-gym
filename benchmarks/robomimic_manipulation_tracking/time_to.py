@@ -34,27 +34,36 @@ def check(m: dict, it: int, path: str) -> dict:
     return m
 
 
+def time_to(run: str, evaluate=evaluate) -> dict:
+    """The run's reading (written to <run>/time_to.json): every kept checkpoint's iteration, wall time, success and object
+    error, whether it meets the target, and the first from which every later one does (None if none). A run without kept
+    checkpoints, or with an evaluation that is not this script's, is an error."""
+    own = os.path.join(run, "eval", "metrics.json")
+    last = json.load(open(own)) if os.path.exists(own) else None
+    ckpts, rows = sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))), []
+    if not ckpts:
+        sys.exit(f"{run}: no ckpt_*.pt (train_robomimic --ckpt_keep keeps them)")
+    for ckpt in ckpts:
+        it = int(os.path.basename(ckpt)[5:11])
+        if last and last["iteration"] == it:
+            m = check(last, it, own)
+        else:
+            out = os.path.join(run, "eval_ckpts", f"{it:06d}")
+            m = check(evaluate(ckpt, out), it, os.path.join(out, "metrics.json"))
+        p = m["policy"]
+        ok = p["success_rate"] >= SUCCESS and p["object_mm"] <= OBJECT_MM  # (a NaN error, every rollout terminated: not met)
+        rows.append({"iteration": it, "minutes": m["wall_time_s"] / 60, "success_rate": p["success_rate"], "object_mm": p["object_mm"],
+                     "target": ok})  # fmt: skip
+    first = next((rows[i] for i in range(len(rows)) if all(r["target"] for r in rows[i:])), None)
+    res = {"minutes_to_target": first and first["minutes"], "iteration_to_target": first and first["iteration"], "checkpoints": rows}
+    with open(os.path.join(run, "time_to.json"), "w") as fh:
+        json.dump(res, fh, indent=2)
+    return res
+
+
 def main():
     for run in sys.argv[1:]:
-        own = os.path.join(run, "eval", "metrics.json")
-        last = json.load(open(own)) if os.path.exists(own) else None
-        ckpts, rows = sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))), []
-        if not ckpts:
-            sys.exit(f"{run}: no ckpt_*.pt (train_robomimic --ckpt_keep keeps them)")
-        for ckpt in ckpts:
-            it = int(os.path.basename(ckpt)[5:11])
-            if last and last["iteration"] == it:
-                m = check(last, it, own)
-            else:
-                out = os.path.join(run, "eval_ckpts", f"{it:06d}")
-                m = check(evaluate(ckpt, out), it, os.path.join(out, "metrics.json"))
-            p = m["policy"]
-            ok = p["success_rate"] >= SUCCESS and p["object_mm"] <= OBJECT_MM
-            rows.append({"iteration": it, "minutes": m["wall_time_s"] / 60, "success_rate": p["success_rate"], "object_mm": p["object_mm"], "target": ok})
-        first = next((rows[i] for i in range(len(rows)) if all(r["target"] for r in rows[i:])), None)
-        res = {"minutes_to_target": first and first["minutes"], "iteration_to_target": first and first["iteration"], "checkpoints": rows}
-        with open(os.path.join(run, "time_to.json"), "w") as fh:
-            json.dump(res, fh, indent=2)
+        res = time_to(run)
         print(run, res["minutes_to_target"], res["iteration_to_target"])
 
 

@@ -2,13 +2,14 @@
 two-finger grippers with their grip sites, the task's free objects), their demonstrations made by MuJoCo itself: the servos
 and the gravity compensation, the scene's layout for the task, the demonstration's file and assets and the downloader's
 checks, the forward kinematics against MuJoCo's, the task at the reference, robosuite's success tests against their
-transcription from robosuite, the world model's control step, the updates and training's arguments; on a GPU, the simulator
-against MuJoCo and its success test against robosuite's."""
+transcription from robosuite, the world model's control step, the updates, training's arguments, the evaluation's rollout
+and summary, and the time to the target; on a GPU, the simulator against MuJoCo and its success test against robosuite's."""
 
 import argparse
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import sys
 
@@ -28,12 +29,13 @@ from ndm_gym.train_hand import UNSUPPORTED
 from ndm_gym.train_robomimic import HAND_ONLY, ROBOMIMIC_DEFAULTS, parse_args
 from ndm_gym.worldmodels.mjcf import MjcfLayout
 
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # the arguments robomimic training implements; the rest of ndm_gym.train's are train_hand.UNSUPPORTED
 SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_frames", "wm_window", "wm_hidden", "wm_act", "wm_no_ln", "wm_batches",
              "wm_batch", "pi_batch", "lr", "gamma", "reward_std_scale", "lam", "action_noise", "critic_epochs", "critic_minibatches", "warmup_steps",
              "wm_only_iters", "lr_decay_iters", "ckpt_every", "max_hours", "log_every", "log_dir", "seed", "resume", "amp", "bptt_decay",
              "st_reg", "st_imag_noise", "st_fail_w")  # fmt: skip
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SUBSTEPS = round(CONTROL_DT / 0.002)
 
 
@@ -486,8 +488,9 @@ def test_evaluation_refuses_no_rollouts(monkeypatch, capsys):
     assert "--num_envs >= 1" in capsys.readouterr().err
 
 
-def test_time_to_the_target(tmp_path, monkeypatch):
-    spec = importlib.util.spec_from_file_location("time_to", os.path.join(ROOT, "benchmarks", "robomimic_manipulation_tracking", "time_to.py"))
+def test_time_to_script_and_its_errors(tmp_path, monkeypatch):
+    """time_to.py as a script: a run without kept checkpoints and an evaluation that is not its own are errors."""
+    spec = importlib.util.spec_from_file_location("time_to", os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "time_to.py"))
     tool = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(tool)
     run = tmp_path / "run"
@@ -536,6 +539,99 @@ def test_hand_options(capsys):
         assert "hand training" in capsys.readouterr().err
     args = parse_args(["--task", "lift", "--elementwise_3x3", "--combo_kernels", "--mix_order_reductions", "--autotune_gemm", *systems])
     assert args.elementwise_3x3 and args.combo_kernels and args.mix_order_reductions and args.autotune_gemm
+
+
+class StubSim:
+    """A simulator that follows the reference exactly: ``term_at`` (world -> step) terminates a world, ``success_frames``
+    (world -> frame offsets from its demonstration's end) says at which frames robosuite's test holds, ``overflow_at`` a
+    step whose contact list is full."""
+
+    def __init__(self, task, n: int, term_at=None, success_frames=None, overflow_at=None):
+        self.task, self.N, self.device, self.ref = task, n, "cpu", task.ref
+        self.term_at, self.success_frames, self.overflow_at, self.t = term_at or {}, success_frames or {}, overflow_at, 0
+        self.contact_geom = torch.zeros(4, 2)
+
+    def reset(self, mask, frame):
+        self.f, self.t = frame.clone(), 0
+
+    def state(self):
+        return torch.cat((self.ref.qpos[self.f], self.ref.qvel[self.f]), -1)
+
+    def step(self, u, reset=True):
+        assert not reset and u.shape == (self.N, self.task.nu)
+        self.f, self.t = self.ref.next_frame(self.f), self.t + 1
+        term = torch.tensor([self.term_at.get(i) == self.t for i in range(self.N)])
+        return self.state(), term, term
+
+    def contact_overflow(self):
+        return self.t == self.overflow_at
+
+    def success(self):
+        return torch.tensor([int(self.ref.end[self.f[i]] - self.f[i]) in self.success_frames.get(i, (0,)) for i in range(self.N)])
+
+
+def test_evaluation_rollout_and_summary(setup):
+    """evaluate_robomimic's rollout: every world to its own demonstration's last frame (a shorter one holds it), its
+    termination and robosuite's test read after the step that reaches the last frame; a full contact list is an error. The
+    summary's rates and times per demonstration, its errors over the rollouts that do not terminate."""
+    from ndm_gym.evaluate_robomimic import rollout, summarize
+
+    model, scene, qpos, qvel, kin, _ = setup
+    q2, v2 = demonstration(model, 12, 3)
+    ref = build_reference([qpos, q2], [qvel, v2], scene, kin, "cpu")
+    task = RobomimicTask(scene, kin, ref)
+    firsts = torch.unique(ref.start)
+    starts = firsts[torch.tensor([0, 0, 0, 1])]  # three worlds on the first demonstration, one on the second
+    n1 = int(ref.end[firsts[0]] - firsts[0])
+
+    class Hold:  # the policy's place: no action
+        def act(self, S, a_prev, f):
+            return torch.zeros(len(f), task.nu)
+
+    # world 1 terminates at step 6, world 2 meets the test one frame before its last only
+    sim = StubSim(task, 4, term_at={1: 6}, success_frames={2: (1,)})
+    states, lens, failed, until, success = out = rollout(sim, Hold(), task, starts)
+    assert states.shape == (n1 + 1, 4, task.state_dim) and lens.tolist() == [n1, n1, n1, int(ref.end[firsts[1]] - firsts[1])]
+    assert failed.tolist() == [False, True, False, False] and until.tolist() == [n1, 6, n1, int(lens[3])]
+    assert success.tolist() == [True, False, False, True]
+    m = summarize(task, out, torch.tensor([0, 1, 2]), int(firsts[0]))
+    assert m["success_rate"] == pytest.approx(1 / 3) and m["terminated"] == pytest.approx(1 / 3)
+    assert m["tracked_s"] == pytest.approx((2 * n1 + 6) / 3 * CONTROL_DT) and m["object_mm"] < 1e-3 and m["keypoint_mm"] < 1e-2
+    assert math.isnan(summarize(task, out, torch.tensor([1]), int(firsts[0]))["object_mm"])  # (every rollout terminated)
+    with pytest.raises(RuntimeError, match="contact list is full"):
+        rollout(StubSim(task, 4, overflow_at=2), Hold(), task, starts)
+
+
+def test_time_to_the_target(tmp_path):
+    """time_to.py: the wall time of the first kept checkpoint from which every later one meets the target (a success of
+    0.99 with the objects within 10 mm), none if the last does not; the run's own evaluation of its last checkpoint."""
+    spec = importlib.util.spec_from_file_location("robomimic_time_to", os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "time_to.py"))
+    time_to = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(time_to)
+
+    def run(name: str, rows: dict, own: int | None = None):
+        path = tmp_path / name
+        path.mkdir()
+        for it in rows:
+            (path / f"ckpt_{it:06d}.pt").write_bytes(b"")
+        metrics = {it: {"iteration": it, "wall_time_s": 60.0 * it / 100, "num_envs": time_to.NUM_ENVS,
+                        "policy": {"success_rate": r[0], "object_mm": r[1]}} for it, r in rows.items()}  # fmt: skip
+        if own is not None:
+            (path / "eval").mkdir()
+            (path / "eval" / "metrics.json").write_text(json.dumps(metrics[own]))
+        calls = []
+
+        def evaluate(ckpt, out):
+            calls.append(int(os.path.basename(ckpt)[5:11]))
+            return metrics[calls[-1]]
+
+        return time_to.time_to(str(path), evaluate), calls
+
+    res, calls = run("a", {100: (1.0, 5.0), 200: (0.98, 5.0), 300: (1.0, 8.0), 400: (0.995, 9.9), 500: (1.0, 4.0)}, own=500)
+    assert (res["iteration_to_target"], res["minutes_to_target"]) == (300, 3.0) and calls == [100, 200, 300, 400]
+    assert [r["target"] for r in res["checkpoints"]] == [True, False, True, True, True] and (tmp_path / "a" / "time_to.json").exists()
+    res, _ = run("b", {100: (1.0, 5.0), 200: (1.0, float("nan"))})
+    assert res["iteration_to_target"] is None and res["minutes_to_target"] is None
 
 
 CUDA = "cuda:0"
