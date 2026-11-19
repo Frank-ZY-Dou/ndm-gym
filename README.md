@@ -242,7 +242,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights; by
   [Yifan Kang](https://github.com/YIFANK): Adroit Door, Pen, Hammer and Relocate tracking with SuperTrack and SuperMimic; by
   [Jionghao Wang](https://github.com/shanemankiw): quadruped motion tracking of a Go2 on a Labrador's motion capture; by
-  [Anna Mei](https://github.com/annamei1): two Wuji hands playing Eden's *Ode to Joy*.
+  [Anna Mei](https://github.com/annamei1): two Wuji hands playing Eden's *Ode to Joy*; by
+  [Jingdong Zhang](https://github.com/Evergreen0929): manipulation demonstration tracking on robomimic's demonstrations.
 - **[2026-11] Using it:** a [leaderboard](#-leaderboard), [named configurations](#-recommended-settings) (`--config`),
   trained weights of the G1 / LAFAN1 runs on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym), a library-only
   `pip` installation ([details](docs/installation.md)), a [documentation site](https://frank-zy-dou.github.io/ndm-gym/).
@@ -488,13 +489,15 @@ benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_st --config go2-supertrac
 <summary><b>Manipulation demonstration tracking</b></summary>
 
 ```bash
-pip install -e '.[hand]'                             # MuJoCo-Warp
-python tools/download_robomimic.py                   # robomimic's demonstrations and robosuite 1.5.0's assets, pinned, into data/robomimic
+pip install -e '.[hand]'                             # MuJoCo-Warp, h5py
+python tools/download_robomimic.py                   # robomimic's demonstrations and robosuite 1.5.0's assets, pinned and checked
 
-# one demonstration: train (SuperTrack, then SuperMimic), evaluate from perturbed starts beside the reference's targets, render
+# one demonstration: train (SuperTrack, then SuperMimic), the stop checkpoint by the benchmark's rule, evaluated from
+# perturbed starts beside the reference's targets, rendered
 python -m ndm_gym.train_robomimic --config robomimic-supertrack --task square --log_dir logs/square_st
 python -m ndm_gym.train_robomimic --config robomimic-supermimic --task square --log_dir logs/square_sm
-python -m ndm_gym.evaluate_robomimic --ckpt logs/square_st/last.pt --out logs/square_st/eval
+python benchmarks/robomimic_manipulation_tracking/stop_rule.py logs/square_st     # its stop_ckpt in logs/square_st/stop.json
+python -m ndm_gym.evaluate_robomimic --ckpt logs/square_st/ckpt_<stop>.pt --out logs/square_st/eval
 MUJOCO_GL=egl python tools/render_robomimic.py --rollout logs/square_st/eval/rollout_0.npz --out square.webp --title SuperTrack
 
 # the benchmark's runs (three tasks, both algorithms, seeds 0-2)
@@ -1794,8 +1797,11 @@ Data:
 - **robomimic** (the manipulation demonstrations): A. Mandlekar, D. Xu, J. Wong, S. Nasiriany, C. Wang, R. Kulkarni,
   L. Fei-Fei, S. Savarese, Y. Zhu, R. Martín-Martín. *What Matters in Learning from Offline Human Demonstrations for Robot
   Manipulation.* CoRL 2021. [arXiv:2108.03298](https://arxiv.org/abs/2108.03298) ·
-  [code](https://github.com/ARISE-Initiative/robomimic) · [data](https://huggingface.co/datasets/robomimic/robomimic_datasets) ·
-  scenes from [robosuite](https://github.com/ARISE-Initiative/robosuite)
+  [code](https://github.com/ARISE-Initiative/robomimic) · [data](https://huggingface.co/datasets/robomimic/robomimic_datasets)
+- **robosuite** (the scenes of robomimic's demonstrations, their assets and success tests): Y. Zhu, J. Wong, A. Mandlekar,
+  R. Martín-Martín, A. Joshi, K. Lin, A. Maddukuri, S. Nasiriany, Y. Zhu. *robosuite: A Modular Simulation Framework and
+  Benchmark for Robot Learning.* arXiv preprint, 2020. [arXiv:2009.12293](https://arxiv.org/abs/2009.12293) ·
+  [code](https://github.com/ARISE-Initiative/robosuite) (v1.5.0)
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,

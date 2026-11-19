@@ -13,13 +13,15 @@ control step and the scene it was recorded in, so the objects' trajectories are 
 at pinned revisions by a script and are not redistributed here; robosuite itself is not a dependency.
 
 ```bash
-pip install -e '.[hand]'                             # MuJoCo-Warp
-python tools/download_robomimic.py                   # the demonstrations and robosuite 1.5.0's assets, pinned, into data/robomimic
+pip install -e '.[hand]'                             # MuJoCo-Warp, h5py
+python tools/download_robomimic.py                   # the demonstrations and robosuite 1.5.0's assets, pinned and checked
 
-# one demonstration: train (SuperTrack, then SuperMimic), evaluate from perturbed starts beside the reference's targets
+# one demonstration: train (SuperTrack, then SuperMimic), the stop checkpoint by the benchmark's rule, evaluated from
+# perturbed starts beside the reference's targets, rendered
 python -m ndm_gym.train_robomimic --config robomimic-supertrack --task square --log_dir logs/square_st
 python -m ndm_gym.train_robomimic --config robomimic-supermimic --task square --log_dir logs/square_sm
-python -m ndm_gym.evaluate_robomimic --ckpt logs/square_st/last.pt --out logs/square_st/eval
+python benchmarks/robomimic_manipulation_tracking/stop_rule.py logs/square_st     # its stop_ckpt in logs/square_st/stop.json
+python -m ndm_gym.evaluate_robomimic --ckpt logs/square_st/ckpt_<stop>.pt --out logs/square_st/eval
 MUJOCO_GL=egl python tools/render_robomimic.py --rollout logs/square_st/eval/rollout_0.npz --out square.webp --title SuperTrack
 ```
 

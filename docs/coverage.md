@@ -47,6 +47,7 @@ this repository yet.
 | NablaEngine | [sailab-ai/NablaEngine](https://github.com/sailab-ai/NablaEngine) | differentiable simulator in the speed comparison |
 | Genesis | [Genesis-Embodied-AI/genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) | timed beside the differentiable simulators; Eden's simulator *(ongoing)* |
 | SPlisHSPlasH | [InteractiveComputerGraphics/SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH) | fluid ground truth for CFC *(ongoing)* |
+| robosuite | [ARISE-Initiative/robosuite](https://github.com/ARISE-Initiative/robosuite), [paper](https://arxiv.org/abs/2009.12293) | the scenes, assets and success tests of robomimic's tasks (v1.5.0; robosuite itself not imported) |
 
 ## Data
 
