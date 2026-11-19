@@ -9,6 +9,48 @@ Install as in the [README](README.md), then `pip install -e ".[dev]"` and `pre-c
 If you have a task in mind, claim it before it is finished: open a draft pull request that says what you plan to do. We can
 then look at it early, and others see that it is taken, which avoids duplicate work.
 
+## Common problems
+
+What most often holds back a pull request here, and what to do instead.
+
+**Comparisons**
+
+- Treat both algorithms the same: the same tuning rounds and budget, options, seeds and evaluation starts. Settings tuned
+  for one algorithm and reused by the other are not yet a comparison; give the other a round of the same size.
+- A configuration said to follow another task's settings follows them exactly, or the text names each change.
+- Stop runs by one rule fixed before the runs and the same for both algorithms (a target, or a plateau of the main error),
+  with a cap. A fixed budget is the measure only when the comparison says so; a run still improving at its end gives no
+  final number.
+- Report every seed. Evaluate the last checkpoint, or one chosen by a rule fixed beforehand, never one picked on the test
+  starts.
+- Define success as the original benchmark does, or call it a proxy.
+
+**Timing**
+
+- Time each run alone on its GPU. Times are reported from A100- or H100-class GPUs; we can re-time a contribution on ours.
+- Save checkpoints often enough to read the time to the target, and say what the clock includes.
+- Call a configuration "fastest" only with a per-phase time table of that exact path; otherwise write "time to the target,
+  not engineered".
+
+**Results text**
+
+- Results only: no plans or changes of plan, machine names, driver versions, local paths or links to private forks.
+- Give every number its seeds and GPU type. List SuperTrack first, both numbers side by side, in neutral words: no
+  verdicts, no remark about one algorithm alone.
+- Open a task's section with its settings table (goal | configuration | result) and one conclusion line; details go to the
+  results page.
+- Describe the world model as it is, and say when it is specific to the task rather than the library's.
+
+**Code**
+
+- Rebase on the current `main` and run `make test-fast` there: a script written against an older interface can break.
+- Declare new dependencies in `pyproject.toml`'s extras; tests that need them use `pytest.importorskip`.
+- Implement or refuse every option a script accepts; none is silently ignored. Missing data or an unsupported setting
+  raises an error instead of falling back to a default.
+- Pin downloads to a revision and check their SHA-256 sums.
+- Add tests that run on the CPU (a stub world model is fine).
+- Keep scripts that do not use the library out of a benchmark, or in a folder of their own.
+
 ## Checks
 
 - `make lint`: ruff, also run by CI on every push.
