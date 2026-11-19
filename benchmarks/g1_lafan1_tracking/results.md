@@ -118,9 +118,9 @@ Both algorithms were timed with and without the lean options in one session, und
 SuperTrack's two times are level within the seeds' spread, so its configuration stays without them; SuperMimic's
 configuration carries them.
 
-The four-GPU path by device before `--fk_fused`, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each
-device's stream around the iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of
-each configuration, the lines of iterations 200-1000 averaged, ms per timed iteration:
+The four-GPU path by device, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each device's stream around the
+iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of each configuration, the lines
+of iterations 200-1000 averaged, ms per timed iteration:
 
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 LAYOUT_PROFILE=1 ndm-train --config lafan1-supertrack-fast-4gpu --seed 0 --iterations 1000
@@ -129,15 +129,19 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 LAYOUT_PROFILE=1 ndm-train --config lafan1-supermim
 
 | configuration | device | collection | world-model updates | policy update | exchange (incl. waiting) | idle | span |
 |---|---|---|---|---|---|---|---|
-| SuperTrack, four GPUs | GPU 0, actor | 33.9 | | | 16.6 | 0.0 | 50.5 |
-| | GPU 1, world model | | 34.9 | | 15.4 | 0.1 | 50.4 |
-| | GPU 2, policy | | | 49.5 | 0.9 | 0.1 | 50.5 |
-| SuperMimic, four GPUs | GPU 0, actor | 36.5 | | | 11.0 | 0.0 | 47.5 |
-| | GPU 1, world model | | 26.3 | | 21.1 | 0.1 | 47.4 |
-| | GPU 2, policy | | | 46.5 | 0.8 | 0.1 | 47.5 |
+| SuperTrack, four GPUs | GPU 0, actor | 33.7 | | | 15.4 | 0.0 | 49.0 |
+| | GPU 1, world model | | 32.4 | | 16.4 | 0.1 | 48.9 |
+| | GPU 2, policy | | | 48.0 | 0.9 | 0.1 | 49.0 |
+| SuperMimic, four GPUs | GPU 0, actor | 36.4 | | | 10.3 | 0.0 | 46.7 |
+| | GPU 1, world model | | 26.3 | | 20.3 | 0.1 | 46.6 |
+| | GPU 2, policy | | | 45.7 | 0.8 | 0.1 | 46.6 |
+
+Without the fused kinematics the same path read 34.9 ms for SuperTrack's world-model updates and 49.5 ms for its policy update,
+46.5 ms for SuperMimic's policy update; the collections and SuperMimic's world-model updates moved by at most 0.2 ms, and the
+exchanges are mostly the wait for the policy learner.
 
 The layout runs the actor, the world-model learner and the policy learner at the same time on different GPUs, each on the
-others' results of the previous iteration, so an iteration takes about its slowest step: the policy update (46.5-49.5 ms).
+others' results of the previous iteration, so an iteration takes about its slowest step: the policy update (45.7-48.0 ms).
 The actor and the world-model learner finish early and wait in the exchange for the policy learner's results; the probe sweeps run
 on a fourth GPU, every 250 iterations.
 
