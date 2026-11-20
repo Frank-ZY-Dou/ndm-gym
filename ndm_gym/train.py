@@ -196,6 +196,10 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="the policy update's compiled imagination step and losses as CUDA graphs (same kernels)")
     parser.add_argument("--critic_cudagraphs", action="store_true",
                         help="supermimic: the critic's minibatch step as a CUDA graph, with capturable Adam (changes results)")
+    parser.add_argument("--critic_compile", action="store_true",
+                        help="supermimic: what its critic's terms run eagerly, as compiled functions: the policy loss's terms after the rollout "
+                             "(survival, discounted rewards, the critic's bootstrap value), the critic's values and GAE targets, and its minibatch "
+                             "steps on the inputs normalized once per update (equal up to float rounding)")
     parser.add_argument("--combo_kernels", action="store_true",
                         help="independent small kernels of compiled functions launched together (combo_kernels; may change results by rounding)")
     parser.add_argument("--compile_eager", action="store_true",
@@ -253,6 +257,8 @@ def parse_args():
         print(f"--algo blinkmimic: SuperMimic with BlinkMimic's recipe; not ported: {NOT_PORTED}", flush=True)
     if args.critic_cudagraphs and args.algo != "supermimic":
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
+    if args.critic_compile and args.algo != "supermimic":
+        parser.error("--critic_compile: SuperMimic's critic (--algo supermimic)")
     if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
         parser.error("--pi_encode_once: SuperTrack's and SuperMimic's imagination only")
     if args.st_wm_fused and args.algo != "supertrack":
