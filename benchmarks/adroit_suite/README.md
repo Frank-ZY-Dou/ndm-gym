@@ -14,7 +14,9 @@ Full preparation commands, verified archive hashes, units, training settings and
 
 ## Results and limitations
 
-Normalized tracking RMSE and native final success, means over training seeds 0-2 ([every seed](v2/results.md)):
+Normalized tracking RMSE and native final success, means over training seeds 0-2 ([every seed](v2/results.md)), from
+the contributed runs, each on one L40S, not re-verified on an A100. SuperMimic's Hammer runs train with
+`--nail-tracking-std .001`:
 
 | task | the prior | SuperTrack | SuperMimic |
 |---|---|---|---|

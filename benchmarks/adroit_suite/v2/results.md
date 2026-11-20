@@ -2,6 +2,8 @@
 
 Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
 
+These are the contributed runs, each on one L40S; they have not been re-verified on an A100.
+
 Pen, Hammer and Relocate each run SuperTrack and SuperMimic with fresh training seeds 0, 1 and 2: **18 complete runs**, 20,000 iterations and 2,048 worlds per run. Every final checkpoint is evaluated on the same 256 starts for its task, with all 4,608 learned-policy episodes retained. Means ± sample SD below are across three **training-seed means**, not 768 independent training seeds. The float32 reference-control prior is evaluated once on those same starts.
 
 This is online demonstration tracking on native MuJoCo scenes, not the standard D4RL offline-RL benchmark. There is one reference per task (Pen clip 1, Hammer clip 3, Relocate clip 0), with one nominal and 255 hand-only perturbed evaluation starts. Passive-object starts are unchanged.

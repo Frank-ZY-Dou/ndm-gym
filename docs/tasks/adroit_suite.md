@@ -88,7 +88,8 @@ Both methods and the control use the same 256 fixed starts: one nominal and 255 
 
 ## Observed limitations
 
-[Complete three-seed results](../../benchmarks/adroit_suite/v2/results.md), SuperTrack and SuperMimic:
+[Complete three-seed results](../../benchmarks/adroit_suite/v2/results.md), SuperTrack and SuperMimic, from the
+contributed runs, each on one L40S, not re-verified on an A100:
 
 - native final success by training seed (0, 1, 2): Pen 98.05, 95.70, 96.48% and 99.61, 46.88, 91.80%; Hammer 100, 100,
   100% and 21.09, 100, 98.05%; Relocate 100% for the prior and all six runs;

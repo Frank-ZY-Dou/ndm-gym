@@ -86,8 +86,9 @@ margins; the CPU collector and the world models' training data keep no-slip.
 For each task, the fastest and the most accurate configuration in this repository (LAFAN1: by pose error and by return);
 each task's section has its settings table and its results. Hands: apple / spray bottle / can; the target is a success
 of 0.99 with the object within 10 mm. Quadrotor: ellipse / lemniscate / race track; the target is a success of 0.99 with
-the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Commands:
-[Recommended settings](#-recommended-settings), [Results](#-results).
+the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Adroit Pen, Hammer
+and Relocate: native final success and normalized tracking RMSE over 256 starts, from contributed runs on an L40S, not
+re-verified on an A100. Commands: [Recommended settings](#-recommended-settings), [Results](#-results).
 
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
@@ -113,6 +114,9 @@ the position within 20 mm. Quadruped: the target is a success of 0.99 with the t
 |  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
 | **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on **99.3 %** of 256 starts (the demonstration's controls: 65.2 %), return **8.165 ± 0.054** (seeds 0-2, A100 40GB) |
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
+| **[Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking)**, one demonstration each; contributed runs on an L40S, not re-verified on an A100 | 🎯 most accurate, Pen | `train_adroit --method supertrack` | native final success **96.7 ± 1.2 %**, normalized tracking RMSE **0.0519 ± 0.0043**; `--method supermimic` **79.4 ± 28.5 %**, **0.2380 ± 0.1386**; the demonstration's controls alone 58.6 %, 0.4024 (seeds 0-2, L40S) |
+|  | 🎯 most accurate, Hammer | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0485 ± 0.0231**; `--method supermimic --nail-tracking-std .001` **73.0 ± 45.0 %**, **0.0762 ± 0.0155**; the demonstration's controls alone 51.2 %, 0.0389 (seeds 0-2, L40S) |
+|  | 🎯 most accurate, Relocate | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0508 ± 0.0027**; `--method supermimic` **100.0 ± 0.0 %**, **0.2059 ± 0.0255**; the demonstration's controls alone 100.0 %, 0.0316 (seeds 0-2, L40S) |
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
@@ -136,7 +140,7 @@ Each training task's best settings, as measured here, are named configurations (
 options beside them); both methods are on offer for every task.
 
 - `ndm-train --config NAME` runs one; `train_hand`, `train_muscles`, `train_quadrotor` and `train_quadruped` take `--config` too;
-  `train_door_full` takes the options as given in its rows.
+  `train_door_full` and `train_adroit` take the options as given in their rows.
 - Options given beside it take precedence.
 - `--config list` prints the names with what each measured.
 
@@ -165,6 +169,9 @@ options beside them); both methods are on offer for every task.
 | | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
+| **Adroit Pen, Hammer, Relocate** (`train_adroit`; contributed runs on an L40S, not re-verified on an A100) | most accurate, Pen | `--method supertrack`: native final success 96.7 %, normalized tracking RMSE 0.0519 | `--method supermimic`: 79.4 %, 0.2380 |
+| | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
+| | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
@@ -185,7 +192,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   on a two-person clip ([three training seeds](benchmarks/g1_boxing/results.md#training-seeds-0-2)),
   [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand,
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
-  [Adroit Door tracking](#adroit-door-tracking) from one of DAPG's demonstrations,
+  [Adroit Door tracking](#adroit-door-tracking) and
+  [Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking), each from one of DAPG's demonstrations,
   [quadruped motion tracking](#quadruped-motion-tracking): a Go2 on the Labrador motion capture of Lifelike agility and play,
   [Wuji Hand piano playing](#wuji-hand-piano-playing): two hands play Eden's *Ode to Joy* with no fingering given.
 - **[2026-11] World models:** the RigidFormer's final configurations and speed options, SuperTrack-RF and SuperMimic-RF
@@ -231,7 +239,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **Tasks:** motion tracking on LAFAN1 (G1); two G1s in one scene tracking a two-person clip; HDMI's 13 human-object
   interaction tasks (G1, contact forces predicted by the world model); MuscleVAE's character with 284 Hill-type muscles and
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
-  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; two
+  flown trajectories of up to 21.7 m/s; the Adroit hand opening a door, turning a pen, hammering a nail and relocating a ball, each from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; two
   Wuji hands playing Eden's *Ode to Joy* with no fingering given; RoboKit's G1 box carrying,
   G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
@@ -1063,26 +1071,52 @@ contributed study on an L40S: [full results](benchmarks/adroit_door/full_results
 
 ### Adroit Pen, Hammer and Relocate tracking
 
-Three native Adroit tasks extend the shared Door collector and learning infrastructure. SuperTrack and SuperMimic each run fresh seeds 0–2 at 20,000 iterations in 2,048 worlds: 18 complete runs. Final checkpoints and the float32 reference-control prior use identical sets of 256 starts. Entries are mean ± sample SD over three training-seed means. Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
+The Adroit hand turns a pen, hammers a nail and relocates a ball (24, 26 and 30 actuators), each by tracking one of
+[DAPG](https://github.com/aravindr93/hand_dapg)'s demonstrations (pen clip 1, hammer clip 3, relocate clip 0) replayed
+in MuJoCo, with the scenes and hand of [Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics).
+The objects and the nail are passive, and the policy adds a bounded correction to the demonstration's own control at
+each step, as on the [door](#adroit-door-tracking). Physics runs in MuJoCo on eight CPU cores, learning on the GPU.
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
 
-| Task | Prior final success | SuperTrack | SuperMimic |
-| --- | ---: | ---: | ---: |
-| Pen | 58.6% | 96.7 ± 1.2% | 79.4 ± 28.5% |
-| Hammer | 51.2% | 100.0 ± 0.0% | 73.0 ± 45.0% |
-| Relocate | 100.0% | 100.0 ± 0.0% | 100.0 ± 0.0% |
+| task | goal | configuration (`python -m ndm_gym.train_adroit`) | result: native final success, normalized tracking RMSE |
+|---|---|---|---|
+| Pen | most accurate | `--method supertrack` | 96.7 ± 1.2 %, 0.0519 ± 0.0043; `--method supermimic` 79.4 ± 28.5 %, 0.2380 ± 0.1386 (seeds 0-2, L40S) |
+| Hammer | most accurate | `--method supertrack` | 100.0 ± 0.0 %, 0.0485 ± 0.0231; `--method supermimic --nail-tracking-std .001` 73.0 ± 45.0 %, 0.0762 ± 0.0155 (seeds 0-2, L40S) |
+| Relocate | most accurate | `--method supertrack` | 100.0 ± 0.0 %, 0.0508 ± 0.0027; `--method supermimic` 100.0 ± 0.0 %, 0.2059 ± 0.0255 (seeds 0-2, L40S) |
 
-- Normalized tracking RMSE, the prior / SuperTrack / SuperMimic: Pen 0.4024 / 0.0519 ± 0.0043 / 0.2380 ± 0.1386, Hammer
-  0.0389 / 0.0485 ± 0.0231 / 0.0762 ± 0.0155, Relocate 0.0316 / 0.0508 ± 0.0027 / 0.2059 ± 0.0255.
-- Native final success by training seed (0, 1, 2), SuperTrack and SuperMimic: Pen 98.0, 95.7, 96.5% and 99.6, 46.9, 91.8%;
-  Hammer 100, 100, 100% and 21.1, 100, 98.0%; Relocate 100% for the prior and all six runs.
+Contributed runs on one L40S each, not re-verified on an A100: 20,000 iterations in 2,048 worlds, the last checkpoint on
+256 starts (one nominal, 255 with the hand perturbed), mean ± standard deviation of the three seeds' means. Success:
+Gymnasium-Robotics' own success test at the clip's last frame. RMSE: the tracking error in units of the reward kernels'
+default widths. Most accurate: the higher success, then the lower RMSE. SuperMimic's Hammer runs train with
+`--nail-tracking-std .001`, a 1 mm reward kernel on the nail in place of the default 10 mm; every other run uses the
+trainer's defaults. No time row: only the last checkpoint is evaluated, so the runs give no time to a target.
 
-These are single-reference online tracking results, not D4RL offline-RL scores.
+**In short:** `--method supertrack` on all three tasks: the lower mean tracking error on each and the higher success on
+Pen and Hammer. On Relocate every start succeeds with either, and with the demonstration's controls alone, which track
+closest there (0.0316).
 
 <p align="center"><img src="docs/media/adroit_suite/v2/grid.webp" alt="Trained Adroit Pen, Hammer and Relocate policies" width="1000"/></p>
-<p align="center"><i>Native Hand accurate adaptation / SuperTrack: Pen seed 0, Hammer seed 1, Relocate seed 0, each final 20k checkpoint. Per case, the lowest fixed tracking-error final run among all six method/seed combinations; fixed nominal episode 0. Full nonterminal windows, native speed; shorter clips hold their last displayed frame. These selected previews do not replace the seed averages above.</i></p>
+<p align="center"><i>SuperTrack on the pen (seed 0), the hammer (seed 1) and the relocation (seed 0) at 20,000 iterations, from the nominal start, at the clips' speed.<br>Per task the run with the lowest tracking error of its six; a shorter clip holds its last frame.</i></p>
 <p align="center"><sub>DAPG references and native Gymnasium-Robotics 1.3.1 scenes/assets; see <a href="NOTICE">NOTICE</a>.</sub></p>
 
-Training takes 93.7–154.9 minutes per seed on one L40S and eight physical CPU cores. See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
+| | Pen | Hammer | Relocate |
+|---|---|---|---|
+| native final success ↑, the demonstration's controls alone | 58.6 % | 51.2 % | 100.0 % |
+| native final success ↑, SuperTrack | 96.7 ± 1.2 % | 100.0 ± 0.0 % | 100.0 ± 0.0 % |
+| native final success ↑, SuperMimic | 79.4 ± 28.5 % | 73.0 ± 45.0 % | 100.0 ± 0.0 % |
+| native final success by training seed (0, 1, 2), SuperTrack | 98.0, 95.7, 96.5 % | 100, 100, 100 % | 100, 100, 100 % |
+| native final success by training seed (0, 1, 2), SuperMimic | 99.6, 46.9, 91.8 % | 21.1, 100, 98.0 % | 100, 100, 100 % |
+| normalized tracking RMSE ↓, the demonstration's controls alone | 0.4024 | 0.0389 | 0.0316 |
+| normalized tracking RMSE ↓, SuperTrack | 0.0519 ± 0.0043 | 0.0485 ± 0.0231 | 0.0508 ± 0.0027 |
+| normalized tracking RMSE ↓, SuperMimic | 0.2380 ± 0.1386 | 0.0762 ± 0.0155 | 0.2059 ± 0.0255 |
+
+- **One demonstration per task:** these are online tracking results on a single reference, not D4RL offline-RL scores.
+- **Hammer's nail:** SuperMimic's runs, trained with the 1 mm kernel, have the lower nail error, 0.206 ± 0.044 against
+  0.332 ± 0.037 mm; the other physical errors are lower for SuperTrack on all three tasks
+  ([physical errors](benchmarks/adroit_suite/v2/results.md#physical-tracking-errors)).
+- **Training time:** 93.7–154.9 minutes per seed for the 20,000 iterations, on one L40S and eight physical CPU cores.
+
+See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
 
 ### Wuji Hand piano playing
 
