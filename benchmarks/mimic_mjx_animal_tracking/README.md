@@ -19,7 +19,7 @@ published.
   (`ndm_gym/robots/animals.py`): the rat (74 qpos, 38 actuators) with its motors as torque actuators, scaled by 0.9, its
   actuators' first-order activation filters kept (40 ms); the fly (43 qpos, 36 position actuators on its legs); the stick
   insect (48 qpos, 41 torque actuators) with its feet's contact pairs and its actuators' scaling. Their qpos and qvel match the
-  clips' layouts exactly, and one control step on MuJoCo-Warp matches MuJoCo's to 1e-8 (median) from the clips' frames.
+  clips' layouts exactly, and one control step on MuJoCo-Warp matches MuJoCo's to 2e-8 (median) from the clips' frames.
 - **Simulator:** MuJoCo-Warp at MIMIC-MJX's rates (the rat and the stick insect: 100 Hz control, 2 ms steps; the fly:
   500 Hz control, 0.2 ms steps), the control step as one CUDA graph. No Isaac Lab, no MJX.
 - **Baseline:** [talmolab/track-mjx](https://github.com/talmolab/track-mjx) (BSD-3-Clause), MIMIC-MJX's PPO: its published

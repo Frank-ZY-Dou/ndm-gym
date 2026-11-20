@@ -30,7 +30,7 @@ MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/eval/rollout
 
 Every body runs at MIMIC-MJX's solver settings (Newton, 5 iterations and 5 line-search iterations, no noslip: MuJoCo-Warp has
 none). The clips hold stac-mjx's qpos and qvel of the body per frame; their layouts match the bodies' exactly, and a control
-step on MuJoCo-Warp from the clips' frames matches MuJoCo's to 1e-8 (median).
+step on MuJoCo-Warp from the clips' frames matches MuJoCo's to 2e-8 (median).
 
 **The rat's activations.** Its actuators filter their controls (an activation a with da/dt = (u - a) / 40 ms), so qpos and
 qvel are not its whole state. Over a control step with the control held, MuJoCo's Euler step of the filter has a closed form

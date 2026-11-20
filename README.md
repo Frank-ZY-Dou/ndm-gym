@@ -118,9 +118,9 @@ ended with the bodies within 3 % of the body's size. Commands:
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
-| **[Animal motion tracking](#animal-motion-tracking)**, stick insect / fruit fly, ten clips each | ⏱ time to the target, not engineered | `stick-supertrack` / `stick-supermimic`, `fly-supertrack` / `fly-supermimic` | stick insect 8.8 / 10.4 min, fruit fly 23.4 / 11.3 min, every run (mean of seeds 0-2, three runs sharing one RTX 4090) |
-|  | 🎯 most accurate | the same | bodies 0.41 / 0.39 mm (stick insect) and 0.062 / 0.047 mm (fruit fly), no episode ended; held-out clips 0.77 / 0.87 and 0.092 / 0.066 mm (seeds 0-2, RTX 4090) |
-| **Animal motion tracking**, rat, ten clips | 🎯 most accurate | `rat-supertrack` / `rat-supermimic` | not solved at a fixed budget of 10,000 iterations: 69 / 19 % of the episodes ended, bodies 35.8 / 19.6 mm (seeds 0-2, RTX 4090) |
+| **[Animal motion tracking](#animal-motion-tracking)**, stick insect / fruit fly, ten clips each | ⏱ time to the target, not engineered | `stick-supertrack` / `stick-supermimic`, `fly-supertrack` / `fly-supermimic` | stick insect 2.7 / 3.8 min, every run; fruit fly 6.5 min (2 of 3 runs) / 4.4 min (every run) (mean of seeds 0-2, each run alone on an A100 80GB SXM4) |
+|  | 🎯 most accurate | the same | bodies 0.40 / 0.39 mm (stick insect) and 0.068 / 0.047 mm (fruit fly), 0 / 0 % and 1.3 / 0 % of the episodes ended; held-out clips 0.75 / 0.87 and 0.096 / 0.065 mm (seeds 0-2, A100 80GB SXM4) |
+| **Animal motion tracking**, rat, ten clips | 🎯 most accurate | `rat-supertrack` / `rat-supermimic` | not solved at a fixed budget of 10,000 iterations: 71 / 19 % of the episodes ended, bodies 34.7 / 21.3 mm (seeds 0-2, A100 80GB SXM4) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -171,9 +171,9 @@ options beside them); both methods are on offer for every task.
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
-| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.41 mm; the target in 8.8 min (three runs sharing one RTX 4090) | `stick-supermimic`: 0.39 mm; 10.4 min |
-| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.062 mm; the target in 23.4 min (three runs sharing one RTX 4090) | `fly-supermimic`: 0.047 mm; 11.3 min |
-| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 69 % of the episodes ended, bodies 35.8 mm | `rat-supermimic`: 19 %, 19.6 mm |
+| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.40 mm; the target in 2.7 min (each run alone on an A100 80GB SXM4) | `stick-supermimic`: 0.39 mm; 3.8 min |
+| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.068 mm; the target in 6.5 min, 2 of 3 runs (each run alone on an A100 80GB SXM4) | `fly-supermimic`: 0.047 mm; 4.4 min |
+| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 71 % of the episodes ended, bodies 34.7 mm | `rat-supermimic`: 19 %, 21.3 mm |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
@@ -1206,13 +1206,13 @@ a stick insect with 41 torque actuators. One policy per body on ten clips; ten m
 
 | goal | configuration (`train_animal`) | result, SuperTrack / SuperMimic |
 |---|---|---|
-| most accurate, stick insect | `--config stick-supertrack` / `--config stick-supermimic` | bodies 0.41 / 0.39 mm, no episode ended; held-out clips 0.77 / 0.87 mm, 0.7 / 1.3 % ended (seeds 0-2, RTX 4090) |
-| most accurate, fruit fly | `--config fly-supertrack` / `--config fly-supermimic` | bodies 0.062 / 0.047 mm, no episode ended; held-out clips 0.092 / 0.066 mm, 6.7 / 0 % ended |
-| time to the target, not engineered | the same | stick insect 8.8 / 10.4 min, fruit fly 23.4 / 11.3 min, every run (three runs sharing one RTX 4090) |
-| rat, a fixed budget of 10,000 iterations | `--config rat-supertrack` / `--config rat-supermimic` | not solved: 69 / 19 % of the episodes ended, bodies 35.8 / 19.6 mm |
+| most accurate, stick insect | `--config stick-supertrack` / `--config stick-supermimic` | bodies 0.40 / 0.39 mm, no episode ended; held-out clips 0.75 / 0.87 mm, 3.3 / 2.0 % ended (seeds 0-2, A100 80GB SXM4) |
+| most accurate, fruit fly | `--config fly-supertrack` / `--config fly-supermimic` | bodies 0.068 / 0.047 mm, 1.3 / 0 % of the episodes ended; held-out clips 0.096 / 0.065 mm, 6.7 / 0 % ended |
+| time to the target, not engineered | the same | stick insect 2.7 / 3.8 min, every run; fruit fly 6.5 min (2 of 3 runs) / 4.4 min (every run) (each run alone on an A100 80GB SXM4) |
+| rat, a fixed budget of 10,000 iterations | `--config rat-supertrack` / `--config rat-supermimic` | not solved: 71 / 19 % of the episodes ended, bodies 34.7 / 21.3 mm |
 
-**In short:** both algorithms track the stick insect and the fruit fly to about 2 % of the body's size with no episode
-ended, and neither solves the rat within 10,000 iterations.
+**In short:** both algorithms track the stick insect and the fruit fly to 2-3 % of the body's size with 0-1.3 % of the
+episodes ended, and neither solves the rat within 10,000 iterations.
 
 <p align="center"><img src="docs/media/animals/grid.webp" alt="SuperTrack and SuperMimic tracking a stick insect, a fruit fly and a rat clip of MIMIC-MJX" width="100%"/></p>
 <p align="center"><i>A stick insect, a fruit fly (a quarter of real time) and a rat clip with SuperTrack and SuperMimic: each case's run with the lowest bodies' error, from the reference's start.<br>The reference is the translucent blue ghost (<a href="docs/tasks/animals.md">the task</a>).</i></p>
@@ -1227,20 +1227,20 @@ ended, and neither solves the rat within 10,000 iterations.
   same changes: `--pi_batch 2048 --wm_lr 2e-3 --fused_fk`, the iterations above and a checkpoint every 1,000. No other
   tuning on the bodies for either algorithm.
 - **Timing:** wall clock from the first training iteration (after the simulator's setup and the warm-up collection;
-  the compilation is in it), with three runs sharing one RTX 4090; not an A100's or H100's, and no per-phase table, so
+  the kernels' compilation was cached before the runs), each run alone on an A100 80GB SXM4; no per-phase table, so
   time to the target, not engineered. The target (at most 2 % of the episodes ended, the bodies within 3 % of the body's
   size) is this benchmark's, not MIMIC-MJX's.
 
 | | stick insect | fruit fly | rat |
 |---|---|---|---|
 | seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 0 / 0 % | 69 / 19 % |
-| bodies ↓, SuperTrack / SuperMimic | 0.41 / 0.39 mm | 0.062 / 0.047 mm | 35.8 / 19.6 mm |
-| joints ↓, SuperTrack / SuperMimic | 8.6 / 4.1° | 4.8 / 3.8° | 12.1 / 9.8° |
-| held-out clips: ended ↓, SuperTrack / SuperMimic | 0.7 / 1.3 % | 6.7 / 0 % | 83 / 51 % |
-| held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.77 / 0.87 mm | 0.092 / 0.066 mm | 52.8 / 43.2 mm |
-| training (min), SuperTrack / SuperMimic | 17 / 19 | 27 / 30 | 53 / 54 |
-| to the target ↓, SuperTrack / SuperMimic | 8.8 / 10.4 min | 23.4 / 11.3 min | not reached |
+| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 1.3 / 0 % | 71 / 19 % |
+| bodies ↓, SuperTrack / SuperMimic | 0.40 / 0.39 mm | 0.068 / 0.047 mm | 34.7 / 21.3 mm |
+| joints ↓, SuperTrack / SuperMimic | 8.2 / 4.2° | 4.6 / 3.7° | 12.0 / 9.8° |
+| held-out clips: ended ↓, SuperTrack / SuperMimic | 3.3 / 2.0 % | 6.7 / 0 % | 84 / 42 % |
+| held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.75 / 0.87 mm | 0.096 / 0.065 mm | 52.4 / 39.6 mm |
+| training (min), SuperTrack / SuperMimic | 6.4 / 7.6 | 11.1 / 12.9 | 22.1 / 24.9 |
+| to the target ↓, SuperTrack / SuperMimic | 2.7 / 3.8 min | 6.5 (2 of 3 runs) / 4.4 min | not reached |
 
 ### BlinkMimic's options
 

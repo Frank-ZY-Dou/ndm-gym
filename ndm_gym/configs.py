@@ -170,16 +170,16 @@ CONFIGS = {
     },
     "train_animal": {
         f"{animal}-{algo}": (f"{opts} --animal {animal} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 1000 --ckpt_keep",
-                             f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, RTX 4090)")
+                             f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, A100 80GB SXM4)")
         for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
         for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))
         for result in [{
-            ("stick", "supertrack"): "no episode ended, bodies 0.41 mm; held-out clips 0.7 % ended, 0.77 mm",
-            ("stick", "supermimic"): "no episode ended, bodies 0.39 mm; held-out clips 1.3 % ended, 0.87 mm",
-            ("fly", "supertrack"): "no episode ended, bodies 0.062 mm; held-out clips 6.7 % ended, 0.092 mm",
-            ("fly", "supermimic"): "no episode ended, bodies 0.047 mm; held-out clips none ended, 0.066 mm",
-            ("rat", "supertrack"): "69 % of the episodes ended, bodies 35.8 mm (not solved)",
-            ("rat", "supermimic"): "19 % of the episodes ended, bodies 19.6 mm (not solved)",
+            ("stick", "supertrack"): "no episode ended, bodies 0.40 mm; held-out clips 3.3 % ended, 0.75 mm",
+            ("stick", "supermimic"): "no episode ended, bodies 0.39 mm; held-out clips 2.0 % ended, 0.87 mm",
+            ("fly", "supertrack"): "1.3 % of the episodes ended, bodies 0.068 mm; held-out clips 6.7 % ended, 0.096 mm",
+            ("fly", "supermimic"): "no episode ended, bodies 0.047 mm; held-out clips none ended, 0.065 mm",
+            ("rat", "supertrack"): "71 % of the episodes ended, bodies 34.7 mm (not solved)",
+            ("rat", "supermimic"): "19 % of the episodes ended, bodies 21.3 mm (not solved)",
         }[animal, algo]]
     },
 }
