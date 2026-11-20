@@ -144,6 +144,9 @@ each other; the rule takes the lowest.
 | | `--horizon 32 --action_noise 0.3 --bptt_decay 0.95` with HOI's optimizer options | 14.7 mm | 4.5 min |
 | | **`--horizon 64`** | **7.0 mm** | 6.8 min |
 
+HOI's optimizer options were tried at 64 steps for SuperTrack only, where they are part of its selected configuration;
+SuperMimic's one run with them had 32 steps and two more changes, and its selected configuration is without them.
+
 Before the selection, in runs of 4,000 iterations on the ellipse: SuperTrack with calibrated term weights (the default
 without `--st_task_weights`) stays at 0.33 m with 64 steps, the body rates' term, whose first error is small, holding the
 policy at the feedforward command; with the task's weights and 32 steps it stays at 0.31 m; a world model of 3 × 256 in the
@@ -198,7 +201,9 @@ simulator state under the simulator's commands, with the policy's exploration no
 
 The simulator is one rigid body without contacts, four physics steps per control step: there is little for a world model
 to save, and bf16 does not help a network of this size. The acceleration model integrates the position from the velocity,
-as the simulator does; the increment model predicts it.
+as the simulator does; the increment model predicts it. The two models also differ in their training: each is the world
+model of its algorithm's run on the ellipse, SuperTrack's trained with Muon and SuperMimic's with Adam, each on its own
+policy's data, so the open-loop errors do not compare the parameterizations alone.
 
 On an A100 40GB SXM4, with the step fused: [results_a100.md](results_a100.md#the-world-model-as-the-simulator).
 

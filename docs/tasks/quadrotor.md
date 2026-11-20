@@ -93,9 +93,13 @@ feedforward command; the task's weights do not ([results](../../benchmarks/quadr
 ## Systems options
 
 The hand task's (`ndm_gym/algos/hand_fast.py`, [their table](hand.md#systems-options)), off by default: `--fused_adam`,
-`--reset_masked`, `--no_sync`, `--collect_graph`, `--update_graphs`, `--pi_opt muon`, `--wm_opt muon`, `--pi_ema`,
-`--pi_lr_mult`. `--compile_eager` is refused: the collection step has no forward kinematics to compile. `QUAD_PROFILE=1`
-prints, with every log row, the time of the collection step, the world-model updates and the policy update.
+`--reset_masked`, `--no_sync`, `--collect_graph`, `--update_graphs`. `--compile_eager` is refused: the collection step has
+no forward kinematics to compile. `QUAD_PROFILE=1` prints, with every log row, the time of the collection step, the
+world-model updates and the policy update.
+
+The same module's optimizer options change what is trained and which policy is evaluated: `--pi_opt muon`, `--wm_opt
+muon`, `--pi_ema`, `--pi_lr_mult` with its ramp. Both algorithms take them; of the quadrotor's named configurations
+SuperTrack's have them (HOI's set) and SuperMimic's do not.
 
 ## Evaluation and videos
 

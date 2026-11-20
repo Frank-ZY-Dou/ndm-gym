@@ -110,8 +110,8 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 | **Hand-object tracking**, XHand, three clips | 🚀 fastest, one GPU | `hand-supermimic-fast` with the speed options | **0.8 / 1.1 / 1.2 min**, every run, mean 1.03 min (an A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.7 / 0.9 / 1.8 min, mean 1.16 min, faster per iteration (18.4 against 15.7 it/s) |
 |  | 🚀 fastest, three GPUs | `hand-supermimic-fast` with the speed options and `--layout AWL` | **0.6 / 0.7 / 0.8 min**, every run, mean 0.72 min (three A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.6 / 0.6 / 1.2 min, mean 0.78 min, faster per iteration (39.4 against 30.3 it/s) |
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
-| **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2) |
-|  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
+| **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2); `quadrotor-supermimic-fast` **0.93 / 0.78 / 0.89 min**, without the optimizer options SuperTrack's configuration has |
+|  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200); `quadrotor-supermimic-accurate` **6.55 / 4.96 / 5.08 mm** and **5.51 / 4.71 / 8.13 mm**, without those options |
 | **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on **99.3 %** of 256 starts (the demonstration's controls: 65.2 %), return **8.165 ± 0.054** (seeds 0-2, A100 40GB) |
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
 | **[Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking)**, one demonstration each; contributed runs on an L40S, not re-verified on an A100 | 🎯 most accurate, Pen | `train_adroit --method supertrack` | native final success **96.7 ± 1.2 %**, normalized tracking RMSE **0.0519 ± 0.0043**; `--method supermimic` **79.4 ± 28.5 %**, **0.2380 ± 0.1386**; the demonstration's controls alone 58.6 %, 0.4024 (seeds 0-2, L40S) |
@@ -990,10 +990,12 @@ ellipse, lemniscate and seven-gate race track, each flown by its controller (the
 
 | goal | configuration (`train_quadrotor`, add `--flight`) | result: ellipse / lemniscate / race track |
 |---|---|---|
-| most accurate | `--config quadrotor-supertrack-accurate` | position 3.38 / 2.02 / 2.19 mm on the autonomous flights, 1.34 / 1.20 / 3.08 mm on the piloted ones, at a success of 100 % (seeds 0-2, H200) |
-| time to the target, not engineered | `--config quadrotor-supertrack-fast` | 0.79 / 0.68 / 0.75 min to a success of 0.99 within 20 mm, every run (seeds 0-2, H200) |
+| most accurate | `--config quadrotor-supertrack-accurate` | position 3.38 / 2.02 / 2.19 mm on the autonomous flights, 1.34 / 1.20 / 3.08 mm on the piloted ones, at a success of 100 % (seeds 0-2, H200); `quadrotor-supermimic-accurate` 6.55 / 4.96 / 5.08 mm and 5.51 / 4.71 / 8.13 mm |
+| time to the target, not engineered | `--config quadrotor-supertrack-fast` | 0.79 / 0.68 / 0.75 min to a success of 0.99 within 20 mm, every run (seeds 0-2, H200); `quadrotor-supermimic-fast` 0.93 / 0.78 / 0.89 min |
 
 Position: the error at the last of 6,000 iterations (5.6 to 7.3 min), over 256 perturbed starts of the whole flight.
+SuperTrack's two configurations have HOI's optimizer options (Muon, a policy average, twice the policy's learning rate
+with its ramp); SuperMimic's two do not.
 
 **In short:** SuperTrack's configurations have the lower position error, autonomous and piloted, and the shorter mean
 time to the target on all three flights (SuperMimic's: 6.55 / 4.96 / 5.08 mm, 5.51 / 4.71 / 8.13 mm piloted, 0.93 / 0.78 /
@@ -1012,8 +1014,12 @@ time to the target on all three flights (SuperMimic's: 6.55 / 4.96 / 5.08 mm, 5.
   perturbed starts, a rollout succeeding if the position stays within 1 m of the reference. Every rollout of every run
   succeeds; the reference's feedforward command alone, open loop, leaves the reference by 1 m after 1.3 to 1.6 s
   ([results](benchmarks/quadrotor_racing_tracking/results.md), [task](docs/tasks/quadrotor.md)).
-- **Selection:** each algorithm starts from the hand task's selected options and is selected on the ellipse with seed 0
-  by one rule; the piloted flights run the selected configurations as they are.
+- **Selection:** each algorithm starts from the hand task's selected options and is selected on the ellipse with seed 0,
+  one of the three reported seeds, by one rule; the piloted flights run the selected configurations as they are.
+- **The optimizer options:** on the ellipse (seed 0, H200) SuperTrack with 64 steps read 3.4 mm with HOI's optimizer
+  options and 3.8 mm without, and the selection took them. SuperMimic's one run with them had 32 steps and two more
+  changes (`--action_noise 0.3 --bptt_decay 0.95`: 14.7 mm), so SuperMimic has no run with them at its selected 64
+  steps ([the arms](benchmarks/quadrotor_racing_tracking/results.md#selection)).
 - **All flights, and the pilots':** one policy on all 18 autonomous flights tracks them to 2.54 ± 0.02 mm (SuperTrack)
   and 6.22 ± 0.34 mm (SuperMimic). The pilots' flights, 8 to 14 laps with a line of their own on every one (the race
   track a professional's at up to 19.3 m/s and 9 g), are tracked with the same configurations; the policy of the 18
