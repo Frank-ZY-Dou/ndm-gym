@@ -51,7 +51,7 @@ MuJoCo model.
 | RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
 | mbrl-lib planning | its CEM controller planning on SuperTrack's acceleration model, each plan executed in MuJoCo: the cart-pole (planner seed 10) and the pusher (seed 17), recorded again on a CPU in fp32 with the A100 runs' fits; half speed | returns 175.96 and -65.89 (175.77 and -62.53 in the A100 runs) |
 | Racing quadrotor | `quadrotor-supertrack-accurate`, seed 0, 6,000 iterations, trained on an A100 40GB SXM4; from the unperturbed start, the chase camera at 1.25 m, in real time | position 2.19, 3.08 and 3.38 mm (the configuration's mean of seeds 0-2 on an H200, over 256 perturbed starts) |
-| Go2 tracking | `go2-supertrack-clip`, seed 0, on `play` (a Labrador's play, 10.1 s), trained on an RTX 6000 Ada; from the unperturbed start, its first 6 s, in real time | feet 7.66 mm (trunk frame), trunk 12.22 mm, joints 1.47° (the configuration's mean of seeds 0-2) |
+| Go2 tracking | `go2-supertrack-clip`, seed 0, on `play` (a Labrador's play, 10.1 s), trained on an RTX 6000 Ada; from the unperturbed start, its first 6 s, in real time | |
 | Adroit door | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` (the door and latch started up to 0.3 rad open), training seed 0, 20,000 iterations on an A100 40GB SXM4: its evaluation's nominal start (door and latch closed, the hand unperturbed), in a brighter scene; half speed, its last frame held | that start: return 9.022, the door opened; the configuration: the door open on 99.3 % of 256 starts, return 8.165 ± 0.054 (seeds 0-2, A100 40GB) |
 | Adroit pen, hammer, relocate | SuperTrack's runs at 20,000 iterations in 2,048 worlds on an L40S: pen seed 0, hammer seed 1, relocate seed 0, each the lowest tracking error of its task's six runs; the nominal episode at half speed (the hammer from 1 s), last frames held | normalized tracking RMSE 0.049, 0.022 and 0.048; 251, 256 and 256 of 256 native final successes |
 | Wuji piano | `supertrack --horizon 3 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.921, 19 of 19 notes; the configuration: Eden F1 0.903 ± 0.015 on 256 starts (seeds 0-2, A100 40GB) |
@@ -86,7 +86,7 @@ margins; the CPU collector and the world models' training data keep no-slip.
 For each task, the fastest and the most accurate configuration in this repository (LAFAN1: by pose error and by return);
 each task's section has its settings table and its results. Hands: apple / spray bottle / can; the target is a success
 of 0.99 with the object within 10 mm. Quadrotor: ellipse / lemniscate / race track; the target is a success of 0.99 with
-the position within 20 mm. Quadruped: the target is a success of 0.99 with the trunk within 20 mm. Adroit Pen, Hammer
+the position within 20 mm. Adroit Pen, Hammer
 and Relocate: native final success and normalized tracking RMSE over 256 starts, from contributed runs on an L40S, not
 re-verified on an A100. Commands: [Recommended settings](#-recommended-settings), [Results](#-results).
 
@@ -117,8 +117,6 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 | **[Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking)**, one demonstration each; contributed runs on an L40S, not re-verified on an A100 | 🎯 most accurate, Pen | `train_adroit --method supertrack` | native final success **96.7 ± 1.2 %**, normalized tracking RMSE **0.0519 ± 0.0043**; `--method supermimic` **79.4 ± 28.5 %**, **0.2380 ± 0.1386**; the demonstration's controls alone 58.6 %, 0.4024 (seeds 0-2, L40S) |
 |  | 🎯 most accurate, Hammer | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0485 ± 0.0231**; `--method supermimic --nail-tracking-std .001` **73.0 ± 45.0 %**, **0.0762 ± 0.0155**; the demonstration's controls alone 51.2 %, 0.0389 (seeds 0-2, L40S) |
 |  | 🎯 most accurate, Relocate | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0508 ± 0.0027**; `--method supermimic` **100.0 ± 0.0 %**, **0.2059 ± 0.0255**; the demonstration's controls alone 100.0 %, 0.0316 (seeds 0-2, L40S) |
-| **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
-|  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB); in an earlier set of finals with the same configurations, seeds and GPU type, 0.804 ± 0.140 and 0.708 ± 0.115, with SuperTrack's horizon-8 configuration the most accurate (0.888 ± 0.092) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); `muscles-supermimic-rf` **60.2 ± 2.0 mm** (heading frame: 35.1 ± 0.7 and 38.5 ± 3.4 mm), with the lower joint error, 8.7 ± 0.4 against 10.1 ± 0.3 deg; with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm and `muscles-supermimic` 65.6 ± 8.1 mm, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
@@ -172,8 +170,6 @@ options beside them); both methods are on offer for every task.
 | **Adroit Pen, Hammer, Relocate** (`train_adroit`; contributed runs on an L40S, not re-verified on an A100) | most accurate, Pen | `--method supertrack`: native final success 96.7 %, normalized tracking RMSE 0.0519 | `--method supermimic`: 79.4 %, 0.2380 |
 | | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
 | | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
-| **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
-| **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
@@ -443,14 +439,14 @@ git clone https://github.com/Houserz/supermimic-quadruped data/third_party/super
 git -C data/third_party/supermimic-quadruped checkout 46a81c2
 python tools/convert_lifelike.py --quadmotion data/third_party/supermimic-quadruped/src   # 65 clips into data/lifelike_go2
 
-# all clips: train (SuperMimic, then SuperTrack), evaluate beside the reference's targets with pushes, render a clip
-python -m ndm_gym.train_quadruped --config go2-supermimic --log_dir logs/go2_sm
+# all clips: train (SuperTrack, then SuperMimic), evaluate beside the reference's targets with pushes, render a clip
 python -m ndm_gym.train_quadruped --config go2-supertrack --log_dir logs/go2_st
-python -m ndm_gym.evaluate_quadruped --ckpt logs/go2_sm/last.pt --out logs/go2_sm/evaluation --push 1 2 --save_rollout
-MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_sm/evaluation/rollout.npz --clip dog_play_002_0 --out play.webp
+python -m ndm_gym.train_quadruped --config go2-supermimic --log_dir logs/go2_sm
+python -m ndm_gym.evaluate_quadruped --ckpt logs/go2_st/last.pt --out logs/go2_st/evaluation --push 1 2 --save_rollout
+MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_st/evaluation/rollout.npz --clip dog_play_002_0 --out play.webp
 
 # a task and seed of the benchmark (benchmarks/go2_lifelike_tracking/tasks.json: all, walk, run, play)
-benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic
+benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_st --config go2-supertrack
 ```
 
 </details>
@@ -471,7 +467,8 @@ SuperTrack and SuperMimic share each task's simulator, data, networks and evalua
   [official code](https://github.com/HybridRobotics/supermimic) was released; its numbers may differ from the authors' code.
 - **World models:** MLP for tracking and training speed, apart from the RigidFormer's tracking results on LAFAN1, the two
   G1s and the muscles.
-- **Not reported here:** tracking on HDMI's human-object interaction tasks, and the RigidFormer's time to a target return.
+- **Not reported here:** tracking on HDMI's human-object interaction tasks and on the Go2, and the RigidFormer's time to a
+  target return.
 - **Return:** the evaluation's undiscounted reward sum over its maximum. ↑: higher is better; ↓: lower is better.
 
 Each task below opens with its settings table and a one-line conclusion; the results follow.
@@ -1235,43 +1232,15 @@ position servos at 50 Hz, a floating base with four feet, flight phases and turn
 [Jionghao Wang](https://github.com/shanemankiw) ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4),
 [#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
 
-| goal | configuration (`train_quadruped`) | result |
-|---|---|---|
-| most accurate, all 65 clips | `--config go2-supermimic` | return 0.986, feet 5.3 mm in the trunk's frame, trunk 12.1 mm, joints 1.1°; no clip failed at a success of 100 % (seeds 0-2, RTX 6000 Ada) |
-| time to the target, not engineered | `--config go2-supermimic` | 1.31 ± 0.03 min to a success of 0.99 with the trunk within 20 mm, every run (seeds 0-2) |
-
-**In short:** SuperMimic, with HOI's optimizer options and a discount of 0.95, is the more accurate on every task and
-reaches the target 3.4 times sooner on all clips (SuperTrack: return 0.977, feet 7.3 mm, 4.3 failed clips of 65,
-4.43 min). On one clip both reach the target in 1 to 2.5 min.
+Tracking results on this task are not reported here.
 
 <p align="center"><img src="docs/media/go2/grid.webp" alt="SuperTrack and SuperMimic tracking a walk, a run and a play clip of a Labrador's motion capture with a Unitree Go2" width="100%"/></p>
 <p align="center"><i>The walk, the run and the play clip with SuperTrack and SuperMimic; seed 0, real time, from the unperturbed start.<br>The retargeted reference laid over the robot in translucent blue: where the robot's white shows, it is off the reference (<a href="docs/tasks/quadruped.md">the task</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking the motion capture of Lifelike agility and play (Tencent Robotics X; for research purposes), with MuJoCo Menagerie's Go2 (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-- **Runs:** all clips 10,000 iterations (11 to 14 min), one clip 6,000, on one RTX 6000 Ada each; the last checkpoint
-  plays 252 (all clips) or 256 rollouts per clip of the whole clip from perturbed starts. The reference's joint
-  positions as the targets, open loop, keep the robot up in 5 % of the rollouts on all clips and in none on the single
-  ones ([results](benchmarks/go2_lifelike_tracking/results.md), [task](docs/tasks/quadruped.md)).
-- **Selection:** each algorithm starts from the library's options (the hand task's for SuperTrack, HOI's optimizer options
-  for SuperMimic). SuperMimic needed a discount of 0.95 in place of 0.99: on all clips at 4,000 iterations (seed 0) its
-  return goes from 0.706 to 0.962 with the trainer's defaults and from 0.839 to 0.968 with HOI's options
-  ([beside the starting point](benchmarks/go2_lifelike_tracking/results.md#beside-the-starting-point)).
-- **Pushes,** not trained for: at 1 m/s every 2 s, 5.5 of 65 clips fail for SuperMimic and 21.5 for SuperTrack; at
-  2 m/s most clips fail for both.
-
-| | all 65 clips | walk | run | play |
-|---|---|---|---|---|
-| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| success ↑, SuperTrack / SuperMimic | 99.9 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
-| reference's targets, open loop: success | 5.2 % | 0 % | 0 % | 0 % |
-| return ↑, SuperTrack | 0.9767 ± 0.0014 | 0.9915 ± 0.0001 | 0.9728 ± 0.0001 | 0.9851 ± 0.0001 |
-| return ↑, SuperMimic | 0.9856 ± 0.0001 | 0.9947 ± 0.0000 | 0.9773 ± 0.0016 | 0.9894 ± 0.0000 |
-| feet ↓, SuperTrack / SuperMimic | 7.26 / 5.33 mm | 6.13 / 4.15 mm | 10.40 / 7.70 mm | 7.66 / 5.57 mm |
-| training to a success of 0.99 within 20 mm ↓, SuperTrack / SuperMimic | 4.43 / 1.31 min | 1.08 / 1.32 min | 1.28 / 2.52 min | 1.08 / 1.61 min |
-
 ```bash
-benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimic        # seeds 0-2; go2-supertrack
-benchmarks/go2_lifelike_tracking/run.sh walk 0 logs/go2_sm --config go2-supermimic-clip  # walk, run, play; go2-supertrack-clip
+benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_st --config go2-supertrack        # seeds 0-2; go2-supermimic
+benchmarks/go2_lifelike_tracking/run.sh walk 0 logs/go2_st --config go2-supertrack-clip  # walk, run, play; go2-supermimic-clip
 ```
 
 ### BlinkMimic's options

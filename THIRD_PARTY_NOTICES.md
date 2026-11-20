@@ -44,7 +44,7 @@ reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`)
 
 `tools/convert_lifelike.py` calls the `quadmotion` package of
 [supermimic-quadruped](https://github.com/Houserz/supermimic-quadruped) (MIT, Copyright (c) 2026 Yuxi Liu and Houserz;
-the results used `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
+pinned at `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
 of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
 
 ## Ported code

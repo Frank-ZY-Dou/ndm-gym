@@ -154,17 +154,13 @@ CONFIGS = {
     },
     "train_quadruped": {
         "go2-supertrack": (f"{GO2_ST} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",
-                           "Go2, all 65 Lifelike clips, 10,000 iterations, 11.1 min on an RTX 6000 Ada: success 0.9987 +- 0.0012, return 0.977, "
-                           "feet 7.3 mm, trunk 12.8 mm; a success of 0.99 with the trunk within 20 mm after 4.43 +- 0.58 min (seeds 0-2)"),
+                           "Go2, all 65 Lifelike clips, 10,000 iterations"),
         "go2-supermimic": (f"{GO2_SM} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",
-                           "Go2, all 65 Lifelike clips, 10,000 iterations, 14.0 min on an RTX 6000 Ada: success 1.000, return 0.986, feet 5.3 mm, "
-                           "trunk 12.1 mm; a success of 0.99 with the trunk within 20 mm after 1.31 +- 0.03 min (seeds 0-2)"),
+                           "Go2, all 65 Lifelike clips, 10,000 iterations"),
         "go2-supertrack-clip": (f"{GO2_ST} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
-                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.992 / 0.973 / 0.985 on "
-                                "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
+                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
         "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
-                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations on an RTX 6000 Ada: return 0.995 / 0.977 / 0.989 on "
-                                "the walk, the run and the play clip at a success of 1.000 (seeds 0-2)"),
+                                "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
     },
 }
 
