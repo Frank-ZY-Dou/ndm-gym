@@ -20,12 +20,55 @@ each of the 40 LAFAN1 clips once from its first frame, without noise or
 randomization. Differences come with Welch 95% intervals over seeds. Every section below except the training speed and the policy-gradient
 diagnostic fixed its rule before its runs. Both algorithms are re-implementations on this pipeline, not
 the authors' code; the configuration SuperMimic's tuning rounds selected differs from the paper's (action noise 0.3 instead
-of 0.1, imagination kicks 0.3, reward kernels ×0.7). Its 3 h configuration with the speed options takes the paper's action
-noise 0.1 and SuperTrack's offsets about the reference pose ([below](#the-3-h-configurations-at-one-budget)).
+of 0.1, imagination kicks 0.3, reward kernels ×0.7). Its most accurate configuration takes the paper's action noise
+0.1 and SuperTrack's offsets about the reference pose; how the named configurations were chosen after the tuning rounds:
+[below](#the-most-accurate-configurations).
+
+## The most accurate configurations
+
+The named most accurate configurations with the MLP world model: 3 h of training each on one A100 40GB SXM4, seeds
+7-9, scored as the main comparison (the last checkpoint's three standard evaluations and its pushes of 1 and 2 m/s);
+mean ± sd over the seeds. No run dropped late (an evaluation during training below 0.60 after its first at or above
+0.82).
+
+| MLP world model | `lafan1-supertrack-accurate` | `lafan1-supermimic-accurate` | SuperTrack - SuperMimic |
+|---|---|---|---|
+| return | 0.898 ± 0.002 | 0.915 ± 0.005 | **-0.017 [-0.028, -0.006]** |
+| failed clips | 0.00 ± 0.00 | 0.00 ± 0.00 | +0.00 [0.00, 0.00] |
+| MPJPE-local (mm) | 10.8 ± 0.0 | 16.7 ± 0.1 | **-5.9 [-6.2, -5.6]** |
+| joint angle (deg) | 2.07 ± 0.03 | 2.96 ± 0.02 | **-0.89 [-0.95, -0.84]** |
+| failed at 1 m/s pushes | 2.0 ± 0.0 | 2.3 ± 0.6 | -0.3 [-1.8, 1.1] |
+| failed at 2 m/s pushes | 15.7 ± 3.5 | 11.7 ± 0.6 | +4.0 [-4.4, 12.4] |
+| iterations in 3 h | 63,200, 63,393, 63,324 | 66,837, 67,208, 67,058 | |
+
+The intervals are Welch 95% intervals of SuperTrack's row minus SuperMimic's, from each seed's scores; bold where they
+exclude 0.
+
+- **How they were chosen.** Each starts from its algorithm's configuration from the tuning rounds, changed in rounds for
+  the time to return 0.82, each algorithm with its own options ([training speed](#training-speed)). These configurations
+  then trained 3 h
+  with the learning rate's cosine over the 3 h (`--lr_decay_hours 3`), which scored higher than the schedule as published
+  in a 3 h pilot run of each (seed 0). At 3 h only the cosine, SuperMimic's action noise and the lean options on SuperTrack's
+  MLP were compared; the changes for the time to 0.82 were not tuned for accuracy after 3 h.
+- **What was tried for which.** In the rounds for the time to 0.82 the simulator's action noise was varied for SuperMimic
+  only (SuperTrack's runs kept the default 0.1), and the imagination kicks in five values for SuperMimic and one for
+  SuperTrack.
+- **The action noise.** SuperMimic's MLP configuration runs with 0.1, the default that SuperTrack's runs keep, in place of
+  its fast configuration's 0.3: with 0.3 its three 3 h runs on these seeds dropped late (return 0.298 ± 0.054 at 3 h), and in a
+  development screen of the noise at 3 h (four seeds per arm) all four runs with 0.3 dropped late (at least 20 failures in
+  two consecutive probe sweeps after iteration 24,000) and none with 0.1; SuperTrack's configuration dropped at neither 0.1
+  nor 0.035.
+- **The lean options.** Both MLP configurations carry the same lean options (`--eprobe_lean --imag_hoist --wm_presample
+  --muon_batched --gc_freeze`). SuperTrack's MLP runs without them, with the same
+  cosine, scored a return of 0.895 ± 0.001 and an MPJPE-local of 11.0 ± 0.2 mm (seeds 7-9).
+- **The budget is 3 h of wall clock:** about 63,310 iterations for SuperTrack, 67,030 for SuperMimic. At equal iterations
+  the order is the same: SuperTrack 0.898 ± 0.003 and 10.8 ± 0.0 mm at its last checkpoints, SuperMimic 0.913 ± 0.001
+  and 16.7 ± 0.2 mm at 64,000 iterations (one evaluation per run).
 
 ## The 3 h configurations at one budget
 
-SuperTrack's and SuperMimic's 3 h configurations, two arms each, on seeds 7, 8 and 9: 3 h of training each with the speed
+These were the named 3 h configurations until [the most accurate configurations](#the-most-accurate-configurations)
+replaced them. SuperTrack's and SuperMimic's 3 h configurations, two arms each, on seeds 7, 8 and 9: 3 h of training each with the speed
 options (`SPEED` of `ndm_gym/configs.py`; SuperMimic also `--critic_cudagraphs`), one A100 40GB SXM4 per run, all on one
 code version. Each algorithm's second arm takes a setting of the other algorithm's configuration that it can take. Both of
 SuperMimic's arms use the paper's action noise 0.1: with 0.3 and the speed options its return falls late
@@ -34,10 +77,10 @@ evaluations and its pushes of 1 and 2 m/s; mean ± sd over the seeds.
 
 | algorithm | arm | return | failed clips | MPJPE-local (mm) | joint angle (deg) | failed at 1 m/s pushes | failed at 2 m/s pushes | iterations in 3 h | late drop, seeds 7 / 8 / 9 |
 |---|---|---|---|---|---|---|---|---|---|
-| SuperTrack | `lafan1-supertrack-accurate` | 0.857 ± 0.004 | 0.00 ± 0.00 | 15.2 ± 1.0 | 2.02 ± 0.03 | 4.0 ± 2.6 | 19.3 ± 2.1 | 36077, 36226, 36338 | no / no / no |
+| SuperTrack | the tuning rounds' configuration | 0.857 ± 0.004 | 0.00 ± 0.00 | 15.2 ± 1.0 | 2.02 ± 0.03 | 4.0 ± 2.6 | 19.3 ± 2.1 | 36077, 36226, 36338 | no / no / no |
 | SuperTrack | with SuperMimic's imagination kicks, `--imag_start_perturb 0.3` | 0.842 ± 0.007 | 0.56 ± 0.38 | 16.1 ± 0.5 | 2.12 ± 0.03 | 2.3 ± 1.2 | 14.3 ± 5.8 | 35982, 36176, 36200 | no / no / no |
 | SuperMimic | the tuning rounds' configuration with action noise 0.1 | 0.863 ± 0.002 | 0.44 ± 0.38 | 24.3 ± 0.9 | 4.05 ± 0.08 | 3.7 ± 1.5 | 10.0 ± 1.0 | 33818, 33669, 33874 | no / no / no |
-| SuperMimic | the same with SuperTrack's offsets about the reference pose, `--sm_residual` (`lafan1-supermimic-accurate`) | 0.872 ± 0.003 | 0.00 ± 0.00 | 21.2 ± 0.3 | 3.40 ± 0.10 | 3.0 ± 1.0 | 12.0 ± 0.0 | 33778, 33687, 33827 | no / no / no |
+| SuperMimic | the same with SuperTrack's offsets about the reference pose, `--sm_residual` | 0.872 ± 0.003 | 0.00 ± 0.00 | 21.2 ± 0.3 | 3.40 ± 0.10 | 3.0 ± 1.0 | 12.0 ± 0.0 | 33778, 33687, 33827 | no / no / no |
 
 Each algorithm's row is its arm with the higher mean return or, when the other arm's is within 0.01 of it, the one with
 the lower MPJPE-local: SuperTrack's configuration as it was; SuperMimic's with action noise 0.1 and `--sm_residual` (0.872
@@ -587,7 +630,7 @@ Iterations reached in 3 h: SuperTrack-RF 12654, 12677, 12696; SuperMimic-RF 1071
 | SuperMimic | MLP iterations in 3 h | 33184, 33205, 33244 | | | | | |
 
 With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861 ± 0.003 and its
-MPJPE-local 14.5 ± 0.2 mm in these runs (seeds 7-9; `lafan1-supertrack-accurate`). SuperMimic's MLP with action noise 0.3
+MPJPE-local 14.5 ± 0.2 mm in these runs (seeds 7-9; the tuning rounds' configuration with the speed options). SuperMimic's MLP with action noise 0.3
 drops late, as on the H100 (return 0.137 at about 33k iterations); its highest per-checkpoint evaluation averages 0.841
 over the seeds, SuperMimic-RF's 0.811. With action noise 0.1 and `--sm_residual` it does not drop (0.872 ± 0.003, the
 [3 h configurations at one budget](#the-3-h-configurations-at-one-budget), where SuperTrack's configuration scores

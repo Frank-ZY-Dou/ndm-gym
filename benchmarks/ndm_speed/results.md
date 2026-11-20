@@ -136,7 +136,7 @@ from standing states with smooth random targets near the default pose. Forward: 
 (four segments of 50, each from the standing states), the median of three repeats after a warm-up, compilation excluded.
 Gradient: the forward and reverse-mode gradient of a 32-step rollout's loss with respect to its 32 target vectors, ms per
 control step and peak GPU memory. The world model is SuperTrack's MLP from the LAFAN1 study, the seed-7 run of
-`lafan1-supertrack-accurate`
+its tuning rounds' configuration with the speed options, 3 h
 (its last checkpoint): its step from the clip's frame-0 reference states, as trained (bf16, compiled) and on its fastest
 inference
 path, and the gradient through the model as trained, the call one CUDA graph. Scripts: [`diffsim/`](diffsim/README.md) for

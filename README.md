@@ -44,7 +44,7 @@ MuJoCo model.
 
 | block | runs | tracking error, speed-up |
 |---|---|---|
-| LAFAN1 tracking | SuperTrack's selected configuration, MLP world model, seed 2, 3 h checkpoint: dance1_subject2, fight1_subject2, fallAndGetUp2_subject2 and sprint1_subject2, 6 s of each clip's window in its section | |
+| LAFAN1 tracking | SuperTrack's configuration from the tuning rounds, MLP world model, seed 2, 3 h checkpoint: dance1_subject2, fight1_subject2, fallAndGetUp2_subject2 and sprint1_subject2, 6 s of each clip's window in its section | |
 | Two G1s, muscles | SuperTrack's selected configuration on each task, MLP world model; MuscleVAE's walk and run | two G1s 13.2 mm (MPJPE, root-relative, over the window shown); the walk 24.9 mm (MPJPE, root frame, over its episodes) |
 | Hand-object | SuperTrack's runs in its section's grid ([which](benchmarks/xhand_tracking/results.md#the-readmes-animations)): the XHand on the spray bottle and the apple, the Allegro hand on the spray bottle, the Inspire hand on the can; half speed, last frames held | |
 | Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
@@ -93,8 +93,8 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 | Task | Goal | Configuration | Result |
 |---|---|---|---|
 | **[LAFAN1 tracking](#lafan1-motion-tracking)**, 40 clips, MLP world model | 🚀 fastest, one GPU | `lafan1-supertrack-fast` and `lafan1-supermimic-fast` ([BlinkMimic's recipe](#blinkmimics-options), both with the lean options) | return 0.82 after **4.13 ± 0.18** and **3.52 ± 0.30 min**, MPJPE-local there **22.4 ± 0.7** and **27.0 ± 1.0 mm**, on an A100 40GB SXM4 (seeds 0-2) |
-|  | 🎯 lowest pose error | `lafan1-supertrack-accurate`, 3 h with the speed options on an A100 40GB SXM4 | MPJPE **15.2 ± 1.0 mm**, joint angle **2.02 ± 0.03°** (seeds 7-9) |
-|  | 📈 highest return | `lafan1-supermimic-accurate`, 3 h with the speed options on an A100 40GB SXM4 | return **0.872 ± 0.003** (seeds 7-9) |
+|  | 🎯 lowest pose error | `lafan1-supertrack-accurate`, 3 h on an A100 40GB SXM4 | MPJPE-local **10.8 ± 0.0 mm**, joint angle **2.07 ± 0.03°**, return 0.898 ± 0.002 (seeds 7-9); `lafan1-supermimic-accurate` **16.7 ± 0.1 mm**, **2.96 ± 0.02°** |
+|  | 📈 highest return | `lafan1-supermimic-accurate`, 3 h on an A100 40GB SXM4 | return **0.915 ± 0.005**, MPJPE-local 16.7 ± 0.1 mm (seeds 7-9); `lafan1-supertrack-accurate` **0.898 ± 0.002** |
 | **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each; the kinematics as fused kernels) | return 0.82 after **1.47 ± 0.05** and **1.42 ± 0.09 min**, MPJPE-local there **21.9 ± 0.5** and **26.9 ± 0.4 mm**, on four A100 40GB SXM4 (seeds 3-5); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
 | **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supertrack` and `two-g1-supermimic` | return 0.88 after **3.66 ± 0.00** and **3.26 ± 0.00 min**, root-relative MPJPE there **16.8 ± 0.4** and **19.9 ± 1.4 mm**, on an A100 40GB SXM4 (MLP world model, seeds 0-2) |
@@ -146,7 +146,7 @@ options beside them); both methods are on offer for every task.
 
 | Task | Goal | SuperTrack | SuperMimic |
 |---|---|---|---|
-| **LAFAN1**, MLP world model | lowest pose error, highest return | `lafan1-supertrack-accurate`: MPJPE 15.2 mm, joint angle 2.02°, return 0.857 (3 h with the speed options, A100 40GB SXM4) | `lafan1-supermimic-accurate`: 21.2 mm, 3.40°, return 0.872 (the same) |
+| **LAFAN1**, MLP world model | lowest pose error, highest return | `lafan1-supertrack-accurate`: MPJPE-local 10.8 mm, joint angle 2.07°, return 0.898 (3 h, A100 40GB SXM4, seeds 7-9) | `lafan1-supermimic-accurate`: 16.7 mm, 2.96°, return 0.915 (the same) |
 | | fastest, one GPU | `lafan1-supertrack-fast`: return 0.82 in 4.13 min, MPJPE-local there 22.4 mm (A100 40GB SXM4) | `lafan1-supermimic-fast`: 3.52 min, 27.0 mm |
 | | fastest, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.47 min, 21.9 mm (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.42 min, 26.9 mm |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
@@ -459,10 +459,10 @@ benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimi
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation.
 
-- **Selection:** LAFAN1's tuning rounds gave both algorithms the same budget and rule (12 runs each). Where the two
-  algorithms' rounds, options or trials differ, these sections say so: [training speed](#training-speed),
-  [two G1s](#two-g1s-one-two-person-clip), [muscles](#muscle-actuated-character),
-  [quadrotor](#quadrotor-trajectory-tracking), [Adroit door](#adroit-door-tracking),
+- **Selection:** LAFAN1's tuning rounds gave both algorithms the same budget and rule (12 runs each); its named
+  configurations come from its rounds for speed. Where the two algorithms' rounds, options or trials differ, these
+  sections say so: [training speed](#training-speed), [two G1s](#two-g1s-one-two-person-clip),
+  [muscles](#muscle-actuated-character), [quadrotor](#quadrotor-trajectory-tracking), [Adroit door](#adroit-door-tracking),
   [Adroit pen, hammer and relocate](#adroit-pen-hammer-and-relocate-tracking), [Wuji piano](#wuji-hand-piano-playing),
   [NDMs as simulators](#ndms-as-simulators-hdmis-scenes), [RoboKit](#ndms-in-robokits-planner) and
   [mbrl-lib](#ndms-in-mbrl-libs-planner). The [fastest configurations](#training-speed) come from rounds of single
@@ -482,39 +482,38 @@ One policy on the G1 tracks all 40 LAFAN1 clips, retargeted to the robot; traini
 
 | goal | configuration | result |
 |---|---|---|
-| lowest pose error | `--config lafan1-supertrack-accurate` | MPJPE 15.2 ± 1.0 mm, joint angle 2.02 ± 0.03° (3 h with the speed options, A100 40GB SXM4, seeds 7-9) |
-| highest return | `--config lafan1-supermimic-accurate` | return 0.872 ± 0.003 (3 h with the speed options, A100 40GB SXM4, seeds 7-9) |
+| lowest pose error | `--config lafan1-supertrack-accurate` | MPJPE-local 10.8 ± 0.0 mm, joint angle 2.07 ± 0.03°, return 0.898 ± 0.002 (3 h, A100 40GB SXM4, seeds 7-9); `lafan1-supermimic-accurate` 16.7 ± 0.1 mm, 2.96 ± 0.02° |
+| highest return | `--config lafan1-supermimic-accurate` | return 0.915 ± 0.005, MPJPE-local 16.7 ± 0.1 mm (3 h, A100 40GB SXM4, seeds 7-9); `lafan1-supertrack-accurate` 0.898 ± 0.002 |
 | most accurate, RigidFormer world model | `--config lafan1-supertrack-rf-accurate` | return 0.832 ± 0.003, MPJPE 21.0 ± 1.3 mm (3 h, A100 40GB, seeds 7-9) |
 | fewest failed clips under pushes, RigidFormer world model | `--config lafan1-supermimic-rf-accurate` | 1.3 / 9.0 of 40 clips under 1 / 2 m/s pushes (3 h, A100 40GB, seeds 7-9) |
 | fastest, one GPU | `--config lafan1-supertrack-fast` or `--config lafan1-supermimic-fast` | return 0.82 after 4.13 ± 0.18 and 3.52 ± 0.30 min on an A100 40GB SXM4, MPJPE-local there 22.4 ± 0.7 and 27.0 ± 1.0 mm (seeds 0-2) |
 | fastest, four GPUs | `--config lafan1-supertrack-fast-4gpu` or `--config lafan1-supermimic-fast-4gpu`, with four GPUs visible | return 0.82 after 1.47 ± 0.05 and 1.42 ± 0.09 min on four A100 40GB SXM4, MPJPE-local there 21.9 ± 0.5 and 26.9 ± 0.4 mm (seeds 3-5) |
 
-**In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
-the measure it optimizes (MPJPE 15.2 against 21.2 mm, return 0.872 against 0.857), and under 2 m/s pushes SuperMimic fails
-fewer clips (12.0 against 19.3 of 40). For speed, the fast configurations: 4.13 and 3.52 min on one GPU, 1.47 and
-1.42 min on four; where return 0.82 is first reached, SuperTrack's MPJPE-local is lower (22.4 against 27.0 mm on one GPU,
-21.9 against 26.9 mm on four).
+**In short:** SuperTrack has the lower pose error (10.8 against 16.7 mm) and SuperMimic the higher return (0.915 against
+0.898), both with the MLP. For speed, the fast configurations: 4.13 and 3.52 min on one GPU, 1.47 and 1.42 min on four;
+where return 0.82 is first reached, SuperTrack's MPJPE-local is lower (22.4 against 27.0 mm on one GPU, 21.9 against
+26.9 mm on four).
 
 <!-- videos:begin -->
 <p align="center"><img src="docs/media/final/grid.webp" alt="SuperTrack tracking six LAFAN1 clips, with the MLP world model and with the RigidFormer" width="773"/></p>
-<p align="center"><i>SuperTrack: MLP, the selected configuration, seed 2; RigidFormer, every speed option, seed 8 (12,677 iterations).<br>3 h checkpoints on an A100; one clip per motion category, its 10 s with the most motion. Blue ghost: the reference.</i></p>
+<p align="center"><i>SuperTrack: MLP, the tuning rounds' configuration, seed 2; RigidFormer, every speed option, seed 8 (12,677 iterations).<br>3 h checkpoints on an A100; one clip per motion category, its 10 s with the most motion. Blue ghost: the reference.</i></p>
 <!-- videos:end -->
 <p align="center"><sub>Renders of LAFAN1 motions (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0; <a href="https://github.com/ubisoft/ubisoft-laforge-animation-dataset">https://github.com/ubisoft/ubisoft-laforge-animation-dataset</a>), retargeted to the G1 (LAFAN1 Retargeting Dataset), resampled, cut to 10 s and rendered. For non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-The 3 h configurations at one budget: seeds 7-9, 3 h with the speed options on one A100 40GB SXM4 each, one code version;
-Welch 95% intervals of the difference, bold where they exclude 0. Each row is the better of two arms on the same seeds (the
-same selection for both), not confirmed on fresh seeds
-([all four arms](benchmarks/g1_lafan1_tracking/results.md#the-3-h-configurations-at-one-budget)).
+The most accurate configurations with the MLP world model: seeds 7-9, 3 h on one A100 40GB SXM4 each. Each is its algorithm's configuration for the
+time to return 0.82 (SuperMimic's MLP with action noise 0.1), trained 3 h with the learning rate's cosine over the 3 h
+([how they were chosen](benchmarks/g1_lafan1_tracking/results.md#the-most-accurate-configurations)). Welch 95% intervals of
+the difference, bold where they exclude 0.
 
-| | SuperTrack | SuperMimic | SuperTrack - SuperMimic |
+| MLP world model | SuperTrack | SuperMimic | SuperTrack - SuperMimic |
 |---|---|---|---|
-| normalized return | 0.857 ± 0.004 | 0.872 ± 0.003 | **-0.016 [-0.023, -0.008]** |
+| normalized return | 0.898 ± 0.002 | 0.915 ± 0.005 | **-0.017 [-0.028, -0.006]** |
 | failed clips (of 40) | 0.0 ± 0.0 | 0.0 ± 0.0 | 0.0 |
-| MPJPE, root-relative (mm) | 15.2 ± 1.0 | 21.2 ± 0.3 | **-6.0 [-8.2, -3.9]** |
-| joint-angle error (deg) | 2.02 ± 0.03 | 3.40 ± 0.10 | **-1.38 [-1.61, -1.15]** |
-| failed clips under root pushes of 1 m/s every 2 s | 4.0 ± 2.6 | 3.0 ± 1.0 | +1.0 [-4.7, 6.7] |
-| failed clips under root pushes of 2 m/s every 2 s | 19.3 ± 2.1 | 12.0 ± 0.0 | **+7.3 [2.2, 12.5]** |
-| iterations in 3 h | 36,077-36,338 | 33,687-33,827 | |
+| MPJPE, root-relative (mm) | 10.8 ± 0.0 | 16.7 ± 0.1 | **-5.9 [-6.2, -5.6]** |
+| joint-angle error (deg) | 2.07 ± 0.03 | 2.96 ± 0.02 | **-0.89 [-0.95, -0.84]** |
+| failed clips under root pushes of 1 m/s every 2 s | 2.0 ± 0.0 | 2.3 ± 0.6 | -0.3 [-1.8, 1.1] |
+| failed clips under root pushes of 2 m/s every 2 s | 15.7 ± 3.5 | 11.7 ± 0.6 | +4.0 [-4.4, 12.4] |
+| iterations in 3 h | 63,200-63,393 | 66,837-67,208 | |
 
 The table below: the configurations selected by the tuning rounds (SuperMimic's with action noise 0.3), seeds 1-3, 3 h
 on one A100 without the speed options; mean ± std over seeds, each seed the average of three standard evaluations (push
@@ -549,13 +548,14 @@ RigidFormer: final configurations with every speed option, fresh seeds 7-9.
 | iterations in 3 h | 12,676 | 10,710 |
 
 ```bash
-SPEED="--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"   # the speed options of both world models
-RF_SPEED="--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"   # the RigidFormer's own
-# the 3 h configurations, MLP world model, with the speed options (about 36,200 and 33,800 iterations in 3 h);
-# SuperMimic's with action noise 0.1 and --sm_residual (with 0.3 and the speed options its return falls late)
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 $SPEED --max_hours 3
-ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.1 --imag_start_perturb 0.3 --sm_residual $SPEED --critic_cudagraphs --max_hours 3
+# the most accurate configurations: each fastest configuration (Training speed, below) trained 3 h with the learning
+# rate's cosine over the 3 h; SuperMimic's MLP with action noise 0.1 in place of 0.3 (with 0.3 its return falls late)
+H3="--max_hours 3 --iterations 1000000 --ckpt_every 2000 --lr_decay_hours 3"
+ndm-train --config lafan1-supertrack-fast $H3                      # --config lafan1-supertrack-accurate, about 63,310 iterations in 3 h
+ndm-train --config lafan1-supermimic-fast --action_noise 0.1 $H3   # --config lafan1-supermimic-accurate, about 67,030
 # RigidFormer world model, with its runs' speed options (--fused_adam, --elementwise_3x3 and --critic_cudagraphs change results: ndm-train --help)
+SPEED="--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
+RF_SPEED="--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"   # the RigidFormer's own
 ndm-train --algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 $SPEED $RF_SPEED --max_hours 3
 ndm-train --algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.4 \
           --wm_batches 7 $SPEED --critic_cudagraphs $RF_SPEED --max_hours 3
@@ -1435,9 +1435,9 @@ Each task's results are in its section; these are the factors behind them.
    iterations (return 0.074 at 3 h), and its late checkpoints track only with that noise on
    ([diagnostic](benchmarks/g1_lafan1_tracking/results.md#supermimics-late-drop-diagnostic)). With the paper's 0.1 they
    do not drop (0.854 at 3 h; [details](benchmarks/g1_lafan1_tracking/results.md#noise-check-supermimic-with-action-noise-01)).
-   With the speed options (about 34k iterations in 3 h on the A100) SuperMimic's 3 h configuration therefore takes 0.1,
-   with SuperTrack's offsets about the reference pose (`--sm_residual`): return 0.872, no late drop
-   ([details](benchmarks/g1_lafan1_tracking/results.md#the-3-h-configurations-at-one-budget)).
+   In 3 h runs of SuperMimic's fast configuration on the A100, all four with 0.3 dropped late and none of four with 0.1 (a
+   development screen of the noise), so its 3 h configuration takes 0.1: return 0.915 in about 67,030 iterations, no late drop
+   ([details](benchmarks/g1_lafan1_tracking/results.md#the-most-accurate-configurations)).
    Return 0.82 after 1.25 h (SuperTrack) and 1.48 h (SuperMimic); the paper reports 1.2 h with its own configuration.
 5. **Semi-implicit world models:** SuperTrack's acceleration model (Fussell et al. 2021, §3.4;
    [`accel.py`](ndm_gym/worldmodels/accel.py)) and [BlinkMimic](https://github.com/fuyichen0725/blinkmimic)'s predict
@@ -1451,8 +1451,9 @@ Each task's results are in its section; these are the factors behind them.
      (SuperMimic's).
    - Online: SuperTrack-RF / SuperMimic-RF return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm. Tuned online as the MLP was, no
      significant difference at equal iterations.
-   - In 3 h with the same speed options the MLP runs about 3x more iterations: return 0.857 (SuperTrack) and 0.872
-     (SuperMimic, action noise 0.1 with `--sm_residual`; with 0.3 its MLP drops late, 0.137 at about 33k iterations).
+   - In 3 h with the same speed options the MLP runs about 3x more iterations; the MLP's 3 h configurations of that time:
+     return 0.857 (SuperTrack) and 0.872 (SuperMimic, action noise 0.1 with `--sm_residual`; with 0.3 its MLP drops late,
+     0.137 at about 33k iterations).
    - Before its tuning: no significant difference in 9 of 10 dynamics shifts, and not more sample-efficient by the rule
      (SuperTrack-RF fewer failed clips at iteration 6,000 only); held-out clips: none for SuperTrack-RF, a return 0.005
      lower [-0.009, -0.000] for SuperMimic-RF's final configuration.
@@ -1476,7 +1477,7 @@ Each task's results are in its section; these are the factors behind them.
 ✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. All numbers, and the preliminary single-seed runs: [`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).
 
 - **Policy rows:** the leave-one-out study, seeds 1-3, 3 h.
-- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3), and the final ones at 3 h against the MLP with the same speed options (seeds 7-9).
+- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3), and the final ones at 3 h against the MLP's of that time with the same speed options (seeds 7-9).
 - In these rows an effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed clips under 1 and 2 m/s pushes).
 - **World-model rows:** the open-loop 32-step error of offline fits, three per variant (bold: significant).
 
