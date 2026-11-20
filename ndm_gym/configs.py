@@ -61,10 +61,11 @@ CONFIGS = {
         "lafan1-supermimic-accurate": (f"{SM_CONFIRMED} {CONFIRMED_3H}",
                                        "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the cosine over the 3 h (about 67,030 iterations): "
                                        "return 0.915 +- 0.005, MPJPE 16.7 +- 0.1 mm (seeds 7-9)"),
-        "lafan1-supertrack-fast": (ST_FAST,
-                                   "LAFAN1: return 0.82 after 4.19 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
+        "lafan1-supertrack-fast": (f"{ST_FAST} {LEAN}",
+                                   "LAFAN1: return 0.82 after 4.13 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time; 3.96 +- 0.03 min "
+                                   "without the lean options in the same set of runs, level within the seeds' spread)"),
         "lafan1-supermimic-fast": (f"{SM_FAST} --pi_encode_once {LEAN}",
-                                   "LAFAN1: return 0.82 after 3.53 +- 0.30 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
+                                   "LAFAN1: return 0.82 after 3.52 +- 0.30 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
         "lafan1-supertrack-fast-4gpu": (f"{ST_FAST} {AWL4} --fk_fused",
                                         "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.47 +- 0.05 min, 5.9 GPU-minutes "
                                         "(seeds 3-5; 1.52 +- 0.08 without --fk_fused in the same session)"),
