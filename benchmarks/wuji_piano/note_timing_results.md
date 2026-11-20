@@ -25,15 +25,6 @@ The score-driven reference solves static hover and press joint positions for sev
 
 The script scored 0.6325 Eden F1, precision 0.9977 and recall 0.5717. It reached 12.0/19 note events and held both pitches on 23.8% of two-note frames. Both onsets were timely on 512/1,024 written paired attacks. Evaluation took 26.3 seconds on the RTX 3060, excluding scene and IK setup.
 
-## Validation under a shared time limit
-
-A secondary timing diagnostic: the last completed round at or before 300 synchronized training seconds of each seed (a cutoff set after training), with its logged 32-start validation result. The primary tables use the 256-start final evaluations after equal experience.
-
-| Method | Rounds (seeds 0/1/2) | Validation F1 (seeds 0/1/2) | Mean ± sample SD |
-|---|---|---|---:|
-| SuperTrack | 19 / 19 / 17 | 0.9153 / 0.7110 / 0.7089 | 0.7784 ± 0.1186 |
-| SuperMimic | 17 / 15 / 16 | 0.4435 / 0.3387 / 0.3425 | 0.3749 ± 0.0595 |
-
 ## World-model onset predictions
 
 From every valid starting frame of each final policy’s held-out nominal physical rollout, replay its recorded actions through the frozen model for 1, 3 or 10 steps. Initialize both windows with the measured key state. Compare threshold crossings within each window using the same one-to-one pitch matcher. The table pools overlapping windows across the three seeds per method. Timing error covers matched events only. A one-step window has a single possible onset tick. SuperTrack's final checkpoints were replayed on the same nominal start to record their actuator observations.
