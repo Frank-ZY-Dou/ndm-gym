@@ -56,3 +56,14 @@ stick insect and the fruit fly, `time_to.json`. No checkpoints.
 | rat_supermimic_s0 (cold cache) | 20 % | 20.4 mm | 52 % | 43.8 mm | 41.8 |  |  |
 
 The rat's runs have no `time_to.json`: the documented command covers the stick insect and the fruit fly.
+
+## Extra runs
+
+`extra/`, each alone on an A100-SXM4-80GB, on the warm cache:
+
+- `rat_supermimic_40k_s0/`: `run_formal.sh`'s rat SuperMimic command of seed 0 with `--iterations 40000 --lr_decay_iters 40000`,
+  and its two evaluations (results.md, "The rat with a longer budget").
+- `ittime_rat_supertrack_fused/`, `ittime_rat_supertrack_default/`: `run_formal.sh`'s rat SuperTrack command of seed 0 for
+  1,000 iterations (`--iterations 1000 --lr_decay_iters 10000 --log_every 50`, no checkpoints), with its
+  `--pi_batch 2048 --fused_fk` and without them; the default one compiled its kernels in its first iterations
+  (results.md, "Development notes": the mean `it_per_s` of iterations 500 to 1,000).

@@ -1,0 +1,14 @@
+{
+  "checkpoint": "logs/mimic_mjx_extra/rat_supermimic_40k_s0/last.pt",
+  "iteration": 40000,
+  "minutes": 99.08653871615728,
+  "animal": "rat",
+  "clips": 10,
+  "episodes": 50,
+  "ended_share": 0.19999998807907104,
+  "body_mm": 16.78936767578125,
+  "end_eff_mm": 14.17382526397705,
+  "root_pos_mm": 7.97638463973999,
+  "joint_deg": 9.129367448422443,
+  "lived_share": 0.8656625747680664
+}
