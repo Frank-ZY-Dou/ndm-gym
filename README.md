@@ -575,6 +575,11 @@ systems options, one run at a time on A100 40GB SXM4 GPUs, seeds 0-2 on one GPU 
 
 - **One GPU:** an iteration runs collection, the world-model updates and the policy update one after another, so it
   takes their sum: 127.4 ms (SuperTrack) and 116.4 ms (SuperMimic).
+- **Options on one GPU:** the lean options (`$LEAN` below) were timed for both algorithms in one session on the same
+  GPU type (seeds 0-2). With them SuperTrack's iteration took 124.5 instead of 127.4 ms and its time to 0.82 was
+  4.04 ± 0.30 against 4.30 ± 0.01 min, level within the seeds' spread; SuperMimic's time went from 4.22 ± 0.42 to
+  3.43 ± 0.18 min, that arm also adding the goals encoded once
+  ([both arms](benchmarks/g1_lafan1_tracking/results.md#training-speed)).
 - **Four GPUs:** the three run at once on separate GPUs, each on the others' results of the previous iteration, so an
   iteration takes about as long as the slowest, the policy update: 51.0 and 51.6 ms. The forward kinematics run as two
   fused kernels there (`--fk_fused`), which takes 0.4-0.9 ms off every iteration of both algorithms; on one GPU the same
@@ -621,17 +626,28 @@ only. ✅ shorter · ❌ longer · ➖ level. The RTX 3090 rows are development 
 |---|---|---|---|---|
 | ✅ | SuperTrack | lower failure-penalty weight, 5 → 3 → 2 → 1 | RTX 3090 | -7% (5 → 3), 9.71 → 8.53 (3 → 2), 8.54 → 7.94 (2 → 1, with the quadratic term; 8.53 → 9.05 without it) |
 | ➖ | SuperTrack | quadratic error term (`--st_quad_w 0.5`) | RTX 3090 | 8.53 → 8.54 |
+| ✅ | SuperTrack | policy batch 4096 instead of 2048, in the first round (2048 again later, below) | A100 40GB | 10.44 → 8.14, to return 0.83 (the base an earlier development run) |
+| ✅ | SuperTrack | balance weight 2 instead of 4 | A100 40GB SXM4 | 6.88 → 6.07 |
 | ✅ | SuperTrack | world-model learning rate 1.6e-3 instead of the policy's 4e-4 | RTX 3090 | 7.94 → 7.43 |
 | ✅ | SuperTrack | policy batch 2048 instead of 4096 | RTX 3090 | 7.94 → 7.59 |
 | ❌ | SuperTrack | 2 or 3 policy updates per iteration | RTX 3090 | 9.71 → 11.95 and 14.14 |
 | ❌ | SuperTrack | 3 world-model batches instead of 5; evaluation-guided reset sweeps every 250 iterations instead of 125 | RTX 3090 | 7.94 → 9.19; 7.94 → 8.88 |
+| ❌ | SuperTrack | policy average 0.99 instead of 0.995 | A100 40GB SXM4 | 6.07 → 6.48 |
+| ❌ | SuperTrack | imagination kicks of 0.15, its configuration having none | RTX 3090 | 8.53 → 10.87 |
 | ✅ | SuperTrack | world-model learning rate 2.4e-3 instead of 1.6e-3 | A100 40GB PCIe | 4.97 → 4.24 |
 | ✅ | SuperTrack | `--goal_table --pi_encode_once` with policy batch 2048 | A100 40GB PCIe | 4.24 → 4.05 |
 | ✅ | SuperTrack | world-model learning rate 2e-3 instead of 2.4e-3 | A100 40GB PCIe | 4.05 → 3.69 |
 | ❌ | SuperTrack | world-model learning rate 3e-3; policy learning rate 5e-4 | A100 40GB PCIe | 4.24 → 4.94; 4.24 → 5.05 |
 | ❌ | SuperTrack | world-model learning rate 2.5e-3; 1.5e-3; policy batch 1024 | A100 40GB PCIe | 4.05 → 4.80; 3.69 → above 4.61 (both) |
+| ✅ | SuperMimic | policy learning-rate multiplier 2 instead of 4 | A100 40GB SXM4 | 5.14 → 4.72 |
 | ✅ | SuperMimic | imagination kicks of 0.15 instead of 0.3 | A100 40GB SXM4 | 4.72 → 4.31 |
+| ❌ | SuperMimic | imagination kicks of 0.5 instead of 0.3; of 0.1 or 0.2 instead of 0.15 | A100 40GB SXM4; RTX 3090; A100 80GB | 4.72 → 5.14; 5.81 → 6.36; 4.18 → 4.93 |
+| ➖ | SuperMimic | simulator action noise 0.5 instead of 0.3 | A100 40GB SXM4 | 4.72 → 4.74 |
+| ❌ | SuperMimic | simulator action noise 0.2, 0.25 or 0.35 instead of 0.3 | A100 40GB SXM4; RTX 3090; RTX 3090 | 4.72 → 5.18; 5.81 → 6.32; 5.22 → 5.76 |
 | ✅ | SuperMimic | policy average 0.99 instead of 0.995 | RTX 3090 | 7.13 → 6.18 |
+| ✅ | SuperMimic | in the same round, not kept (the policy average was shorter): imagination kicks of 0.05 instead of 0.15; reward kernels ×0.6 instead of ×0.7 | RTX 3090 | 7.13 → 6.68; 7.13 → 6.64 |
+| ❌ | SuperMimic | policy average 0.98 instead of 0.99; reward kernels ×0.6 instead of ×0.7 on the later configuration | RTX 3090 | 6.18 → 6.69; 5.22 → 6.35 |
+| ➖ | SuperMimic | reward kernels ×0.8 instead of ×0.7 | A100 80GB | 4.18 → 4.18 |
 | ✅ | SuperMimic | 2 policy updates of half the batch | RTX 3090 | 6.18 → 5.81 |
 | ❌ | SuperMimic | 2 or 3 policy updates of the full batch | RTX 3090 | 6.18 → 8.21 and 9.28 |
 | ✅ | SuperMimic | foot-contact reward 0.15 instead of 0.25 | RTX 3090 | 5.81 → 5.22 |
@@ -641,6 +657,10 @@ only. ✅ shorter · ❌ longer · ➖ level. The RTX 3090 rows are development 
 | ➖ | SuperMimic | world-model learning rate 1.5e-3, policy learning rate 5e-4; world-model learning rate 2.5e-3 with 2 policy updates | A100 40GB PCIe | 3.69 → 3.62, 3.63; 3.80 → 3.81 |
 | ❌ | SuperMimic | no world-model mirroring | A100 40GB PCIe | 3.69 → 4.25 |
 | ❌ | SuperMimic | policy learning-rate multiplier 3; policy learning rate 5e-4; world-model learning rate 1e-3; policy batch 512 | A100 40GB PCIe | 3.62 → 4.03; 4.39; 4.51; above 4.69 |
+
+Of the options both algorithms take, the rounds varied the simulator's action noise for SuperMimic only (four values;
+SuperTrack's runs all kept 0.1), imagination kicks in five values for SuperMimic and one for SuperTrack, and the policy
+average in two values and one.
 
 </details>
 

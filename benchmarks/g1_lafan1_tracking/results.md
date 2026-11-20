@@ -110,13 +110,17 @@ update takes 46.0 ms instead of 55.0, and `--eprobe_lean` computes only what a p
 
 Both algorithms were timed with and without the lean options in one session, under the same conditions (seeds 0-2):
 
-| one GPU, minutes to 0.82 | SuperTrack | SuperMimic |
+| one GPU, minutes to 0.82; ms per iteration, 200-1000 / 1000-1500 | SuperTrack | SuperMimic |
 |---|---|---|
-| without the lean options (SuperMimic also without `--pi_encode_once`) | 4.30 ± 0.01 | 4.22 ± 0.42 |
-| with them | 4.04 ± 0.30 | 3.43 ± 0.18 |
+| without the lean options (SuperMimic also without `--pi_encode_once`) | 4.30 ± 0.01; 127.4 / 188.7 | 4.22 ± 0.42; 127.1 / 191.9 |
+| with them | 4.04 ± 0.30; 124.5 / 170.8 | 3.43 ± 0.18; 116.3 / 164.9 |
 
 SuperTrack's two times are level within the seeds' spread, so its configuration stays without them; SuperMimic's
 configuration carries them.
+
+With the lean options SuperTrack's iteration is shorter in both windows: its world-model updates take 32.4 ms instead of
+35.0, its policy update 49.1 instead of 50.0. SuperMimic's arm also added `--pi_encode_once`, which SuperTrack's
+configuration already had.
 
 The four-GPU path by device, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each device's stream around the
 iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of each configuration, the lines
