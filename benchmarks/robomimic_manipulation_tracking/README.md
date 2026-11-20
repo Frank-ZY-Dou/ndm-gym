@@ -72,5 +72,6 @@ arm with a gripper, contact-rich manipulation with millimetre tolerances, and tw
 - The demonstration's joint positions as the servos' targets, open loop, on MuJoCo (10 demonstrations a task): the arm
   follows them to 0.024 rad (RMS) on Lift and 0.040 rad on Square, but the objects are left behind: the cube ends 49 mm
   (median) from its demonstration on Lift, the square nut 302 mm on Square, the hammer 935 mm on Transport.
-- MuJoCo-Warp 3.15 runs the three scenes with the servos: one control step (25 physics steps) from a demonstration's state
-  agrees with MuJoCo's to 3e-7 (Lift), 3e-6 (Square) and 6e-7 (Transport) in qpos.
+- MuJoCo-Warp 3.15 runs the three scenes with the servos: one control step (25 physics steps) from 32 states along
+  demonstration 0 agrees with MuJoCo's in qpos to 4e-7 (Lift), 5e-6 (Square) and 6e-5 (Transport) (the largest entry's
+  difference, median over the states; the largest over all of them 2e-4, 1e-3 and 8e-4).

@@ -119,8 +119,8 @@ is the hand task's, a success of 0.99 (robosuite's test at the last frame, a tra
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
-| **[Manipulation demonstration tracking](#manipulation-demonstration-tracking)**, a Panda, robomimic's Lift / Square / Transport | ⏱ time to the target, not engineered | `robomimic-supertrack`, `robomimic-supermimic` | 2.5 / 4.9 min and 6.0 / 10.8 min on Lift / Square, every run; Transport not reached in 1,500 iterations (mean of seeds 0-2, three runs sharing one RTX 4090) |
-|  | 🎯 most accurate | `robomimic-supertrack`, `robomimic-supermimic` | object position 0.60 / 1.96 / 7.13 mm and 0.80 / 4.08 / 12.3 mm at a success of 100 / 100 / 89.8 % and 100 / 100 / 37.1 % (the reference's targets alone: 0 / 7 / 0 %; seeds 0-2, 1,500 iterations, RTX 4090) |
+| **[Manipulation demonstration tracking](#manipulation-demonstration-tracking)**, a Panda, robomimic's Lift / Square / Transport | ⏱ time to the target, not engineered | `robomimic-supertrack`, `robomimic-supermimic` | 1.1 / 3.6 min, every run, and 1.1 / 6.9 min (Square: 2 of 3 runs) on Lift / Square; Transport not reached in 1,500 iterations (mean of seeds 0-2, each run alone on an A100 80GB SXM4) |
+|  | 🎯 most accurate | `robomimic-supertrack`, `robomimic-supermimic` | object position 0.63 / 1.78 / 5.11 mm and 0.79 / 5.96 / 12.6 mm at a success of 100 / 100 / 66.5 % and 100 / 96.9 / 6.6 % (the reference's targets alone: 0 / 7 / 0 %; seeds 0-2, 1,500 iterations, A100 80GB SXM4) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -171,7 +171,7 @@ options beside them); both methods are on offer for every task.
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
 | **Go2**, all clips (`train_quadruped`) | most accurate, and time to the target | `go2-supertrack`: return 0.977, feet 7.3 mm; the target in 4.43 min (RTX 6000 Ada) | `go2-supermimic`: 0.986, 5.3 mm; 1.31 min |
-| **Manipulation**, one demonstration (`train_robomimic`, add `--task`) | most accurate | `robomimic-supertrack`: object 0.60 / 1.96 / 7.13 mm at a success of 100 / 100 / 89.8 % (Lift / Square / Transport; seeds 0-2, RTX 4090) | `robomimic-supermimic`: 0.80 / 4.08 / 12.3 mm at 100 / 100 / 37.1 % |
+| **Manipulation**, one demonstration (`train_robomimic`, add `--task`) | most accurate | `robomimic-supertrack`: object 0.63 / 1.78 / 5.11 mm at a success of 100 / 100 / 66.5 % (Lift / Square / Transport; seeds 0-2, A100 80GB SXM4) | `robomimic-supermimic`: 0.79 / 5.96 / 12.6 mm at 100 / 96.9 / 6.6 % |
 | **Go2**, one clip (add `--clips`) | most accurate | `go2-supertrack-clip`: return 0.992 / 0.973 / 0.985 (walk / run / play) | `go2-supermimic-clip`: 0.995 / 0.977 / 0.989 |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
@@ -1203,14 +1203,15 @@ grasps with millimetre clearances, and two arms handing a hammer over.
 
 | goal | configuration (`train_robomimic`) | result |
 |---|---|---|
-| most accurate | `--config robomimic-supertrack`, `--config robomimic-supermimic` | object position 0.60 / 1.96 / 7.13 mm and 0.80 / 4.08 / 12.3 mm at a success of 100 / 100 / 89.8 % and 100 / 100 / 37.1 % on Lift / Square / Transport (seeds 0-2, 1,500 iterations, 256 perturbed rollouts each, RTX 4090) |
-| time to the target, not engineered | the same | a success of 0.99 with the object within 10 mm, held: 2.5 ± 0.0 / 4.9 ± 2.6 min and 6.0 ± 4.8 / 10.8 ± 4.9 min on Lift / Square; Transport not reached (seeds 0-2, three runs sharing one RTX 4090) |
+| most accurate | `--config robomimic-supertrack`, `--config robomimic-supermimic` | object position 0.63 / 1.78 / 5.11 mm and 0.79 / 5.96 / 12.6 mm at a success of 100 / 100 / 66.5 % and 100 / 96.9 / 6.6 % on Lift / Square / Transport (seeds 0-2, 1,500 iterations, 256 perturbed rollouts each, A100 80GB SXM4) |
+| time to the target, not engineered | the same | a success of 0.99 with the object within 10 mm, held: 1.1 ± 0.0 / 3.6 ± 1.2 min and 1.1 ± 0.0 / 6.9 ± 0.0 min (Square: 2 of 3 runs) on Lift / Square; Transport not reached (seeds 0-2, each run alone on an A100 80GB SXM4) |
 
-**In short:** on Lift and Square both algorithms succeed in every rollout (the reference's targets alone: 0 and 5-7 %); on
-Transport SuperTrack succeeds in 89.8 % and SuperMimic in 37.1 % at the fixed budget of 1,500 iterations.
+**In short:** on Lift both algorithms succeed in every rollout and on Square in 100 % and 96.9 % (the reference's targets
+alone: 0 and 5-9 %); on Transport SuperTrack succeeds in 66.5 % and SuperMimic in 6.6 % at the fixed budget of 1,500
+iterations.
 
 <p align="center"><img src="docs/media/robomimic/grid.webp" alt="SuperTrack and SuperMimic tracking robomimic's Lift, Square and Transport demonstrations with Panda arms" width="100%"/></p>
-<p align="center"><i>Lift, Square and Transport (4x speed) with SuperTrack and SuperMimic from the unperturbed start, the whole demonstration; per case the seed with the highest success, then the lowest object error.<br>The demonstration's arms and objects are the translucent blue ghost (<a href="docs/tasks/robomimic.md">the task</a>).</i></p>
+<p align="center"><i>Lift, Square and Transport (4x speed) with SuperTrack and SuperMimic from the unperturbed start, the whole demonstration (SuperMimic's Transport rollout ends after 29 s of 36 s); per case the seed with the highest success, then the lowest object error.<br>The demonstration's arms and objects are the translucent blue ghost (<a href="docs/tasks/robomimic.md">the task</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking robomimic's demonstrations (MIT) in robosuite 1.5.0's scenes (MIT); see <a href="NOTICE">NOTICE</a>.</sub></p>
 
 - **Runs:** demonstration 0 of each task, 1,500 iterations in 2,048 worlds for both algorithms (the learning rate on a
@@ -1225,12 +1226,12 @@ Transport SuperTrack succeeds in 89.8 % and SuperMimic in 37.1 % at the fixed bu
 | | Lift | Square | Transport |
 |---|---|---|---|
 | seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| success ↑, SuperTrack / SuperMimic | 100 / 100 % | 100 / 100 % | 89.8 / 37.1 % |
-| reference's targets, open loop: success | 0 % | 7.0 / 5.5 % | 0 % |
-| object position ↓, SuperTrack / SuperMimic | 0.60 / 0.80 mm | 1.96 / 4.08 mm | 7.13 / 12.3 mm |
-| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 0 / 0 % | 5.7 / 59.6 % |
-| training (min), SuperTrack / SuperMimic, three runs sharing one RTX 4090 | 6.8 / 8.5 | 12.8 / 13.2 | 19.2 / 22.0 |
-| to the target ↓, SuperTrack / SuperMimic | 2.5 / 6.0 min | 4.9 / 10.8 min | not reached / not reached |
+| success ↑, SuperTrack / SuperMimic | 100 / 100 % | 100 / 96.9 % | 66.5 / 6.6 % |
+| reference's targets, open loop: success | 0 % | 5.9 / 7.9 % | 0 % |
+| object position ↓, SuperTrack / SuperMimic | 0.63 / 0.79 mm | 1.78 / 5.96 mm | 5.11 / 12.6 mm |
+| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 0 / 0.4 % | 27.7 / 92.8 % |
+| training (min), SuperTrack / SuperMimic, each run alone on an A100 80GB SXM4 | 3.2 / 3.4 | 6.5 / 6.9 | 8.5 / 9.3 |
+| to the target ↓, SuperTrack / SuperMimic | 1.1 / 1.1 min | 3.6 / 6.9 min (SuperMimic: 2 of 3 runs) | not reached / not reached |
 
 ### BlinkMimic's options
 
