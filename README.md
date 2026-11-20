@@ -153,7 +153,7 @@ options beside them); both methods are on offer for every task.
 | **Two G1s**, MLP world model (add `--motion_dir`) | lowest pose error, highest return | `two-g1-supertrack`: MPJPE 46.2 / 14.1 mm, return 0.8925 (seeds 0-2, 9,396 iterations) | `two-g1-supermimic`: 45.3 / 16.0 mm, return 0.9055 (the same) |
 | | time to the target, not engineered, one GPU | `two-g1-supertrack`: return 0.88 in 3.66 ± 0.00 min, root-relative MPJPE there 16.8 mm (seeds 0-2, A100 40GB SXM4) | `two-g1-supermimic`: 3.26 ± 0.00 min, 19.9 mm |
 | | time to the target, not engineered, three GPUs (`--layout AWL`) | `two-g1-supertrack-3gpu`: 1.85 ± 0.21 min, 16.1 mm (three A100 40GB SXM4) | `two-g1-supermimic-3gpu`: 1.62 ± 0.18 min, 20.0 mm |
-| **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm |
+| **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm (0.5 h, 4,373 iterations) | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm (0.5 h, 5,718 iterations) |
 | **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast`: the target in 1.0 / 0.8 / 2.0 min (9 of 9 runs, mean 1.30) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min (8 of 9, mean 2.19) |
 | | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 0.9 min (9 of 9 runs, mean 0.70) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.6 / 1.0 min (7 of 9, mean 1.46) |
@@ -710,8 +710,13 @@ SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,04
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack, MLP world model, on InterHuman clip 1566: seed 0's best checkpoint (iteration 7,000); blue ghosts: the references.<br>MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-- **Selection:** with the MLP, two rounds with equal run counts; the small RigidFormer (SuperTrack-RF, SuperMimic-RF),
-  from the first round's selections, in six further rounds of two runs per algorithm; then three training seeds.
+- **Selection:** with the MLP, two rounds with equal run counts, from LAFAN1's tuning-round selections (SuperMimic's
+  with action noise 0.3; its later 3 h configuration on LAFAN1, with 0.1, was not run on the clip). The small RigidFormer
+  (SuperTrack-RF, SuperMimic-RF) in six further rounds of two runs per algorithm, from the first round's selections,
+  SuperTrack-RF's with LAFAN1's SuperTrack-RF balance weight of 2 in place of the clip's 4; then three training seeds.
+- **The RigidFormer pair's budget:** both train 0.5 h, in which SuperTrack-RF runs 4,373 iterations and SuperMimic-RF
+  5,718: SuperMimic-RF's configuration has two world-model batches per iteration, SuperTrack-RF's five. Two batches were
+  tried for SuperMimic-RF only, three for both ([each round's runs](benchmarks/g1_boxing/results.md#training-seeds-0-2)).
 - **Table:** mean ± standard deviation over training seeds 0-2 of each run's best checkpoint, evaluated five times. The accuracy
   rows were measured before the two configurations took the goal encoded once (`--goal_table --pi_encode_once`), which computes
   the same values up to float rounding.

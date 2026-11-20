@@ -24,7 +24,8 @@ Setup:
 
 ## Selected on the clip
 
-Two rounds with equal run counts start from LAFAN1's selections. Five evaluations of each run's best checkpoint determine
+Two rounds with equal run counts start from LAFAN1's selections, those of its tuning rounds (SuperMimic's later 3 h
+configuration on LAFAN1, with action noise 0.1, was not run on the clip). Five evaluations of each run's best checkpoint determine
 the ranking. Learning curves use one evaluation per checkpoint to select that checkpoint (the selections: one checkpoint per
 1,000 iterations).
 
@@ -63,7 +64,9 @@ selection.
 The two selections and their RigidFormer counterparts, SuperTrack-RF and SuperMimic-RF, three training seeds each. The
 RigidFormer configurations start from round 1's selections without the MLP's options, use a small RigidFormer (`--rf_merge
 joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2`) and were chosen on the clip with seed 0 in six further rounds
-of two 0.5 h runs per algorithm, by the rule above (the MLP: the two rounds above). The four are named configurations:
+of two 0.5 h runs per algorithm, by the rule above (the MLP: the two rounds above). SuperTrack-RF's start has LAFAN1's
+SuperTrack-RF balance weight (`--st_balance_w 2`) in place of round 1's 4; SuperMimic-RF's keeps round 1's kicks
+(`--imag_start_perturb 0.3`; LAFAN1's SuperMimic-RF has 0.4). The four are named configurations:
 `ndm-train --config two-g1-supertrack`, `two-g1-supertrack-rf`,
 `two-g1-supermimic`, `two-g1-supermimic-rf`. All pairs succeed in every evaluation.
 
@@ -79,6 +82,21 @@ evaluation each) is evaluated five times from the clip's first frame; a cell is 
 deviation over the three seeds. Seed 0 trained on an A100-SXM4-80GB for 0.5 h (SuperMimic with the MLP 0.3 h, its best
 checkpoint its last). Seeds 1 and 2 trained on A100-SXM4-40GB GPUs to seed 0's iteration counts (9,396, 4,373, 6,264 and
 5,718, in the table's order), so training times are not compared across the seeds.
+
+The RigidFormer pair's budget is equal in time, not in iterations: in 0.5 h SuperTrack-RF runs 4,373 iterations and
+SuperMimic-RF 5,718, with two world-model batches per iteration against five. The six rounds' runs (seed 0, 0.5 h each):
+
+| round | SuperTrack-RF | SuperMimic-RF |
+|---|---|---|
+| 1 | the small RigidFormer (kept); RF-S | the small RigidFormer (kept); RF-S |
+| 2 | `--wm_batches 3`; `--st_fail_w 3` (selected) | `--wm_batches 3` (selected); `--pi_ema 0.99` |
+| 3 | `--wm_lr 8e-4` (selected); `--wm_lr 1.6e-3` | `--wm_lr 8e-4`; `--wm_lr 1.6e-3` (selected) |
+| 4 | `--wm_opt muon`; `--wm_opt muon --wm_lr 3.2e-3` | `--wm_opt muon`; `--wm_opt muon --wm_lr 3.2e-3` (selected) |
+| 5 | `--st_fail_w 2`; `--st_fail_w 2 --wm_opt muon --wm_lr 3.2e-3` (selected) | `--contact_reward 0.15`; `--wm_batches 2` (selected) |
+| 6 | `--wm_lr 3e-3`; `--wm_lr 3.5e-3` (selected) | `--wm_lr 3e-3` (selected); `--wm_lr 3.5e-3` |
+
+Two world-model batches and the policy average 0.99 were tried for SuperMimic-RF only; the failure-penalty weights are
+SuperTrack's own option, the foot-contact reward SuperMimic's.
 
 ### SuperTrack-MLP and SuperMimic-MLP at one budget
 
