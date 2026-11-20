@@ -53,15 +53,15 @@ RF_ARGS = ("rf_dim", "rf_layers", "rf_heads", "rf_registers", "rf_no_tree_bias",
 MLP_ARGS = ("wm_hidden", "wm_act", "wm_no_ln")
 # ndm_gym.train's speed options and BlinkMimic's options that muscle training does not implement, refused unless at their
 # defaults: LAFAN1's CUDA graphs of compiled parts (--update_graphs captures whole updates), compiled and fused kinematics (--fk_fused:
-# the G1's) and goal options, the
+# the G1's) and the G1's fused window loss (--st_wm_fused) and goal options, the
 # --algo blinkmimic preset, the mirror augmentation (the character's muscles are not mirrored), LAFAN1 SuperMimic's
 # semi-implicit world model and foot-contact reward, --lr_decay_ret (LAFAN1's normalized return), and the failure-focused
 # and evaluation-guided resets (MuscleSim draws its resets inside its reset graph from MuscleVAE's reset frames of three
 # clips: not ported).
-SPEED_UNSUPPORTED = ("wm_cudagraphs", "pi_cudagraphs", "critic_cudagraphs", "compile_eager", "fk_fused", "goal_table", "pi_encode_once", "preset",
-                     "wm_mirror", "wm_structured", "contact_reward", "ref_contact_fix", "lr_decay_ret", "fail_reset", "bin_fix", "eprobe_share",
-                     "eprobe_tile", "eprobe_lead_min", "eprobe_lead_max", "eprobe_every", "eprobe_start", "eprobe_win", "eprobe_decay",
-                     "eprobe_graph", "eprobe_async", "eprobe_lean")  # fmt: skip
+SPEED_UNSUPPORTED = ("wm_cudagraphs", "pi_cudagraphs", "critic_cudagraphs", "compile_eager", "fk_fused", "st_wm_fused", "goal_table",
+                     "pi_encode_once", "preset", "wm_mirror", "wm_structured", "contact_reward", "ref_contact_fix", "lr_decay_ret", "fail_reset",
+                     "bin_fix", "eprobe_share", "eprobe_tile", "eprobe_lead_min", "eprobe_lead_max", "eprobe_every", "eprobe_start", "eprobe_win",
+                     "eprobe_decay", "eprobe_graph", "eprobe_async", "eprobe_lean")  # fmt: skip
 
 
 def parse_args(argv: list[str] | None = None):

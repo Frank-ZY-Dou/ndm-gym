@@ -212,6 +212,10 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="the forward kinematics of training (ArticulationKinematics.forward: the world-model and policy losses, the "
                              "rewards, the critic's input, the reference's bodies) as two Triton kernels with a hand-written backward pass "
                              "(kernels/fk.py; changes results by rounding; a RigidFormer world model's own kinematics: --rf_fused_inputs)")
+    parser.add_argument("--st_wm_fused", action="store_true",
+                        help="supertrack: the world-model window loss (wm_window_terms: the forward kinematics of the predicted and the target "
+                             "states and the four errors of every body) as two Triton kernels with a hand-written backward pass, no body's "
+                             "state in memory (kernels/wm_loss.py; changes results by rounding)")
     if not rigidformer:
         return
     parser.add_argument("--rf_fused_train", action="store_true",
@@ -251,6 +255,8 @@ def parse_args():
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
     if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
         parser.error("--pi_encode_once: SuperTrack's and SuperMimic's imagination only")
+    if args.st_wm_fused and args.algo != "supertrack":
+        parser.error("--st_wm_fused: SuperTrack's world-model window loss (--algo supertrack)")
     if args.paired and (args.motions != "interhuman" or args.num_envs % 2):
         parser.error("--paired: two-person clips (--motions interhuman) and an even --num_envs (two robots per env)")
     return args
