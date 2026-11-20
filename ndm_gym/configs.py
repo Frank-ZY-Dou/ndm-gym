@@ -13,8 +13,8 @@ RECIPE = ("--pi_ema 0.995 --lr 4e-4 --wm_batches 5 --wm_mirror 0.5 --pi_opt muon
 RF_RECIPE = RECIPE.replace(" --wm_hidden 1024 1024 1024", "")  # the recipe without the MLP's size
 RESETS = "--fail_reset 0.3 --bin_fix --eprobe_share 0.15 --eprobe_graph --eprobe_async 20 --eprobe_start 1000 --eprobe_every 125 --eprobe_decay 0.7"
 SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_sync --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
-# speed options of the 3 h runs: SPEED for both backbones (SuperMimic's runs also --critic_cudagraphs), RF_SPEED the
-# RigidFormer's own
+# speed options of the 3 h runs: SPEED for the RigidFormer's and the MLP's earlier ones (SuperMimic's runs also
+# --critic_cudagraphs), RF_SPEED the RigidFormer's own
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
 RF_SMALL = "--rf_merge joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2"
@@ -24,6 +24,10 @@ AWL4 = "--layout AWL --eprobe_gpu 3 --eprobe_every 250 --eprobe_async 4 --eprobe
 ST_FAST = f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table --pi_encode_once {RESETS} {SYSTEMS} {TIMED}"
 SM_FAST = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 {RECIPE} --pi_ema 0.99 --pi_batch 1024 --pi_lr_mult 2 "
            f"--pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix --sm_residual --wm_structured {RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
+# the most accurate configurations: the fastest ones trained 3 h with the learning rate's cosine over the 3 h, as their runs ran
+# (the arguments the runs recorded: tests/test_configs.py); SuperMimic's with action noise 0.1 in place of 0.3
+CONFIRMED_3H = "--max_hours 3 --iterations 1000000 --ckpt_every 2000 --lr_decay_hours 3"
+SM_CONFIRMED = f"{SM_FAST} --pi_encode_once {LEAN}".replace("--action_noise 0.3", "--action_noise 0.1")
 PAIRED = "--motions interhuman --paired"  # with --motion_dir: a two-person clip (tools/convert_interhuman.py)
 ENCODE_ONCE = "--goal_table --pi_encode_once"  # the policy's goal encoded once per update from every frame's goal (equal up to rounding)
 TWO_G1_ST = (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE} --pi_batch 4096 {ENCODE_ONCE} {SYSTEMS} {PAIRED} "
@@ -51,13 +55,12 @@ GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadrupe
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
     "train": {
-        "lafan1-supertrack-accurate": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {SPEED} --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 36,200 iterations): return "
-                                       "0.857 +- 0.004, MPJPE 15.2 +- 1.0 mm (seeds 7-9)"),
-        "lafan1-supermimic-accurate": (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.1 --imag_start_perturb 0.3 --sm_residual {SPEED} "
-                                       "--critic_cudagraphs --max_hours 3",
-                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the speed options (about 33,800 iterations): return "
-                                       "0.872 +- 0.003, MPJPE 21.2 +- 0.3 mm (seeds 7-9)"),
+        "lafan1-supertrack-accurate": (f"{ST_FAST} {LEAN} {CONFIRMED_3H}",
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the cosine over the 3 h (about 63,310 iterations): "
+                                       "return 0.898 +- 0.002, MPJPE 10.8 +- 0.0 mm (seeds 7-9)"),
+        "lafan1-supermimic-accurate": (f"{SM_CONFIRMED} {CONFIRMED_3H}",
+                                       "LAFAN1, 40 clips, 3 h on an A100 40GB SXM4 with the cosine over the 3 h (about 67,030 iterations): "
+                                       "return 0.915 +- 0.005, MPJPE 16.7 +- 0.1 mm (seeds 7-9)"),
         "lafan1-supertrack-fast": (ST_FAST,
                                    "LAFAN1: return 0.82 after 4.19 +- 0.18 min on an A100 40GB SXM4 (seeds 0-2, one run at a time)"),
         "lafan1-supermimic-fast": (f"{SM_FAST} --pi_encode_once {LEAN}",
