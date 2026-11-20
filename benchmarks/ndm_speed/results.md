@@ -27,7 +27,9 @@ warm-up steps. Scenes start at the clip's first frame, without contacts between 
 ## NDM against physics on three tasks
 
 RF: RigidFormer RF-S, (a) as trained, (b) bf16 inference copy with Triton step kernels, (c) fused Triton blocks.
-MLP: bf16 inference copy (accuracy not scored). M = million env-steps per second; parentheses show the ratio to physics.
+MLP: bf16 inference copy (accuracy not scored). Both timed networks predict accelerations (SuperTrack's
+parameterization); the increment models (SuperMimic's), fitted for the accuracy tables below, were not timed.
+M = million env-steps per second; parentheses show the ratio to physics.
 Physics runs out of memory beyond N = 16384.
 
 **move_suitcase**
