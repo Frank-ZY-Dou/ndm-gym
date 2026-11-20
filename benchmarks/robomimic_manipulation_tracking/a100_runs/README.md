@@ -7,6 +7,9 @@ Per run, JSON records: `eval/metrics.json`, `time_to.json` (every kept checkpoin
 and `train.json` (the training log's last row: the iteration, the minutes, the environment steps and the iterations per
 second; `ep_len`, the mean episode length in training at 80, 90 and 100 % of the run). No logs, no checkpoints.
 
+The grid of these runs' renders (each case's seed with the highest success, then the lowest object error, from the
+unperturbed start; Transport at four times real time): [media/grid.webp](media/grid.webp).
+
 - **GPU:** NVIDIA A100-SXM4-80GB; each run alone on its GPU.
 - **Software:** Python 3.12.9, PyTorch 2.11.0 (CUDA 12.6 build), warp-lang 1.17.0 (CUDA 12 build), MuJoCo and MuJoCo-Warp 3.15.0.
 - **Compilation:** every run here had the kernels' compilation in the cache. `cold_cache_seed0/` holds each configuration's
