@@ -1,5 +1,7 @@
 # Manipulation demonstration tracking
 
+Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
+
 A Franka Panda arm with its parallel gripper (two of them for Transport) tracks a human teleoperated demonstration in
 physics: the arm's joints, the gripper and the objects it handles, from the demonstration's own simulator states. The scenes
 run on MuJoCo-Warp directly (no Isaac Lab; `ndm_gym/sim/rigid/robomimic_sim.py`). One policy tracks one demonstration, or

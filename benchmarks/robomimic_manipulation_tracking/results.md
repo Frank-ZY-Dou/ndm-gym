@@ -1,5 +1,7 @@
 # Manipulation demonstration tracking: results
 
+Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
+
 SuperTrack and SuperMimic, with the library's MLP world model of generalized coordinates, make one Franka Panda (two for
 Transport) track robomimic's first proficient-human demonstration of Lift, Square and Transport on MuJoCo-Warp
 ([the task](../../docs/tasks/robomimic.md), [the rules](README.md)).

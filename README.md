@@ -1353,7 +1353,8 @@ One Franka Panda (two for Transport) tracks a proficient human's teleoperated de
 [robomimic](https://github.com/ARISE-Initiative/robomimic) (Mandlekar et al., CoRL 2021) on MuJoCo-Warp, in the scene the
 demonstration was recorded in (robosuite 1.5.0): the arms' joints, the grippers and the objects, whose trajectories are the
 demonstration's own. The arms' torque actuators become joint position servos within their torque limits; contact-rich
-grasps with millimetre clearances, and two arms handing a hammer over.
+grasps with millimetre clearances, and two arms handing a hammer over. Contributed by
+[Jingdong Zhang](https://github.com/Evergreen0929) ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
 
 | goal | configuration (`train_robomimic`, add `--task`) | result: Lift / Square / Transport |
 |---|---|---|
@@ -1728,6 +1729,8 @@ Pull requests from outside contributors, each merged with its runs and results:
   SuperTrack and SuperMimic ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
 - [Jionghao Wang](https://github.com/shanemankiw): quadruped motion tracking: a Unitree Go2 on the Lifelike Labrador motion
   capture ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4), [#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
+- [Jingdong Zhang](https://github.com/Evergreen0929): manipulation demonstration tracking, Panda arms on robomimic's Lift,
+  Square and Transport ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
 
 ## 📄 Papers and repositories
 
