@@ -249,7 +249,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [mbrl-lib](benchmarks/mbrl_lib/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
   offline world-model benchmark.
-- **Benchmarks:** configurations selected in rounds under one rule, confidence intervals on LAFAN1
+- **Benchmarks:** on LAFAN1, tuning rounds with one budget and rule for both algorithms, and confidence intervals
   ([details](benchmarks/g1_lafan1_tracking/results.md#how-the-numbers-were-obtained)).
 
 | | MLP world model (default) | RigidFormer world model |
@@ -459,8 +459,14 @@ benchmarks/go2_lifelike_tracking/run.sh all 0 logs/go2_sm --config go2-supermimi
 
 SuperTrack and SuperMimic share each task's simulator, data, networks and evaluation.
 
-- **Selection:** rounds with equal budgets and one rule; the [fastest configurations](#training-speed) come from rounds
-  of single changes.
+- **Selection:** LAFAN1's tuning rounds gave both algorithms the same budget and rule (12 runs each). Where the two
+  algorithms' rounds, options or trials differ, these sections say so: [training speed](#training-speed),
+  [two G1s](#two-g1s-one-two-person-clip), [muscles](#muscle-actuated-character),
+  [quadrotor](#quadrotor-trajectory-tracking), [Adroit door](#adroit-door-tracking),
+  [Adroit pen, hammer and relocate](#adroit-pen-hammer-and-relocate-tracking), [Wuji piano](#wuji-hand-piano-playing),
+  [NDMs as simulators](#ndms-as-simulators-hdmis-scenes), [RoboKit](#ndms-in-robokits-planner) and
+  [mbrl-lib](#ndms-in-mbrl-libs-planner). The [fastest configurations](#training-speed) come from rounds of single
+  changes.
 - **SuperMimic** here is this library's re-implementation, written before its
   [official code](https://github.com/HybridRobotics/supermimic) was released; its numbers may differ from the authors' code.
 - **World models:** MLP for tracking and training speed, apart from the RigidFormer's tracking results on LAFAN1, the two
