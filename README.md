@@ -73,7 +73,7 @@ MuJoCo model.
 | NDM simulation: the racing quadrotor ([details](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds, the fused step in fp32 (TF32 products) with the network as one kernel: SuperTrack's acceleration model 74.3 M against MuJoCo Warp's 3.26 M (22.8x); SuperMimic's increment model 73.7 M against 3.27 M (22.6x); with the network compiled layer by layer 19.6x / 19.0x. The network is 85 % of the step | one A100 40GB SXM4 |
 | NDM simulation: the Wuji piano ([details](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds: the horizon-3 SuperTrack run's `PianoDynamics` with its networks in bf16 (compiled, one CUDA graph), 46.24 M against MuJoCo Warp's 30,213 for a control step of the full scene (1,530x; the four seed-0 models, both algorithms at both horizons, 1,523-1,530x). The model steps the policy's 192-number observed state; its due-key error is 0.15 / 0.19 / 0.26 of a key's travel at 1 / 3 / 10 steps, the horizon-3 SuperMimic model's 0.16 / 0.19 / 0.32 | one A100 40GB SXM4 |
 | the G1's forward step and the gradient of a 32-step rollout ([details](benchmarks/ndm_speed/results.md)) | SuperTrack's MLP world model against NablaEngine, MuJoCo Warp with the adjoint of its pull request #1535 and MJX, each in its faster setting | one A100 40GB |
-| RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds on the acceleration and on the increment model, the median over twenty plans (planner seeds 0-9, twice); the simulation step's speedup beside the task | one A100 40GB SXM4 |
+| RoboKit planning ([details](benchmarks/robokit_ndm/results.md)) | the example's whole planning time at the planner's own worlds on the acceleration and on the increment model, the median over twenty plans (planner seeds 0-9, twice; the acceleration model's G1 box carrying over ten, seeds 0-9 once); the simulation step's speedup beside the task | one A100 40GB SXM4 |
 | mbrl-lib planning ([details](benchmarks/mbrl_lib/results.md)) | the planner's time per executed step on the acceleration and on the increment model, timed in one session, the median over three planner seeds; the step's speedup at 4,096 worlds beside the task | one A100 80GB SXM4 |
 
 The Adroit door: MuJoCo Warp without no-slip and without multi-contact or native CCD, which it refuses with this model's
@@ -1343,7 +1343,8 @@ and each plan executes on MuJoCo Warp. Planning time is the simulator's steps pl
 | planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning 3.0x / 1.8x / 2.1x and 3.0x / 1.8x / 2.2x faster than on MuJoCo Warp; 20 of 20 plans pass on each task for each |
 
 G1 box carrying / G1 climbing / Go2 jumping; one A100 40GB SXM4, the median over the planner's seeds 0-9 run twice, one fit
-of each world model per task (fit seed 0) ([details](benchmarks/robokit_ndm/results.md)).
+of each world model per task (fit seed 0). SuperTrack's model on G1 box carrying was timed over seeds 0-9 once, in a
+session of its own; its 20 plans were counted in two earlier runs ([details](benchmarks/robokit_ndm/results.md)).
 
 **In short:** on either world model the three examples plan 1.8-3.0x faster than on MuJoCo Warp, and every plan passes the
 example's own check; the two are level (their planning times within 1 s).

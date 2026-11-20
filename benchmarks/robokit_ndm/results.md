@@ -46,7 +46,10 @@ A100 40GB SXM4 with nothing else running.
   - The network alone, SuperTrack's / SuperMimic's: 0.18 / 0.23 ms (G1 box carrying) and 0.21 / 0.17 ms (G1 climbing), at
     2,047 worlds, and 0.15 / 0.12 ms (Go2 jumping, 1,228 worlds).
 - **Planning.** The example's own planning time for its whole motion, the median over twenty plans (the planner's seeds 0-9,
-  twice; each within 1 s of it); MuJoCo Warp's planner with seeds 0-9 once. With a simulator whose step does nothing,
+  twice; each within 1 s of it); MuJoCo Warp's planner with seeds 0-9 once. SuperTrack's model on G1 box carrying was timed
+  apart, over ten plans (seeds 0-9 once, every plan 3 s) on A100 40GB SXM4 GPUs with nothing else running; its 20 plans of
+  the table below ran on an A100 40GB SXM4 with other work beside them and are counted for their passes, not their times.
+  With a simulator whose step does nothing,
   planning takes 2 s (G1 box carrying and G1 climbing) and 9 s (Go2 jumping), and the plans fail: the planner's own share,
   which no simulator removes.
 - **Plans that pass.** Each plan is read by the example's own check:
@@ -72,7 +75,10 @@ SuperMimic's 0.7-9.3 cm.
 
 The same fits were also planned on a development revision of the planner code, which this repository does not hold. The
 eight-seed fits passed 20 of 20 each (boxes within 9.8 and 9.0 cm). The second fits passed 20 of 20 (SuperTrack's, within
-3.6 cm) and 17 of 20 (SuperMimic's: three boxes 11.3-13.7 cm from the goal).
+3.6 cm) and 17 of 20 (SuperMimic's: three boxes 11.3-13.7 cm from the goal). In an earlier session on that revision, with
+planner seeds 0-4 once, SuperTrack's eight-seed fit passed 4 of 5 (one box 10.1 cm from its goal, where the check allows
+10.0) and SuperMimic's 5 of 5; planned twice more there, SuperTrack's passed 5 of 5 both times. G1 climbing and Go2
+jumping passed 5 of 5 for each.
 
 ## Reproducing
 
@@ -91,6 +97,7 @@ python -m ndm_gym.wmbench.fit_mjcf --model data/g1_climb_s0_planner0.mjb \
   --test held=data/g1_climb_s2_rollout_dt20.npz executed=data/g1_climb_s2_executed0.npz \
   --steps 20000 --batch 512 --window 8 --compile --cut 300 --eval_every 2000 --eval_k 1 8 20 40 \
   --out fits/rfit_g1_climb_dt20_acc_ln.csv --save fits/rfit_g1_climb_dt20_acc_ln.pt
+# SuperMimic's increment model: the same command with --wm_param increment (files rfit_g1_climb_dt20_inc_ln.*)
 # time the step against MuJoCo Warp's
 python -m ndm_gym.wmbench.speed_mjcf --meta data/g1_climb_s0.json --states data/g1_climb_s2_executed0.npz --nworld 2047 8192 \
   --what physics ndm ndmsim --dtype bf16 --ckpt fits/rfit_g1_climb_dt20_acc_ln.pt --derived kinematics sensor_pos \
