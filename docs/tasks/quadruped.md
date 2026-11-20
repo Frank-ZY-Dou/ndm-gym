@@ -113,13 +113,5 @@ it shows where the two overlap (`--plain_ghost`: a faint ghost in the scene inst
 `.webp`) or as a contact sheet of frames at even steps. `--source reference_targets` draws the rollout with the
 reference pose as the targets.
 
-![SuperTrack and SuperMimic on the walk, the run and the play clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/grid.webp)
-
-*Seed 0 of each algorithm's single-clip runs from the unperturbed start, real time; the reference laid over the robot in translucent blue (where the robot's white shows, it is off the
-reference). Single
-animations: [walk](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/walk_sm.webp), [run](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/run_sm.webp), [play](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/play_sm.webp)
-(SuperMimic); [walk](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/walk_st.webp), [run](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/run_st.webp), [play](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/play_st.webp)
-(SuperTrack).*
-
 Tasks and rules: [`benchmarks/go2_lifelike_tracking`](../../benchmarks/go2_lifelike_tracking/README.md). Tracking results
 on this task are not reported here.
