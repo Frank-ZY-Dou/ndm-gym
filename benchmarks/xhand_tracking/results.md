@@ -1,5 +1,8 @@
 # Hand-object tracking: results
 
+Contributed by [Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
+([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+
 SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift clips with a floating right XHand
 ([the task](../../docs/tasks/hand.md)); both also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
 

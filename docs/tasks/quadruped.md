@@ -1,5 +1,8 @@
 # Quadruped motion tracking
 
+Contributed by [Jionghao Wang](https://github.com/shanemankiw) ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4),
+[#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
+
 A Unitree Go2 tracks the motion capture of a Labrador retriever: walking, trotting, running, turning, backing, jumping
 and playing, on MuJoCo-Warp directly (no Isaac Lab; `ndm_gym/sim/rigid/quadruped_sim.py`). One policy tracks one clip
 or all of them.

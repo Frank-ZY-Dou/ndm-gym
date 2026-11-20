@@ -1,5 +1,8 @@
 # Quadruped motion tracking: results
 
+Contributed by [Jionghao Wang](https://github.com/shanemankiw) ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4),
+[#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
+
 SuperTrack and SuperMimic, with the library's MLP world model of generalized coordinates, make a Unitree Go2 track the
 retargeted motion capture of a Labrador ([the task](../../docs/tasks/quadruped.md), [the rules](README.md)).
 

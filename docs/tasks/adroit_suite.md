@@ -1,5 +1,7 @@
 # Adroit manipulation tracking
 
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
+
 Pen, Hammer and Relocate extend the native Adroit infrastructure used by [Door](adroit_door.md). The algorithms learn from new simulator transitions and optimize tracking through a learned dynamics model. This is an online demonstration-tracking study, **not standard D4RL offline RL**.
 
 The initial single-seed study is retained as historical evidence. The [three-seed follow-up](../../benchmarks/adroit_suite/v2/README.md) uses fresh complete runs for both methods and all three tasks. Door's independent contribution is unchanged. The [study protocol and results](../../benchmarks/adroit_suite/README.md) record reference selection, adaptation, controls, compute budgets and limitations.

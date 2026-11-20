@@ -1,5 +1,7 @@
 # Quadrotor trajectory tracking
 
+Contributed by [Zhengming Yu](https://github.com/Yzmblog) ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
+
 A racing quadrotor tracks flown trajectories: the autonomous flights of
 [Race Against the Machine](https://github.com/tii-racing/drone-racing-dataset) (Bosello et al., RA-L 2024; the data CC BY
 4.0), a 5-inch racing drone recorded by motion capture at 275 Hz on an ellipse, a lemniscate and a 3-D race track of

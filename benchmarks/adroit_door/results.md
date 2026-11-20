@@ -1,5 +1,7 @@
 # Native Adroit Door control replay (development feasibility)
 
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+
 This is reference preparation, not a trained policy result or a performance
 comparison. Native hand; no Allegro retargeting, attachments, object actuators or
 external applied forces. Bounded supervised residual training results are recorded below. Existing defaults are unchanged.

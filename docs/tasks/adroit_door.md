@@ -1,5 +1,7 @@
 # Adroit Door demonstration tracking
 
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+
 A native Adroit hand tracks a physically replayed door-opening demonstration.
 The 28 hand actuators must move the hand, turn the passive latch and open the
 passive door. The task measures hand, door and latch tracking separately from

@@ -1,11 +1,13 @@
 # Wuji Hand piano: SuperTrack and SuperMimic on A100s
 
+Contributed by [Anna Mei](https://github.com/annamei1) ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
+
 Each algorithm's configuration, chosen by the same settings screen, at horizons 3 and 8: seeds 0-2, 20 rounds each
 (102,400 control transitions), every run alone on one A100 40GB SXM4. Every final checkpoint plays the whole song from the
 same 256 held-out starts. Numbers are the mean ± sample SD over the three seeds. The world model is the task-specific
 `PianoDynamics` for both algorithms ([task and scoring](README.md#task-and-scoring)).
 
-The contributed study ran the starting configurations of both algorithms on one RTX 3060 (seeds 0-2, the same budget):
+Anna Mei's study ran the starting configurations of both algorithms on one RTX 3060 (seeds 0-2, the same budget):
 Eden F1 0.8490 ± 0.0705 for SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([the contributed study](ode_to_joy_results.md),
 [note timing and the scripted reference](note_timing_results.md)).
 

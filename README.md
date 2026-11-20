@@ -208,7 +208,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] Contributed** by [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it;
   the Allegro and the Inspire hand, each read from its scene with no code of its own; by
   [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights; by
-  [Yifan Kang](https://github.com/YIFANK): Adroit Door tracking with SuperTrack and SuperMimic; by
+  [Yifan Kang](https://github.com/YIFANK): Adroit Door, Pen, Hammer and Relocate tracking with SuperTrack and SuperMimic; by
+  [Jionghao Wang](https://github.com/shanemankiw): quadruped motion tracking of a Go2 on a Labrador's motion capture; by
   [Anna Mei](https://github.com/annamei1): two Wuji hands playing Eden's *Ode to Joy*.
 - **[2026-11] Using it:** a [leaderboard](#-leaderboard), [named configurations](#-recommended-settings) (`--config`),
   trained weights of the G1 / LAFAN1 runs on [Hugging Face](https://huggingface.co/frankzydou/ndm-gym), a library-only
@@ -804,7 +805,10 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 
 A floating hand tracks human grasp-and-lift demonstrations on MuJoCo-Warp: the XHand, the Allegro hand and the Inspire
 hand, each on an apple, a spray bottle and a can. The reference is [SPIDER](https://github.com/facebookresearch/spider)'s
-kinematic retarget of the captured hand and of the object's pose.
+kinematic retarget of the captured hand and of the object's pose. Contributed by
+[Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
+([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand
+([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|
@@ -944,7 +948,8 @@ A racing quadrotor tracks the motion-captured flights of
 [Race Against the Machine](https://github.com/tii-racing/drone-racing-dataset) on MuJoCo-Warp: one rigid body of 870 g
 commanded by a collective thrust and body rates at 100 Hz, an underactuated flying base without contacts, on the dataset's
 ellipse, lemniscate and seven-gate race track, each flown by its controller (the autonomous flights) and by human pilots
-(the piloted flights).
+(the piloted flights). Contributed by [Zhengming Yu](https://github.com/Yzmblog)
+([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
 
 | goal | configuration (`train_quadrotor`, add `--flight`) | result: ellipse / lemniscate / race track |
 |---|---|---|
@@ -1016,7 +1021,8 @@ The 28-actuator Adroit hand opens a door by tracking one demonstration: clip 23 
 [Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics). The door and its latch are passive, and the
 policy adds a bounded correction to the demonstration's own control at each step. Physics runs in MuJoCo on eight CPU
 cores, learning on the GPU. Two settings: the demonstration's start, and the door and latch started up to 0.3 rad open
-(`--door-latch-offset 0.3`).
+(`--door-latch-offset 0.3`). Contributed by [Yifan Kang](https://github.com/YIFANK)
+([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
 
 | goal | configuration (`python -m ndm_gym.train_door_full`) | result |
 |---|---|---|
@@ -1057,7 +1063,7 @@ contributed study on an L40S: [full results](benchmarks/adroit_door/full_results
 
 ### Adroit Pen, Hammer and Relocate tracking
 
-Three native Adroit tasks extend the shared Door collector and learning infrastructure. SuperTrack and SuperMimic each run fresh seeds 0–2 at 20,000 iterations in 2,048 worlds: 18 complete runs. Final checkpoints and the float32 reference-control prior use identical sets of 256 starts. Entries are mean ± sample SD over three training-seed means.
+Three native Adroit tasks extend the shared Door collector and learning infrastructure. SuperTrack and SuperMimic each run fresh seeds 0–2 at 20,000 iterations in 2,048 worlds: 18 complete runs. Final checkpoints and the float32 reference-control prior use identical sets of 256 starts. Entries are mean ± sample SD over three training-seed means. Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
 
 | Task | Prior final success | SuperTrack | SuperMimic |
 | --- | ---: | ---: | ---: |
@@ -1084,7 +1090,8 @@ Two floating Wuji Hand 2 hands play Eden's *Ode to Joy*, the melody and a held b
 one-second lead-in), on 88 passive keys in MuJoCo Warp: 52 independent wrist and finger controls at 20 Hz, the score's
 next half second as the goal, no fingering given. Both algorithms train through the task's own world model,
 `PianoDynamics`: a polynomial fit of the fingertip geometry and hand-set contact constants find the keys a fingertip can
-press, and two residual networks correct the actuators' motion and the keys' depths.
+press, and two residual networks correct the actuators' motion and the keys' depths. Contributed by
+[Anna Mei](https://github.com/annamei1) ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
 
 | goal | configuration (`benchmarks/wuji_piano/run.sh`) | result |
 |---|---|---|
@@ -1125,7 +1132,9 @@ benchmarks/wuji_piano/run.sh supermimic logs/piano_sm --horizon 3 --gamma 0.95 -
 A Unitree Go2 tracks the motion capture of a Labrador retriever from
 [Lifelike agility and play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play) on MuJoCo-Warp: 12 joint
 position servos at 50 Hz, a floating base with four feet, flight phases and turns. The reference is a kinematic retarget
-(supermimic-quadruped's `quadmotion`) that no physics shaped, so the policy has to find the contacts.
+(supermimic-quadruped's `quadmotion`) that no physics shaped, so the policy has to find the contacts. Contributed by
+[Jionghao Wang](https://github.com/shanemankiw) ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4),
+[#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
 
 | goal | configuration (`train_quadruped`) | result |
 |---|---|---|

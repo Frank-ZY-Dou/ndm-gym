@@ -1,5 +1,7 @@
 # Wuji Hand piano playing
 
+Contributed by [Anna Mei](https://github.com/annamei1) ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
+
 Two freely moving Wuji Hand 2 beta2 hands play Eden’s 90 BPM *Ode to Joy* on 88 passive keys in MuJoCo-Warp: the
 melody and a held bass, 19 notes in an 11.5 s episode with a one-second lead-in. Each hand has six wrist pose axes and
 20 finger joints, 52 independent controls at 20 Hz over 200 Hz physics. The policy sees the score's current frame and
@@ -23,7 +25,7 @@ alone on one A100 40GB SXM4, the same 256 held-out starts ([every seed, the scre
 SuperTrack at horizon 3 is the most accurate, above SuperMimic at either horizon; at horizon 8 SuperMimic's mean F1 is
 the higher. SuperTrack's seeds lie closer together and its runs take less time at both horizons.
 
-The training times are the contributed implementation's (eager updates), not engineered for speed. The contributed study
+The training times are the contributed implementation's (eager updates), not engineered for speed. Anna Mei's study
 ran both algorithms' starting configurations on one RTX 3060 (seeds 0-2, the same budget): Eden F1 0.8490 ± 0.0705 for
 SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([the contributed study](ode_to_joy_results.md));
 there the scripted reference, with assigned fingers, scored 0.6325 ([note timing](note_timing_results.md)).

@@ -1,5 +1,7 @@
 # Quadrotor trajectory tracking: results
 
+Contributed by [Zhengming Yu](https://github.com/Yzmblog) ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
+
 SuperTrack and SuperMimic, with MLP world models, track flown trajectories of Race Against the Machine with a racing
 quadrotor ([the task](../../docs/tasks/quadrotor.md), [the rules](README.md#rules-fixed-before-the-runs)).
 
