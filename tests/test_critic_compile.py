@@ -1,10 +1,11 @@
-"""SuperMimic's --critic_compile (train.py speed option, off by default), on the CPU in eager mode (torch.compile as the identity),
-where the option computes the default's values with the same operations: the graphable policy update with --critic_compile is
-the default's bit for bit (its survival products are the same loop of products), the eager one up to float rounding in its policy
-loss and gradient (the option's loop of products where the default has cumprod); the critic's update is the default's bit for bit
-in both, its inputs normalized once per update and cast once to the first product's dtype (the normalizer does not change during
-the minibatch steps), as the CPU's bf16 autocast shows. The test at the end needs a GPU: the option compiled, in fp32 and under
-CUDA's bf16 autocast, against the default up to rounding."""
+"""SuperMimic's --critic_compile and both algorithms' --compile_norms (train.py speed options, off by default), on the CPU in eager
+mode (torch.compile as the identity), where each option computes the default's values with the same operations: the graphable
+policy update with --critic_compile is the default's bit for bit (its survival products are the same loop of products), the
+eager one up to float rounding in its policy loss and gradient (the option's loop of products where the default has cumprod);
+the critic's update is the default's bit for bit in both, its inputs normalized once per update and cast once
+to the first product's dtype (the normalizer does not change during the minibatch steps), as the CPU's bf16 autocast shows.
+--compile_norms' statistics are the default's bit for bit (the structured world model's plain increments computed once). The
+tests at the end need a GPU: the options compiled, in fp32 and under CUDA's bf16 autocast, against the default up to rounding."""
 
 import pytest
 import torch
@@ -112,18 +113,82 @@ def test_critic_compile_refusals(eager, kin, synthetic_motion, synthetic_mdp):
     assert not algo.critic_compile and not hasattr(algo, "critic_loss_c")
 
 
+def _transitions(buf, k: int):
+    from ndm_gym.state import unflatten_state
+
+    w = buf.data
+    return unflatten_state(w["s"][k]), unflatten_state(w["s1"][k]), w["a"][k], w["xi"][k]
+
+
+def _norms(algo) -> list[torch.Tensor]:
+    wm = algo.wm
+    return [t.clone() for n in (wm.in_norm, wm.out_norm, getattr(wm, "inc_norm", None)) if n is not None for t in (n.mean, n.var, n.count)]
+
+
+@pytest.mark.parametrize("name,extra", [("supertrack", {"st_com": True}), ("supermimic", {"wm_structured": True, "sm_residual": True}),
+                                        ("supermimic", {})], ids=["supertrack", "supermimic-structured", "supermimic"])  # fmt: skip
+def test_compile_norms_is_the_default(eager, monkeypatch, kin, synthetic_motion, synthetic_mdp, name, extra):
+    """--compile_norms: the world-model normalizers after two collection steps' updates are the default's bit for bit (the
+    statistics written in place, RunningNorm with --no_sync, in both)."""
+    from ndm_gym.core.normalizer import RunningNorm
+
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    out = []
+    for on in (False, True):
+        algo, buf = _algo(name, kin, synthetic_motion, synthetic_mdp, no_sync=True, compile_norms=on, **extra)
+        assert algo.compile_norms == on
+        for k in (0, 5):
+            algo.update_wm_norms(*_transitions(buf, k))
+        out.append(_norms(algo))
+    assert len(out[0]) == (9 if extra.get("wm_structured") else 6)
+    for a, b in zip(*out):
+        torch.testing.assert_close(b, a, **EXACT)
+
+
+def test_compile_norms_computes_the_increments_once(eager, monkeypatch, kin, synthetic_motion, synthetic_mdp):
+    """With --wm_structured the default computes the plain increments twice (in ``targets`` and for ``inc_norm``), the
+    option once."""
+    from ndm_gym.core.normalizer import RunningNorm
+
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    for on, calls in ((False, 2), (True, 1)):
+        algo, buf = _algo("supermimic", kin, synthetic_motion, synthetic_mdp, no_sync=True, compile_norms=on, wm_structured=True)
+        n, inc = [0], algo.wm.increments
+
+        def counted(S, S1, n=n, inc=inc):
+            n[0] += 1
+            return inc(S, S1)
+
+        monkeypatch.setattr(algo.wm, "increments", counted)
+        algo.update_wm_norms(*_transitions(buf, 0))
+        assert n[0] == calls
+
+
+def test_compile_norms_refusals(eager, kin, synthetic_motion, synthetic_mdp):
+    from test_xmimic_learner import RF
+
+    with pytest.raises(ValueError, match="no_sync"):
+        _algo("supermimic", kin, synthetic_motion, synthetic_mdp, compile_norms=True)
+    with pytest.raises(ValueError, match="MLP world model"):
+        _algo("supertrack", kin, synthetic_motion, synthetic_mdp, compile_norms=True, no_sync=True, **RF)
+
+
 def test_train_parses_the_options(monkeypatch):
-    """ndm_gym.train's parser: --critic_compile with SuperMimic only."""
+    """ndm_gym.train's parser: --critic_compile with SuperMimic only, --compile_norms with SuperTrack and SuperMimic."""
     import sys
 
     pytest.importorskip("isaaclab")
     from ndm_gym import train
 
-    monkeypatch.setattr(sys, "argv", ["ndm_gym.train", "--algo", "supermimic", "--critic_compile"])
-    assert train.parse_args().critic_compile
-    monkeypatch.setattr(sys, "argv", ["ndm_gym.train", "--algo", "supertrack", "--critic_compile"])
-    with pytest.raises(SystemExit):
-        train.parse_args()
+    for argv in (["--algo", "supermimic", "--critic_compile", "--compile_norms", "--no_sync"],
+                 ["--algo", "supertrack", "--compile_norms", "--no_sync"]):  # fmt: skip
+        monkeypatch.setattr(sys, "argv", ["ndm_gym.train"] + argv)
+        a = train.parse_args()
+        assert a.compile_norms and a.critic_compile == (a.algo == "supermimic")
+    for bad in (["--algo", "supertrack", "--critic_compile"], ["--algo", "other", "--compile_norms"]):
+        monkeypatch.setattr(sys, "argv", ["ndm_gym.train"] + bad)
+        with pytest.raises(SystemExit):
+            train.parse_args()
 
 
 # ---------------------------------------------------------------- on a GPU, compiled
@@ -217,3 +282,22 @@ def test_critic_compile_compiled(monkeypatch, synthetic_motion, amp):
     _close(l1, l0, fwd)
     for a, b in zip(g0, g1):
         _close(b, a, grad)
+
+
+@GPU
+def test_compile_norms_compiled(monkeypatch, synthetic_motion):
+    """--compile_norms compiled on the GPU (fp32): the normalizers after one collection step's update, against the default's,
+    up to float rounding (1e-5)."""
+    from ndm_gym.core.normalizer import RunningNorm
+    from ndm_gym.state import unflatten_state
+
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    out = []
+    for on in (False, True):
+        algo, buf = _gpu(synthetic_motion, dict(compile_eager=True, compile_norms=on, **PUBLISHED, **GRAPHABLE))
+        w = buf.data
+        algo.update_wm_norms(unflatten_state(w["s"][3]), unflatten_state(w["s1"][3]), w["a"][3], w["xi"][3])
+        out.append(_norms(algo))
+    for a, b in zip(*out):
+        _close(b, a, 1e-5)
+

@@ -200,6 +200,9 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="supermimic: what its critic's terms run eagerly, as compiled functions: the policy loss's terms after the rollout "
                              "(survival, discounted rewards, the critic's bootstrap value), the critic's values and GAE targets, and its minibatch "
                              "steps on the inputs normalized once per update (equal up to float rounding)")
+    parser.add_argument("--compile_norms", action="store_true",
+                        help="supertrack, supermimic: the collection's world-model normalizer updates as one compiled function, with "
+                             "--wm_structured the plain increments computed once (needs --no_sync; the MLP world model; equal up to float rounding)")
     parser.add_argument("--combo_kernels", action="store_true",
                         help="independent small kernels of compiled functions launched together (combo_kernels; may change results by rounding)")
     parser.add_argument("--compile_eager", action="store_true",
@@ -259,6 +262,8 @@ def parse_args():
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
     if args.critic_compile and args.algo != "supermimic":
         parser.error("--critic_compile: SuperMimic's critic (--algo supermimic)")
+    if args.compile_norms and args.algo not in ("supertrack", "supermimic"):
+        parser.error("--compile_norms: SuperTrack's and SuperMimic's world-model normalizers")
     if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
         parser.error("--pi_encode_once: SuperTrack's and SuperMimic's imagination only")
     if args.st_wm_fused and args.algo != "supertrack":
