@@ -22,11 +22,13 @@ Transport) track robomimic's first proficient-human demonstration of Lift, Squar
   NutAssemblySquare and TwoArmTransport, written as a function of the state) at the demonstration's last frame. This is a
   tracking proxy, not robomimic's success rate of a learned policy (the test met at any step within a horizon).
 - **Reference targets:** the same rollouts with the reference's joint positions as the servos' targets and no policy.
-- **Hardware and clock:** one RTX 4090 running three training runs at once, so the times are wall clock under that sharing
-  and upper bounds of a run alone. The clock starts at the first training iteration, after the simulator's setup and the
-  warm-up collection, and includes the compilation and the checkpoints' saving; evaluations are not in it. Time to the
-  target, not engineered: there is no per-phase time table, and the times are not an A100's or H100's.
-- Mean ± sample SD over the three training seeds.
+- **Hardware and clock:** each run alone on one A100 80GB SXM4. The clock starts at the first training iteration, after the
+  simulator's setup and the warm-up collection, and includes the checkpoints' saving; evaluations are not in it. The
+  kernels' compilation was in the cache before these runs: on an empty cache a run takes 4 to 15 min longer (each
+  configuration's first seed-0 run, in `a100_runs/cold_cache_seed0/`). Time to the target, not engineered: there is no
+  per-phase time table. Iterations/s is `train_log.csv`'s last `it_per_s`.
+- Mean ± sample SD over the three training seeds. Each run's log, metrics and time to the target:
+  [`a100_runs/`](a100_runs/README.md).
 
 ```bash
 benchmarks/robomimic_manipulation_tracking/run_formal.sh
@@ -36,32 +38,33 @@ benchmarks/robomimic_manipulation_tracking/run_formal.sh
 
 | task | algorithm | success ↑ | object position ↓ | object position at the last frame ↓ | episodes ended ↓ | reference targets: success | training (min) | iterations/s |
 |---|---|---|---|---|---|---|---|---|
-| Lift | SuperTrack | 100.0 ± 0.0 % | 0.60 ± 0.10 mm | 1.70 ± 0.17 mm | 0.0 % | 0.0 % | 6.8 ± 1.4 | 4.2 ± 2.1 |
-| | SuperMimic | 100.0 ± 0.0 % | 0.80 ± 0.21 mm | 2.22 ± 1.2 mm | 0.0 % | 0.0 % | 8.5 ± 2.2 | 2.9 ± 0.6 |
-| Square | SuperTrack | 100.0 ± 0.0 % | 1.96 ± 0.53 mm | 4.03 ± 0.80 mm | 0.0 % | 7.0 ± 2.7 % | 12.8 ± 3.0 | 2.3 ± 1.2 |
-| | SuperMimic | 100.0 ± 0.0 % | 4.08 ± 0.85 mm | 3.57 ± 0.13 mm | 0.0 % | 5.5 ± 2.4 % | 13.2 ± 2.8 | 1.9 ± 0.4 |
-| Transport | SuperTrack | 89.8 ± 5.4 % | 7.13 ± 0.75 mm | 32.1 ± 12 mm | 5.7 ± 3.9 % | 0.0 % | 19.2 ± 6.3 | 1.4 ± 0.2 |
-| | SuperMimic | 37.1 ± 27 % | 12.3 ± 1.7 mm | 308 ± 180 mm | 59.6 ± 32 % | 0.0 % | 22.0 ± 2.4 | 1.0 ± 0.0 |
+| Lift | SuperTrack | 100.0 ± 0.0 % | 0.63 ± 0.04 mm | 1.94 ± 0.52 mm | 0.0 % | 0.0 % | 3.2 ± 0.0 | 7.96 ± 0.03 |
+| | SuperMimic | 100.0 ± 0.0 % | 0.79 ± 0.07 mm | 2.34 ± 0.56 mm | 0.0 % | 0.0 % | 3.4 ± 0.0 | 7.28 ± 0.06 |
+| Square | SuperTrack | 100.0 ± 0.0 % | 1.78 ± 0.19 mm | 3.52 ± 1.8 mm | 0.0 % | 5.9 ± 1.4 % | 6.5 ± 0.1 | 3.86 ± 0.04 |
+| | SuperMimic | 96.9 ± 5.4 % | 5.96 ± 2.7 mm | 7.89 ± 5.3 mm | 0.4 ± 0.7 % | 7.9 ± 1.0 % | 6.9 ± 0.1 | 3.61 ± 0.09 |
+| Transport | SuperTrack | 66.5 ± 9.4 % | 5.11 ± 0.12 mm | 95.9 ± 40 mm | 27.7 ± 13 % | 0.0 % | 8.5 ± 0.0 | 2.99 ± 0.02 |
+| | SuperMimic | 6.6 ± 4.4 % | 12.6 ± 3.6 mm | 329 ± 10 mm | 92.8 ± 4.9 % | 0.0 % | 9.3 ± 0.0 | 2.72 ± 0.02 |
 
 Per seed (0 / 1 / 2), success and object position:
 
 | task | SuperTrack | SuperMimic |
 |---|---|---|
-| Lift | 100 / 100 / 100 %; 0.48 / 0.66 / 0.66 mm | 100 / 100 / 100 %; 0.58 / 0.82 / 1.00 mm |
-| Square | 100 / 100 / 100 %; 2.32 / 1.36 / 2.20 mm | 100 / 100 / 100 %; 5.03 / 3.42 / 3.77 mm |
-| Transport | 88.7 / 85.2 / 95.7 %; 6.62 / 7.99 / 6.77 mm | 13.7 / 66.4 / 31.2 %; 13.37 / 10.36 / 13.29 mm |
+| Lift | 100 / 100 / 100 %; 0.60 / 0.67 / 0.61 mm | 100 / 100 / 100 %; 0.75 / 0.87 / 0.76 mm |
+| Square | 100 / 100 / 100 %; 1.99 / 1.71 / 1.64 mm | 100 / 100 / 90.6 %; 4.01 / 4.82 / 9.05 mm |
+| Transport | 77.3 / 61.7 / 60.5 %; 5.07 / 5.24 / 5.01 mm | 9.0 / 9.4 / 1.6 %; 15.82 / 8.69 / 13.32 mm |
 
-On Lift and Square both algorithms succeed in every rollout, where the reference's targets alone succeed in 0 and 5-7 %.
-On Transport (two arms, a 36 s demonstration) SuperTrack succeeds in 89.8 % and SuperMimic in 37.1 % of the rollouts. The
-Transport runs still change between their last checkpoints (below), so these are the fixed budget's numbers, not final
-ones.
+On Lift both algorithms succeed in every rollout, and on Square SuperTrack in every rollout and SuperMimic in 96.9 %
+(100 / 100 / 90.6 % over the seeds), where the reference's targets alone succeed in 0 and 5-9 %. On Transport (two arms,
+a 36 s demonstration) SuperTrack succeeds in 66.5 % and SuperMimic in 6.6 % of the rollouts. The Transport runs of both
+algorithms and Square's SuperMimic runs still change between their last checkpoints (below), so these are the fixed
+budget's numbers, not final ones.
 
 ## Time to the target
 
 The target is the hand task's: a success of at least 0.99 with the tracked objects within 10 mm. `time_to.py` evaluates
 every kept checkpoint (every 500 iterations) as the last one is, without the reference's targets, and reports the wall time
-of the first checkpoint from which every later one meets the target. The checkpoints are 500 iterations apart and the
-clock is the shared GPU's (above), so the times are upper bounds.
+of the first checkpoint from which every later one meets the target. The checkpoints are 500 iterations apart, so a time
+is its checkpoint's and an upper bound (every Lift run meets the target at its first checkpoint).
 
 ```bash
 python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s?
@@ -69,10 +72,10 @@ python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_form
 
 | task | algorithm | minutes to the target ↓ | iteration | seeds 0 / 1 / 2 (min) |
 |---|---|---|---|---|
-| Lift | SuperTrack | 2.5 ± 0.0 | 500 / 500 / 500 | 2.4 / 2.5 / 2.4 |
-| | SuperMimic | 6.0 ± 4.8 | 1,500 / 1,000 / 500 | 11.0 / 5.4 / 1.4 |
-| Square | SuperTrack | 4.9 ± 2.6 | 500 / 500 / 500 | 7.4 / 2.3 / 4.9 |
-| | SuperMimic | 10.8 ± 4.9 | 1,000 / 1,500 / 1,000 | 7.8 / 16.4 / 8.3 |
+| Lift | SuperTrack | 1.1 ± 0.0 | 500 / 500 / 500 | 1.1 / 1.1 / 1.0 |
+| | SuperMimic | 1.1 ± 0.0 | 500 / 500 / 500 | 1.2 / 1.1 / 1.1 |
+| Square | SuperTrack | 3.6 ± 1.2 | 1,000 / 500 / 1,000 | 4.4 / 2.2 / 4.3 |
+| | SuperMimic | 6.9 ± 0.0, 2 of 3 runs | 1,500 / 1,500 / not reached | 6.9 / 6.8 / not reached |
 | Transport | SuperTrack | not reached | | |
 | | SuperMimic | not reached | | |
 
@@ -80,13 +83,15 @@ Each checkpoint's success (500 / 1,000 / 1,500 iterations), seeds 0, 1, 2:
 
 | task | SuperTrack | SuperMimic |
 |---|---|---|
-| Lift | 100 / 100 / 100 % in every seed | 100 / 10.9 / 100 %; 28.5 / 100 / 100 %; 100 / 100 / 100 % |
-| Square | 99.6 / 100 / 100 %; 100 / 100 / 100 %; 100 / 100 / 100 % | 30.9 / 100 / 100 %; 100 / 94.1 / 100 %; 41.4 / 100 / 100 % |
-| Transport | 92.2 / 89.5 / 88.7 %; 89.1 / 83.6 / 85.2 %; 63.7 / 68.4 / 95.7 % | 15.6 / 0.0 / 13.7 %; 0.0 / 30.9 / 66.4 %; 0.0 / 2.3 / 31.2 % |
+| Lift | 100 / 100 / 100 % in every seed | 99.2 / 100 / 100 %; 100 / 100 / 100 %; 100 / 100 / 100 % |
+| Square | 91.0 / 100 / 100 %; 100 / 100 / 100 %; 84.0 / 100 / 100 % | 100 / 97.7 / 100 %; 100 / 90.2 / 100 %; 100 / 1.6 / 90.6 % |
+| Transport | 88.3 / 92.2 / 77.3 %; 99.2 / 85.2 / 61.7 %; 97.3 / 65.6 / 60.5 % | 0.4 / 0.0 / 9.0 %; 7.8 / 1.6 / 9.4 %; 0.0 / 14.8 / 1.6 % |
 
 ## Renders
 
 `tools/render_robomimic.py` renders a rollout recorded by `evaluate_robomimic`. `docs/media/robomimic/` holds, per task and
-algorithm, the seed with the highest success and then the lowest object error (Lift seed 0 for both, Square seed 1 for
-both, Transport SuperTrack seed 2 and SuperMimic seed 1), from the unperturbed start, Transport at four times real time,
-and the grid of the six (`tools/make_grid.py`).
+algorithm, the seed with the highest success and then the lowest object error (Lift seed 0 for both, Square SuperTrack
+seed 2 and SuperMimic seed 0, Transport SuperTrack seed 0 and SuperMimic seed 1), from the unperturbed start, Transport at
+four times real time, and the grid of the six (`tools/make_grid.py`). SuperMimic's Transport rollout terminates after
+29 s of the demonstration's 36 s, as its other two seeds' do (after 19 and 29 s); the other five play the whole
+demonstration.
