@@ -1449,8 +1449,9 @@ Each task's results are in its section; these are the factors behind them.
    - Offline, at a learning rate of 4e-4 picked on the benchmark's test sets: 7-16% lower open-loop error in
      distribution, 11-21% out of it; at the shared default 2e-4, -4% / -11% (SuperTrack's model) and +8% / +0%
      (SuperMimic's).
-   - Online: SuperTrack-RF / SuperMimic-RF return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm. Tuned online as the MLP was, no
-     significant difference at equal iterations.
+   - Online, tuned as the MLP was (the RigidFormer after 12 tuning runs, the MLP after 12): no significant difference at
+     equal iterations. Its final configurations (the RigidFormer after 21 and 19 tuning runs, SuperTrack-RF's and
+     SuperMimic-RF's, the MLP after 12): return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm.
    - In 3 h with the same speed options the MLP runs about 3x more iterations; the MLP's 3 h configurations of that time:
      return 0.857 (SuperTrack) and 0.872 (SuperMimic, action noise 0.1 with `--sm_residual`; with 0.3 its MLP drops late,
      0.137 at about 33k iterations).
@@ -1477,7 +1478,7 @@ Each task's results are in its section; these are the factors behind them.
 ✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. All numbers, and the preliminary single-seed runs: [`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).
 
 - **Policy rows:** the leave-one-out study, seeds 1-3, 3 h.
-- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3), and the final ones at 3 h against the MLP's of that time with the same speed options (seeds 7-9).
+- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3; the RigidFormer after 12 tuning runs, the MLP after 12), and the final ones at 3 h against the MLP's of that time with the same speed options (seeds 7-9; the RigidFormer after 21 and 19 tuning runs, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12).
 - In these rows an effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed clips under 1 and 2 m/s pushes).
 - **World-model rows:** the open-loop 32-step error of offline fits, three per variant (bold: significant).
 

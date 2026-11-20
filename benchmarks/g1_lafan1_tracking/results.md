@@ -581,9 +581,10 @@ Held-out clips at every checkpoint (mean over seeds 1-3; context):
 
 ## RigidFormer tuned online
 
-SuperTrack-RF and SuperMimic-RF tuned online as the MLP was (selected: SuperTrack `--st_balance_w 2`, SuperMimic
-`--imag_start_perturb 0.4`; RF-S, world-model learning rate 4e-4), on seeds 1-3, one A100 40GB each, against the MLP
-finals and against RigidFormer before its tuning. Equal iterations: the MLP finals' counts at 3 h. Mean ± std over seeds;
+SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, 12 tuning runs each as the MLP had (selected: SuperTrack
+`--st_balance_w 2`, SuperMimic `--imag_start_perturb 0.4`; RF-S, world-model learning rate 4e-4), on seeds 1-3, one A100
+40GB each, against the MLP finals and against RigidFormer before its tuning. Equal iterations: the MLP finals' counts at
+3 h. Mean ± std over seeds;
 difference [Welch 95% interval], bold when it excludes 0.
 
 At equal iterations no metric differs significantly from the MLP finals. At 3 h without the speed options, where
@@ -606,7 +607,8 @@ Checkpoints of the selected configurations: SuperTrack last: iterations 12670, 1
 ## RigidFormer's final configurations
 
 SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
-40GB each), ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
+40GB each; the RigidFormer after 21 and 19 tuning runs in all, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12),
+ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
 SuperMimic-RF `--imag_start_perturb 0.4 --wm_batches 7`, both `--wm_lr 4e-4`. The selected configurations then ran on
 fresh seeds 7-9, 3 h each, scored as the main comparison, next to the MLP configurations with the speed options that
 apply to them. Differences with Welch 95% intervals; bold when the interval excludes 0.

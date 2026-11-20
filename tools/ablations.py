@@ -832,8 +832,9 @@ def readme_markdown(rows):
     out = ["✅ helps · ⚖️ trade-off · ❌ hurts · ➖ no clear effect. All numbers, and the preliminary single-seed runs: "
            "[`ablations.md`](benchmarks/g1_lafan1_tracking/ablations.md).", "",
            "- **Policy rows:** the leave-one-out study, seeds 1-3, 3 h.",
-           "- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3), and the final ones at 3 h against the MLP's "
-           "of that time with the same speed options (seeds 7-9).",
+           "- **RigidFormer rows:** the tuned configurations at equal iterations (seeds 1-3; the RigidFormer after 12 tuning runs, the "
+           "MLP after 12), and the final ones at 3 h against the MLP's of that time with the same speed options (seeds 7-9; the "
+           "RigidFormer after 21 and 19 tuning runs, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12).",
            "- In these rows an effect counts when its Welch 95% interval excludes 0 (return, failed clips, MPJPE, failed clips under 1 "
            "and 2 m/s pushes).",
            "- **World-model rows:** the open-loop 32-step error of offline fits, three per variant (bold: significant).", "",
