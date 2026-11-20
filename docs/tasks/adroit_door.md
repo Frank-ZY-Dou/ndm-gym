@@ -157,7 +157,7 @@ python -m ndm_gym.eval_door_full --checkpoint /path/outside/repository/st-offset
   --model ... --reference ... --native-library ... --output /path/outside/repository/st-offset-seed0-evaluation
 ```
 
-Results on A100 40GB, both settings, every seed: [results](../../benchmarks/adroit_door/results_a100.md).
+Results on A100 40GB, both settings, every seed and the settings screen: [results](../../benchmarks/adroit_door/results_a100.md).
 
 ## Render saved physical trajectories
 

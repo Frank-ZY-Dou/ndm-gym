@@ -112,8 +112,8 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
 | **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2); `quadrotor-supermimic-fast` **0.93 / 0.78 / 0.89 min**, without the optimizer options SuperTrack's configuration has |
 |  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200); `quadrotor-supermimic-accurate` **6.55 / 4.96 / 5.08 mm** and **5.51 / 4.71 / 8.13 mm**, without those options |
-| **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on **99.3 %** of 256 starts (the demonstration's controls: 65.2 %), return **8.165 ± 0.054** (seeds 0-2, A100 40GB) |
-|  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3`, the contributed implementation | 99 % of the starts open after **13.1 ± 7.9 min** (seeds 0-2, A100 40GB) |
+| **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --door-latch-offset 0.3` with `--method supertrack --residual-scale 0.2` and with `--method supermimic`, openings level | the door open on **99.3 ± 0.8 %** and **99.5 ± 0.9 %** of 256 starts (the demonstration's controls: 65.2 %); return **8.165 ± 0.054** and **7.927 ± 0.066**, door RMSE 0.1403 ± 0.0054 and 0.1320 ± 0.0060 rad (seeds 0-2, A100 40GB) |
+|  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3` | 99 % of the starts open after **13.1 ± 7.9 min**, the runs ending at 99.5 % open (seeds 0-2, A100 40GB); `--method supertrack --lr 8e-4` **35.5 ± 13.6 min**, ending at 91.1 %; both in the contributed implementation |
 | **[Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking)**, one demonstration each; contributed runs on an L40S, not re-verified on an A100 | 🎯 most accurate, Pen | `train_adroit --method supertrack` | native final success **96.7 ± 1.2 %**, normalized tracking RMSE **0.0519 ± 0.0043**; `--method supermimic` **79.4 ± 28.5 %**, **0.2380 ± 0.1386**; the demonstration's controls alone 58.6 %, 0.4024 (seeds 0-2, L40S) |
 |  | 🎯 most accurate, Hammer | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0485 ± 0.0231**; `--method supermimic --nail-tracking-std .001` **73.0 ± 45.0 %**, **0.0762 ± 0.0155**; the demonstration's controls alone 51.2 %, 0.0389 (seeds 0-2, L40S) |
 |  | 🎯 most accurate, Relocate | `train_adroit --method supertrack` | **100.0 ± 0.0 %**, **0.0508 ± 0.0027**; `--method supermimic` **100.0 ± 0.0 %**, **0.2059 ± 0.0255**; the demonstration's controls alone 100.0 %, 0.0316 (seeds 0-2, L40S) |
@@ -124,7 +124,7 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
-| **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model, MLP, as a bf16 copy | **27.62 M world-steps/s**, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed collector on eight CPU cores; SuperMimic's increment model 27.14 M, 64.3x ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
+| **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | **27.62 M** and **27.14 M world-steps/s**, 69.7x and 64.3x MuJoCo Warp, which was timed beside each model on that model's states (0.396 M and 0.422 M), 1,629x and 1,600x the contributed collector on eight CPU cores; at 4,096 worlds 20.85 M and 21.55 M ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#quadrotor-trajectory-tracking)**, the racing quadrotor, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs, the fused step in fp32, the network as one kernel | **74.3 M** and **73.7 M world-steps/s**, 22.8x and 22.6x MuJoCo Warp's 3.26 M / 3.27 M; 34.2x / 34.1x at 1,024 worlds, 11.5x at 65,536 ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#wuji-hand-piano-playing)**, the Wuji piano, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | the task's `PianoDynamics`, its networks in bf16 (both algorithms' models within 1 %) | **46.2 M world-steps/s**, 1,530x MuJoCo Warp's 30,213 for a control step of the full scene; the model steps only the policy's 192-number observed state, a due key's depth off by 0.15 / 0.19 / 0.26 of its travel at 1 / 3 / 10 steps (SuperTrack's horizon-3 model; SuperMimic's 0.16 / 0.19 / 0.32) ([results](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | ⏱ throughput, not engineered | the MLP world model (acceleration parameterization) as a bf16 copy | **16.28 M env-steps/s**, 45.9x the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5x ([results](benchmarks/ndm_speed/results.md)) |
@@ -168,7 +168,7 @@ options beside them); both methods are on offer for every task.
 | **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.38 / 2.02 / 2.19 mm | `quadrotor-supermimic-accurate`: 6.55 / 4.96 / 5.08 mm |
 | | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
-| | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min | `--method supermimic`: 13.1 min |
+| | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min, the runs ending at 91.1 % | `--method supermimic`: 13.1 min, ending at 99.5 % |
 | **Adroit Pen, Hammer, Relocate** (`train_adroit`; contributed runs on an L40S, not re-verified on an A100) | most accurate, Pen | `--method supertrack`: native final success 96.7 %, normalized tracking RMSE 0.0519 | `--method supermimic`: 79.4 %, 0.2380 |
 | | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
 | | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
@@ -1069,17 +1069,19 @@ cores, learning on the GPU. Two settings: the demonstration's start, and the doo
 
 | goal | configuration (`python -m ndm_gym.train_door_full`) | result |
 |---|---|---|
-| most accurate, door and latch up to 0.3 rad open | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` | the door open on 99.3 % of 256 starts, return 8.165 ± 0.054; the demonstration's controls alone 65.2 %, 6.102 (seeds 0-2, A100 40GB) |
-| time to the target, not engineered | `--method supermimic --door-latch-offset 0.3` | 99 % of the starts open after 13.1 ± 7.9 min of training (seeds 0-2, A100 40GB; the contributed implementation) |
-| most accurate, the demonstration's start | `--method supertrack` | return 9.018 ± 0.013, every start open; the demonstration's controls 9.035 (seeds 0-2, A100 40GB) |
+| most accurate, door and latch up to 0.3 rad open | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` and `--method supermimic --door-latch-offset 0.3`, openings level | the door open on 99.3 ± 0.8 % and 99.5 ± 0.9 % of 256 starts, return 8.165 ± 0.054 and 7.927 ± 0.066; the demonstration's controls alone 65.2 %, 6.102 (seeds 0-2, A100 40GB) |
+| time to the target, not engineered | `--method supermimic --door-latch-offset 0.3` | 99 % of the starts open after 13.1 ± 7.9 min of training, the runs ending at 99.5 % open; `--method supertrack --lr 8e-4` 35.5 ± 13.6 min, ending at 91.1 % (seeds 0-2, A100 40GB; both in the contributed implementation) |
+| most accurate, the demonstration's start | `--method supertrack` | return 9.018 ± 0.013, every start open; `--method supermimic` 8.934 ± 0.044, every start open; the demonstration's controls 9.035 (seeds 0-2, A100 40GB) |
 
 Opening: the door open at the end of the clip; 256 starts, one nominal and 255 with the hand perturbed (and, with the
-offset, the door and latch raised by up to 0.3 rad each); 20,000 iterations. Most accurate: the higher return where the
-opening rates are within their seeds' spread.
+offset, the door and latch raised by up to 0.3 rad each); 20,000 iterations. With the door and latch started open the two
+opening rates are within their seeds' spread; SuperTrack's configuration has the higher return and the lower hand error
+(0.0730 against 0.0783 rad), SuperMimic's the lower door error (0.1320 against 0.1403 rad).
 
 **In short:** from the demonstration's start its controls already open every start, and training leaves the tracking
-a little below them (SuperMimic: return 8.934); with the door and latch started open, a learned correction opens 99 % of
-the starts against 65 % (SuperMimic's: 99.5 %, return 7.927; SuperTrack with `--lr 8e-4`: 99 % open after 35.5 min).
+a little below them (return 9.018 and 8.934 against 9.035); with the door and latch started open, a learned correction
+opens 99 % of the starts against 65 % (SuperTrack 99.3 %, return 8.165; SuperMimic 99.5 %, return 7.927; 99 % open after
+35.5 min with SuperTrack's `--lr 8e-4` and 13.1 min with SuperMimic, not engineered).
 
 <p align="center"><img src="docs/media/adroit_door/policy.webp" alt="A trained SuperTrack policy opens the Adroit door, tracking the demonstration" width="640"/></p>
 <p align="center"><i>SuperTrack from the demonstration's start, seed 0, at the clip's speed.</i></p>
@@ -1087,15 +1089,17 @@ the starts against 65 % (SuperMimic's: 99.5 %, return 7.927; SuperTrack with `--
 
 - **Why a correction on the demonstration's control:** the policy starts from controls that already open the door, so
   learning only has to fix what perturbed starts break. With the door started open, SuperTrack's correction scaled by
-  0.2 instead of 0.1 opened 99.8 % of the starts in its screen instead of 87.3 %.
+  0.2 instead of 0.1 opened 99.8 % of the starts in its screen instead of 87.3 %; the same change lowered SuperMimic's
+  from 99.0 % to 82.2 % ([the screen](benchmarks/adroit_door/results_a100.md#the-settings-screen)).
 - **Why the time is not engineered:** the contributed trainer collects with MuJoCo on the CPU (about 0.1 s an iteration)
   and learns in eager fp32 (0.24-0.33 s); the times are that implementation's.
 - **Why the world model simulates faster:** one batched network step stands in for five physics steps with contacts; in
   bf16 it is mostly matrix products (64 % / 66 % of the step for SuperTrack's / SuperMimic's model), the rest compiled
   elementwise kernels. At 16,384 worlds on one A100 40GB SXM4, SuperTrack's acceleration model steps 27.62 M world-steps
   per second, 69.7x MuJoCo Warp's 0.396 M and 1,629x the contributed native collector on eight CPU cores (16,962);
-  SuperMimic's increment model 27.14 M (64.3x against 0.422 M; 1,600x). The bf16 copies stay within 2.5 % of fp32 in
-  open-loop error (the door at 16 steps: 0.0058 / 0.0055 rad)
+  SuperMimic's increment model 27.14 M (64.3x against 0.422 M; 1,600x). The two are level: at 4,096 worlds SuperMimic's
+  steps 21.55 M and SuperTrack's 20.85 M, and MuJoCo Warp was timed beside each on that model's own states. The bf16
+  copies stay within 2.5 % of fp32 in open-loop error (the door at 16 steps: 0.0058 / 0.0055 rad)
   ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)). MuJoCo Warp runs without no-slip
   and without multi-contact or native CCD, which it refuses with this model's margins; the CPU collector and the world
   models' training data keep no-slip.
