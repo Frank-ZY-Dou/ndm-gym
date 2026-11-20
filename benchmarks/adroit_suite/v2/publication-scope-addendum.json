@@ -1,6 +1,6 @@
 {
   "time": 1794978655.8169332,
-  "reason": "User explicitly clarified that valid implementation and honestly reported method failures are sufficient for contribution; >=95% success is not a CONTRIBUTING requirement.",
+  "reason": "Valid implementation and honestly reported method failures are sufficient for contribution; >=95% success is not a CONTRIBUTING requirement.",
   "change": "Resume the twelve originally planned Pen/Relocate runs; preserve all six Hammer results and the failed quality gate. No reference, metric, native predicate, seed, budget or training source changes.",
   "original_gate_status": false
 }

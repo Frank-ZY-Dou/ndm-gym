@@ -41,7 +41,7 @@
     "vram_gib_per_job": 16,
     "disk_gib_per_job": 40,
     "max_job_seconds": 18000,
-    "root": "/data/YifanKang/adroit-suite-v2",
+    "root": "<data-root>/adroit-suite-v2",
     "shared_memory_custom_kernel_bytes": 0,
     "warmup": "Exact method/task/width/full network and batches before each full run",
     "headroom": "Leave GPUs6-7 and 40 physical cores available; CPU checks occupy four separate cores only; admission and continuous resource monitoring; no unrelated jobs stopped"

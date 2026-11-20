@@ -118,5 +118,5 @@ SuperTrack and the five of this table for SuperMimic, on seed 0; the two rounds 
 ## Notes
 
 - Two of SuperMimic's first trainings on all clips (seeds 0 and 1) and one on `play` (seed 0) shared their GPU with
-  another user's job; they were run again on idle GPUs and only the reruns are reported.
+  another job; they were run again on idle GPUs and only the reruns are reported.
 - Not measured: clips held out of training (zero-shot), and the two long clips (70 s and 79 s) split into shorter ones.
