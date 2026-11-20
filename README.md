@@ -120,7 +120,7 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 | **[Quadruped motion tracking](#quadruped-motion-tracking)**, a Go2, all 65 clips of a dog's motion capture | ⏱ time to the target, not engineered | `go2-supermimic` | **1.31 ± 0.03 min**, every run (an RTX 6000 Ada, seeds 0-2; `go2-supertrack` 4.43 ± 0.58 min) |
 |  | 🎯 most accurate | `go2-supermimic` | return **0.986**, feet **5.3 mm** in the trunk's frame, trunk 12.1 mm, no clip failed, at a success of 100 % (seeds 0-2, 10,000 iterations, 14 min) |
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB) |
-| **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm (four tuning rounds to the RigidFormer's nine) |
+| **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); `muscles-supermimic-rf` **60.2 ± 2.0 mm** (heading frame: 35.1 ± 0.7 and 38.5 ± 3.4 mm), with the lower joint error, 8.7 ± 0.4 against 10.1 ± 0.3 deg; with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm and `muscles-supermimic` 65.6 ± 8.1 mm, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
 | **[NDM in mbrl-lib's planner](#ndms-in-mbrl-libs-planner)**, PETS' cart-pole / pusher, one A100 80GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **20.8x / 9.9x** and **20.9x / 10.5x** faster than on MuJoCo Warp (0.314 → 0.0151 / 0.0150 s, 0.300 → 0.0303 / 0.0286 s a step), 103.8x / 31.3x and 104.3x / 33.2x faster than mbrl-lib's CPU pool; 30 of 30 / 28 of 30 plans at the bar for each ([results](benchmarks/mbrl_lib/results.md)) |
@@ -777,6 +777,10 @@ and `muscles-supermimic-rf` have the lower joint error (9.7 and 8.7 deg against 
 
 - **Selection:** four rounds of 1 h runs with the MLP, ranked by one rule; the selected configurations train with seeds
   1-3 for up to 3 h, stopping when the error stops falling.
+- **What differs:** SuperTrack's muscle targets are offsets about the reference action, SuperMimic's are about the
+  T-pose. SuperMimic's option for offsets about the reference pose (`--sm_residual`, part of its LAFAN1 MLP and two-G1
+  configurations) is not implemented by `train_muscles` and was not tried here. The rounds varied the simulator's action
+  noise for SuperMimic only (0.1 beside its 0.3).
 - **Evaluation:** the best checkpoint with at most 10% of episodes ended, with a seed it did not train with
   ([details](benchmarks/musclevae/results.md)).
 

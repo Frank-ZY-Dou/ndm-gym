@@ -61,6 +61,12 @@ SuperMimic's later checkpoints reach 55.8-67.6 mm in the root frame with 0.13-0.
 
 With the MLP world model, both algorithms had the same four rounds, all with seed 0 and a budget of 1 h on an A100 40GB PCIe, ranked by the same rule.
 
+The two configurations parameterize the actions differently, and the rounds did not vary that: SuperTrack's muscle
+targets are offsets about the reference action, SuperMimic's are about the T-pose (`ndm_gym/algos/muscle_algos.py`).
+SuperMimic's option for offsets about the reference pose, `--sm_residual` (part of its LAFAN1 MLP and two-G1
+configurations; on LAFAN1 its MPJPE went from 28.4 to 25.0 mm with it), is not implemented by `train_muscles`, which
+refuses it. Of the options both algorithms take, the action noise was varied for SuperMimic only (round 1).
+
 - **Rule:** in each run, the best checkpoint as above (a checkpoint every 1,000 iterations) is evaluated with seed 1. Per
   algorithm the lowest MPJPE is selected; within 2 mm, the lower share of episodes ended. A run with no checkpoint at or
   below 0.10 ended cannot be selected.
