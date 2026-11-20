@@ -67,6 +67,9 @@ CUDA_VISIBLE_DEVICES=0 python -m ndm_gym.train_adroit $COMMON \
 
 For the follow-up, repeat each task/method with seeds 0, 1 and 2 in separate output directories. Hammer SuperMimic additionally uses `--nail-tracking-std .001`; every other task/method retains the defaults. This changes only the training reward width, not the reference or native success predicate. Evaluation always reports the original widths. The narrower width did not make Hammer success robust across seeds; preserve every result. Door-specific tuning and start-offset options are rejected by the fixed suite protocol.
 
+Hammer's nail width was screened for SuperMimic only; the trainer accepts the option for both methods, and for SuperTrack
+it changes the nail term's weight (the reciprocal of the width).
+
 The formal training source matches commit `1fbef65` in `ndm_gym/`. Subsequent integration with upstream `76b9914` retains the same default execution: both algorithms' full-capacity 320-step states, optimizers, replay and RNGs match bit-for-bit, with only the source fingerprint differing. [Compatibility record](../../benchmarks/adroit_suite/v2/upstream_compatibility.json).
 
 The shared schedule performs 40,960,000 training transitions plus 65,536 warmup transitions, 80,000 model optimizer steps and 19,700 policy updates. SuperMimic additionally performs 394,000 critic optimizer steps. The Hand accurate adaptation uses four model batches of 2,048 eight-step windows, 4,096 imagined policy starts, horizon 16, five goal frames, the existing network sizes and method-specific learning rates. Native joint coordinates/controller, finite-clip termination and CPU physics differ from XHand; this is not a literal equivalence claim.

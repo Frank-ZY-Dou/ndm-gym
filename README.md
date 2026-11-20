@@ -1153,6 +1153,10 @@ closest there (0.0316).
 - **Hammer's nail:** SuperMimic's runs, trained with the 1 mm kernel, have the lower nail error, 0.206 ± 0.044 against
   0.332 ± 0.037 mm; the other physical errors are lower for SuperTrack on all three tasks
   ([physical errors](benchmarks/adroit_suite/v2/results.md#physical-tracking-errors)).
+- **The kernel's width** was screened for SuperMimic only: 10, 1 and 0.5 mm at 6,000 iterations on a development seed
+  gave 6.6 %, 100 % and 43.0 % success at a normalized tracking RMSE of 0.0698, 0.0978 and 0.1476
+  ([the screen](benchmarks/adroit_suite/v2/README.md)). SuperTrack's runs keep 10 mm; the option would change its
+  objective too, its term weights being the reciprocals of the widths.
 - **Training time:** 93.7–154.9 minutes per seed for the 20,000 iterations, on one L40S and eight physical CPU cores.
 
 See [all seeds, physical errors and limitations](benchmarks/adroit_suite/v2/results.md), [the precision experiment](benchmarks/adroit_suite/v2/README.md), [checks](benchmarks/adroit_suite/v2/contributing_checks.md), and the [reproduction guide](docs/tasks/adroit_suite.md).
