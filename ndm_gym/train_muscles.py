@@ -58,10 +58,10 @@ MLP_ARGS = ("wm_hidden", "wm_act", "wm_no_ln")
 # semi-implicit world model and foot-contact reward, --lr_decay_ret (LAFAN1's normalized return), and the failure-focused
 # and evaluation-guided resets (MuscleSim draws its resets inside its reset graph from MuscleVAE's reset frames of three
 # clips: not ported).
-SPEED_UNSUPPORTED = ("wm_cudagraphs", "pi_cudagraphs", "critic_cudagraphs", "critic_compile", "compile_norms", "compile_eager", "fk_fused",
-                     "st_wm_fused", "goal_table", "pi_encode_once", "preset", "wm_mirror", "wm_structured", "contact_reward", "ref_contact_fix",
-                     "lr_decay_ret", "fail_reset", "bin_fix", "eprobe_share", "eprobe_tile", "eprobe_lead_min", "eprobe_lead_max", "eprobe_every",
-                     "eprobe_start", "eprobe_win", "eprobe_decay", "eprobe_graph", "eprobe_async", "eprobe_lean")  # fmt: skip
+SPEED_UNSUPPORTED = ("wm_cudagraphs", "pi_cudagraphs", "critic_cudagraphs", "critic_compile", "critic_fused", "compile_norms", "compile_eager",
+                     "fk_fused", "st_wm_fused", "goal_table", "pi_encode_once", "preset", "wm_mirror", "wm_structured", "contact_reward",
+                     "ref_contact_fix", "lr_decay_ret", "fail_reset", "bin_fix", "eprobe_share", "eprobe_tile", "eprobe_lead_min", "eprobe_lead_max",
+                     "eprobe_every", "eprobe_start", "eprobe_win", "eprobe_decay", "eprobe_graph", "eprobe_async", "eprobe_lean")  # fmt: skip
 
 
 def parse_args(argv: list[str] | None = None):

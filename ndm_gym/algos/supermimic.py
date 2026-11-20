@@ -51,6 +51,16 @@ class SuperMimic(Algo):
             self.loss_terms_c = torch.compile(self._loss_terms)
             self.critic_targets_c = torch.compile(self._critic_targets)
             self.critic_loss_c = torch.compile(self._critic_loss)
+        # optional (train.py --critic_fused, with --critic_compile): each minibatch step (the loss, its backward pass, the clipping and
+        # Adam's step) by Triton kernels around cuBLAS's products (kernels/critic_fused.py), the critic's parameters, their
+        # gradients and Adam's state in flat buffers. Equal to --critic_compile's steps up to float rounding.
+        self.critic_fused = getattr(args, "critic_fused", False)
+        if self.critic_fused:
+            if not self.critic_compile:
+                raise ValueError("--critic_fused needs --critic_compile (its steps read the inputs normalized once per update)")
+            from ..kernels.critic_fused import CriticFused
+
+            self.cfused = CriticFused(self.critic, self.opt_v)
         # optional, for ablations of the action parameterization: offsets about the reference pose of the next frame
         # (SuperTrack's) instead of setpoints about the default pose
         self.residual = self.is_residual(vars(args))
@@ -110,6 +120,8 @@ class SuperMimic(Algo):
     def load_state_dict(self, ck):
         super().load_state_dict(ck)
         self.critic.load_state_dict(ck["critic"]), self.opt_v.load_state_dict(ck["opt_v"])
+        if self.critic_fused:  # Adam's state back into the flat buffers, the parameters' bf16 copies from the loaded ones
+            self.cfused.attach(), self.cfused.refresh()
 
     # ------------------------------------------------------------------ world model (Eq. 1, state term)
     def _wm_err(self, S_hat, s1, mask):
@@ -363,6 +375,9 @@ class SuperMimic(Algo):
                     perm = torch.randperm(n, device=dev)
                     for i in range(args.critic_minibatches):
                         idx = perm[i * mb : (i + 1) * mb]
+                        if self.critic_fused:  # the step by the kernels
+                            v_loss = self.cfused.step(Xf, Yf, idx)
+                            continue
                         v_loss = self.critic_loss_c(Xf, Yf, idx) if self.critic_compile else ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
                         self.opt_v.zero_grad(set_to_none=True)
                         v_loss.backward()
@@ -468,6 +483,9 @@ class SuperMimic(Algo):
                 perm = torch.randperm(n, device=dev)
                 for i in range(args.critic_minibatches):
                     idx = perm[i * mb : (i + 1) * mb]
+                    if self.critic_fused:  # the step by the kernels
+                        v_loss = self.cfused.step(Xf, Yf, idx)
+                        continue
                     v_loss = self.critic_loss_c(Xf, Yf, idx) if self.critic_compile else ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
                     self.opt_v.zero_grad(set_to_none=True)
                     v_loss.backward()

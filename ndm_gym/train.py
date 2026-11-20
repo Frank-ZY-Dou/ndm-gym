@@ -200,6 +200,10 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="supermimic: what its critic's terms run eagerly, as compiled functions: the policy loss's terms after the rollout "
                              "(survival, discounted rewards, the critic's bootstrap value), the critic's values and GAE targets, and its minibatch "
                              "steps on the inputs normalized once per update (equal up to float rounding)")
+    parser.add_argument("--critic_fused", action="store_true",
+                        help="supermimic, with --critic_compile: each critic minibatch step (the loss, its backward pass, the clipping and Adam's "
+                             "step) by Triton kernels around cuBLAS's products, the critic's parameters, gradients and Adam's state in "
+                             "flat buffers (kernels/critic_fused.py; changes results by rounding)")
     parser.add_argument("--compile_norms", action="store_true",
                         help="supertrack, supermimic: the collection's world-model normalizer updates as one compiled function, with "
                              "--wm_structured the plain increments computed once (needs --no_sync; the MLP world model; equal up to float rounding)")
@@ -262,6 +266,8 @@ def parse_args():
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
     if args.critic_compile and args.algo != "supermimic":
         parser.error("--critic_compile: SuperMimic's critic (--algo supermimic)")
+    if args.critic_fused and not args.critic_compile:
+        parser.error("--critic_fused: with --critic_compile (SuperMimic's critic; the steps read the inputs normalized once per update)")
     if args.compile_norms and args.algo not in ("supertrack", "supermimic"):
         parser.error("--compile_norms: SuperTrack's and SuperMimic's world-model normalizers")
     if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
