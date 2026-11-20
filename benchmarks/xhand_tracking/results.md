@@ -391,27 +391,55 @@ synchronized at each boundary, so their sum is not the running iteration:
 With three GPUs the steps run at once, so an iteration takes about as long as the slowest: 25.3 ms for SuperTrack (its
 two updates, 24.9 and 24.6 ms) and 33.8 ms for SuperMimic (its policy update with the critic's, 33.3 ms).
 
-## More clips
+## More tasks
 
-The mustard bottle and the mug, two more of DexYCB's demonstrations, on the XHand and the Allegro hand. Training and
-evaluation as in [More hands](#more-hands): SuperMimic with `--config hand-supermimic-fast`, 6,000 iterations, training
-seeds 0-2, the last checkpoint; no setting was tuned on these clips.
+Four more single-hand demonstrations with the code and the configurations above: the mustard bottle and the mug of DexYCB
+on the XHand and the Allegro hand, and two tool-use demonstrations of OakInk2, stirring a beaker and pouring from a tube
+(221 frames, 4.4 s), on the XHand, the hand SPIDER's example dataset retargets them to.
+
+| goal | configuration (`train_hand`, add `--clip`) | result: mustard bottle / mug / stir beaker / pour tube |
+|---|---|---|
+| a success of 0.99 on every task | `--config hand-supertrack-fast` | XHand: 100.0 / 99.2-100.0 / 99.2-99.6 / 98.4-99.2 %; Allegro: 99.6-100.0 / 96.9-99.6 % |
+| | `--config hand-supermimic-fast` | XHand: 100.0 / 100.0 / 99.6 / 99.6-100.0 %; Allegro: 100.0 / 100.0 % |
+
+**In short:** both configurations track all four demonstrations with an object error of 1.2 to 5.8 mm; SuperTrack has the
+lower object error on the mustard bottle with both hands and on the XHand's mug, and SuperMimic's twelve XHand and six
+Allegro runs are all at a success of 0.996 or more.
+
+- **Training:** `hand-supertrack-fast` and `hand-supermimic-fast` as named, 6,000 iterations, 2,048 worlds, training seeds
+  0-2; no setting was changed for these tasks. A40 and A100 40GB GPUs, three runs to a GPU, so no times are given.
+- **Evaluation:** the last checkpoint, 256 rollouts of the whole clip from perturbed starts, evaluation seed 0, as
+  [above](#setup). Every seed is listed (0 / 1 / 2).
 
 ```bash
+python tools/download_hand_clips.py                                                 # the mustard bottle and the mug
+python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/tool_tasks.json   # the two tool-use tasks
 benchmarks/xhand_tracking/run.sh mustard_bottle <seed> data/spider logs/xhand_sm --config hand-supermimic-fast
-ROBOT=allegro benchmarks/xhand_tracking/run.sh mug <seed> data/spider logs/allegro_sm --config hand-supermimic-fast
+ROBOT=allegro benchmarks/xhand_tracking/run.sh mug <seed> data/spider logs/allegro_st --config hand-supertrack-fast
+TASKS=benchmarks/xhand_tracking/tool_tasks.json benchmarks/xhand_tracking/run.sh stir_beaker <seed> data/spider logs/tools_sm \
+      --config hand-supermimic-fast
 ```
 
 | hand | task | | seeds | success | object position | object position, last frame | fingertips | object lift |
 |---|---|---|---|---|---|---|---|---|
-| XHand | `mustard_bottle` | reference targets | | 1 % | 157.9 mm | 308.7 mm | 29.1 mm | -4.3 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.7 ± 0.0 mm | 1.1 ± 0.7 mm | 7.1 ± 0.2 mm | 24.2 ± 0.0 cm |
-| | `mug` | reference targets | | 0 % | 136.8 mm | 313.2 mm | 30.3 mm | -0.3 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.9 ± 0.3 mm | 3.8 ± 0.7 mm | 8.9 ± 1.2 mm | 31.0 ± 0.3 cm |
+| XHand | `mustard_bottle` | reference targets | | 1 % | 157.9 mm | 309.1 mm | 29.1 mm | -4.3 cm |
+| | | SuperTrack | 0 / 1 / 2 | 100.0 / 100.0 / 100.0 % | 1.6 / 1.6 / 1.6 mm | 0.8 / 0.7 / 0.8 mm | 6.7 / 6.7 / 6.6 mm | 24.1 / 24.1 / 24.1 cm |
+| | | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 100.0 % | 2.7 / 2.7 / 2.7 mm | 1.2 / 0.4 / 1.7 mm | 7.1 / 6.9 / 7.3 mm | 24.1 / 24.1 / 24.2 cm |
+| | `mug` | reference targets | | 0 % | 136.9 mm | 313.2 mm | 30.3 mm | -0.2 cm |
+| | | SuperTrack | 0 / 1 / 2 | 99.2 / 100.0 / 100.0 % | 1.8 / 1.5 / 1.5 mm | 3.5 / 0.7 / 0.5 mm | 9.9 / 6.5 / 5.8 mm | 30.8 / 31.0 / 30.9 cm |
+| | | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 100.0 % | 4.1 / 3.5 / 4.0 mm | 3.2 / 4.5 / 3.6 mm | 9.1 / 7.6 / 9.9 mm | 30.7 / 31.4 / 31.0 cm |
+| | `stir_beaker` | reference targets | | 0 % | 278.9 mm | 455.7 mm | 19.9 mm | -5.2 cm |
+| | | SuperTrack | 0 / 1 / 2 | 99.2 / 99.2 / 99.6 % | 4.5 / 4.4 / 3.4 mm | 7.7 / 7.1 / 5.8 mm | 5.0 / 4.8 / 4.7 mm | 3.9 / 3.8 / 3.9 cm |
+| | | SuperMimic | 0 / 1 / 2 | 99.6 / 99.6 / 99.6 % | 4.9 / 4.2 / 4.7 mm | 7.5 / 6.1 / 7.6 mm | 6.2 / 6.6 / 6.7 mm | 4.1 / 4.0 / 4.0 cm |
+| | `pour_tube` | reference targets | | 0 % | 113.6 mm | 313.7 mm | 18.0 mm | -0.9 cm |
+| | | SuperTrack | 0 / 1 / 2 | 99.2 / 98.8 / 98.4 % | 3.4 / 5.7 / 5.7 mm | 4.2 / 7.7 / 8.3 mm | 3.8 / 4.2 / 4.3 mm | 3.4 / 3.4 / 3.4 cm |
+| | | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 99.6 % | 3.3 / 3.1 / 3.9 mm | 3.0 / 2.7 / 5.3 mm | 5.8 / 6.5 / 6.7 mm | 3.3 / 3.4 / 3.7 cm |
 | Allegro | `mustard_bottle` | reference targets | | 100 % | 22.9 mm | 22.2 mm | 22.7 mm | 23.0 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 2.0 ± 0.0 mm | 0.7 ± 0.1 mm | 5.0 ± 0.2 mm | 24.1 ± 0.0 cm |
-| | `mug` | reference targets | | 88 % | 50.3 mm | 65.7 mm | 22.5 mm | 24.8 cm |
-| | | SuperMimic | 0, 1, 2 | 100.0 ± 0.0 % | 3.5 ± 0.6 mm | 3.0 ± 0.6 mm | 8.1 ± 1.4 mm | 31.0 ± 0.1 cm |
+| | | SuperTrack | 0 / 1 / 2 | 100.0 / 100.0 / 99.6 % | 1.4 / 1.2 / 1.8 mm | 0.3 / 0.2 / 1.7 mm | 4.4 / 5.3 / 5.2 mm | 24.1 / 24.1 / 24.0 cm |
+| | | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 100.0 % | 2.0 / 2.1 / 2.0 mm | 0.6 / 0.8 / 0.7 mm | 4.8 / 5.2 / 4.9 mm | 24.1 / 24.1 / 24.2 cm |
+| | `mug` | reference targets | | 89 % | 51.0 mm | 65.6 mm | 22.5 mm | 24.9 cm |
+| | | SuperTrack | 0 / 1 / 2 | 99.2 / 99.6 / 96.9 % | 2.2 / 1.6 / 5.8 mm | 2.3 / 1.3 / 10.5 mm | 5.7 / 5.7 / 11.0 mm | 30.8 / 30.9 / 30.1 cm |
+| | | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 100.0 % | 3.0 / 4.2 / 3.3 mm | 2.6 / 2.7 / 3.7 mm | 6.9 / 9.6 / 7.7 mm | 31.0 / 31.0 / 31.1 cm |
 
 ## Training time
 
