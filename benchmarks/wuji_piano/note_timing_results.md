@@ -2,6 +2,8 @@
 
 The contributed study's note-timing diagnostic of its runs (both algorithms' starting configurations, seeds 0-2) and of a
 scripted reference. The A100 runs of both algorithms, each after the same settings screen, are in [results_a100.md](results_a100.md).
+SuperMimic's runs here are at the library's default discount (0.99) and critic settings, untuned on this task
+([how to read them](ode_to_joy_results.md)).
 
 All seven evaluations ran on an RTX 3060 and used the same 256 starting poses and full 230-frame score. The primary result uses Eden framewise F1. This diagnostic counts each written and played note once. A single held note can cover several correct frames and still miss a repeated attack.
 

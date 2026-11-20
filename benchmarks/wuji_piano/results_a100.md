@@ -9,7 +9,10 @@ same 256 held-out starts. Numbers are the mean ± sample SD over the three seeds
 
 Anna Mei's study ran the starting configurations of both algorithms on one RTX 3060 (seeds 0-2, the same budget):
 Eden F1 0.8490 ± 0.0705 for SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([the contributed study](ode_to_joy_results.md),
-[note timing and the scripted reference](note_timing_results.md)).
+[note timing and the scripted reference](note_timing_results.md)). SuperMimic there ran with the library's default
+discount (0.99) and critic settings, untuned on this task, and its critic overpredicts the return on every seed (mean
+bias +11.0, +14.5 and +60.5; [critic diagnostics](ode_to_joy_results.md#critic-diagnostics)); the screen below gave both
+algorithms a round from those starting configurations.
 
 ## Results
 
@@ -22,7 +25,8 @@ Eden F1 0.8490 ± 0.0705 for SuperTrack and 0.4123 ± 0.2090 for SuperMimic ([th
 
 SuperTrack at horizon 3 is the most accurate configuration, above SuperMimic at either horizon. At horizon 8 SuperMimic's
 mean F1, precision, recall and exact two-note frames are the higher. At both horizons SuperTrack's seeds lie closer
-together, it reaches more notes (18.53 and 16.57 of 19, SuperMimic's 17.42 and 15.94) and its runs take less time.
+together, it reaches more notes (18.53 and 16.57 of 19, SuperMimic's 17.42 and 15.94) and its runs take less time (not
+engineered). An earlier set of finals, below, differs on the order at horizon 8 and on the seeds' spread.
 
 Every seed:
 
@@ -56,7 +60,8 @@ library, gave:
 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10` | 0.820 ± 0.135 | 0.815 ± 0.024 | 0.8043 / 0.8427 / 0.7975 |
 
 In both sets SuperTrack's best configuration is the most accurate: at horizon 3 in these finals, at horizon 8 in the
-earlier ones.
+earlier ones. The sets differ on the rest: in the earlier one SuperTrack's mean is the higher at horizon 8 as well (0.888
+against 0.815), and SuperMimic's seeds lie closer together at both horizons (0.115 against 0.140, 0.024 against 0.092).
 
 ## The settings screen
 
@@ -69,6 +74,13 @@ screen ran on RTX 2080 Ti GPUs and serves the selection only.
   regularizer (`--st-reg`, 0 or 0.01) and the reach term's weight in its loss (`--st-reach-weight`, 0.20 or 0.40).
 - SuperMimic's own settings: the discount (`--gamma`, 0.99 or 0.95), the gradient through each imagined state
   (`--bptt-decay`, 1 or 0.95) and the critic's epochs per update (`--critic-epochs`, 5 or 10).
+- Not varied: the settings both algorithms share (the weights of the due-key, wrong-key and reach terms in SuperTrack's
+  loss and SuperMimic's reward, the learning rates and the actor's schedule, the exploration schedule, the update counts,
+  the world model and its hand-set constants). They come from the contributed study, where a pilot run of SuperTrack
+  preceded its runs and SuperMimic's followed them; SuperMimic took them with the library's default discount and critic.
+- The own settings are not of the same kinds: the gradient decay, which `ndm-train` offers to both algorithms, is
+  SuperMimic's alone in this trainer and is in both of its selections; the reach term's weight, part of both objectives,
+  was varied for SuperTrack only and not selected.
 
 **SuperTrack, horizon 3**, every configuration at seed 5
 
@@ -196,4 +208,5 @@ evaluation episodes, the mean absolute error in fractions of a key's travel. The
 | SuperMimic, horizon 8 | 0.094 / 0.102 / 0.126 | 0.043 / 0.050 / 0.051 |
 
 So the speed-up is that of a model of what the policy observes, not of a replacement for the physics: after 1 to 10
-steps a due key's predicted depth is off by 9-32 % of its travel.
+steps a due key's predicted depth is off by 9-32 % of its travel. The lowest due-key errors of the four are those of
+SuperMimic's horizon-8 model.
