@@ -67,19 +67,22 @@ the frozen model (`ndm_gym/algos/robomimic_algos.py`): SuperTrack with the accel
 keypoints, the joints, the fingers and the objects' poses; SuperMimic with the increment model, the imagined reward and a
 critic. The systems options are the hand task's.
 
-`--config list` prints the configurations with what each measured. `robomimic-supertrack` takes
-`hand-supertrack-accurate`'s options without its `--st_imag_noise 0.2`, `robomimic-supermimic` `hand-supermimic-accurate`'s;
-both add `--solver_iterations 20` and the benchmark's budget (1,500 iterations on a schedule of 4,000).
+`--config list` prints the configurations with what each measured. Each is one of four with the same kinds of change from
+the hand task's accurate presets, chosen by one rule on another seed: `robomimic-supertrack` is `hand-supertrack-accurate`'s
+options with imagination noise 0 (`--st_imag_noise 0`), `robomimic-supermimic` `hand-supermimic-accurate`'s; both add
+`--solver_iterations 20`, a cap of 6,000 iterations with the learning rate's decay over it and a checkpoint kept every 250,
+from which the benchmark's stop rule (`benchmarks/robomimic_manipulation_tracking/stop_rule.py`) takes the run's result.
 
 Results: [benchmarks/robomimic_manipulation_tracking](../../benchmarks/robomimic_manipulation_tracking/results.md). In short
-(seeds 0-2, 1,500 iterations, each run alone on an A100 80GB SXM4): SuperTrack a success of 100 / 100 / 70.4 % with the object
-within 0.62 / 1.57 / 5.69 mm on Lift / Square / Transport, the target after 0.9 / 3.7 min / not reached; SuperMimic
-100 / 84.9 / 29.7 %, 0.87 / 5.34 / 10.6 mm (Transport: 2 of 3 seeds, every rollout of the third ended), 1.1 / 4.3 min (2 of 3
-runs) / not reached (time to the target, not engineered). Success is robosuite's test at the demonstration's last frame on a
-rollout that never terminated, a tracking proxy.
+(seeds 0-2, one A100 40GB SXM4 per run, each run to its stop): SuperTrack a success of 100 / 100 / 56.9 % with the object
+within 0.41 / 1.45 / 5.42 mm on Lift / Square / Transport, the target after 1.04 / 2.14 min / not reached; SuperMimic
+100 / 69.5 / 54.9 %, 0.92 / 7.62 / 6.73 mm, 1.32 / 6.88 min (Square in 2 of 3 runs) / not reached (time to the target, not
+engineered). Success is robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking
+proxy; MuJoCo-Warp's contact order is not deterministic, and two evaluations of one checkpoint differ by about 4 points on
+Transport.
 
 ![SuperTrack and SuperMimic on Lift, Square and Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/grid.webp)
 
-Per case the seed with the highest success, then the lowest object error, from the unperturbed start (Transport at four times real time), the
+Per case the seed with the lowest object error, from the unperturbed start (Transport at four times real time), the
 demonstration's arms and objects in translucent blue. The animations: [Lift](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/lift_st.webp), [Square](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/square_st.webp), [Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/transport_st.webp)
 (SuperTrack); [Lift](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/lift_sm.webp), [Square](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/square_sm.webp), [Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/transport_sm.webp) (SuperMimic).

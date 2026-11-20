@@ -188,12 +188,14 @@ CONFIGS = {
     },
     "train_robomimic": {
         "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 70.4 %, object 0.62 / 1.57 / "
-                                 "5.69 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, A100 80GB SXM4)"),
+                                 "one demonstration (add --task; --demo 0 by default), the checkpoint at the benchmark's stop rule "
+                                 "(stop_rule.py): success 100 / 100 / 56.9 %, object 0.41 / 1.45 / 5.42 mm on Lift / Square / Transport; the "
+                                 "target in 1.04 / 2.14 min, Transport not reached (seeds 0-2, 256 perturbed rollouts, A100 40GB SXM4)"),
         "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 84.9 / 29.7 %, object 0.87 / 5.34 / "
-                                 "10.6 mm on Lift / Square / Transport (seeds 0-2, Transport's object error 2 of them; 256 perturbed rollouts, A100 80GB "
-                                 "SXM4)"),
+                                 "one demonstration (add --task; --demo 0 by default), the checkpoint at the benchmark's stop rule "
+                                 "(stop_rule.py): success 100 / 69.5 / 54.9 %, object 0.92 / 7.62 / 6.73 mm on Lift / Square / Transport; the "
+                                 "target in 1.32 / 6.88 min (Square in 2 of 3 runs), Transport not reached (seeds 0-2, 256 perturbed rollouts, "
+                                 "A100 40GB SXM4)"),
     },
 }
 

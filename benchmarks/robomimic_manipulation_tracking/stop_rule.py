@@ -8,7 +8,7 @@ checkpoint, the evaluations read); the evaluations go to <run>/quick/<iteration>
 
     python benchmarks/robomimic_manipulation_tracking/stop_rule.py <run directory> [...]
 
-The study's runs applied the rule while they trained (each checkpoint evaluated as it appeared, the training ended at the
+The results' runs applied the rule while they trained (each checkpoint evaluated as it appeared, the training ended at the
 stop); applied afterwards to a run trained to the cap it picks the same checkpoint, up to the evaluations' run-to-run spread.
 """
 
