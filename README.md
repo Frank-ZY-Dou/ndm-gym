@@ -1386,6 +1386,10 @@ model's run-to-run spread).
 - **World models:** MLPs fitted by the same rule on the same recordings; the pusher's fitted again after one round of four
   plans on each model's own first fit. Their steps share one code path and differ in the last operation: an acceleration
   integrated, an increment applied.
+- **What differs:** the fitting recipe (the stop rule, the pusher's contact inputs and its round) was developed on
+  SuperTrack's acceleration model and applied to SuperMimic's increment model unchanged. The acceleration model also has
+  an option of its own, `--accel_mean_velocity`: its position advances with the mean velocity of the step's physics
+  steps. The increment model has no counterpart.
 - **Measure:** seconds per executed step.
 
 | task | CPU MuJoCo, 16 processes | MuJoCo Warp | SuperTrack's model | SuperMimic's model | plans at the bar |
