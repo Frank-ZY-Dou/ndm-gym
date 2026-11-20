@@ -1457,13 +1457,16 @@ python -m pytest tests          # CPU; the equivalence tests compare against thi
 Pull requests from outside contributors, each merged with its runs and results:
 
 - [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it, and the Allegro and the Inspire
-  hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+  hand ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2), [#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
 - [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights
   ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
 - [Yifan Kang](https://github.com/YIFANK): native Adroit Door tracking with SuperTrack and SuperMimic
-  ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+  ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)); native Adroit Pen, Hammer and Relocate tracking
+  ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
 - [Anna Mei](https://github.com/annamei1): two Wuji Hand 2 hands playing Eden's *Ode to Joy* on MuJoCo-Warp, with
   SuperTrack and SuperMimic ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
+- [Jionghao Wang](https://github.com/shanemankiw): quadruped motion tracking: a Unitree Go2 on the Lifelike Labrador motion
+  capture ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4), [#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
 
 ## 📄 Papers and repositories
 
