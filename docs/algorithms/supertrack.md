@@ -44,7 +44,7 @@ Options of both algorithms: [Algorithms](../algorithms.md#options). HOI, hand an
 
 | task | configuration |
 |---|---|
-| LAFAN1 motion tracking | `--st_fail_w 5 --st_balance_w 4` with the speed options (`--config lafan1-supertrack-accurate`; [results](../../README.md#lafan1-motion-tracking)); [the fastest](../../README.md#training-speed) |
+| LAFAN1 motion tracking | its fastest configuration trained 3 h with the learning rate's cosine over the 3 h (`--config lafan1-supertrack-accurate`; [results](../../README.md#lafan1-motion-tracking)); [the fastest](../../README.md#training-speed) |
 | Two G1s | [README](../../README.md#two-g1s-one-two-person-clip) |
 | Human-object interaction | [commands](../tasks/hoi.md) |
 | Muscle-actuated character | [README](../../README.md#muscle-actuated-character) |

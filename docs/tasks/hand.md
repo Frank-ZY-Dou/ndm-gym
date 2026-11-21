@@ -1,5 +1,8 @@
 # Hand-object tracking
 
+Contributed by [Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
+([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+
 A dexterous hand tracks a human hand-object demonstration: a right hand on a position-controlled floating palm (the XHand, the Allegro hand or the Inspire hand) reaches an object, grasps it and lifts it, on MuJoCo-Warp directly (no Isaac Lab;
 `ndm_gym/sim/rigid/hand_sim.py`). The clips and scenes are [SPIDER](https://github.com/facebookresearch/spider)'s
 (`retarget/retarget_full`: DexYCB, HRDexDB and OakInk demonstrations retargeted to robot hands).

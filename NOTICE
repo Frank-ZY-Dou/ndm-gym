@@ -35,13 +35,6 @@ docs/media/quadrotor holds renders (and a grid of them) of policies tracking fli
 race-track flights of release v3.0.0, Bosello et al., IEEE Robotics and Automation Letters 2026; the dataset by TII Racing, CC BY
 4.0), the flown path and the gates drawn from its motion capture, with a model of its drone written in this repository from the
 paper's specification. They are shared under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
-docs/media/go2 holds renders (and a grid of them) of policies tracking motion capture of a Labrador from "Lifelike agility
-and play in quadrupedal robots" (https://github.com/Tencent-RoboticsX/lifelike-agility-and-play; its licence file MIT, its
-README: for research purposes only), retargeted to the Unitree Go2 with supermimic-quadruped's quadmotion
-(https://github.com/Houserz/supermimic-quadruped; MIT) and drawn with MuJoCo Menagerie's Unitree Go2
-(https://github.com/google-deepmind/mujoco_menagerie; BSD-3-Clause), the retarget laid over it in translucent blue. They are for
-research and non-commercial illustration only and are not covered by the MIT license in LICENSE.
-
 docs/media/animals holds renders (and a grid of them) of policies tracking reference clips of MIMIC-MJX
 (https://huggingface.co/datasets/talmolab/MIMIC-MJX; MIT; Zhang, Yang et al., arXiv 2511.20532), drawn with the rat, stick
 insect and fruit fly bodies and arenas of vnl-playground (https://github.com/talmolab/vnl-playground; BSD-3-Clause; its fly
@@ -57,18 +50,17 @@ assets (from RoboPianist, Copyright 2023 The RoboPianist Authors, Apache-2.0) wi
 (https://github.com/wuji-technology/wuji-description; MIT), and the piano roll of that episode. The sources' notices and
 terms, listed in THIRD_PARTY_NOTICES.md, are not replaced by this repository's LICENSE.
 
-docs/media/teaser.webp puts 6 s of such renders in fourteen blocks. The LAFAN1 tracking block is under the terms of the
+docs/media/teaser.webp puts 6 s of such renders in thirteen blocks. The LAFAN1 tracking block is under the terms of the
 docs/media/final paragraph, the Two G1s block under CC BY-NC-SA 4.0 as docs/media/boxing, the Muscles block under those of
 docs/media/musclevae and the Hand-object block under those of docs/media/hand. The Human-object interaction block, renders of
 four of HDMI's tasks, is under the terms of the docs/media/hoi paragraph, and the RoboKit planning block, the docs/media/robokit
 renders of its three examples (G1 box carrying tracks the OMOMO clip), under the sources and terms that paragraph names. The
-Racing quadrotor block holds renders like docs/media/quadrotor's, under CC BY 4.0 as that paragraph says, the Go2 tracking
-block a docs/media/go2 render, under the terms of that paragraph, and the Adroit door block a render of another policy trained
-here on the same demonstration and scene as the docs/media/adroit_door preview, under the sources and terms of the Adroit Door
-paragraph below. The Adroit pen, hammer and relocate blocks hold docs/media/adroit_suite renders, under the sources and terms
-of the Adroit suite paragraph below, and the Wuji piano block a render of the docs/media/wuji_piano policy, under the sources
-and terms that paragraph names. The mbrl-lib planning block holds the docs/media/mbrl renders; no other part of it is
-covered by the MIT license in LICENSE.
+Racing quadrotor block holds renders like docs/media/quadrotor's, under CC BY 4.0 as that paragraph says, and the Adroit door
+block a render of another policy trained here on the same demonstration and scene as the docs/media/adroit_door preview, under
+the sources and terms of the Adroit Door paragraph below. The Adroit pen, hammer and relocate blocks hold
+docs/media/adroit_suite renders, under the sources and terms of the Adroit suite paragraph below, and the Wuji piano block a
+render of the docs/media/wuji_piano policy, under the sources and terms that paragraph names. The mbrl-lib planning block holds
+the docs/media/mbrl renders; no other part of it is covered by the MIT license in LICENSE.
 
 The Adroit Door preview in docs/media/adroit_door shows a policy trained here to track a physical replay of DAPG's
 clip 23 from door-v0_demos.pickle (https://github.com/aravindr93/hand_dapg, commit
