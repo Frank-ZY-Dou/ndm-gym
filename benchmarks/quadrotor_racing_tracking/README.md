@@ -8,11 +8,14 @@ A racing quadrotor tracks flown trajectories of [Race Against the Machine](https
 |---|---|
 | `tasks.json` | the benchmark's tasks: one autonomous flight of each shape (`ellipse`, `lemniscate`, `race_track`), one piloted flight of each (`ellipse_piloted`, `lemniscate_piloted`, `race_track_piloted`), the 18 autonomous flights (`all`) and the 18 piloted ones, at the dataset's release |
 | `run.sh` | train and evaluate one task and seed |
-| `time_to.sh` | the training time at which a run first reaches the target (its kept checkpoints, evaluated in order) |
+| `time_to.sh` | the training time at which a run first reaches the target, or from which it holds it for a given number of iterations (its kept checkpoints, evaluated in order) |
 | `summarize.py` | the tables of `results.md` from the runs |
 | `results.md` | setup, rules, results |
 
 ## Rules, fixed before the runs
+
+The contributed study's ([results](results.md#the-contributed-study-on-an-h200)); the named configurations' selection is in
+[the README](../../README.md#quadrotor-trajectory-tracking).
 
 - **Tasks:** one flight of each shape, the first autonomous flight of the ellipse, of the lemniscate and of the race track;
   then one policy on all 18 autonomous flights; then the first piloted flight of each shape (added after the autonomous

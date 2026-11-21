@@ -47,9 +47,13 @@ MUSCLE_RF = ("--wm_backbone rigidformer --rf_muscle_tokens body --rf_dim 128 --r
 HAND_SYSTEMS = "--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
 HOI_OPT = "--pi_opt muon --wm_opt muon --pi_ema 0.995 --pi_lr_mult 2 --lr_decay_ret 0.95 --lr_decay_by 1400 --lr_decay_len 300"  # HOI's optimizer options
 QUAD_SYSTEMS = "--fused_adam --reset_masked --no_sync --collect_graph --update_graphs"  # the hand task's, without the forward kinematics' option
-# the quadrotor's selected settings: an imagined window of 0.64 s, a world model of 3 x 256
-QUAD_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights --horizon 64 {HOI_OPT} --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
-QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+# the quadrotor's settings: a world model of 3 x 256; the most accurate configurations imagine 100 steps (1 s) with HOI's optimizer
+# options, the fast ones 64 steps (0.64 s) with Muon, no policy average and smaller batches
+QUAD_ST = f"--algo supertrack --st_fail_w 2 --st_task_weights --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+QUAD_SM = f"--algo supermimic --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+QUAD_ST_OPT = HOI_OPT.replace("--pi_ema 0.995", "--pi_ema 0")  # HOI's optimizer options without the policy average
+# the 6,000-iteration runs' cosine; a checkpoint every 50 iterations for the time to the target (time_to.sh <run> 1500 500)
+QUAD_TIMED = "--iterations 1500 --lr_decay_iters 6000 --ckpt_every 50 --ckpt_keep"
 # the Go2's selected settings (benchmarks/go2_lifelike_tracking): SuperTrack with the hand task's options, SuperMimic with HOI's
 # optimizer options and a discount of 0.95
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
@@ -148,18 +152,22 @@ CONFIGS = {
                                   "0.009 (seeds 1-3)"),
     },
     "train_quadrotor": {
-        "quadrotor-supertrack-accurate": (f"{QUAD_ST} --iterations 6000 --lr_decay_iters 6000",
-                                          "racing quadrotor (add --flight), 6,000 iterations, 5.6-5.9 min on an H200: position 3.38 / 2.02 / 2.19 mm on "
-                                          "the ellipse, the lemniscate and the race track at a success of 100 % (seeds 0-2)"),
-        "quadrotor-supermimic-accurate": (f"{QUAD_SM} --iterations 6000 --lr_decay_iters 6000",
-                                          "racing quadrotor (add --flight), 6,000 iterations, 7.0-7.3 min on an H200: position 6.55 / 4.96 / 5.08 mm on "
-                                          "the ellipse, the lemniscate and the race track at a success of 100 % (seeds 0-2)"),
-        "quadrotor-supertrack-fast": (f"{QUAD_ST} --iterations 1000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep",
-                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm after 0.79 / 0.68 / 0.75 min "
-                                      "(H200, mean of seeds 0-2, checkpoints every 250 iterations; not engineered)"),
-        "quadrotor-supermimic-fast": (f"{QUAD_SM} --iterations 1000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep",
-                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm after 0.93 / 0.78 / 0.89 min "
-                                      "(H200, mean of seeds 0-2, checkpoints every 250 iterations; not engineered)"),
+        "quadrotor-supertrack-accurate": (f"{QUAD_ST} --lr 8e-4 --horizon 100 {HOI_OPT} --iterations 6000 --lr_decay_iters 6000",
+                                          "racing quadrotor (add --flight), 6,000 iterations, 13.1-13.6 min on an A100 40GB SXM4: position 3.06 / "
+                                          "1.89 / 1.98 mm on the ellipse, the lemniscate and the race track, 1.11 / 0.99 / 2.75 mm on their piloted "
+                                          "flights, 2.31 mm with one policy on all 18 autonomous flights, at a success of 100 % (seeds 0-2)"),
+        "quadrotor-supermimic-accurate": (f"{QUAD_SM} --lr 4e-4 --horizon 100 {HOI_OPT} --iterations 6000 --lr_decay_iters 6000",
+                                          "racing quadrotor (add --flight), 6,000 iterations, 17.6-18.1 min on an A100 40GB SXM4: position 5.71 / "
+                                          "3.95 / 4.08 mm on the ellipse, the lemniscate and the race track, 4.48 / 4.00 / 6.63 mm on their piloted "
+                                          "flights, 4.94 mm with one policy on all 18 autonomous flights, at a success of 100 % (seeds 0-2)"),
+        "quadrotor-supertrack-fast": (f"{QUAD_ST} --lr 4e-4 --horizon 64 {QUAD_ST_OPT} --pi_batch 1024 --wm_batch 1024 {QUAD_TIMED}",
+                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm, held for 500 iterations, "
+                                      "from 0.38 / 0.32 / 0.36 min on the ellipse, the lemniscate and the race track (A100 40GB SXM4, mean of seeds "
+                                      "0-2, every run; a checkpoint every 50 iterations, 64 perturbed starts, warm compile caches; not engineered)"),
+        "quadrotor-supermimic-fast": (f"{QUAD_SM} --lr 4e-4 --horizon 64 --pi_opt muon --wm_opt muon --pi_batch 2048 {QUAD_TIMED}",
+                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm, held for 500 iterations, "
+                                      "from 0.71 / 0.69 / 0.67 min on the ellipse, the lemniscate and the race track (A100 40GB SXM4, mean of seeds "
+                                      "0-2, every run; a checkpoint every 50 iterations, 64 perturbed starts, warm compile caches; not engineered)"),
     },
     "train_quadruped": {
         "go2-supertrack": (f"{GO2_ST} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",
