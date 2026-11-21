@@ -1,0 +1,174 @@
+{
+  "minutes_to_target": 10.654463934898377,
+  "iteration_to_target": 5750,
+  "checkpoints": [
+    {
+      "iteration": 250,
+      "minutes": 0.38897565205891926,
+      "ended_share": 0.8999999761581421,
+      "body_mm": 1.468372106552124,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 1.088191310564677,
+      "ended_share": 0.29999998211860657,
+      "body_mm": 1.5716502666473389,
+      "target": false
+    },
+    {
+      "iteration": 750,
+      "minutes": 1.5448981483777364,
+      "ended_share": 0.8199999928474426,
+      "body_mm": 0.34021782875061035,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 1.9996224641799927,
+      "ended_share": 0.17999999225139618,
+      "body_mm": 0.1532614827156067,
+      "target": false
+    },
+    {
+      "iteration": 1250,
+      "minutes": 2.4555808305740356,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.08568931370973587,
+      "target": false
+    },
+    {
+      "iteration": 1500,
+      "minutes": 2.9113315383593243,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.06659989058971405,
+      "target": true
+    },
+    {
+      "iteration": 1750,
+      "minutes": 3.3664512753486635,
+      "ended_share": 0.0,
+      "body_mm": 0.06160619854927063,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 3.8214321891466776,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.06827648729085922,
+      "target": true
+    },
+    {
+      "iteration": 2250,
+      "minutes": 4.276535153388977,
+      "ended_share": 0.0,
+      "body_mm": 0.06598296761512756,
+      "target": true
+    },
+    {
+      "iteration": 2500,
+      "minutes": 4.731813061237335,
+      "ended_share": 0.03999999910593033,
+      "body_mm": 0.07315629720687866,
+      "target": false
+    },
+    {
+      "iteration": 2750,
+      "minutes": 5.187161723772685,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.070286825299263,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 5.64261915286382,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.0702688992023468,
+      "target": true
+    },
+    {
+      "iteration": 3250,
+      "minutes": 6.098340586821238,
+      "ended_share": 0.07999999821186066,
+      "body_mm": 0.08445728570222855,
+      "target": false
+    },
+    {
+      "iteration": 3500,
+      "minutes": 6.553725620110829,
+      "ended_share": 0.05999999865889549,
+      "body_mm": 0.08045576512813568,
+      "target": false
+    },
+    {
+      "iteration": 3750,
+      "minutes": 7.009357547760009,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.07123913615942001,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 7.465725636482238,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.07168734073638916,
+      "target": true
+    },
+    {
+      "iteration": 4250,
+      "minutes": 7.921177220344544,
+      "ended_share": 0.0,
+      "body_mm": 0.0673232227563858,
+      "target": true
+    },
+    {
+      "iteration": 4500,
+      "minutes": 8.376560306549072,
+      "ended_share": 0.0,
+      "body_mm": 0.06780186295509338,
+      "target": true
+    },
+    {
+      "iteration": 4750,
+      "minutes": 8.832041903336842,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.0730176493525505,
+      "target": true
+    },
+    {
+      "iteration": 5000,
+      "minutes": 9.287718546390533,
+      "ended_share": 0.019999999552965164,
+      "body_mm": 0.07046177983283997,
+      "target": true
+    },
+    {
+      "iteration": 5250,
+      "minutes": 9.743273103237152,
+      "ended_share": 0.0,
+      "body_mm": 0.06706716865301132,
+      "target": true
+    },
+    {
+      "iteration": 5500,
+      "minutes": 10.198896364370983,
+      "ended_share": 0.05999999865889549,
+      "body_mm": 0.08231494575738907,
+      "target": false
+    },
+    {
+      "iteration": 5750,
+      "minutes": 10.654463934898377,
+      "ended_share": 0.0,
+      "body_mm": 0.06529547274112701,
+      "target": true
+    },
+    {
+      "iteration": 6000,
+      "minutes": 11.11009007692337,
+      "ended_share": 0.0,
+      "body_mm": 0.06521990150213242,
+      "target": true
+    }
+  ]
+}

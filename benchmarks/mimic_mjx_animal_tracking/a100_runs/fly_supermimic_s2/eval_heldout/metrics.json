@@ -1,0 +1,14 @@
+{
+  "checkpoint": "logs/mimic_mjx_formal/fly_supermimic_s2/last.pt",
+  "iteration": 6000,
+  "minutes": 12.928418600559235,
+  "animal": "fly",
+  "clips": 10,
+  "episodes": 50,
+  "ended_share": 0.0,
+  "body_mm": 0.0659070760011673,
+  "end_eff_mm": 0.09651945531368256,
+  "root_pos_mm": 0.04641963168978691,
+  "joint_deg": 3.9750638021284628,
+  "lived_share": 1.0
+}

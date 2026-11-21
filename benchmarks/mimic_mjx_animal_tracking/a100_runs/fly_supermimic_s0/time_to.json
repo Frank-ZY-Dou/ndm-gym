@@ -1,0 +1,174 @@
+{
+  "minutes_to_target": 2.7812291820844015,
+  "iteration_to_target": 1250,
+  "checkpoints": [
+    {
+      "iteration": 250,
+      "minutes": 0.3764172077178955,
+      "ended_share": 0.8999999761581421,
+      "body_mm": 1.469334363937378,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 1.1870710770289103,
+      "ended_share": 0.5999999642372131,
+      "body_mm": 2.1633009910583496,
+      "target": false
+    },
+    {
+      "iteration": 750,
+      "minutes": 1.721448036034902,
+      "ended_share": 0.0,
+      "body_mm": 0.23998798429965973,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 2.2512675205866497,
+      "ended_share": 0.0,
+      "body_mm": 0.12158852815628052,
+      "target": false
+    },
+    {
+      "iteration": 1250,
+      "minutes": 2.7812291820844015,
+      "ended_share": 0.0,
+      "body_mm": 0.07704080641269684,
+      "target": true
+    },
+    {
+      "iteration": 1500,
+      "minutes": 3.3111346920331317,
+      "ended_share": 0.0,
+      "body_mm": 0.06382115185260773,
+      "target": true
+    },
+    {
+      "iteration": 1750,
+      "minutes": 3.8410719712575276,
+      "ended_share": 0.0,
+      "body_mm": 0.06218180060386658,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 4.37103107770284,
+      "ended_share": 0.0,
+      "body_mm": 0.05549420043826103,
+      "target": true
+    },
+    {
+      "iteration": 2250,
+      "minutes": 4.901223134994507,
+      "ended_share": 0.0,
+      "body_mm": 0.05163825675845146,
+      "target": true
+    },
+    {
+      "iteration": 2500,
+      "minutes": 5.431424446900686,
+      "ended_share": 0.0,
+      "body_mm": 0.04985453560948372,
+      "target": true
+    },
+    {
+      "iteration": 2750,
+      "minutes": 5.961629350980123,
+      "ended_share": 0.0,
+      "body_mm": 0.048103950917720795,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 6.4917467157046,
+      "ended_share": 0.0,
+      "body_mm": 0.04749493673443794,
+      "target": true
+    },
+    {
+      "iteration": 3250,
+      "minutes": 7.021919580300649,
+      "ended_share": 0.0,
+      "body_mm": 0.047185033559799194,
+      "target": true
+    },
+    {
+      "iteration": 3500,
+      "minutes": 7.5521769523620605,
+      "ended_share": 0.0,
+      "body_mm": 0.04615041986107826,
+      "target": true
+    },
+    {
+      "iteration": 3750,
+      "minutes": 8.082529532909394,
+      "ended_share": 0.0,
+      "body_mm": 0.04555942490696907,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 8.612784266471863,
+      "ended_share": 0.0,
+      "body_mm": 0.0449618324637413,
+      "target": true
+    },
+    {
+      "iteration": 4250,
+      "minutes": 9.143111189206442,
+      "ended_share": 0.0,
+      "body_mm": 0.044464319944381714,
+      "target": true
+    },
+    {
+      "iteration": 4500,
+      "minutes": 9.673471967379252,
+      "ended_share": 0.0,
+      "body_mm": 0.04421808570623398,
+      "target": true
+    },
+    {
+      "iteration": 4750,
+      "minutes": 10.203943153222403,
+      "ended_share": 0.0,
+      "body_mm": 0.044069740921258926,
+      "target": true
+    },
+    {
+      "iteration": 5000,
+      "minutes": 10.734391212463379,
+      "ended_share": 0.0,
+      "body_mm": 0.04418010264635086,
+      "target": true
+    },
+    {
+      "iteration": 5250,
+      "minutes": 11.264854486783346,
+      "ended_share": 0.0,
+      "body_mm": 0.04404449462890625,
+      "target": true
+    },
+    {
+      "iteration": 5500,
+      "minutes": 11.795327858130138,
+      "ended_share": 0.0,
+      "body_mm": 0.043886419385671616,
+      "target": true
+    },
+    {
+      "iteration": 5750,
+      "minutes": 12.325787830352784,
+      "ended_share": 0.0,
+      "body_mm": 0.0441121831536293,
+      "target": true
+    },
+    {
+      "iteration": 6000,
+      "minutes": 12.856295243899028,
+      "ended_share": 0.0,
+      "body_mm": 0.04410888999700546,
+      "target": true
+    }
+  ]
+}

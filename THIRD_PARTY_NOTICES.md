@@ -47,6 +47,20 @@ reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`)
 pinned at `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
 of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
 
+## Animal motion tracking
+
+The animal tracking task ([`docs/tasks/animals.md`](docs/tasks/animals.md)) copies no third-party file. What it reads is
+downloaded by the user at pinned revisions (`tools/download_mimic_mjx.py`) and is not redistributed:
+
+- the reference clips of MIMIC-MJX ("MIMIC-MJX: Neuromechanical Emulation of Animal Behavior", Zhang, Yang et al., arXiv
+  2511.20532; [talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX) @ `b4e53a7`, MIT): stac-mjx's
+  kinematics of the rat, the fruit fly and the stick insect;
+- the bodies and arenas of [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) @ `c154805`
+  (BSD-3-Clause); its fruit fly is [flybody](https://github.com/TuragaLab/flybody)'s (Apache-2.0).
+
+`ndm_gym/robots/animals.py` edits the bodies as MIMIC-MJX's environments do (the rat's scale, the stick insect's gear and
+foot contacts) and its termination thresholds are MIMIC-MJX's.
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from

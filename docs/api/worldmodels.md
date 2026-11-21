@@ -22,4 +22,6 @@
 
 ::: ndm_gym.worldmodels.quadrotor
 
+::: ndm_gym.worldmodels.animal
+
 ::: ndm_gym.worldmodels.mjcf

@@ -1,0 +1,174 @@
+{
+  "minutes_to_target": 10.751083636283875,
+  "iteration_to_target": 1250,
+  "checkpoints": [
+    {
+      "iteration": 250,
+      "minutes": 1.980065139134725,
+      "ended_share": 0.8999999761581421,
+      "body_mm": 1.4693317413330078,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 9.152390555540721,
+      "ended_share": 0.5,
+      "body_mm": 2.2181472778320312,
+      "target": false
+    },
+    {
+      "iteration": 750,
+      "minutes": 9.687751479943593,
+      "ended_share": 0.0,
+      "body_mm": 0.21110472083091736,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 10.219365771611532,
+      "ended_share": 0.0,
+      "body_mm": 0.09506680071353912,
+      "target": false
+    },
+    {
+      "iteration": 1250,
+      "minutes": 10.751083636283875,
+      "ended_share": 0.0,
+      "body_mm": 0.0693972036242485,
+      "target": true
+    },
+    {
+      "iteration": 1500,
+      "minutes": 11.282919577757518,
+      "ended_share": 0.0,
+      "body_mm": 0.061073094606399536,
+      "target": true
+    },
+    {
+      "iteration": 1750,
+      "minutes": 11.81479581197103,
+      "ended_share": 0.0,
+      "body_mm": 0.06137601658701897,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 12.346999498208364,
+      "ended_share": 0.0,
+      "body_mm": 0.058251865208148956,
+      "target": true
+    },
+    {
+      "iteration": 2250,
+      "minutes": 12.879450392723083,
+      "ended_share": 0.0,
+      "body_mm": 0.05635438114404678,
+      "target": true
+    },
+    {
+      "iteration": 2500,
+      "minutes": 13.4117467045784,
+      "ended_share": 0.0,
+      "body_mm": 0.05454058200120926,
+      "target": true
+    },
+    {
+      "iteration": 2750,
+      "minutes": 13.944208578268688,
+      "ended_share": 0.0,
+      "body_mm": 0.052422117441892624,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 14.47651698589325,
+      "ended_share": 0.0,
+      "body_mm": 0.051938511431217194,
+      "target": true
+    },
+    {
+      "iteration": 3250,
+      "minutes": 15.008680868148804,
+      "ended_share": 0.0,
+      "body_mm": 0.050832442939281464,
+      "target": true
+    },
+    {
+      "iteration": 3500,
+      "minutes": 15.544452444712322,
+      "ended_share": 0.0,
+      "body_mm": 0.050772543996572495,
+      "target": true
+    },
+    {
+      "iteration": 3750,
+      "minutes": 16.07688431342443,
+      "ended_share": 0.0,
+      "body_mm": 0.05103942006826401,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 16.60940132935842,
+      "ended_share": 0.0,
+      "body_mm": 0.05029229819774628,
+      "target": true
+    },
+    {
+      "iteration": 4250,
+      "minutes": 17.1420196890831,
+      "ended_share": 0.0,
+      "body_mm": 0.050325945019721985,
+      "target": true
+    },
+    {
+      "iteration": 4500,
+      "minutes": 17.709010088443755,
+      "ended_share": 0.0,
+      "body_mm": 0.05046027898788452,
+      "target": true
+    },
+    {
+      "iteration": 4750,
+      "minutes": 18.24166375796,
+      "ended_share": 0.0,
+      "body_mm": 0.0511137954890728,
+      "target": true
+    },
+    {
+      "iteration": 5000,
+      "minutes": 18.774645491441092,
+      "ended_share": 0.0,
+      "body_mm": 0.051001906394958496,
+      "target": true
+    },
+    {
+      "iteration": 5250,
+      "minutes": 19.313995603720347,
+      "ended_share": 0.0,
+      "body_mm": 0.05069614201784134,
+      "target": true
+    },
+    {
+      "iteration": 5500,
+      "minutes": 19.848248569170632,
+      "ended_share": 0.0,
+      "body_mm": 0.05068371072411537,
+      "target": true
+    },
+    {
+      "iteration": 5750,
+      "minutes": 20.382470587889355,
+      "ended_share": 0.0,
+      "body_mm": 0.05048490688204765,
+      "target": true
+    },
+    {
+      "iteration": 6000,
+      "minutes": 20.915320265293122,
+      "ended_share": 0.0,
+      "body_mm": 0.05078531429171562,
+      "target": true
+    }
+  ]
+}
