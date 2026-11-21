@@ -91,9 +91,14 @@ Rules fixed here before the runs they apply to.
   control step for the same pairs of geoms; a rollout succeeds if it never terminates and its highest reward is 4. The
   share of the rollouts that reach each stage is reported with it. These rollouts track one demonstration from
   perturbed starts: the number is not ACT's success rate of an imitation policy from images.
-- **Measures:** the success and the stages, the objects' position and rotation error, the joints' error and the share
-  of the rollouts that end early (a tracked object 15 cm or a gripper keypoint 20 cm from the reference); SuperTrack
-  first, both numbers side by side.
+- **Final state:** beside ACT's test, the last stage as a function of the state at the demonstration's last frame, as
+  the manipulation task reads its success: the cube off the table at the left gripper's grasp point with the gripper
+  closed on it; the peg inside the socket's opening with its end within 2 mm of the pin's. ACT's test asks for the
+  touch itself, which the demonstrations' recorded targets, replayed in this simulator, reach in 5 of the 10 Insertion
+  demonstrations; the state test says how many rollouts end inserted.
+- **Measures:** the success, the stages and the final state, the objects' position and rotation error, the joints'
+  error and the share of the rollouts that end early (a tracked object 15 cm or a gripper keypoint 20 cm from the
+  reference); SuperTrack first, both numbers side by side.
 - **Time:** each run alone on one A100 (80 GB). The clock starts at the first training iteration, and the text says what
   it includes. A checkpoint is kept every 200 iterations; the time to the target is that of the first checkpoint from
   which every later one has a success of at least 0.99 with the objects within 10 mm (the manipulation task's target).
