@@ -1,14 +1,14 @@
 {
   "checkpoint": "logs/mimic_mjx_formal/rat_supertrack_s0/last.pt",
   "iteration": 10000,
-  "minutes": 38.66078127622605,
+  "minutes": 33.010121655464175,
   "animal": "rat",
   "clips": 10,
   "episodes": 50,
-  "ended_share": 0.6800000071525574,
-  "body_mm": 33.712547302246094,
-  "end_eff_mm": 30.930522918701172,
-  "root_pos_mm": 18.19686508178711,
-  "joint_deg": 11.87933991960027,
-  "lived_share": 0.5035341382026672
+  "ended_share": 0.699999988079071,
+  "body_mm": 37.21182632446289,
+  "end_eff_mm": 35.093448638916016,
+  "root_pos_mm": 21.003498077392578,
+  "joint_deg": 12.633972516275483,
+  "lived_share": 0.4954216778278351
 }
