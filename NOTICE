@@ -35,6 +35,11 @@ docs/media/quadrotor holds renders (and a grid of them) of policies tracking fli
 race-track flights of release v3.0.0, Bosello et al., IEEE Robotics and Automation Letters 2026; the dataset by TII Racing, CC BY
 4.0), the flown path and the gates drawn from its motion capture, with a model of its drone written in this repository from the
 paper's specification. They are shared under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+docs/media/robomimic holds renders (and a grid of them) of policies tracking proficient-human demonstrations of robomimic
+(https://huggingface.co/datasets/robomimic/robomimic_datasets; MIT; Mandlekar et al., CoRL 2021) in the scenes they were
+recorded in, drawn with the models, meshes and textures of robosuite 1.5.0 (https://github.com/ARISE-Initiative/robosuite;
+MIT), the demonstration laid over each in translucent blue.
+
 docs/media/mbrl holds renders of mbrl-lib's (https://github.com/facebookresearch/mbrl-lib; MIT, Copyright (c) Facebook, Inc. and
 its affiliates) cart-pole and pusher models, its cartpole.xml and pusher.xml, as its CEM controller executes in MuJoCo plans
 made on this library's world model, drawn with this library's lights, floor and sky.
