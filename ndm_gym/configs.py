@@ -35,6 +35,10 @@ TWO_G1_ST = (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE
 TWO_G1_SM = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 --contact_reward 0.25 "
              f"--ref_contact_fix --sm_residual --wm_structured {ENCODE_ONCE} {SYSTEMS} {PAIRED} --ckpt_every 1000 --iterations 9396")  # fmt: skip
 AWL3 = "--layout AWL"  # three GPUs: actor | world-model learner | policy learner (the two-G1 configurations run no probe sweeps)
+# each algorithm's speed options on the two G1s and its policy batch halved (4,096 to 2,048 and 2,048 to 1,024): shorter iterations, the
+# same accuracy at the published budget within the seeds' spread
+TWO_G1_ST_FAST = f"{TWO_G1_ST.replace('--pi_batch 4096', '--pi_batch 2048')} --st_wm_fused"
+TWO_G1_SM_FAST = f"{TWO_G1_SM.replace('--pi_batch 2048', '--pi_batch 1024')} --critic_compile --compile_norms --critic_fused"
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
 MUSCLE_SYS = "--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
@@ -78,24 +82,29 @@ CONFIGS = {
         "lafan1-supermimic-rf-accurate": (f"--algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 "
                                           f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
-        "two-g1-supertrack": (TWO_G1_ST,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.66 +- 0.00 min, root-relative MPJPE there "
-                              "16.8 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / root-relative "
-                              "(seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4; measured before "
-                              "the goal was encoded once, which computes the same values up to float rounding)"),
-        "two-g1-supermimic": (TWO_G1_SM,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.26 +- 0.00 min, root-relative MPJPE there "
-                              "19.9 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / root-relative "
-                              "(seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: 0.9042 +- 0.0015, "
-                              "47.5 / 16.1 mm; measured before the goal was encoded once, which computes the same values up to float rounding)"),
-        "two-g1-supertrack-3gpu": (f"{TWO_G1_ST} {AWL3}",
+        "two-g1-supertrack": (TWO_G1_ST_FAST,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir); its world-model loss as fused kernels (--st_wm_fused) and its "
+                              "policy batch halved (--pi_batch 2048): return 0.88 after 3.48 +- 0.49 min, root-relative MPJPE there 16.8 mm, "
+                              "143.3 ms per iteration on an A100 40GB SXM4 (seeds 0-3); at its 9,396 iterations return 0.8925 +- 0.0011, MPJPE "
+                              "46.2 / 14.1 mm global / root-relative with the policy batch of 4,096 (seeds 0-2: seed 0 on an A100 80GB, in 0.5 h, "
+                              "seeds 1-2 on an A100 40GB SXM4; before the goal was encoded once, which computes the same values up to float "
+                              "rounding), 0.8929 +- 0.0011, 44.7 / 14.3 mm with 2,048 (seeds 0-2, A100 40GB SXM4)"),
+        "two-g1-supermimic": (TWO_G1_SM_FAST,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir); its critic's update and its world-model normalizer updates "
+                              "compiled (--critic_compile --compile_norms), the critic's steps as fused kernels (--critic_fused) and its policy "
+                              "batch halved (--pi_batch 1024): return 0.88 after 2.70 +- 0.27 min, root-relative MPJPE there 20.5 mm, 127.2 ms "
+                              "per iteration on an A100 40GB SXM4 (seeds 0-3); at two-g1-supertrack's 9,396 iterations return 0.9055 +- 0.0011, "
+                              "MPJPE 45.3 / 16.0 mm global / root-relative with the policy batch of 2,048 (seeds 0-2, A100 40GB SXM4; for 0.3 h, "
+                              "6,264 iterations: 0.9042 +- 0.0015, 47.5 / 16.1 mm; before the goal was encoded once, which computes the same "
+                              "values up to float rounding), 0.9053 +- 0.0007, 45.6 / 16.2 mm with 1,024 (seeds 0-2)"),
+        "two-g1-supertrack-3gpu": (f"{TWO_G1_ST_FAST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min, root-relative MPJPE there 16.1 mm "
-                                   "(seeds 0-2)"),
-        "two-g1-supermimic-3gpu": (f"{TWO_G1_SM} {AWL3}",
+                                   "learner and policy learner one GPU each, two-g1-supertrack's options; return 0.88 after 1.63 +- 0.15 min, "
+                                   "root-relative MPJPE there 16.1 mm, 63.7 ms per iteration (seeds 0-2)"),
+        "two-g1-supermimic-3gpu": (f"{TWO_G1_SM_FAST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min, root-relative MPJPE there 20.0 mm "
-                                   "(seeds 0-2)"),
+                                   "learner and policy learner one GPU each, two-g1-supermimic's options; return 0.88 after 1.48 +- 0.16 min, "
+                                   "root-relative MPJPE there 20.6 mm, 64.4 ms per iteration (seeds 0-2)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "
