@@ -24,7 +24,8 @@ benchmark's set is the default one (10 kept episodes per task, seed 0): its arra
 and a set that differs raises. Another seed or number of episodes needs ``--unpinned`` and is not the benchmark's. The
 waypoints, the gripper's range, the start pose and the reward tests are ACT's (``scripted_policy.py``, ``constants.py``,
 ``ee_sim_env.py``, ``sim_env.py``); a control step is stepped in dm_control's order (``mj_step2``, the remaining physics
-steps, ``mj_step1``), as ACT's environments step it.
+steps, ``mj_step1``), as ACT's environments step it. These parts are adapted from ACT under its MIT License (Copyright (c) 2023
+Tony Z. Zhao; THIRD_PARTY_NOTICES.md).
 """
 
 from __future__ import annotations

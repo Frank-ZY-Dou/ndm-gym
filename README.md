@@ -1690,6 +1690,10 @@ Data:
   Manipulation.* CoRL 2021. [arXiv:2108.03298](https://arxiv.org/abs/2108.03298) ·
   [code](https://github.com/ARISE-Initiative/robomimic) · [data](https://huggingface.co/datasets/robomimic/robomimic_datasets) ·
   scenes from [robosuite](https://github.com/ARISE-Initiative/robosuite)
+- **ALOHA and ACT** (the bimanual scenes and the scripted policies of their demonstrations): T. Z. Zhao, V. Kumar,
+  S. Levine, C. Finn. *Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware.* RSS 2023.
+  [arXiv:2304.13705](https://arxiv.org/abs/2304.13705) · [code](https://github.com/tonyzhaozh/act) ·
+  [project](https://tonyzhaozh.github.io/aloha/)
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,

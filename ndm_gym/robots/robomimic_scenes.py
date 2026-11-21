@@ -102,6 +102,8 @@ class RobomimicScene:
     control_dt: float = 0.05  # the control step (robosuite's control_freq 20)
     # actuator pairs (i, j) driven by one action: j's target offset is the negative of i's (a gripper's two mirrored fingers)
     mirror: tuple[tuple[int, int], ...] = ()
+    # groups of geom pairs whose contacts the task's staged reward reads (ACT's: robots.aloha_scenes.CONTACTS)
+    contacts: tuple[tuple[tuple[int, int], ...], ...] = ()
 
     @staticmethod
     def from_model(m: mujoco.MjModel, task: str) -> RobomimicScene:

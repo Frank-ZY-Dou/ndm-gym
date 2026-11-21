@@ -1,10 +1,12 @@
 """Bimanual demonstration tracking on ACT's simulated ALOHA tasks, on a small scene in ACT's naming (two arms of six hinges and
 two finger slides each, position actuators, a free cube or a peg and a socket): the scene's layout for the task with its
-mirrored fingers, the demonstration file and its targets, the action's spread over the actuators, the success tests, and the
-generator's waypoints, interpolation, draws and pins; with the demonstrations generated (tools/make_aloha_demos.py), the real
-scenes' kinematics against MuJoCo's and the success tests against ACT's reward."""
+mirrored fingers, the demonstration file and its targets, the action's spread over the actuators, the success tests, ACT's
+staged reward, and the generator's waypoints, interpolation, draws and pins; with the demonstrations generated
+(tools/make_aloha_demos.py), the real scenes' kinematics against MuJoCo's and the success tests against ACT's reward; on a
+GPU, the simulator's control step against MuJoCo's and its contacts' reward against the demonstrations' recorded one."""
 
 import importlib.util
+import itertools
 import json
 import os
 import sys
@@ -15,8 +17,8 @@ import pytest
 import torch
 
 from ndm_gym.motion.sources import aloha
-from ndm_gym.robots.aloha_scenes import (CONTROL_DT, FINGER_REACH, GRASP_REACH, HOLD, INSERTION_X, TASKS, TRANSFER_OPENING, TRANSFER_Z, aloha_scene,
-                                         load_scene)  # fmt: skip
+from ndm_gym.robots.aloha_scenes import (CONTACTS, CONTROL_DT, FINGER_REACH, GRASP_REACH, HOLD, INSERTION_X, MAX_REWARD, TASKS, TRANSFER_OPENING,
+                                         TRANSFER_Z, aloha_scene, load_scene)  # fmt: skip
 from ndm_gym.tasks.robomimic_tracking import RobomimicTask, SceneKinematics, build_reference
 from ndm_gym.worldmodels.mjcf import MjcfLayout
 
@@ -36,15 +38,19 @@ def scene_xml(task: str, actuated_fingers: bool = True) -> str:
             links += f'<body name="{side}/l{k}" pos="0.03 0 0.02"><joint name="{side}/{j}" axis="{axis}" range="-3 3"/><geom size="0.01" mass="0.2"/>'
         fingers = "".join(
             f'<body name="{side}/{f}_finger_link" pos="{FINGER_REACH} 0 0"><joint name="{side}/{f}_finger" type="slide" axis="0 1 0" range="{lo} {hi}"/>'
-            f'<geom size="0.004" mass="0.02"/></body>'
+            f'<geom name="{side}/10_{f}_gripper_finger" size="0.004" mass="0.02"/></body>'
             for f, lo, hi in (("left", 0.021, 0.057), ("right", -0.057, -0.021)))  # fmt: skip
         return (f'<body name="{side}" pos="{x} 0.5 0.1" euler="0 0 {yaw}">{links}<body name="{side}/gripper_link" pos="0.03 0 0">'
                 f'<geom size="0.01" mass="0.1"/>{fingers}</body>{"</body>" * len(JOINTS)}</body>')  # fmt: skip
 
-    def box(name: str, joint: str, x: float) -> str:
-        return f'<body name="{name}" pos="{x} 0.5 0.05"><joint name="{joint}" type="free"/><geom type="box" size="0.02 0.02 0.02" mass="0.05"/></body>'
+    def box(name: str, joint: str, x: float, geoms: tuple[str, ...]) -> str:
+        parts = "".join(f'<geom name="{g}" type="box" size="0.02 0.02 0.02" mass="0.01"/>' for g in geoms)
+        return f'<body name="{name}" pos="{x} 0.5 0.05"><joint name="{joint}" type="free"/>{parts}</body>'
 
-    objects = box("box", "red_box_joint", 0.1) if task == "aloha_transfer_cube" else box("peg", "red_peg_joint", 0.15) + box("socket", "blue_socket_joint", -0.15)
+    if task == "aloha_transfer_cube":
+        objects = box("box", "red_box_joint", 0.1, ("red_box",))
+    else:
+        objects = box("peg", "red_peg_joint", 0.15, ("red_peg",)) + box("socket", "blue_socket_joint", -0.15, ("socket-1", "socket-2", "socket-3", "socket-4", "pin"))
     actuators = ""
     for side in ("vx300s_left", "vx300s_right"):
         actuators += "".join(f'<position joint="{side}/{j}" kp="50" ctrlrange="-3 3"/>' for j in JOINTS)
@@ -87,8 +93,8 @@ def test_action_and_targets():
     _, scene, kin, task = small_task("aloha_transfer_cube")
     f = torch.tensor([0, 1])
     zero = task.setpoint(torch.zeros(2, task.na), f)
-    assert torch.allclose(zero, task.ref.target[f + 1])  # no action: the demonstration's own targets, not its joint positions
-    assert not torch.allclose(task.ref.target, task.ref.ctrl)
+    assert torch.allclose(zero, task.ref.ctrl[f + 1])  # no action: the reference's joint positions, not the targets it recorded
+    assert torch.allclose(task.recorded_setpoint(f), task.ref.target[f + 1]) and not torch.allclose(task.ref.target, task.ref.ctrl)
     a = torch.zeros(2, task.na)
     a[:, 6], a[:, 13] = 0.5, -0.25  # the left gripper's action, the right gripper's
     moved = task.setpoint(a, f) - zero
@@ -96,6 +102,46 @@ def test_action_and_targets():
     assert torch.allclose(moved[0, [6, 7, 14, 15]], torch.tensor([0.01, -0.01, -0.005, 0.005]), atol=1e-6)  # a gripper's fingers mirrored
     with pytest.raises(ValueError, match="targets"):
         build_reference(task.ref.qpos[:4].numpy(), task.ref.qvel[:4].numpy(), scene, kin, "cpu", target=np.zeros((3, 16)))
+    bare = build_reference(task.ref.qpos[:4].numpy(), task.ref.qvel[:4].numpy(), scene, kin, "cpu")
+    with pytest.raises(ValueError, match="recorded no position targets"):
+        RobomimicTask(scene, kin, bare).recorded_setpoint(f)
+
+
+def act_reward(name: str, touch: dict) -> int:
+    """ACT's get_reward (sim_env.py), from whether each named pair of geoms touches."""
+    if name == "aloha_transfer_cube":
+        reward = 0
+        if touch["right"]:
+            reward = 1
+        if touch["right"] and not touch["table"]:  # lifted
+            reward = 2
+        if touch["left"]:  # attempted transfer
+            reward = 3
+        if touch["left"] and not touch["table"]:  # successful transfer
+            reward = 4
+        return reward
+    reward = 0
+    if touch["left"] and touch["right"]:  # touch both
+        reward = 1
+    if touch["left"] and touch["right"] and (not touch["peg_table"]) and (not touch["socket_table"]):  # grasp both
+        reward = 2
+    if touch["peg_socket"] and (not touch["peg_table"]) and (not touch["socket_table"]):  # peg and socket touching
+        reward = 3
+    if touch["pin"]:  # successful insertion
+        reward = 4
+    return reward
+
+
+@pytest.mark.parametrize("name,groups", [("aloha_transfer_cube", ("left", "right", "table")),
+                                         ("aloha_insertion", ("left", "right", "peg_table", "socket_table", "peg_socket", "pin"))])  # fmt: skip
+def test_staged_reward(name, groups):
+    model, scene, _, task = small_task(name)
+    assert len(scene.contacts) == len(CONTACTS[name]) == len(groups)
+    names = [[tuple(mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM, g) for g in pair) for pair in group] for group in scene.contacts]
+    assert names == [list(group) for group in CONTACTS[name]]
+    cases = list(itertools.product((False, True), repeat=len(groups)))  # every combination of the groups touching
+    rewards = task.staged_reward(torch.tensor(cases))
+    assert rewards.tolist() == [act_reward(name, dict(zip(groups, c, strict=True))) for c in cases] and int(rewards.max()) == MAX_REWARD
 
 
 def test_success_tests():
@@ -188,3 +234,61 @@ def test_demonstrations_and_scenes(name):
         act = np.concatenate([[False], demo["reward"] == 4])
         mine = ok[k * (401 + HOLD) :][:401]
         assert not (act & ~mine).any() and np.mean(mine == act) > 0.97 and mine[-1] and demo["meta"]["mujoco"] == "2.3.7"
+
+
+CUDA = "cuda:0"
+HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("mujoco_warp") is not None
+GPU = pytest.mark.skipif(not HAVE_SIM, reason="needs a GPU and MuJoCo-Warp")
+
+
+@GPU
+def test_simulator_step_and_contacts():
+    """RobomimicSim on the small scene at ALOHA's control step: MuJoCo's physics steps of it, a gripper's fingers mirrored
+    under one action; ``touching`` reads the contacts of the worlds' present states."""
+    from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
+
+    model, scene, _, _ = small_task("aloha_transfer_cube")
+    kin = SceneKinematics(MjcfLayout.from_model(model), scene.keypoint_bodies).to(CUDA)
+    d = mujoco.MjData(model)
+    d.qpos[[6, 14]], d.qpos[[7, 15]] = 0.04, -0.04
+    qpos, qvel = np.tile(d.qpos, (4, 1)), np.zeros((4, model.nv))
+    task = RobomimicTask(scene, kin, build_reference(qpos, qvel, scene, kin, CUDA, hold=HOLD))
+    n = 3
+    sim = RobomimicSim(model, task, n, CUDA, joint_noise=0.0)
+    assert sim.substeps == round(CONTROL_DT / model.opt.timestep)
+    frames = torch.zeros(n, dtype=torch.long, device=CUDA)
+    sim.reset(torch.ones(n, dtype=torch.bool, device=CUDA), frames)
+    (q, _) = scene.objects[0]
+    sim.qpos[1, q + 2] = 0.0199  # world 1: the cube on the table; the others' in the air
+    assert sim.touching().tolist() == [[False, False, False], [False, False, True], [False, False, False]]
+    a = torch.zeros(n, task.na, device=CUDA)
+    a[:, 0], a[:, 6] = 0.2, -0.5
+    u = task.setpoint(a, frames)
+    start = sim.state()[:, : model.nq].cpu().numpy().astype(np.float64)
+    s1, _, _ = sim.step(u, reset=False)
+    for i in range(n):
+        d = mujoco.MjData(model)
+        d.qpos[:], d.ctrl[:] = start[i], u[i].cpu().numpy()
+        for _ in range(sim.substeps):
+            mujoco.mj_step(model, d)
+        diff = np.abs(s1[i, : model.nq].cpu().numpy() - d.qpos)
+        assert diff.max() < 2e-3  # in single precision: the light arms' joints agree to 4e-4 rad, the cube (falling, or settling on the table) to less
+
+
+@GPU
+@pytest.mark.skipif(not HAVE_DATA, reason="the ALOHA demonstrations are not generated (tools/make_aloha_demos.py)")
+@pytest.mark.parametrize("name", sorted(TASKS))
+def test_contacts_reward_on_demonstrations(name):
+    """ACT's reward from MuJoCo-Warp's contacts at a demonstration's frames against the one recorded with it (MuJoCo 2.3.7's
+    contacts): the same stage at nearly every frame, and the last stage reached where the demonstration reaches it."""
+    from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
+    from ndm_gym.train_robomimic import build
+
+    model, task, (nconmax, njmax) = build(name, 0, DATA, CUDA)
+    frames = torch.arange(1, 401, device=CUDA)  # frame t is the state after step t - 1, whose reward was recorded
+    sim = RobomimicSim(model, task, len(frames), CUDA, nconmax=nconmax, njmax=njmax, joint_noise=0.0)
+    sim.reset(torch.ones(len(frames), dtype=torch.bool, device=CUDA), frames)
+    mine = task.staged_reward(sim.touching()).cpu().numpy()
+    recorded = aloha.load_demo(aloha.demo_path(DATA, name), 0)["reward"]
+    assert np.mean(mine == recorded) > 0.97, (np.mean(mine == recorded), np.nonzero(mine != recorded)[0])
+    assert recorded.max() == MAX_REWARD and np.mean((mine == MAX_REWARD) == (recorded == MAX_REWARD)) > 0.98

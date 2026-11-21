@@ -53,6 +53,10 @@ class RobomimicSim:
         self.graph = capture.graph
         self.qpos, self.qvel, self.ctrl = wp.to_torch(self.data.qpos), wp.to_torch(self.data.qvel), wp.to_torch(self.data.ctrl)
         self.warmstart = wp.to_torch(self.data.qacc_warmstart)
+        # the geom pairs of the scene's contact groups, each as one key (the smaller geom id first) with its group
+        pairs = [(min(a, b) * model.ngeom + max(a, b), g) for g, group in enumerate(task.scene.contacts) for a, b in group]
+        self.ngeom, self.pair_key = model.ngeom, torch.tensor([k for k, _ in pairs], dtype=torch.long, device=device)
+        self.pair_group = torch.tensor([g for _, g in pairs], dtype=torch.long, device=device)
         self.f = torch.zeros(num_envs, dtype=torch.long, device=device)
         self.last = torch.zeros(num_envs, dtype=torch.long, device=device)  # the frame each world's episode ends at
         self.reset(torch.ones(num_envs, dtype=torch.bool, device=device))
@@ -67,7 +71,7 @@ class RobomimicSim:
         qpos = ref.qpos[f].clone()
         qpos[:, self.arm_q] += self.joint_noise * torch.randn(n, len(self.arm_q), device=self.device)
         last = torch.minimum(f + self.episode, ref.end[f]) if frame is None else ref.end[f]
-        return f, qpos, ref.qvel[f], ref.target[f], last
+        return f, qpos, ref.qvel[f], ref.ctrl[f], last
 
     @torch.no_grad()
     def reset(self, mask: torch.Tensor, frame: torch.Tensor | None = None):
@@ -105,6 +109,22 @@ class RobomimicSim:
     def state(self) -> torch.Tensor:
         """The flat state (N, nq + nv): MuJoCo's qpos and qvel."""
         return torch.cat((self.qpos, self.qvel), -1)
+
+    @torch.no_grad()
+    def touching(self) -> torch.Tensor:
+        """Whether each world has a pair of each of the scene's contact groups in contact (N, G, bool), in a collision pass
+        at the present state: MuJoCo's contact list of a state, which ACT's reward reads after a control step."""
+        with wp.ScopedDevice(self.device):
+            mjw.kinematics(self.model, self.data)
+            mjw.collision(self.model, self.data)
+        wp.synchronize_device(self.device)
+        n = int(wp.to_torch(self.data.nacon)[0])
+        geom, world = wp.to_torch(self.data.contact.geom)[:n].long(), wp.to_torch(self.data.contact.worldid)[:n].long()
+        key = geom.amin(-1) * self.ngeom + geom.amax(-1)
+        c, p = torch.nonzero(key.unsqueeze(-1) == self.pair_key, as_tuple=True)
+        out = torch.zeros(self.N, len(self.task.scene.contacts), dtype=torch.bool, device=self.device)
+        out[world[c], self.pair_group[p]] = True
+        return out
 
     def _after(self, s: torch.Tensor, fk):
         """The next state (the state before the step where it is non-finite) and whether each episode terminated."""

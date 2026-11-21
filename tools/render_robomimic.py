@@ -1,5 +1,7 @@
 """Render a manipulation tracking rollout (ndm_gym.evaluate_robomimic's rollout_<demo>.npz) in robosuite's own scene, the one
-the demonstration was recorded in (its materials, textures and lights; its visual geoms): the simulated arms, grippers and
+the demonstration was recorded in (its materials, textures and lights; its visual geoms), or in ACT's ALOHA scene (the
+tasks ``aloha_*``, docs/tasks/aloha.md: its geoms, materials and lights, with tools/render.py's gradient sky, the scene
+having none): the simulated arms, grippers and
 objects solid, the demonstration's a translucent blue ghost laid over the frame with an outline (tools/render_hand.py's
 --ghost_overlay), a fixed camera per task that follows the tracked objects a little, a label and the NDM Gym mark
 (tools/render.py's).
@@ -15,7 +17,8 @@ rollout, in its seconds. A rollout that terminated is drawn up to its terminatio
 objects (``all``), its objects alone (``objects``) or nothing (``none``). ``--source reference_targets``: the rollout under the
 reference's joint positions as the servos' targets (open loop) over the same ghost. The camera: ``--azimuth``, ``--elevation``,
 ``--distance`` (m) and ``--lookat`` override the task's; ``--follow`` how far it leans toward the tracked objects (0: fixed).
-The scene comes from the demonstration (``--data_dir``: tools/download_robomimic.py's output); robosuite is not needed.
+The scene comes from the demonstration (``--data_dir``: tools/download_robomimic.py's output); robosuite is not needed. An
+ALOHA task's comes from ACT's files (``--data_dir``: tools/make_aloha_demos.py's output).
 """
 
 import argparse
@@ -35,6 +38,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ndm_gym.motion.sources.robomimic import demo_path, load_demo
+from ndm_gym.robots import aloha_scenes
 from ndm_gym.robots.robomimic_scenes import TASKS, load_scene
 
 GHOST_RGB = np.array((0.25, 0.58, 0.95)) * 255
@@ -42,33 +46,49 @@ GHOST_RGB = np.array((0.25, 0.58, 0.95)) * 255
 # blue), the objects' as tools/render_hand.py's --ghost_overlay
 GHOST_ALPHA = {1: (0.10, 0.55), 2: (0.30, 0.85)}
 VISUAL_GROUP = 1  # robosuite's visual geoms (group 0: the collision shapes, which its renders hide)
+ALOHA_GROUPS = (0, 1, 2)  # ACT's scenes draw the geoms that collide: every group
 # per task the free camera: lookat (robosuite's world: the table's centre at the origin, 0.8 m high), distance (m), azimuth,
 # elevation (degrees); Lift and Square seen from the front, beside the arm, Transport from the side of its two tables
 VIEWS = {
     "lift": ((-0.2, 0.02, 1.17), 1.35, 150.0, -12.0),
     "square": ((-0.12, -0.02, 1.12), 1.5, 155.0, -16.0),
     "transport": ((0.0, 0.0, 1.1), 1.85, 180.0, -27.0),
+    # ACT's world: the table's top at z = 0, the arms 0.94 m apart along x at y = 0.5; seen from the front, a little above
+    "aloha_transfer_cube": ((0.0, 0.5, 0.2), 1.15, 90.0, -24.0),
+    "aloha_insertion": ((0.0, 0.5, 0.2), 1.15, 90.0, -24.0),
 }
+NAMES = {"lift": "Lift", "square": "Square", "transport": "Transport", "aloha_transfer_cube": "Transfer Cube", "aloha_insertion": "Insertion"}
 INK, MUTED, RED = (28, 30, 34), (92, 98, 108), (200, 45, 45)
 MARK_LIGHT = (255, 255, 255, 150)  # the mark in white where the first frame is dark under it (Transport's pedestals)
 
 
 def ghost_geoms(m: mujoco.MjModel, task: str) -> np.ndarray:
     """Each geom's part of the ghost (ngeom,): 1 the robots' (their arms and grippers; not their fixed bases and mounts), 2 the
-    tracked objects', 0 none; of the visual geoms that move (not welded to the world)."""
-    objects = {int(m.body_rootid[m.jnt_bodyid[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j)]]) for j in TASKS[task]["objects"]}
+    tracked objects', 0 none; of the drawn geoms that move (not welded to the world)."""
+    aloha = task in aloha_scenes.TASKS
+    joints = (aloha_scenes.TASKS if aloha else TASKS)[task]["objects"]
+    objects = {int(m.body_rootid[m.jnt_bodyid[mujoco.mj_name2id(m, mujoco.mjtObj.mjOBJ_JOINT, j)]]) for j in joints}
     names = [mujoco.mj_id2name(m, mujoco.mjtObj.mjOBJ_BODY, b) or "" for b in range(m.nbody)]
-    robots = {int(m.body_rootid[b]) for b, name in enumerate(names) if re.match(r"(robot|gripper)\d+_", name)}
+    robots = {int(m.body_rootid[b]) for b, name in enumerate(names) if re.match(r"vx300s_(left|right)" if aloha else r"(robot|gripper)\d+_", name)}
     body = m.geom_bodyid
-    moving = (m.geom_group == VISUAL_GROUP) & (m.body_weldid[body] != 0)
+    moving = (np.isin(m.geom_group, ALOHA_GROUPS) if aloha else m.geom_group == VISUAL_GROUP) & (m.body_weldid[body] != 0)
     return np.where(moving & np.isin(m.body_rootid[body], list(objects)), 2, np.where(moving & np.isin(m.body_rootid[body], list(robots)), 1, 0))
+
+
+def aloha_model(assets_root: str, task: str) -> mujoco.MjModel:
+    """ACT's scene of ``task`` (robots.aloha_scenes.load_scene's) with tools/render.py's sky: ACT's scenes have none."""
+    aloha_scenes.load_scene(assets_root, task)  # (its checks of the task and the files)
+    spec = mujoco.MjSpec.from_file(os.path.join(assets_root, aloha_scenes.TASKS[task]["scene"]))
+    spec.add_texture(name="ndm_sky", type=mujoco.mjtTexture.mjTEXTURE_SKYBOX, builtin=mujoco.mjtBuiltin.mjBUILTIN_GRADIENT,
+                     rgb1=(0.985, 0.987, 0.99), rgb2=(0.86, 0.88, 0.91), width=512, height=512)  # fmt: skip
+    return spec.compile()
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--rollout", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--data_dir", default=os.path.join(ROOT, "data", "robomimic"))
+    ap.add_argument("--data_dir", default=None, help="default data/robomimic; an ALOHA task's: data/aloha")
     ap.add_argument("--task", default=None, help="the rollout's task (default: the rollout's own)")
     ap.add_argument("--demo", type=int, default=None, help="its demonstration (default: the rollout's own)")
     ap.add_argument("--source", default="state", choices=["state", "reference_targets"])
@@ -114,8 +134,12 @@ def main():
         term = int(d["terminated_at"]) if "terminated_at" in d and a.source == "state" else -1
     if task is None:
         ap.error("the rollout does not name its task: --task")
-    xml = load_demo(demo_path(a.data_dir, task), demo)["xml"]
-    model = load_scene(xml, os.path.abspath(os.path.join(a.data_dir, "robosuite_assets")))
+    aloha = task in aloha_scenes.TASKS
+    data_dir = a.data_dir or os.path.join(ROOT, "data", "aloha" if aloha else "robomimic")
+    if aloha:
+        model = aloha_model(os.path.abspath(os.path.join(data_dir, "act_assets")), task)
+    else:
+        model = load_scene(load_demo(demo_path(data_dir, task), demo)["xml"], os.path.abspath(os.path.join(data_dir, "robosuite_assets")))
     if model.nq != nq:
         raise ValueError(f"the rollout's {nq} coordinates, the scene of {task} demo {demo} has {model.nq}")
     model.vis.global_.offwidth, model.vis.global_.offheight = max(a.width, 640), max(a.height, 480)
@@ -124,7 +148,7 @@ def main():
     renderer = mujoco.Renderer(model, a.height, a.width)
     opt = mujoco.MjvOption()
     opt.geomgroup[:] = 0
-    opt.geomgroup[VISUAL_GROUP] = 1
+    opt.geomgroup[list(ALOHA_GROUPS) if aloha else VISUAL_GROUP] = 1
     opt.sitegroup[:] = 0
     ghost = None if a.ghost == "none" else ghost_geoms(model, task)
     if a.ghost == "objects":
@@ -135,7 +159,7 @@ def main():
     cam.azimuth = az if a.azimuth is None else a.azimuth
     cam.elevation = el if a.elevation is None else a.elevation
     look0 = np.array(a.lookat or look0, dtype=float)
-    obj_q = [model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)] for j in TASKS[task]["objects"]]
+    obj_q = [model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, j)] for j in (aloha_scenes.TASKS if aloha else TASKS)[task]["objects"]]
     s = a.height / 432  # label sizes scale with the frame
     bold, small = _font(0, round(20 * s)), _font(1, round(15 * s))
     mark_fill = None  # the mark's color, chosen at the first frame by the brightness under it
@@ -193,7 +217,7 @@ def main():
             draw_mark(draw, a.width, a.height, bold, fill=mark_fill)
         return Image.alpha_composite(img, over).convert("RGB")
 
-    name = {"lift": "Lift", "square": "Square", "transport": "Transport"}[task]
+    name = NAMES[task]
     speed = "" if a.speed == 1 else f"   {a.speed:g}x"
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     if sheet:  # a contact sheet

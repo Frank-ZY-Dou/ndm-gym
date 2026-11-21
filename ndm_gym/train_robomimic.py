@@ -118,7 +118,7 @@ def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: fl
     from ndm_gym.worldmodels.mjcf import MjcfLayout
 
     ids = [demo] if isinstance(demo, int) else demo
-    if task_name.startswith("aloha_"):  # ACT's scene, one for every demonstration, with the demonstrations' own targets
+    if task_name.startswith("aloha_"):  # ACT's scene, one for every demonstration, which recorded its position targets
         from ndm_gym.motion.sources import aloha
         from ndm_gym.robots import aloha_scenes
 

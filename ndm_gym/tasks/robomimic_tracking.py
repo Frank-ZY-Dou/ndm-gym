@@ -60,9 +60,8 @@ class SceneKinematics(nn.Module):
 
 class RobomimicReference(NamedTuple):
     """Demonstrations at the control rate, (T, ...) per field: the state, the actuators' joint positions, the keypoints, the
-    tracked objects' positions and rotations, the first and the last frame of each frame's demonstration, and the servos'
-    reference targets (``target``: the position targets that lead to a frame; the frame's joint positions unless the
-    demonstration recorded its own)."""
+    tracked objects' positions and rotations, the first and the last frame of each frame's demonstration, and the position
+    targets that the demonstration itself recorded (``target``: those that led to a frame; None if it recorded none)."""
 
     qpos: torch.Tensor
     qvel: torch.Tensor
@@ -72,7 +71,7 @@ class RobomimicReference(NamedTuple):
     obj_R: torch.Tensor
     start: torch.Tensor
     end: torch.Tensor
-    target: torch.Tensor
+    target: torch.Tensor | None
 
     @property
     def frames(self) -> int:
@@ -95,8 +94,8 @@ def object_poses(scene: RobomimicScene, qpos: torch.Tensor) -> tuple[torch.Tenso
 
 def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, device: str, target=None, hold: int = HOLD) -> RobomimicReference:
     """The reference of demonstrations' states, (T, nq) and (T, nv) arrays or lists of them (one per demonstration, one after
-    the other), each demonstration's last state held for ``hold`` frames at rest. ``target``: the demonstrations' own
-    position targets, (T, nu) each, a frame's being those that led to it (default: the frames' joint positions)."""
+    the other), each demonstration's last state held for ``hold`` frames at rest. ``target``: the position targets the
+    demonstrations recorded, (T, nu) each, a frame's being those that led to it."""
     if not isinstance(qpos, (list, tuple)):
         qpos, qvel, target = [qpos], [qvel], None if target is None else [target]
     qs, vs, us, starts, ends, offset = [], [], [], [], [], 0
@@ -118,7 +117,7 @@ def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, dev
     with torch.no_grad():
         keypoints = kin(qpos)
     return RobomimicReference(qpos, qvel, ctrl, keypoints, obj_p, obj_R, torch.cat(starts).to(device), torch.cat(ends).to(device),
-                              torch.cat(us).to(device) if us else ctrl)  # fmt: skip
+                              torch.cat(us).to(device) if us else None)  # fmt: skip
 
 
 @dataclass
@@ -180,10 +179,16 @@ class RobomimicTask:
 
     def setpoint(self, a: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
         """The actuators' position targets for policy output ``a`` in [-1, 1] at frame ``f``: offsets about the reference's
-        targets of the next frame (its joint positions, or the demonstration's own targets)."""
+        joint positions at the next frame."""
         if self.spread is not None:
             a = a @ self.spread.T
-        return torch.clamp(self.ref.target[self.ref.next_frame(f)] + self.scale * a, self.u_lo, self.u_hi)
+        return torch.clamp(self.ref.ctrl[self.ref.next_frame(f)] + self.scale * a, self.u_lo, self.u_hi)
+
+    def recorded_setpoint(self, f: torch.Tensor) -> torch.Tensor:
+        """The position targets the demonstration recorded for the step at frame ``f`` (those that led to its next frame)."""
+        if self.ref.target is None:
+            raise ValueError("the demonstrations recorded no position targets")
+        return torch.clamp(self.ref.target[self.ref.next_frame(f)], self.u_lo, self.u_hi)
 
     def _objects(self, S):
         qpos, qvel = S
@@ -278,6 +283,23 @@ class RobomimicTask:
                 ok = ok & (rel[..., :2].abs() < BIN_HALF_XY).all(-1) & (rel[..., 2] > BIN_FLOOR) & (rel[..., 2] < BIN_TOP)
             return ok
         raise NotImplementedError(f"success of {kind!r}")
+
+    def staged_reward(self, touch: torch.Tensor) -> torch.Tensor:
+        """ACT's reward of a state, 0 to 4 (..., long), from whether a pair of each of the scene's contact groups touches
+        (..., G, bool; the groups of robots.aloha_scenes.CONTACTS, read off the simulator's contacts)."""
+        kind, r = self.scene.success_kind, torch.zeros(touch.shape[:-1], dtype=torch.long, device=touch.device)
+        if kind == "aloha_transfer":  # TransferCubeTask.get_reward
+            left, right, table = touch.unbind(-1)
+            for stage, met in enumerate((right, right & ~table, left, left & ~table), 1):
+                r = torch.where(met, stage, r)
+            return r
+        if kind == "aloha_insertion":  # InsertionTask.get_reward
+            left, right, peg_table, socket_table, peg_socket, pin = touch.unbind(-1)
+            lifted = ~peg_table & ~socket_table
+            for stage, met in enumerate((left & right, left & right & lifted, peg_socket & lifted, pin), 1):
+                r = torch.where(met, stage, r)
+            return r
+        raise NotImplementedError(f"a staged reward of {kind!r}")
 
     def critic_features(self, S, fk: torch.Tensor, f: torch.Tensor, a_prev: torch.Tensor, goal_frames: int) -> torch.Tensor:
         return torch.cat((self.obs(S, fk, a_prev), self.goal(S, fk, f, goal_frames)), -1)

@@ -1,8 +1,8 @@
 """The bimanual tracking task's demonstrations: ACT's scripted policies' episodes in its simulated ALOHA scenes with the whole
 state kept, as tools/make_aloha_demos.py writes them, ``<data_dir>/<task>/demos.npz`` (ACT's own recordings hold no object
 poses). A demonstration is the state after every control step of 20 ms (qpos, qvel; 401 frames with the start), the 16
-position targets of every step and ACT's staged reward. The reference's targets are the demonstration's own: a frame's are
-those that led to it, the first frame's those of the first step."""
+position targets of every step and ACT's staged reward. ``target`` gives a frame the targets that led to it, the first
+frame those of the first step (the tracking policy does not read them: tasks.robomimic_tracking)."""
 
 from __future__ import annotations
 
