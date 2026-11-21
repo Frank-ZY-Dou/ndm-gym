@@ -51,6 +51,17 @@ QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QU
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
+# manipulation demonstration tracking: the hand task's settings and systems options as the starting point
+ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights {HAND_SYSTEMS}"
+ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
+# the benchmark's runs (benchmarks/robomimic_manipulation_tracking): 1,500 iterations on the schedule of 4,000, the solver at 20
+# iterations, a checkpoint kept every 100
+ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 100 --ckpt_keep"
+# bimanual demonstration tracking (benchmarks/aloha_bimanual_tracking): the manipulation task's options with episodes of up to
+# 500 control steps (10 s at ACT's 50 Hz, the manipulation task's 200 steps at 20 Hz), its tuning round's choice for both
+# algorithms; the benchmark's runs: 6,000 iterations with the cosine over them, the solver at 20 iterations, a checkpoint
+# kept every 200
+ALOHA_RUN = "--episode 500 --solver_iterations 20 --iterations 6000 --lr_decay_iters 6000 --ckpt_every 200 --ckpt_keep"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -161,6 +172,25 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
         "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
+    },
+    "train_robomimic": {
+        "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 70.4 %, object 0.62 / 1.57 / "
+                                 "5.69 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, A100 80GB SXM4)"),
+        "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 84.9 / 29.7 %, object 0.87 / 5.34 / "
+                                 "10.6 mm on Lift / Square / Transport (seeds 0-2, Transport's object error 2 of them; 256 perturbed rollouts, A100 80GB "
+                                 "SXM4)"),
+        "aloha-supertrack": (f"{ROBOMIMIC_ST} {ALOHA_RUN}",
+                             "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
+                             "default), 6,000 iterations, the cap's last checkpoint: success 100 / 30.9 / 100 % with the cube within 2.22 / 2.07 / "
+                             "1.37 mm on Transfer Cube, 0 / 0 / 100 % with the objects within 1.92 / 1.60 / 1.84 mm on Insertion (seeds 0 / 1 / 2, "
+                             "256 perturbed rollouts, A100 80GB SXM4; not every run settled)"),
+        "aloha-supermimic": (f"{ROBOMIMIC_SM} {ALOHA_RUN}",
+                             "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
+                             "default), 6,000 iterations, the cap's last checkpoint: success 69.1 / 0.4 / 69.5 % with the cube within 13.4 / 24.0 / "
+                             "10.1 mm on Transfer Cube, 0.4 / 0 / 0 % on Insertion (seeds 0 / 1 / 2, 256 perturbed rollouts, A100 80GB SXM4; no run "
+                             "settled)"),
     },
 }
 

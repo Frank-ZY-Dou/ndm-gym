@@ -32,7 +32,7 @@ sim = [
     "warp-lang==1.17.0",
     "newton @ git+https://github.com/newton-physics/newton.git@71eeba16a717d4dcf0b9dd7056a7b6f863054dc3",
 ]
-hand = ["mujoco==3.15.0", "mujoco-warp==3.15.0", "warp-lang==1.17.0"]
+hand = ["mujoco==3.15.0", "mujoco-warp==3.15.0", "warp-lang==1.17.0", "h5py>=3.10"]
 render = ["pillow>=10", "matplotlib>=3.8", "imageio-ffmpeg>=0.5"]  # tools/render*.py, plot.py, compare_videos.py (and ffmpeg)
 contacts = ["scipy>=1.11"]  # worldmodels/mjcf.py's contact inputs (fit_mjcf --contacts): the convex hulls of the robot's collision geoms
 docs = ["mkdocs>=1.6,<2", "mkdocs-material>=9.5", "mkdocstrings-python>=1.16"]
@@ -74,3 +74,4 @@ extend-exclude = ["third_party"]
 "ndm_gym/sim/rigid/hand_sim.py" = ["E402"]
 "ndm_gym/sim/rigid/quadrotor_sim.py" = ["E402"]
 "ndm_gym/sim/rigid/quadruped_sim.py" = ["E402"]
+"ndm_gym/sim/rigid/robomimic_sim.py" = ["E402"]

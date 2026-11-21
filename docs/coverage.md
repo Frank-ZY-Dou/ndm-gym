@@ -63,6 +63,8 @@ this repository yet.
 | HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
 | Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset), [paper](https://doi.org/10.1109/LRA.2024.3371288) | the quadrotor's flights, autonomous and piloted |
 | On Your Own | [paper](https://doi.org/10.1109/LRA.2026.3653405), [release v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0) | the professional pilot's race-track flights |
+| robomimic | [ARISE-Initiative/robomimic](https://github.com/ARISE-Initiative/robomimic), [data](https://huggingface.co/datasets/robomimic/robomimic_datasets), [paper](https://arxiv.org/abs/2108.03298) | its proficient-human demonstrations of Lift, Square and Transport, for manipulation tracking |
+| ACT | [tonyzhaozh/act](https://github.com/tonyzhaozh/act), [paper](https://arxiv.org/abs/2304.13705) | its simulated ALOHA scenes and the scripted policies of Transfer Cube and Insertion, whose episodes `tools/make_aloha_demos.py` generates with the objects' poses, for bimanual tracking |
 | Lifelike agility and play | [Tencent-RoboticsX/lifelike-agility-and-play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play), [paper](https://doi.org/10.1038/s42256-024-00861-3) | a Labrador's motion capture, retargeted to the Go2 for quadruped tracking |
 
 ## Robots and hands
@@ -81,6 +83,8 @@ this repository yet.
 | RoboPianist's keyboard | 88 passive keys | [google-research/robopianist](https://github.com/google-research/robopianist), through [Eden's assets](https://huggingface.co/datasets/Kashu7100/eden_assets) | piano playing |
 | Sharpa hand | dexterous hand | [openrobokit/robokit](https://github.com/openrobokit/robokit) | RoboKit's pen *(ongoing)* |
 | Adroit hand | dexterous hand, 24-30 actuators by task | [Farama-Foundation/Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics) | door opening ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)); pen turning, hammering and ball relocation ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)); from DAPG demonstrations |
+| Franka Emika Panda | 7-DoF arm with a parallel gripper | [ARISE-Initiative/robosuite](https://github.com/ARISE-Initiative/robosuite) 1.5.0, in robomimic's scenes | manipulation demonstration tracking, one arm or two |
+| ALOHA (two ViperX 300) | two 6-DoF arms with parallel grippers | [tonyzhaozh/act](https://github.com/tonyzhaozh/act)'s scenes | bimanual demonstration tracking |
 | Race Against the Machine's racer | 5-inch racing quadrotor | written here from the paper's specification (`ndm_gym/robots/quadrotor.py`) | trajectory tracking |
 | MuscleVAE's character | muscle-actuated humanoid | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | tracking with muscles |
 | Cart-pole, pusher | PETS' MuJoCo models | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | mbrl-lib's planner on world models |
