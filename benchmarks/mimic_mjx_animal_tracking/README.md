@@ -41,5 +41,5 @@ Fixed before the three-seed runs.
   the episodes lived; the same on the held-out clips.
 
 The target of the time to the target (at most 2 % of the episodes ended, the bodies within 3 % of the body's size) was set
-after these runs, on their kept checkpoints. MIMIC-MJX's median keypoint error against stac-mjx's keypoints is not computed
+after earlier runs of these configurations, on their kept checkpoints. MIMIC-MJX's median keypoint error against stac-mjx's keypoints is not computed
 here: the bodies' error is a mean over the body frames' origins.

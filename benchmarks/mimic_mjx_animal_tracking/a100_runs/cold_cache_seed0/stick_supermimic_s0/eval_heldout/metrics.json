@@ -1,14 +1,14 @@
 {
   "checkpoint": "logs/mimic_mjx_formal/stick_supermimic_s0/last.pt",
   "iteration": 4000,
-  "minutes": 30.900182108084362,
+  "minutes": 14.85874414841334,
   "animal": "stick",
   "clips": 10,
   "episodes": 50,
-  "ended_share": 0.0,
-  "body_mm": 0.8616366386413574,
-  "end_eff_mm": 1.187822937965393,
-  "root_pos_mm": 0.5989797115325928,
-  "joint_deg": 5.520342021651427,
-  "lived_share": 1.0
+  "ended_share": 0.05999999865889549,
+  "body_mm": 1.0504876375198364,
+  "end_eff_mm": 1.3561991453170776,
+  "root_pos_mm": 0.8253756165504456,
+  "joint_deg": 5.736504275390813,
+  "lived_share": 0.9651786088943481
 }
