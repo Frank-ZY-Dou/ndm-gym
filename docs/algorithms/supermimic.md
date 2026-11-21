@@ -33,6 +33,8 @@ BlinkMimic's semi-implicit variant is `--wm_structured` ([BlinkMimic](../blinkmi
 | `--no_critic` | off | drops the critic |
 | `--critic_epochs` | 5 | the critic's epochs per update |
 | `--critic_minibatches` | 4 | the critic's minibatches per epoch |
+| `--critic_compile` | off | the critic's eager work (the policy loss's terms after the rollout, the critic's values and their targets, each minibatch step) as three compiled functions, the inputs normalized once per update (the same values up to float rounding) |
+| `--critic_fused` | off | with `--critic_compile`: each critic minibatch step as Triton kernels around cuBLAS's products, about 45 kernel launches as 12 (the same values up to float rounding) |
 
 Options of both algorithms: [Algorithms](../algorithms.md#options). HOI training has its own: `python -m ndm_gym.train_hoi --help`.
 
