@@ -19,7 +19,7 @@ import torch.nn as nn
 from ..buffer import ReplayBuffer
 from ..policies.critic import Critic
 from ..policies.hand_policy import HandPolicy
-from ..robots.hands import NUM_PALM, HandKinematics
+from ..robots.hands import HandKinematics
 from ..tasks.hand_tracking import HandTask, unflatten_state
 from ..tasks.hdmi import relative_rot, rot_angle
 from ..worldmodels.hand import HandWorldModel
@@ -60,7 +60,8 @@ class HandSuperMimic:
         if not 0 < self.bptt_decay <= 1:
             raise ValueError(f"--bptt_decay must be in (0, 1], got {self.bptt_decay}")
         goal_dim = task.goal_frame_dim * self.goal_frames
-        self.wm = HandWorldModel(kin.num_joints, hidden=args.wm_hidden, act=args.wm_act, layer_norm=not args.wm_no_ln, kind=self.kind).to(dev)
+        self.wm = HandWorldModel(kin.num_joints, kin.palm_translations, kin.palm_keypoints.tolist(), hidden=args.wm_hidden, act=args.wm_act,
+                                 layer_norm=not args.wm_no_ln, kind=self.kind).to(dev)  # fmt: skip
         self.pi = HandPolicy(task.obs_dim, goal_dim, kin.num_joints).to(dev)
         self.critic = Critic(task.obs_dim + goal_dim).to(dev)
         # Adam at --lr, the policy's with betas (0.9, 0.95), unless a systems option says otherwise (algos.hand_fast)
@@ -334,7 +335,7 @@ class HandSuperTrack(HandSuperMimic):
             self.bal.ready.fill_(True)
             self.step_worth = c.w_keypoint + c.w_palm_ori + c.w_finger + c.w_object_pos + c.w_object_ori  # every error at its kernel's width
         ref = task.ref
-        self.ref_local = (ref.keypoints[:, 1:] - ref.keypoints[:, :1]) @ ref.palm_R  # the fingertips about the palm, the palm's frame
+        self.ref_local = kin.fingertips_about_palms(ref.keypoints, ref.palm_R)
         self.st_step = torch.compile(self._st_step)
         # --compile_updates: the start states' kinematics (SuperMimic's start_features compile them) and the objective compiled
         self.start_fk, self.st_objective = kin.forward, self._st_objective
@@ -358,9 +359,9 @@ class HandSuperTrack(HandSuperMimic):
         q, qd, p, R, v, w = S
         keypoints, palm_R = fk
         ref = self.task.ref
-        local = (keypoints[..., 1:, :] - keypoints[..., :1, :]) @ palm_R
+        local = self.kin.fingertips_about_palms(keypoints, palm_R)
         errs = [(keypoints - ref.keypoints[f]).abs().sum(-1).mean(-1), (local - self.ref_local[f]).abs().sum(-1).mean(-1),
-                rot_angle(relative_rot(ref.palm_R[f], palm_R)), (q[..., NUM_PALM:] - ref.q[f][..., NUM_PALM:]).abs().mean(-1),
+                rot_angle(relative_rot(ref.palm_R[f], palm_R)).mean(-1), (q - ref.q[f])[..., self.kin.finger_joints].abs().mean(-1),
                 (p - ref.p[f]).abs().sum(-1), rot_angle(relative_rot(ref.R[f], R))]  # fmt: skip
         if self.vel_terms:
             errs += [(qd - ref.qd[f]).abs().mean(-1), (v - ref.v[f]).abs().sum(-1), (w - ref.w[f]).abs().sum(-1)]

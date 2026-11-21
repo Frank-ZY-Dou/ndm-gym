@@ -34,7 +34,7 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ndm_gym.core.rotations import mat_to_quat
-from ndm_gym.robots.hands import scene_indices
+from ndm_gym.robots.hands import OBJECT_BODY, hand_keypoints, scene_indices
 
 FLOOR_CELL = 0.1  # the side of a floor tile (m)
 GHOST_RGBA = (0.25, 0.58, 0.95, 0.18)
@@ -172,6 +172,20 @@ def interpolate(qpos: np.ndarray, quat_at: int, x: np.ndarray) -> np.ndarray:
     return out
 
 
+def followed_positions(model: mujoco.MjModel, qpos: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """What the camera follows over the frames ``qpos`` (T, nq): the palms' mean position and the object's center of mass."""
+    data = mujoco.MjData(model)
+    palms = [s for sites in hand_keypoints(model) for s in sites[:1]]
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, OBJECT_BODY)
+    palm_positions, object_positions = np.zeros((len(qpos), 3)), np.zeros((len(qpos), 3))
+    for i, q in enumerate(qpos):
+        data.qpos[:] = q
+        mujoco.mj_kinematics(model, data)
+        mujoco.mj_comPos(model, data)
+        palm_positions[i], object_positions[i] = data.site_xpos[palms].mean(0), data.xipos[body]
+    return palm_positions, object_positions
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--clip", type=str, required=True)
@@ -214,9 +228,9 @@ def main():
     if model.nq != frames.shape[1]:
         raise ValueError("the studio scene's qpos does not match the rollout's")
 
-    # the camera follows the reference's palm and object over the floor at a fixed height, whatever the source, by default
+    # the camera follows the reference's palms and object over the floor at a fixed height, whatever the source, by default
     # facing the palm of the final grasp from its side
-    palm_positions, object_positions = followed[:, indices["qpos"][:3]], followed[:, object_qpos : object_qpos + 3]
+    palm_positions, object_positions = followed_positions(mujoco.MjModel.from_xml_path(scene_xml), followed)
     track = np.concatenate((palm_positions, object_positions))
     lowest, highest = track.min(0), track.max(0)
     grasp_direction = object_positions[-1, :2] - palm_positions[-1, :2]  # from the palm through the object
