@@ -99,6 +99,9 @@ class RobomimicScene:
     success_kind: str
     success_xy: tuple[float, float] = (0.0, 0.0)  # Square: its peg's position
     bins: tuple[tuple[int, int], ...] = ()  # Transport: the bins of the first tracked objects (the payload's, the trash's)
+    control_dt: float = 0.05  # the control step (robosuite's control_freq 20)
+    # actuator pairs (i, j) driven by one action: j's target offset is the negative of i's (a gripper's two mirrored fingers)
+    mirror: tuple[tuple[int, int], ...] = ()
 
     @staticmethod
     def from_model(m: mujoco.MjModel, task: str) -> RobomimicScene:
@@ -144,7 +147,7 @@ class RobomimicScene:
 
     @property
     def num_arms(self) -> int:
-        return sum(self.arm) // 7
+        return len(self.keypoint_bodies) // len(KEYPOINT_BODIES)  # (an arm has one gripper)
 
 
 def contact_capacity(m: mujoco.MjModel, qpos: np.ndarray, qvel: np.ndarray, every: int = 5) -> tuple[int, int]:

@@ -43,15 +43,15 @@ def replay_fields(task: RobomimicTask) -> dict:
         "s": (task.state_dim, torch.float32),
         "s1": (task.state_dim, torch.float32),
         "u": (task.nu, torch.float32),
-        "a_prev": (task.nu, torch.float32),
+        "a_prev": (task.na, torch.float32),
         "f": ((), torch.long),
         "done": ((), torch.bool),
     }
 
 
-def world_model(model, args, kind: str, substeps: int) -> MjcfWorldModel:
-    """The scene's world model over one control step (``model``: the compiled scene with its servos)."""
-    lay = dataclasses.replace(MjcfLayout.from_model(model), dt=CONTROL_DT)
+def world_model(model, args, kind: str, substeps: int, dt: float = CONTROL_DT) -> MjcfWorldModel:
+    """The scene's world model over one control step of ``dt`` (``model``: the compiled scene with its servos)."""
+    lay = dataclasses.replace(MjcfLayout.from_model(model), dt=dt)
     lead = {"pos_lead": mean_velocity_lead(model, substeps)} if kind == "accel" else {}
     return MjcfWorldModel(lay, hidden=tuple(args.wm_hidden), act=args.wm_act, layer_norm=not args.wm_no_ln, kind=kind, **lead)
 
@@ -66,8 +66,8 @@ class RobomimicSuperMimic:
         if not 0 < self.bptt_decay <= 1:
             raise ValueError(f"--bptt_decay must be in (0, 1], got {self.bptt_decay}")
         goal_dim = task.goal_frame_dim * self.goal_frames
-        self.wm = world_model(model, args, self.kind, substeps).to(dev)
-        self.pi = RobomimicPolicy(task.obs_dim, goal_dim, task.nu).to(dev)
+        self.wm = world_model(model, args, self.kind, substeps, task.control_dt).to(dev)
+        self.pi = RobomimicPolicy(task.obs_dim, goal_dim, task.na).to(dev)
         self.critic = Critic(task.obs_dim + goal_dim).to(dev)
         self.opt_wm = optimizer(args, dev, self.wm, "wm")
         self.opt_pi = optimizer(args, dev, self.pi, "pi")
@@ -311,7 +311,7 @@ def collect_step(sim, task, algo, buffer, args, a_prev: torch.Tensor, ep_len: to
     acc["r"] += task.reward(S1, fk1, f1, a, a_prev).sum() / task.max_step_reward
     acc["object_err"] += task.errors(S1, fk1, f1)["object_pos"].mean(-1).sum()
     at_end = (f1 == task.ref.end[f1]) & ~term  # the episodes that reach their demonstration's last frame
-    acc["success"] += (task.success(S1) & at_end).sum()
+    acc["success"] += (task.success(S1, fk1) & at_end).sum()
     acc["at_end"] += at_end.sum()
     acc["steps"] += sim.N
     acc["done"] += done.sum()
@@ -331,7 +331,7 @@ class RobomimicCollector(Collector):
         self.graphed = bool(args.collect_graph)
         if self.graphed and buffer.size_t is None:
             raise ValueError("--collect_graph writes at the replay's device-side head (ReplayBuffer.use_device_ptr(device_size=True))")
-        self.a_prev = torch.zeros(sim.N, task.nu, device=sim.device)
+        self.a_prev = torch.zeros(sim.N, task.na, device=sim.device)
         self.ep_len = torch.zeros(sim.N, device=sim.device)
         self.acc = {k: torch.zeros((), device=sim.device) for k in ACC_KEYS}
         self.fk = task.fk

@@ -25,16 +25,16 @@ require_simulator(__name__, modules=("warp", "mujoco_warp"))
 import mujoco_warp as mjw
 import warp as wp
 
-from ...tasks.robomimic_tracking import CONTROL_DT, RobomimicTask, unflatten_state
+from ...tasks.robomimic_tracking import RobomimicTask, unflatten_state
 
 
 class RobomimicSim:
     def __init__(self, model: mujoco.MjModel, task: RobomimicTask, num_envs: int, device: str, nconmax: int = 64, njmax: int = 512,
                  episode: int = 200, joint_noise: float = 0.01, stagger: bool = False):  # fmt: skip
         self.task, self.ref, self.N, self.device, self.episode, self.joint_noise = task, task.ref, num_envs, device, episode, joint_noise
-        self.substeps = round(CONTROL_DT / model.opt.timestep)
-        if abs(self.substeps * model.opt.timestep - CONTROL_DT) > 1e-9:
-            raise ValueError(f"the physics step {model.opt.timestep} does not divide the control step {CONTROL_DT}")
+        self.substeps = round(task.control_dt / model.opt.timestep)
+        if abs(self.substeps * model.opt.timestep - task.control_dt) > 1e-9:
+            raise ValueError(f"the physics step {model.opt.timestep} does not divide the control step {task.control_dt}")
         if (model.nq, model.nv, model.nu) != (task.nq, task.nv, task.nu):
             raise ValueError("the model is not the task's scene")
         self.arm_q = task.act_q[task.arm]  # the arms' joints, which the starts perturb
@@ -67,7 +67,7 @@ class RobomimicSim:
         qpos = ref.qpos[f].clone()
         qpos[:, self.arm_q] += self.joint_noise * torch.randn(n, len(self.arm_q), device=self.device)
         last = torch.minimum(f + self.episode, ref.end[f]) if frame is None else ref.end[f]
-        return f, qpos, ref.qvel[f], ref.ctrl[f], last
+        return f, qpos, ref.qvel[f], ref.target[f], last
 
     @torch.no_grad()
     def reset(self, mask: torch.Tensor, frame: torch.Tensor | None = None):

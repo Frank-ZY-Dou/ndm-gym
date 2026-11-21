@@ -47,10 +47,13 @@ def parse_args(argv: list[str] | None = None):
     parser = argparse.ArgumentParser()
     add_train_args(parser)
     add_hand_fast_args(parser)  # the systems options
-    parser.add_argument("--task", type=str, required=True, choices=["lift", "square", "transport"])
+    parser.add_argument("--task", type=str, required=True, choices=["lift", "square", "transport", "aloha_transfer_cube", "aloha_insertion"],
+                        help="robomimic's tasks, or ACT's simulated ALOHA tasks (docs/tasks/aloha.md)")
     parser.add_argument("--demo", type=int, nargs="+", default=[0],
                         help="the demonstrations (demo_<i>) of the task's file; several: one policy on all of them, whose scenes must be one")  # fmt: skip
-    parser.add_argument("--data_dir", type=str, default=os.path.join(REPO, "data", "robomimic"), help="tools/download_robomimic.py's output")
+    parser.add_argument("--data_dir", type=str, default=None,
+                        help="tools/download_robomimic.py's output (default data/robomimic); the ALOHA tasks: tools/make_aloha_demos.py's "
+                        "(default data/aloha)")  # fmt: skip
     parser.add_argument("--episode", type=int, default=200, help="an episode's longest length in control steps (20 Hz)")
     parser.add_argument("--solver_iterations", type=int, default=0,
                         help="the constraint solver's iterations, in place of the scene's (robosuite's: MuJoCo's 100); a GPU step lasts as "
@@ -92,6 +95,8 @@ def parse_args(argv: list[str] | None = None):
             parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that robomimic training does not implement")
     if args.episode < 2:
         parser.error("--episode >= 2")
+    if args.data_dir is None:
+        args.data_dir = os.path.join(REPO, "data", "aloha" if args.task.startswith("aloha_") else "robomimic")
     if args.solver_iterations < 0 or args.solver_ls_iterations < 0 or (args.solver_ls_iterations and not args.solver_iterations):
         parser.error("--solver_iterations >= 0, --solver_ls_iterations >= 0 and only with --solver_iterations")
     try:
@@ -109,21 +114,30 @@ def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: fl
     scene's)."""
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo, split_states
     from ndm_gym.robots.robomimic_scenes import RobomimicScene, contact_capacity, load_scene
-    from ndm_gym.tasks.robomimic_tracking import RewardCfg, RobomimicTask, SceneKinematics, build_reference
+    from ndm_gym.tasks.robomimic_tracking import HOLD, RewardCfg, RobomimicTask, SceneKinematics, build_reference
     from ndm_gym.worldmodels.mjcf import MjcfLayout
 
-    demos = [load_demo(demo_path(data_dir, task_name), i) for i in ([demo] if isinstance(demo, int) else demo)]
-    if any(x["xml"] != demos[0]["xml"] for x in demos[1:]):
-        raise ValueError(f"{task_name}: the demonstrations {demo} were recorded in different scenes (one policy on several needs one scene)")
-    d = demos[0]
-    model = load_scene(d["xml"], os.path.abspath(os.path.join(data_dir, "robosuite_assets")))
+    ids = [demo] if isinstance(demo, int) else demo
+    if task_name.startswith("aloha_"):  # ACT's scene, one for every demonstration, with the demonstrations' own targets
+        from ndm_gym.motion.sources import aloha
+        from ndm_gym.robots import aloha_scenes
+
+        demos = [aloha.load_demo(aloha.demo_path(data_dir, task_name), i) for i in ids]
+        model = aloha_scenes.load_scene(os.path.abspath(os.path.join(data_dir, "act_assets")), task_name)
+        scene, states = aloha_scenes.aloha_scene(model, task_name), [(x["qpos"], x["qvel"]) for x in demos]
+        targets, hold = [x["target"] for x in demos], aloha_scenes.HOLD
+    else:
+        demos = [load_demo(demo_path(data_dir, task_name), i) for i in ids]
+        if any(x["xml"] != demos[0]["xml"] for x in demos[1:]):
+            raise ValueError(f"{task_name}: the demonstrations {demo} were recorded in different scenes (one policy on several needs one scene)")
+        model = load_scene(demos[0]["xml"], os.path.abspath(os.path.join(data_dir, "robosuite_assets")))
+        scene, states = RobomimicScene.from_model(model, task_name), [split_states(x["states"], model.nq, model.nv) for x in demos]
+        targets, hold = None, HOLD
     if solver_iterations:
         model.opt.iterations = solver_iterations
         model.opt.ls_iterations = solver_ls_iterations or model.opt.ls_iterations
-    scene = RobomimicScene.from_model(model, task_name)
-    states = [split_states(x["states"], model.nq, model.nv) for x in demos]
     kin = SceneKinematics(MjcfLayout.from_model(model), scene.keypoint_bodies).to(device)
-    ref = build_reference([q for q, _ in states], [v for _, v in states], scene, kin, device)
+    ref = build_reference([q for q, _ in states], [v for _, v in states], scene, kin, device, target=targets, hold=hold)
     task = RobomimicTask(scene, kin, ref, RewardCfg().scaled(reward_std_scale))
     caps = [contact_capacity(model, q, v) for q, v in states]
     return model, task, (max(c[0] for c in caps), max(c[1] for c in caps))
@@ -186,7 +200,7 @@ def main():
         collect = RobomimicCollector(sim, task, algo, buffer, args)
         acc = collect.acc
     else:
-        a_prev, ep_len = torch.zeros(N, task.nu, device=dev), torch.zeros(N, device=dev)
+        a_prev, ep_len = torch.zeros(N, task.na, device=dev), torch.zeros(N, device=dev)
         acc = {k: torch.zeros((), device=dev) for k in ACC_KEYS}
 
         def host_step(u):

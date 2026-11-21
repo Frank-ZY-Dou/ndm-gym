@@ -34,7 +34,7 @@ def rollout(sim, algo, task, starts, policy: bool = True):
     every = torch.ones(sim.N, dtype=torch.bool, device=sim.device)
     sim.reset(every, starts)
     lens = task.ref.end[starts] - starts
-    a_prev = torch.zeros(sim.N, task.nu, device=sim.device)
+    a_prev = torch.zeros(sim.N, task.na, device=sim.device)
     failed = torch.zeros(sim.N, dtype=torch.bool, device=sim.device)
     until = lens.clone()
     states = [sim.state()]
@@ -78,7 +78,7 @@ def main():
     from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo
     from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
-    from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, unflatten_state
+    from ndm_gym.tasks.robomimic_tracking import unflatten_state
     from ndm_gym.train_robomimic import build
 
     torch.manual_seed(args.seed)
@@ -88,7 +88,8 @@ def main():
     demo = targs.demo if args.demo is None else args.demo
     demos = demo if isinstance(demo, list) else [demo]
     data_dir = args.data_dir or targs.data_dir
-    if args.demo is not None:  # robosuite draws Lift's cube and Transport's hammer per demonstration: the policy's scene only
+    # robosuite draws Lift's cube and Transport's hammer per demonstration: the policy's scene only (ACT's scene is one)
+    if args.demo is not None and not targs.task.startswith("aloha_"):
         trained = targs.demo if isinstance(targs.demo, list) else [targs.demo]
         path = demo_path(data_dir, targs.task)
         scene = load_demo(path, trained[0])["xml"]
@@ -117,12 +118,12 @@ def main():
         ok = ~failed
         mean = lambda x: float(x[:, ok].mean()) if bool(ok.any()) else math.nan  # noqa: E731
         return {"success_rate": float(success.float().mean()), "terminated": float(failed.float().mean()),
-                "tracked_s": float(until.float().mean() * CONTROL_DT), "object_mm": 1000 * mean(e["object_pos"].mean(-1)),
+                "tracked_s": float(until.float().mean() * task.control_dt), "object_mm": 1000 * mean(e["object_pos"].mean(-1)),
                 "object_final_mm": 1000 * float(e["object_pos"][-1].mean()), "object_deg": math.degrees(mean(e["object_ori_sq"].sqrt().mean(-1))),
                 "keypoint_mm": 1000 * mean(e["keypoint"].mean(-1)), "joint_rad": mean(e["joint"]), "finger_mm": 1000 * mean(e["finger"])}  # fmt: skip
 
     os.makedirs(args.out, exist_ok=True)
-    metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": CONTROL_DT,
+    metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": task.control_dt,
                "num_envs": args.num_envs, "solver_iterations": [int(model.opt.iterations), int(model.opt.ls_iterations)], "per_demo": {}}  # fmt: skip
     group = torch.arange(args.num_envs * D, device=dev) // args.num_envs  # each world's demonstration
     runs = {"nominal": rollout(nominal, algo, task, firsts), "policy": rollout(sim, algo, task, firsts[group])}
@@ -139,7 +140,7 @@ def main():
         _, _, failed, until, success = runs["nominal"]
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
                  reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
-                 control_dt=CONTROL_DT, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,
+                 control_dt=task.control_dt, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,
                  success=bool(success[d]))  # fmt: skip
         metrics["per_demo"][str(name)] = m
     for key in ("policy", "reference_targets"):  # the means over the demonstrations

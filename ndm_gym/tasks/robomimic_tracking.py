@@ -22,12 +22,13 @@ import torch
 import torch.nn as nn
 
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq
+from ..robots.aloha_scenes import GRASP_RATIO, INSERTION_LATERAL, INSERTION_X, TRANSFER_OPENING, TRANSFER_REACH, TRANSFER_Z
 from ..robots.robomimic_scenes import (BIN_FLOOR, BIN_HALF_XY, BIN_TOP, KEYPOINT_BODIES, LIFT_HEIGHT, LIFT_TABLE_TOP, SQUARE_TABLE_TOP, SQUARE_XY,
                                        SQUARE_Z, RobomimicScene)  # fmt: skip
 from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel
 
-CONTROL_DT = 0.05  # robosuite's control_freq 20
-HOLD = 10  # frames of the last state appended to a demonstration (0.5 s)
+CONTROL_DT = 0.05  # robosuite's control_freq 20 (a scene's own control step: RobomimicScene.control_dt)
+HOLD = 10  # frames of the last state appended to a demonstration (0.5 s at CONTROL_DT)
 
 
 def flatten_state(S) -> torch.Tensor:
@@ -58,9 +59,10 @@ class SceneKinematics(nn.Module):
 
 
 class RobomimicReference(NamedTuple):
-    """Demonstrations at the control rate, (T, ...) per field: the state, the actuators' joint positions (the servos'
-    reference targets), the keypoints, the tracked objects' positions and rotations, and the first and the last frame of each
-    frame's demonstration."""
+    """Demonstrations at the control rate, (T, ...) per field: the state, the actuators' joint positions, the keypoints, the
+    tracked objects' positions and rotations, the first and the last frame of each frame's demonstration, and the servos'
+    reference targets (``target``: the position targets that lead to a frame; the frame's joint positions unless the
+    demonstration recorded its own)."""
 
     qpos: torch.Tensor
     qvel: torch.Tensor
@@ -70,6 +72,7 @@ class RobomimicReference(NamedTuple):
     obj_R: torch.Tensor
     start: torch.Tensor
     end: torch.Tensor
+    target: torch.Tensor
 
     @property
     def frames(self) -> int:
@@ -90,16 +93,22 @@ def object_poses(scene: RobomimicScene, qpos: torch.Tensor) -> tuple[torch.Tenso
     return p, R
 
 
-def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, device: str) -> RobomimicReference:
+def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, device: str, target=None, hold: int = HOLD) -> RobomimicReference:
     """The reference of demonstrations' states, (T, nq) and (T, nv) arrays or lists of them (one per demonstration, one after
-    the other), each demonstration's last state held for ``HOLD`` frames at rest."""
+    the other), each demonstration's last state held for ``hold`` frames at rest. ``target``: the demonstrations' own
+    position targets, (T, nu) each, a frame's being those that led to it (default: the frames' joint positions)."""
     if not isinstance(qpos, (list, tuple)):
-        qpos, qvel = [qpos], [qvel]
-    qs, vs, starts, ends, offset = [], [], [], [], 0
-    for q, v in zip(qpos, qvel, strict=True):
+        qpos, qvel, target = [qpos], [qvel], None if target is None else [target]
+    qs, vs, us, starts, ends, offset = [], [], [], [], [], 0
+    for k, (q, v) in enumerate(zip(qpos, qvel, strict=True)):
         q, v = torch.as_tensor(q, dtype=torch.float32), torch.as_tensor(v, dtype=torch.float32)
-        qs.append(torch.cat((q, q[-1:].expand(HOLD, -1)), 0))
-        vs.append(torch.cat((v, torch.zeros(HOLD, v.shape[-1])), 0))
+        qs.append(torch.cat((q, q[-1:].expand(hold, -1)), 0))
+        vs.append(torch.cat((v, torch.zeros(hold, v.shape[-1])), 0))
+        if target is not None:
+            u = torch.as_tensor(target[k], dtype=torch.float32)
+            if u.shape != (q.shape[0], scene.nu):
+                raise ValueError(f"a demonstration's targets are {tuple(u.shape)}, its states {q.shape[0]} frames of {scene.nu} actuators")
+            us.append(torch.cat((u, u[-1:].expand(hold, -1)), 0))
         n = len(qs[-1])
         starts.append(torch.full((n,), offset)), ends.append(torch.full((n,), offset + n - 1))
         offset += n
@@ -108,7 +117,8 @@ def build_reference(qpos, qvel, scene: RobomimicScene, kin: SceneKinematics, dev
     obj_p, obj_R = object_poses(scene, qpos)
     with torch.no_grad():
         keypoints = kin(qpos)
-    return RobomimicReference(qpos, qvel, ctrl, keypoints, obj_p, obj_R, torch.cat(starts).to(device), torch.cat(ends).to(device))
+    return RobomimicReference(qpos, qvel, ctrl, keypoints, obj_p, obj_R, torch.cat(starts).to(device), torch.cat(ends).to(device),
+                              torch.cat(us).to(device) if us else ctrl)  # fmt: skip
 
 
 @dataclass
@@ -137,7 +147,19 @@ class RobomimicTask:
         dev = ref.qpos.device
         long = lambda x: torch.tensor(x, dtype=torch.long, device=dev)  # noqa: E731
         f32 = lambda x: torch.tensor(x, dtype=torch.float32, device=dev)  # noqa: E731
-        self.nq, self.nv, self.nu = scene.nq, scene.nv, scene.nu
+        self.nq, self.nv, self.nu, self.control_dt = scene.nq, scene.nv, scene.nu, scene.control_dt
+        # the policy's action: one value per actuator, a mirrored pair's second actuator following its first's with the sign
+        # changed (na < nu; ``spread`` (nu, na) takes an action to the actuators' offsets)
+        followers = {j: i for i, j in scene.mirror}
+        own = [i for i in range(scene.nu) if i not in followers]
+        self.na, self.spread = len(own), None
+        if followers:
+            spread = torch.zeros(scene.nu, len(own), device=dev)
+            for col, i in enumerate(own):
+                spread[i, col] = 1.0
+            for j, i in followers.items():
+                spread[j, own.index(i)] = -1.0
+            self.spread = spread
         self.act_q, self.act_d = long(scene.act_q), long(scene.act_d)
         self.u_lo, self.u_hi, self.scale = f32(scene.act_lo), f32(scene.act_hi), f32(scene.act_scale)
         self.arm = long([i for i, a in enumerate(scene.arm) if a])  # the actuators of arm joints, and of gripper fingers
@@ -147,17 +169,21 @@ class RobomimicTask:
         self.num_keypoints, self.num_objects, self.num_arms = len(scene.keypoint_bodies), len(scene.objects), scene.num_arms
         self.state_dim = scene.nq + scene.nv
         kps, objs, arms, acts = self.num_keypoints, self.num_objects, self.num_arms, self.nu
-        self.obs_dim = acts + acts + 3 * kps + objs * (3 * arms + 6 + 3 + 3) + acts
+        self.obs_dim = acts + acts + 3 * kps + objs * (3 * arms + 6 + 3 + 3) + self.na
         self.goal_frame_dim = acts + objs * (3 + 6) + 3 * kps
-        self.max_step_reward = (cfg.w_keypoint + cfg.w_joint + cfg.w_object_pos + cfg.w_object_ori) * CONTROL_DT
+        self.max_step_reward = (cfg.w_keypoint + cfg.w_joint + cfg.w_object_pos + cfg.w_object_ori) * self.control_dt
+        if scene.success_kind == "aloha_transfer":  # the left gripper's (the first's) finger joints, whose distance is its opening
+            self.left_fingers = [q for q, a in zip(scene.act_q, scene.arm, strict=True) if not a][:2]
 
     def fk(self, qpos: torch.Tensor) -> torch.Tensor:
         return self.kin(qpos)
 
     def setpoint(self, a: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
-        """The actuators' position targets for policy output ``a`` in [-1, 1] at frame ``f``: offsets about the next frame's
-        joint positions."""
-        return torch.clamp(self.ref.ctrl[self.ref.next_frame(f)] + self.scale * a, self.u_lo, self.u_hi)
+        """The actuators' position targets for policy output ``a`` in [-1, 1] at frame ``f``: offsets about the reference's
+        targets of the next frame (its joint positions, or the demonstration's own targets)."""
+        if self.spread is not None:
+            a = a @ self.spread.T
+        return torch.clamp(self.ref.target[self.ref.next_frame(f)] + self.scale * a, self.u_lo, self.u_hi)
 
     def _objects(self, S):
         qpos, qvel = S
@@ -212,7 +238,7 @@ class RobomimicTask:
             + c.w_object_ori * torch.exp(-e["object_ori_sq"] / c.object_ori_std**2).mean(-1)
             + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
         )
-        return r * CONTROL_DT
+        return r * self.control_dt
 
     def termination(self, S, fk: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
         e = self.errors(S, fk, f)
@@ -225,10 +251,21 @@ class RobomimicTask:
             1 - torch.sigmoid((e["keypoint"] - self.cfg.term_keypoint) / width)).prod(-1)  # fmt: skip
         return 1 - alive
 
-    def success(self, S) -> torch.Tensor:
-        """robosuite's success test of the task as a function of the state (bool, ...)."""
-        p, _ = object_poses(self.scene, S[0])
+    def success(self, S, fk: torch.Tensor | None = None) -> torch.Tensor:
+        """The success test of the scene's task as a function of the state (bool, ...): robosuite's, or ACT's final stage
+        (robots.aloha_scenes). ``fk``: the state's keypoints, if computed already."""
+        p, R = object_poses(self.scene, S[0])
         kind = self.scene.success_kind
+        if kind == "aloha_transfer":  # the cube off the table, at the left gripper's grasp point, the gripper closed on it
+            fk = self.fk(S[0]) if fk is None else fk
+            link, between = fk[..., 0, :], 0.5 * (fk[..., 1, :] + fk[..., 2, :])  # the left gripper's link, between its fingers' links
+            grasp = link + GRASP_RATIO * (between - link)
+            opening = S[0][..., self.left_fingers[0]] - S[0][..., self.left_fingers[1]]
+            near = torch.linalg.vector_norm(p[..., 0, :] - grasp, dim=-1) < TRANSFER_REACH
+            return (p[..., 0, 2] > TRANSFER_Z) & near & (opening < TRANSFER_OPENING)
+        if kind == "aloha_insertion":  # the peg's centre in the socket's frame: its end at the pin's, within the opening
+            rel = ((p[..., 0, :] - p[..., 1, :]).unsqueeze(-2) @ R[..., 1, :, :]).squeeze(-2)
+            return (rel[..., 0].abs() < INSERTION_X) & (rel[..., 1:].abs().amax(-1) < INSERTION_LATERAL)
         if kind == "lift":
             return p[..., 0, 2] > LIFT_TABLE_TOP + LIFT_HEIGHT
         if kind == "square":
