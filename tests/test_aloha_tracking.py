@@ -35,9 +35,10 @@ def scene_xml(task: str, actuated_fingers: bool = True) -> str:
         links = ""
         for k, j in enumerate(JOINTS):
             axis = ("0 0 1", "0 1 0", "0 1 0", "1 0 0", "0 1 0", "1 0 0")[k]
-            links += f'<body name="{side}/l{k}" pos="0.03 0 0.02"><joint name="{side}/{j}" axis="{axis}" range="-3 3"/><geom size="0.01" mass="0.2"/>'
+            links += (f'<body name="{side}/l{k}" pos="0.03 0 0.02"><joint name="{side}/{j}" axis="{axis}" range="-3 3" damping="2" armature="0.02"/>'
+                      f'<geom size="0.01" mass="0.2"/>')
         fingers = "".join(
-            f'<body name="{side}/{f}_finger_link" pos="{FINGER_REACH} 0 0"><joint name="{side}/{f}_finger" type="slide" axis="0 1 0" range="{lo} {hi}"/>'
+            f'<body name="{side}/{f}_finger_link" pos="{FINGER_REACH} 0 0"><joint name="{side}/{f}_finger" type="slide" axis="0 1 0" range="{lo} {hi}" damping="2"/>'
             f'<geom name="{side}/10_{f}_gripper_finger" size="0.004" mass="0.02"/></body>'
             for f, lo, hi in (("left", 0.021, 0.057), ("right", -0.057, -0.021)))  # fmt: skip
         return (f'<body name="{side}" pos="{x} 0.5 0.1" euler="0 0 {yaw}">{links}<body name="{side}/gripper_link" pos="0.03 0 0">'
@@ -272,7 +273,7 @@ def test_simulator_step_and_contacts():
         for _ in range(sim.substeps):
             mujoco.mj_step(model, d)
         diff = np.abs(s1[i, : model.nq].cpu().numpy() - d.qpos)
-        assert diff.max() < 2e-3  # in single precision: the light arms' joints agree to 4e-4 rad, the cube (falling, or settling on the table) to less
+        assert diff[: scene.nu].max() < 1e-4 and diff.max() < 2e-3, diff.max()  # the arms' joints; the free cube (falling, or settling on the table)
 
 
 @GPU

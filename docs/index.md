@@ -41,8 +41,8 @@ See [installation options](installation.md) and the [Quickstart](quickstart.md) 
 | Path | What |
 |---|---|
 | `ndm_gym/core/` | rotations, differentiable articulation FK, MLPs, running normalizers, Muon |
-| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`); the Unitree Go2 (`go2.py`); robomimic's scenes with the Panda arms as servos (`robomimic_scenes.py`) |
-| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`, `drone_racing.py`, `lifelike.py`, `robomimic.py`) |
+| `ndm_gym/robots/` | Unitree G1 29-DoF spec (`g1.py`); MuscleVAE's character and muscles (`musclevae_char.py`, `muscles.py`); dexterous hands (`hands.py`); objects (`objects.py`); a racing quadrotor (`quadrotor.py`); the Unitree Go2 (`go2.py`); robomimic's scenes with the Panda arms as servos (`robomimic_scenes.py`); ACT's ALOHA scenes (`aloha_scenes.py`) |
+| `ndm_gym/motion/` | motion library (50 Hz goals) and loaders (`sources/lafan1.py`, `hoi.py`, `interhuman.py`, `musclevae.py`, `spider.py`, `drone_racing.py`, `lifelike.py`, `robomimic.py`, `aloha.py`) |
 | `ndm_gym/sim/` | Isaac Lab 3 + MuJoCo-Warp tracking simulator; HDMI's scenes; MuscleVAE on Newton; a hand and an object on MuJoCo-Warp; a quadrotor on MuJoCo-Warp; the Go2 on MuJoCo-Warp; robomimic's scenes on MuJoCo-Warp; Isaac Lab's launcher; RoboKit's simulator on a world model and its recordings; mbrl-lib's environments on a world model |
 | `ndm_gym/tasks/` | `tracking.py` (SuperMimic's setup), `contact.py`; `hdmi.py`, `hdmi_tasks.py` (HDMI's 13 tasks); `muscle_tracking.py`; `hand_tracking.py`; `quadrotor_tracking.py`; `quadruped_tracking.py`; `robomimic_tracking.py` |
 | `ndm_gym/worldmodels/` | `accel.py` (SuperTrack), `increment.py` (SuperMimic), `semi_implicit.py` (BlinkMimic), `rigidformer.py` (backbone), `hoi.py`, `muscle.py`, `hand.py`, `quadrotor.py`, `mjcf.py` (MuJoCo models in generalized coordinates) |

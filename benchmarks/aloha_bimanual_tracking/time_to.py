@@ -66,7 +66,7 @@ def main():
             p = m["policy"]
             ok = p["success_rate"] >= SUCCESS and p["object_mm"] <= OBJECT_MM
             rows.append({"iteration": it, "minutes": m["wall_time_s"] / 60, "success_rate": p["success_rate"], "stage_rates": p["stage_rates"],
-                         "object_mm": p["object_mm"], "terminated": p["terminated"], "target": ok})  # fmt: skip
+                         "final_state_rate": p["final_state_rate"], "object_mm": p["object_mm"], "terminated": p["terminated"], "target": ok})  # fmt: skip
         first = next((rows[i] for i in range(len(rows)) if all(r["target"] for r in rows[i:])), None)
         res = {"minutes_to_target": first and first["minutes"], "iteration_to_target": first and first["iteration"], "settled": settled(rows),
                "checkpoints": rows}  # fmt: skip

@@ -81,9 +81,13 @@ beside the policy (`demonstration_targets`), and the reference's joint positions
 0 to 4) and counts an episode a success if its highest reward is 4. `evaluate_robomimic` reads the simulator's contacts
 after every control step (`RobomimicSim.touching`, a collision pass at the state) for the same pairs of geoms
 (`aloha_scenes.CONTACTS`), and a rollout succeeds if it never terminates and its highest reward is 4. These are rollouts
-that track a demonstration from perturbed starts, not ACT's success rate of an imitation policy from images. Training's
-log has the last stage as a function of the state instead (`aloha_scenes`, a proxy that agrees with ACT's reward on 99.4 %
-and 98.8 % of the demonstrations' frames).
+that track a demonstration from perturbed starts, not ACT's success rate of an imitation policy from images.
+
+Beside it the evaluation reports the last stage as a function of the state at the demonstration's last frame
+(`final_state_rate`; `aloha_scenes`), as the manipulation task reads its success: the cube off the table at the left
+gripper's grasp point with the gripper closed on it; the peg inside the socket's opening with its end within 2 mm of the
+pin's. On the demonstrations' frames it agrees with ACT's reward of 4 on 99.4 % and 98.8 %, and every frame with that
+reward passes. Training's log has this state test (`success`).
 
 ## Method
 

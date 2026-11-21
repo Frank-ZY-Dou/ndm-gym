@@ -8,8 +8,10 @@ as the servos' targets in the policy's place (zero actions, open loop); every de
 world to its own demonstration's last frame. A rollout succeeds if it never terminates and meets robosuite's success test at
 the demonstration's last frame. The ALOHA tasks: if it never terminates and ACT's reward, read off the simulator's contacts
 after every control step, reaches its maximum at one of them, as ACT counts an episode a success (``stage_rates``: the
-shares of the rollouts whose highest reward reaches each stage); and as many rollouts again under the position targets the
-demonstration recorded (``demonstration_targets``, open loop). The errors are means over the frames of the rollouts that do not terminate;
+shares of the rollouts whose highest reward reaches each stage; ``final_state_rate``: the share that never terminates and
+meets the state test of the last stage at the demonstration's last frame, robots.aloha_scenes, as the robomimic tasks read
+their success); and as many rollouts again under the position targets the demonstration recorded
+(``demonstration_targets``, open loop). The errors are means over the frames of the rollouts that do not terminate;
 ``object_final_mm`` the tracked objects' mean error at the last frame; ``policy`` and ``reference_targets`` at the top level are
 the means over the demonstrations. One rollout from each demonstration's unperturbed first frame is saved as
 ``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets; the step of its
@@ -30,8 +32,8 @@ def rollout(sim, algo, task, starts, targets: str = "policy"):
     under the ``policy`` or, without it, under the ``reference``'s joint positions as the targets or the ``demonstration``'s
     recorded ones; the worlds whose demonstration ends earlier hold its last frame until the longest ends. Returns the states
     (T, N, D), each world's number of steps, whether it terminated within them, the step of its termination (its number of
-    steps without one), whether it succeeds (the module's docstring) and its highest staged reward before it ends (zeros
-    for a scene without one)."""
+    steps without one), whether it succeeds (the module's docstring), its highest staged reward before it ends (zeros
+    for a scene without one) and whether it never terminates and meets the scene's state test at its last frame."""
     import torch
 
     from ndm_gym.robots.aloha_scenes import MAX_REWARD
@@ -57,11 +59,9 @@ def rollout(sim, algo, task, starts, targets: str = "policy"):
         a_prev = a
         states.append(s1)
     states = torch.stack(states)
-    if task.scene.contacts:
-        success = (best == MAX_REWARD) & ~failed
-    else:
-        success = task.success(unflatten_state(states[lens, torch.arange(sim.N, device=sim.device)], task.nq)) & ~failed
-    return states, lens, failed, until, success, best
+    final = task.success(unflatten_state(states[lens, torch.arange(sim.N, device=sim.device)], task.nq)) & ~failed
+    success = (best == MAX_REWARD) & ~failed if task.scene.contacts else final
+    return states, lens, failed, until, success, best, final
 
 
 def main():
@@ -123,7 +123,7 @@ def main():
 
     def summarize(out, worlds: torch.Tensor, start: int) -> dict:
         """The metrics of the ``worlds`` (all of one demonstration, starting at ``start``) of a rollout's output."""
-        states, lens, failed, until, success, best = (x[:, worlds] if x.dim() > 1 else x[worlds] for x in out)
+        states, lens, failed, until, success, best, final = (x[:, worlds] if x.dim() > 1 else x[worlds] for x in out)
         n = int(lens[0])
         S = unflatten_state(states[: n + 1], task.nq)
         e = task.errors(S, task.fk(S[0]), torch.arange(start, start + n + 1, device=dev).unsqueeze(-1))
@@ -133,8 +133,9 @@ def main():
              "tracked_s": float(until.float().mean() * task.control_dt), "object_mm": 1000 * mean(e["object_pos"].mean(-1)),
              "object_final_mm": 1000 * float(e["object_pos"][-1].mean()), "object_deg": math.degrees(mean(e["object_ori_sq"].sqrt().mean(-1))),
              "keypoint_mm": 1000 * mean(e["keypoint"].mean(-1)), "joint_rad": mean(e["joint"]), "finger_mm": 1000 * mean(e["finger"])}  # fmt: skip
-        if task.scene.contacts:  # the shares of the rollouts whose highest staged reward reaches 1, 2, ...
+        if task.scene.contacts:  # the shares of the rollouts whose highest staged reward reaches 1, 2, ...; the state test
             m["stage_rates"] = [float((best >= k).float().mean()) for k in range(1, MAX_REWARD + 1)]
+            m["final_state_rate"] = float(final.float().mean())
         return m
 
     os.makedirs(args.out, exist_ok=True)
@@ -154,7 +155,7 @@ def main():
             if key in runs:
                 m[key] = summarize(runs[key], torch.nonzero(group == d).squeeze(-1), start)
         n = end - start
-        _, _, failed, until, success, _ = runs["nominal"]
+        _, _, failed, until, success, _, _ = runs["nominal"]
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
                  reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
                  control_dt=task.control_dt, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,

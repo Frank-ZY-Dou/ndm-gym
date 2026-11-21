@@ -15,6 +15,7 @@ These tasks share the pipeline. Scripts in `tools/` prepare the data; none of th
 | [Wuji Hand piano playing](tasks/wuji_piano.md), Eden's *Ode to Joy* | two floating Wuji Hand 2 hands, 88 passive keys | MuJoCo-Warp | `benchmarks/wuji_piano/download_assets.py` | `benchmarks/wuji_piano/run.sh` |
 | [Quadruped motion tracking](tasks/quadruped.md), the Lifelike Labrador motion capture | Unitree Go2 | MuJoCo-Warp | `tools/download_lifelike.sh`, `tools/convert_lifelike.py` | `python -m ndm_gym.train_quadruped` |
 | [Manipulation demonstration tracking](tasks/robomimic.md), robomimic's Lift, Square and Transport | one or two Franka Pandas with their grippers | MuJoCo-Warp | `tools/download_robomimic.py` | `python -m ndm_gym.train_robomimic` |
+| [Bimanual demonstration tracking](tasks/aloha.md), ACT's simulated Transfer Cube and Insertion | ALOHA's two ViperX 300 arms with their grippers | MuJoCo-Warp | `tools/make_aloha_demos.py` | `python -m ndm_gym.train_robomimic` |
 
 The world models also stand in for simulators:
 
