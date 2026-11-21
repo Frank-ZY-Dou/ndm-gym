@@ -57,6 +57,11 @@ ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
 # the benchmark's runs (benchmarks/robomimic_manipulation_tracking): 1,500 iterations on the schedule of 4,000, the solver at 20
 # iterations, a checkpoint kept every 100
 ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 100 --ckpt_keep"
+# bimanual demonstration tracking (benchmarks/aloha_bimanual_tracking): the manipulation task's options with episodes of up to
+# 500 control steps (10 s at ACT's 50 Hz, the manipulation task's 200 steps at 20 Hz), its tuning round's choice for both
+# algorithms; the benchmark's runs: 6,000 iterations with the cosine over them, the solver at 20 iterations, a checkpoint
+# kept every 200
+ALOHA_RUN = "--episode 500 --solver_iterations 20 --iterations 6000 --lr_decay_iters 6000 --ckpt_every 200 --ckpt_keep"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -176,6 +181,12 @@ CONFIGS = {
                                  "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 84.9 / 29.7 %, object 0.87 / 5.34 / "
                                  "10.6 mm on Lift / Square / Transport (seeds 0-2, Transport's object error 2 of them; 256 perturbed rollouts, A100 80GB "
                                  "SXM4)"),
+        "aloha-supertrack": (f"{ROBOMIMIC_ST} {ALOHA_RUN}",
+                             "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
+                             "default), 6,000 iterations (benchmarks/aloha_bimanual_tracking)"),
+        "aloha-supermimic": (f"{ROBOMIMIC_SM} {ALOHA_RUN}",
+                             "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
+                             "default), 6,000 iterations (benchmarks/aloha_bimanual_tracking)"),
     },
 }
 

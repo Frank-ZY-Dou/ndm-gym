@@ -108,6 +108,19 @@ def test_action_and_targets():
         RobomimicTask(scene, kin, bare).recorded_setpoint(f)
 
 
+def test_configurations():
+    """The benchmark's configurations: the manipulation task's options with the benchmark's budget, checkpoints and episodes."""
+    from ndm_gym.train_robomimic import parse_args
+
+    for algo in ("supertrack", "supermimic"):
+        a = parse_args(["--config", f"aloha-{algo}", "--task", "aloha_insertion"])
+        b = parse_args(["--config", f"robomimic-{algo}", "--task", "lift"])
+        assert (a.algo, a.iterations, a.lr_decay_iters, a.ckpt_every, a.ckpt_keep, a.solver_iterations, a.episode) == (algo, 6000, 6000, 200, True, 20, 500)
+        assert a.data_dir.endswith(os.path.join("data", "aloha")) and b.data_dir.endswith(os.path.join("data", "robomimic"))
+        changed = {k for k in vars(a) if getattr(a, k) != getattr(b, k)}
+        assert changed == {"config", "task", "data_dir", "iterations", "lr_decay_iters", "ckpt_every", "episode"}
+
+
 def act_reward(name: str, touch: dict) -> int:
     """ACT's get_reward (sim_env.py), from whether each named pair of geoms touches."""
     if name == "aloha_transfer_cube":
