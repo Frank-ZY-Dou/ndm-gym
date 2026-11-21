@@ -132,6 +132,23 @@ iterations in seeds 0 and 2, at a success of 94.9 and 98.8 %). On Insertion Supe
 of 0 and 100 % while the objects' error stays between 1.5 and 4.5 mm from 1,400 iterations on: 87 of the three runs' 90
 checkpoints have a success below 5 % or above 95 %. ACT's last stage is one contact, the peg's end on the pin.
 
+## The last checkpoints evaluated again
+
+Each run's last checkpoint evaluated three more times (256 perturbed rollouts, without the open-loop ones): with the same
+evaluation seed, with evaluation seed 1, and with the scenes' own solver settings (100 iterations in place of the cap of
+20 that the runs train and evaluate with). Success, seeds 0 / 1 / 2:
+
+| task | algorithm | the run's evaluation | again, the same seed | evaluation seed 1 | the scenes' own solver |
+|---|---|---|---|---|---|
+| Transfer Cube | SuperTrack | 100.0 / 30.9 / 100.0 % | 100.0 / 39.8 / 100.0 % | 100.0 / 40.2 / 100.0 % | 100.0 / 36.7 / 100.0 % |
+| | SuperMimic | 69.1 / 0.4 / 69.5 % | 63.3 / 0.0 / 73.8 % | 64.1 / 0.0 / 66.0 % | 67.2 / 0.4 / 68.0 % |
+| Insertion | SuperTrack | 0.0 / 0.0 / 100.0 % | 0.0 / 0.0 / 100.0 % | 0.0 / 0.0 / 100.0 % | 0.0 / 0.0 / 100.0 % |
+| | SuperMimic | 0.4 / 0.0 / 0.0 % | 0.4 / 0.0 / 0.0 % | 0.8 / 0.0 / 0.0 % | 0.4 / 0.0 / 0.0 % |
+
+A checkpoint whose rollouts all succeed, or none, does the same in the four evaluations, on Insertion too; the other
+checkpoints move by up to 9 points, also between two evaluations with the same seed (30.9 and 39.8 %). The records:
+`a100_runs/evaluated_again/`.
+
 ## Tuning round
 
 The manipulation task's configurations are the starting point, and its budget of 1,500 iterations is for a 20 Hz task,

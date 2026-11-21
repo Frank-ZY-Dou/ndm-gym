@@ -2,8 +2,10 @@
 
 The benchmark's 12 runs (`benchmarks/aloha_bimanual_tracking/run_formal.sh`) with every kept checkpoint's evaluation
 (`python benchmarks/aloha_bimanual_tracking/time_to.py logs/aloha_formal/*_s?`), each configuration's first seed-0 run
-on an empty kernel cache (`cold_cache_seed0/`), and the tuning round's 16 runs on demonstration 1 (`tuning_round/`,
-variants 1 to 4 as `v1` to `v4`). [The results](../results.md) are computed from these files.
+on an empty kernel cache (`cold_cache_seed0/`), the tuning round's 16 runs on demonstration 1 (`tuning_round/`,
+variants 1 to 4 as `v1` to `v4`), and the 12 last checkpoints evaluated again (`evaluated_again/`: with the same
+evaluation seed, with evaluation seed 1, with the scenes' own solver settings; `metrics.json` each).
+[The results](../results.md) are computed from these files.
 
 Per run, JSON records only (no logs, no checkpoints):
 
