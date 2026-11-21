@@ -3,7 +3,8 @@
 wall time of the first checkpoint from which every later one has a success of at least 0.99 with the tracked objects within
 10 mm (the hand task's target). The last checkpoint's evaluation is the run's own (<run>/eval) when it exists. Writes
 <run>/time_to.json (minutes_to_target: null if never). The times are the runs' own wall clock, checkpoints every
---ckpt_every iterations.
+--ckpt_every iterations. A run without kept checkpoints, or with an evaluation in <run>/eval_ckpts that is not this script's,
+is an error.
 
     python benchmarks/robomimic_manipulation_tracking/time_to.py <run directory> [...]
 """
@@ -15,24 +16,38 @@ import subprocess
 import sys
 
 SUCCESS, OBJECT_MM = 0.99, 10.0
+NUM_ENVS = 256  # evaluate_robomimic's perturbed rollouts per demonstration, as in the last checkpoint's evaluation
 
 
 def evaluate(ckpt: str, out: str) -> dict:
     path = os.path.join(out, "metrics.json")
     if not os.path.exists(path):
-        cmd = [sys.executable, "-m", "ndm_gym.evaluate_robomimic", "--ckpt", ckpt, "--out", out, "--no_reference"]
+        cmd = [sys.executable, "-m", "ndm_gym.evaluate_robomimic", "--ckpt", ckpt, "--out", out, "--no_reference", "--num_envs", str(NUM_ENVS)]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     return json.load(open(path))
+
+
+def check(m: dict, it: int, path: str) -> dict:
+    """The metrics of checkpoint ``it`` as this script evaluates it (the perturbed rollouts, the physics trained in)."""
+    if m["iteration"] != it or m["num_envs"] != NUM_ENVS:
+        sys.exit(f"{path} is not this script's evaluation of checkpoint {it} ({NUM_ENVS} perturbed rollouts): remove it")
+    return m
 
 
 def main():
     for run in sys.argv[1:]:
         own = os.path.join(run, "eval", "metrics.json")
         last = json.load(open(own)) if os.path.exists(own) else None
-        rows = []
-        for ckpt in sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))):
+        ckpts, rows = sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))), []
+        if not ckpts:
+            sys.exit(f"{run}: no ckpt_*.pt (train_robomimic --ckpt_keep keeps them)")
+        for ckpt in ckpts:
             it = int(os.path.basename(ckpt)[5:11])
-            m = last if last and last["iteration"] == it else evaluate(ckpt, os.path.join(run, "eval_ckpts", f"{it:06d}"))
+            if last and last["iteration"] == it:
+                m = check(last, it, own)
+            else:
+                out = os.path.join(run, "eval_ckpts", f"{it:06d}")
+                m = check(evaluate(ckpt, out), it, os.path.join(out, "metrics.json"))
             p = m["policy"]
             ok = p["success_rate"] >= SUCCESS and p["object_mm"] <= OBJECT_MM
             rows.append({"iteration": it, "minutes": m["wall_time_s"] / 60, "success_rate": p["success_rate"], "object_mm": p["object_mm"], "target": ok})

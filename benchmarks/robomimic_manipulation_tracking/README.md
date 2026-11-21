@@ -55,7 +55,7 @@ arm with a gripper, contact-rich manipulation with millimetre tolerances, and tw
     written as a function of the state (Lift: the cube above the table by 4 cm; Square: the nut on its peg; Transport:
     the hammer in its bin and the trash in the trash bin), a tracking proxy for robomimic's success;
   - the share of episodes ended early.
-- **Time to the target:** the training wall clock at the first kept checkpoint (every 500 iterations) from which every
+- **Time to the target:** the training wall clock at the first kept checkpoint (every 100 iterations) from which every
   later one has a success of at least 0.99 with the objects within 10 mm (the hand task's target), and iterations/s.
 - **Reference:** the same rollouts with the demonstration's joint positions as the servos' targets, without a policy.
 

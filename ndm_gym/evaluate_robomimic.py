@@ -69,11 +69,14 @@ def main():
     args = parser.parse_args()
     if args.solver_ls_iterations and args.solver_iterations <= 0:
         parser.error("--solver_ls_iterations caps the line search of a --solver_iterations cap (> 0)")
+    if args.num_envs < 1:
+        parser.error("--num_envs >= 1")
 
     import numpy as np
     import torch
 
     from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS
+    from ndm_gym.motion.sources.robomimic import demo_path, load_demo
     from ndm_gym.sim.rigid.robomimic_sim import RobomimicSim
     from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, unflatten_state
     from ndm_gym.train_robomimic import build
@@ -84,11 +87,18 @@ def main():
     targs = argparse.Namespace(**ck["args"])
     demo = targs.demo if args.demo is None else args.demo
     demos = demo if isinstance(demo, list) else [demo]
+    data_dir = args.data_dir or targs.data_dir
+    if args.demo is not None:  # robosuite draws Lift's cube and Transport's hammer per demonstration: the policy's scene only
+        trained = targs.demo if isinstance(targs.demo, list) else [targs.demo]
+        path = demo_path(data_dir, targs.task)
+        scene = load_demo(path, trained[0])["xml"]
+        if any(load_demo(path, i)["xml"] != scene for i in demos):
+            raise ValueError(f"--demo {demos}: not recorded in the scene of the checkpoint's demonstrations {trained}")
     if args.solver_iterations < 0:  # the physics trained in
-        solver = (getattr(targs, "solver_iterations", 0), getattr(targs, "solver_ls_iterations", 0))
+        solver = (targs.solver_iterations, targs.solver_ls_iterations)
     else:
         solver = (args.solver_iterations, args.solver_ls_iterations if args.solver_iterations else 0)
-    model, task, (nconmax, njmax) = build(targs.task, demos, args.data_dir or targs.data_dir, dev, solver_iterations=solver[0],
+    model, task, (nconmax, njmax) = build(targs.task, demos, data_dir, dev, solver_iterations=solver[0],
                                           solver_ls_iterations=solver[1])  # fmt: skip
     targs.update_graphs = False  # (plain optimizers: none is stepped here)
     ref, D = task.ref, len(demos)

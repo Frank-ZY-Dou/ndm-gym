@@ -98,6 +98,10 @@ def main():
     given += ["--quality"] if a.quality is not None and ext != ".webp" else []
     if given:
         ap.error(f"{', '.join(given)} not used by an --out of {ext or 'no extension'}")
+    if a.title and a.no_labels:
+        ap.error("--title is a label: not drawn with --no_labels")
+    if a.speed <= 0 or (a.fps is not None and a.fps <= 0) or (a.distance is not None and a.distance <= 0):
+        ap.error("--speed > 0, --fps > 0, --distance > 0")
     a.frames, a.cols, a.quality, a.fps = a.frames or 8, a.cols or 4, a.quality or 70, a.fps or 20.0
     check_egl_device()
 
@@ -127,7 +131,7 @@ def main():
         ghost[ghost == 1] = 0
     look0, dist, az, el = VIEWS[task]
     cam = mujoco.MjvCamera()
-    cam.distance = a.distance or dist
+    cam.distance = dist if a.distance is None else a.distance
     cam.azimuth = az if a.azimuth is None else a.azimuth
     cam.elevation = el if a.elevation is None else a.elevation
     look0 = np.array(a.lookat or look0, dtype=float)

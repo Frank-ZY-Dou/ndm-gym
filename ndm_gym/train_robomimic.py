@@ -1,8 +1,9 @@
 """Training loop for manipulation demonstration tracking on robomimic demonstrations of one scene (docs/tasks/robomimic.md): collect in
 RobomimicSim -> fit the world model on replay windows -> policy update through imagined rollouts
 (ndm_gym.algos.robomimic_algos). The loop, the schedule and the systems options are hand-object tracking's (ndm_gym.train_hand,
-ndm_gym.algos.hand_fast) with the defaults of ROBOMIMIC_DEFAULTS; ndm_gym.train's arguments that this training does not
-implement are refused unless left at their defaults (train_hand.UNSUPPORTED).
+ndm_gym.algos.hand_fast) with the defaults of ROBOMIMIC_DEFAULTS; ndm_gym.train's arguments and hand training's systems
+options that this training does not implement are refused unless left at their defaults (train_hand.UNSUPPORTED,
+UNSUPPORTED_SYSTEMS).
 
 An iteration is one control step of every world, ``--wm_batches`` world-model steps and, after ``--wm_only_iters``, one policy
 (and critic) update. Writes ``train_log.csv``, ``args.json`` and ``last.pt`` to ``--log_dir`` (``--ckpt_keep``: also
@@ -31,6 +32,12 @@ ROBOMIMIC_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_0
 # the options a resumed run must share with its checkpoint: the algorithm and SuperTrack's weights, the optimizers' layouts
 # and states, the policy average
 RESUME_MATCH = ("algo", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
+
+# hand training's systems options (algos.hand_fast) that this training does not implement; each is refused unless at its
+# default: train_hand's own (the kernels' options, its phase times), HandSuperMimic's, and hand_fast.Collector's
+# --compile_collect (RobomimicCollector compiles the forward kinematics only: --compile_eager)
+UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "elementwise_3x3",
+                       "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
 
 
 def parse_args(argv: list[str] | None = None):
@@ -80,6 +87,9 @@ def parse_args(argv: list[str] | None = None):
     for name in UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that robomimic training does not implement")
+    for name in UNSUPPORTED_SYSTEMS:
+        if getattr(args, name) != parser.get_default(name):
+            parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that robomimic training does not implement")
     if args.episode < 2:
         parser.error("--episode >= 2")
     if args.solver_iterations < 0 or args.solver_ls_iterations < 0 or (args.solver_ls_iterations and not args.solver_iterations):

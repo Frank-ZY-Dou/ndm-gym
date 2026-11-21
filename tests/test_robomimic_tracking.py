@@ -6,12 +6,15 @@ the world model's control step, the updates and training's arguments; on a GPU, 
 import argparse
 import importlib.util
 import json
+import os
+import sys
 
 import mujoco
 import numpy as np
 import pytest
 import torch
 
+from ndm_gym.algos.hand_fast import add_hand_fast_args
 from ndm_gym.algos.robomimic_algos import ROBOMIMIC_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.motion.sources.robomimic import load_demo, split_states
@@ -19,7 +22,7 @@ from ndm_gym.robots.robomimic_scenes import ARM_KP, LIFT_HEIGHT, LIFT_TABLE_TOP,
 from ndm_gym.tasks.robomimic_tracking import CONTROL_DT, HOLD, RewardCfg, RobomimicTask, SceneKinematics, build_reference, unflatten_state
 from ndm_gym.train import add_train_args
 from ndm_gym.train_hand import UNSUPPORTED
-from ndm_gym.train_robomimic import ROBOMIMIC_DEFAULTS, parse_args
+from ndm_gym.train_robomimic import ROBOMIMIC_DEFAULTS, UNSUPPORTED_SYSTEMS, parse_args
 from ndm_gym.worldmodels.mjcf import MjcfLayout
 
 # the arguments robomimic training implements; the rest of ndm_gym.train's are train_hand.UNSUPPORTED
@@ -27,6 +30,10 @@ SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_
              "wm_batch", "pi_batch", "lr", "gamma", "reward_std_scale", "lam", "action_noise", "critic_epochs", "critic_minibatches", "warmup_steps",
              "wm_only_iters", "lr_decay_iters", "ckpt_every", "max_hours", "log_every", "log_dir", "seed", "resume", "amp", "bptt_decay",
              "st_reg", "st_imag_noise", "st_fail_w")  # fmt: skip
+# hand training's systems options that robomimic training implements
+SYSTEMS = ("fused_adam", "reset_masked", "no_sync", "collect_graph", "compile_eager", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "pi_lr_mult",
+           "lr_decay_ret", "lr_decay_len", "lr_decay_by", "muon_batched")  # fmt: skip
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SUBSTEPS = round(CONTROL_DT / 0.002)
 
 
@@ -255,6 +262,54 @@ def test_training_arguments():
     st = parse_args(["--task", "lift", "--algo", "supertrack", "--st_fail_w", "2", "--st_task_weights", "--demo", "7", "--solver_iterations", "20",
                      "--solver_ls_iterations", "10"])  # fmt: skip
     assert (st.algo, st.st_fail_w, st.st_task_weights, st.demo, st.solver_iterations, st.solver_ls_iterations) == ("supertrack", 2, True, [7], 20, 10)
+
+
+def test_systems_options_implemented_or_refused(capsys):
+    parser = argparse.ArgumentParser()
+    add_hand_fast_args(parser)
+    assert {a.dest for a in parser._actions} - {"help"} == set(SYSTEMS) | set(UNSUPPORTED_SYSTEMS)
+    for name in UNSUPPORTED_SYSTEMS:  # each is a flag
+        with pytest.raises(SystemExit):
+            parse_args(["--task", "lift", f"--{name}"])
+        assert f"--{name} is an option of hand training" in capsys.readouterr().err
+
+
+def test_evaluation_refuses_no_rollouts(monkeypatch, capsys):
+    from ndm_gym import evaluate_robomimic
+
+    monkeypatch.setattr(sys, "argv", ["evaluate_robomimic", "--ckpt", "last.pt", "--out", "eval", "--num_envs", "0"])
+    with pytest.raises(SystemExit):
+        evaluate_robomimic.main()
+    assert "--num_envs >= 1" in capsys.readouterr().err
+
+
+def test_time_to_the_target(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("time_to", os.path.join(ROOT, "benchmarks", "robomimic_manipulation_tracking", "time_to.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(sys, "argv", ["time_to.py", str(run)])
+    with pytest.raises(SystemExit, match="no ckpt_"):  # a run without kept checkpoints is not "target not reached"
+        tool.main()
+
+    def checkpoint(it, success, object_mm, num_envs=256, own=False):
+        (run / f"ckpt_{it:06d}.pt").write_bytes(b"")
+        out = run / "eval" if own else run / "eval_ckpts" / f"{it:06d}"
+        out.mkdir(parents=True, exist_ok=True)
+        metrics = {"iteration": it, "wall_time_s": 6.0 * it, "num_envs": num_envs, "policy": {"success_rate": success, "object_mm": object_mm}}
+        (out / "metrics.json").write_text(json.dumps(metrics))
+
+    for it, success, object_mm in ((100, 1.0, 5.0), (200, 0.9, 5.0), (300, 0.99, 12.0), (400, 1.0, 9.0)):  # the target: 0.99, 10 mm
+        checkpoint(it, success, object_mm)
+    checkpoint(500, 0.995, 8.0, own=True)  # the last checkpoint's evaluation is the run's own
+    tool.main()  # the evaluations are there: none is run
+    res = json.loads((run / "time_to.json").read_text())
+    assert res["iteration_to_target"] == 400 and res["minutes_to_target"] == 40.0  # held from 400 on, not from 100
+    assert [r["target"] for r in res["checkpoints"]] == [True, False, False, True, True]
+    checkpoint(450, 1.0, 5.0, num_envs=64)  # another evaluation's metrics
+    with pytest.raises(SystemExit, match="not this script's evaluation"):
+        tool.main()
 
 
 CUDA = "cuda:0"
