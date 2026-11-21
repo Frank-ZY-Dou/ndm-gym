@@ -33,7 +33,7 @@ Fixed before the three-seed runs.
 - **Configurations:** one per algorithm, the same for the three bodies apart from the budget (`--config <body>-<algorithm>`,
   [results](results.md#how-the-numbers-were-obtained)).
 - **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat); a
-  checkpoint kept every 1,000.
+  checkpoint kept every 250.
 - **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD; the GPU stated.
 - **Evaluation:** the last checkpoint plays every clip from its first frame and four more times from perturbed starts
   (0.02 rad on the joints), without exploration noise, to the clip's end: the share of episodes ended by MIMIC-MJX's

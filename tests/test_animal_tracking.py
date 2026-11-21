@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import sys
 
 import mujoco
 import numpy as np
@@ -17,13 +18,14 @@ import pytest
 import torch
 
 from ndm_gym.algos.animal_algos import ANIMAL_ALGOS, WINDOW_KEYS, replay_fields
+from ndm_gym.algos.hand_fast import add_hand_fast_args
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.core.rotations import quat_to_mat
 from ndm_gym.motion.sources.mimic_mjx import resample
 from ndm_gym.robots.animals import activation_filter
 from ndm_gym.tasks.animal_tracking import AnimalKinematics, AnimalTask, RewardCfg, build_reference
 from ndm_gym.train import add_train_args
-from ndm_gym.train_animal import ANIMAL_DEFAULTS, UNSUPPORTED, parse_args, parse_clips
+from ndm_gym.train_animal import ANIMAL_DEFAULTS, UNSUPPORTED, UNSUPPORTED_SYSTEMS, parse_args, parse_clips
 from ndm_gym.worldmodels.animal import AnimalWorldModel
 from ndm_gym.worldmodels.mjcf import MjcfLayout
 
@@ -31,7 +33,11 @@ SUPPORTED = ("algo", "num_envs", "iterations", "buffer_steps", "horizon", "goal_
              "wm_batch", "pi_batch", "lr", "gamma", "reward_std_scale", "lam", "action_noise", "critic_epochs", "critic_minibatches", "warmup_steps",
              "wm_only_iters", "lr_decay_iters", "ckpt_every", "max_hours", "log_every", "log_dir", "seed", "resume", "amp", "bptt_decay",
              "st_reg", "st_imag_noise", "st_fail_w", "wm_lr")  # fmt: skip
-DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "mimic_mjx")
+# hand training's systems options that animal training implements
+SYSTEMS = ("fused_adam", "reset_masked", "no_sync", "collect_graph", "compile_eager", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "pi_lr_mult",
+           "lr_decay_ret", "lr_decay_len", "lr_decay_by", "muon_batched")  # fmt: skip
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA = os.path.join(ROOT, "data", "mimic_mjx")
 CTRL_DT, SUBSTEPS = 0.01, 5
 
 BODY = """
@@ -217,6 +223,54 @@ def test_training_arguments():
     with pytest.raises(SystemExit):
         parse_args(["--animal", "rat", "--clip_ids", "0", "--wm_backbone", "rigidformer"])
     assert parse_args(["--animal", "rat", "--clip_ids", "0", "--wm_lr", "2e-3"]).wm_lr == 2e-3
+
+
+def test_systems_options_implemented_or_refused(capsys):
+    parser = argparse.ArgumentParser()
+    add_hand_fast_args(parser)
+    assert {a.dest for a in parser._actions} - {"help"} == set(SYSTEMS) | set(UNSUPPORTED_SYSTEMS)
+    for name in UNSUPPORTED_SYSTEMS:  # each is a flag
+        with pytest.raises(SystemExit):
+            parse_args(["--animal", "rat", "--clip_ids", "0", f"--{name}"])
+        assert f"--{name} is an option of hand training" in capsys.readouterr().err
+
+
+def test_evaluation_refuses_unused_options(monkeypatch, capsys):
+    from ndm_gym import evaluate_animal
+
+    for argv, message in ((["--ckpt", "last.pt", "--joint_noise", "0.05"], "--joint_noise perturbs the repeated starts"),
+                          (["--ckpt", "last.pt", "--repeats", "-1"], "--repeats >= 0")):  # fmt: skip
+        monkeypatch.setattr(sys, "argv", ["evaluate_animal", *argv])
+        with pytest.raises(SystemExit):
+            evaluate_animal.main()
+        assert message in capsys.readouterr().err
+
+
+def test_time_to_the_target(tmp_path, monkeypatch, capsys):
+    spec = importlib.util.spec_from_file_location("time_to", os.path.join(ROOT, "benchmarks", "mimic_mjx_animal_tracking", "time_to.py"))
+    tool = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(tool)
+    run = tmp_path / "run"
+    run.mkdir()
+    monkeypatch.setattr(sys, "argv", ["time_to.py", str(run)])
+    with pytest.raises(SystemExit, match="no ckpt_"):  # a run without kept checkpoints is not "target not reached"
+        tool.main()
+
+    def checkpoint(it, ended, body_mm, episodes=50):
+        (run / f"ckpt_{it:06d}.pt").write_bytes(b"")
+        (run / "eval_ckpts" / f"{it:06d}").mkdir(parents=True, exist_ok=True)
+        metrics = {"iteration": it, "minutes": it / 100, "animal": "stick", "clips": 10, "episodes": episodes, "ended_share": ended, "body_mm": body_mm}
+        (run / "eval_ckpts" / f"{it:06d}" / "metrics.json").write_text(json.dumps(metrics))
+
+    for it, ended, body_mm in ((250, 0.0, 0.5), (500, 0.1, 0.4), (750, 0.02, 0.5), (1000, 0.0, 0.4)):  # the target: 2 %, 0.53 mm
+        checkpoint(it, ended, body_mm)
+    tool.main()  # the evaluations are there: none is run
+    res = json.loads((run / "time_to.json").read_text())
+    assert res["iteration_to_target"] == 750 and res["minutes_to_target"] == 7.5  # held from 750 on, not from 250
+    assert [r["target"] for r in res["checkpoints"]] == [True, False, True, True]
+    checkpoint(1250, 0.0, 0.4, episodes=10)  # another evaluation's metrics (no perturbed repeats)
+    with pytest.raises(SystemExit, match="not this script's evaluation"):
+        tool.main()
 
 
 @pytest.mark.skipif(not os.path.exists(os.path.join(DATA, "rat", "reference.h5")), reason="MIMIC-MJX's data not downloaded")

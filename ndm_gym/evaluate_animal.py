@@ -37,6 +37,10 @@ def main():
         parser.error("give --ckpt or --ckpts")
     if args.record and not args.out:
         parser.error("--record writes <out>/rollout.npz: give --out")
+    if args.repeats < 0:
+        parser.error("--repeats >= 0")
+    if not args.repeats and args.joint_noise != parser.get_default("joint_noise"):
+        parser.error("--joint_noise perturbs the repeated starts: give --repeats")
     paths = args.ckpts or [args.ckpt]
 
     import numpy as np
@@ -54,7 +58,7 @@ def main():
     data_dir = args.data_dir or run.data_dir
     spec = ANIMALS[run.animal]
     model, _, _, task = build(run.animal, clip_ids, data_dir, dev, run.reward_std_scale, run.action_scale, run.goal_stride,
-                             fused_fk=getattr(run, "fused_fk", False))
+                             fused_fk=run.fused_fk)
     ref = task.ref
     starts = torch.unique(ref.start)
     reps = 1 + args.repeats

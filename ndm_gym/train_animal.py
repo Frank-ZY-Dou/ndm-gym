@@ -3,8 +3,8 @@ stick insect of MIMIC-MJX) tracks clips of its animal's recorded kinematics (mot
 fit the world model on replay windows -> policy update through imagined rollouts (ndm_gym.algos.animal_algos).
 
 The loop, the schedule and the systems options are hand-object tracking's (ndm_gym.train_hand, ndm_gym.algos.hand_fast) with
-the defaults of ANIMAL_DEFAULTS; ndm_gym.train's arguments that this training does not implement are refused unless left at
-their defaults (UNSUPPORTED).
+the defaults of ANIMAL_DEFAULTS; ndm_gym.train's arguments and hand training's systems options that this training does not
+implement are refused unless left at their defaults (UNSUPPORTED, UNSUPPORTED_SYSTEMS).
 
 An iteration is one control step of every world, ``--wm_batches`` world-model steps and, after ``--wm_only_iters``, one policy
 (and critic) update. Writes ``train_log.csv``, ``args.json`` and ``last.pt`` to ``--log_dir`` (``--ckpt_keep``: also
@@ -38,6 +38,11 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
                "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center", "rf_merge", "wm_sample", "wm_prio_alpha",
                "wm_fail_windows", "wm_fail_window", "st_wm_loss", "no_critic", "pi_updates", "lr_decay_hours", "ckpt_hours",
                "motion_dir", "motions", "paired", "clips")  # fmt: skip
+# hand training's systems options (algos.hand_fast) that this training does not implement; each is refused unless at its
+# default: train_hand's own (the kernels' options, its phase times), HandSuperMimic's, and hand_fast.Collector's
+# --compile_collect (AnimalCollector compiles the forward kinematics only: --compile_eager)
+UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "elementwise_3x3",
+                       "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
 # the options a resumed run must share with its checkpoint
 RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
 
@@ -97,6 +102,9 @@ def parse_args(argv: list[str] | None = None):
     for name in UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that animal training does not implement")
+    for name in UNSUPPORTED_SYSTEMS:
+        if getattr(args, name) != parser.get_default(name):
+            parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that animal training does not implement")
     if args.goal_stride < 1 or args.episode < 2 or args.action_scale <= 0:
         parser.error("--goal_stride >= 1, --episode >= 2, --action_scale > 0")
     try:

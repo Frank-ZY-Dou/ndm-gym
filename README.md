@@ -1297,7 +1297,7 @@ episodes ended, and neither solves the rat within 10,000 iterations.
   end, so their numbers are the budget's, not final ones
   ([results](benchmarks/mimic_mjx_animal_tracking/results.md), [task](docs/tasks/animals.md)).
 - **Settings:** SuperTrack takes `hand-supertrack-fast`'s options and SuperMimic `hand-supermimic-fast`'s, each with the
-  same changes: `--pi_batch 2048 --wm_lr 2e-3 --fused_fk`, the iterations above and a checkpoint every 1,000. No other
+  same changes: `--pi_batch 2048 --wm_lr 2e-3 --fused_fk`, the iterations above and a checkpoint every 250. No other
   tuning on the bodies for either algorithm.
 - **Timing:** wall clock from the first training iteration (after the simulator's setup and the warm-up collection;
   the kernels' compilation was cached before the runs), each run alone on an A100 80GB SXM4; no per-phase table, so

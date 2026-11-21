@@ -3,7 +3,8 @@
 first checkpoint from which every later one ends at most 2 % of its episodes with the bodies' error within 3 % of the body's
 size (the task's: the bodies' median largest distance from the root; stick insect 0.53 mm, fruit fly 0.079 mm, rat 4.7 mm).
 Writes <run>/time_to.json (minutes_to_target: null if never). The times are the runs' own wall clock, checkpoints every
---ckpt_every iterations.
+--ckpt_every iterations. A run without kept checkpoints, or with an evaluation in <run>/eval_ckpts that is not this script's,
+is an error.
 
     python benchmarks/mimic_mjx_animal_tracking/time_to.py <run directory> [...]
 """
@@ -16,18 +17,24 @@ import sys
 
 SIZE_MM = {"stick": 17.58, "fly": 2.623, "rat": 156.6}  # the tasks' sizes (train_animal's log), in evaluate_animal's mm
 ENDED, BODY = 0.02, 0.03
+REPEATS = 4  # each clip's perturbed repeats, as in the last checkpoint's evaluation
 
 
 def main():
     for run in sys.argv[1:]:
         ckpts, out = sorted(glob.glob(os.path.join(run, "ckpt_*.pt"))), os.path.join(run, "eval_ckpts")
+        if not ckpts:
+            sys.exit(f"{run}: no ckpt_*.pt (train_animal --ckpt_keep keeps them)")
         todo = [c for c in ckpts if not os.path.exists(os.path.join(out, os.path.basename(c)[5:11], "metrics.json"))]
         if todo:  # one process for the run's checkpoints (evaluate_animal --ckpts)
-            cmd = [sys.executable, "-m", "ndm_gym.evaluate_animal", "--ckpts", *todo, "--repeats", "4", "--out", out]
+            cmd = [sys.executable, "-m", "ndm_gym.evaluate_animal", "--ckpts", *todo, "--repeats", str(REPEATS), "--out", out]
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
         rows = []
         for c in ckpts:
-            m = json.load(open(os.path.join(out, os.path.basename(c)[5:11], "metrics.json")))
+            path = os.path.join(out, os.path.basename(c)[5:11], "metrics.json")
+            m = json.load(open(path))
+            if m["iteration"] != int(os.path.basename(c)[5:11]) or m["episodes"] != m["clips"] * (1 + REPEATS):
+                sys.exit(f"{path} is not this script's evaluation of {c} (the run's clips, {REPEATS} perturbed repeats): remove it")
             ok = m["ended_share"] <= ENDED and m["body_mm"] <= BODY * SIZE_MM[m["animal"]]
             rows.append({"iteration": m["iteration"], "minutes": m["minutes"], "ended_share": m["ended_share"], "body_mm": m["body_mm"], "target": ok})
         first = None

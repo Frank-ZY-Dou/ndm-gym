@@ -46,8 +46,13 @@ def main():
     ap.add_argument("--distance", type=float, default=None, help="the camera's distance in body sizes (default 3.5)")
     ap.add_argument("--first", type=float, default=0.0, help="the window's start in the episode's seconds")
     ap.add_argument("--seconds", type=float, default=None, help="the window's length in the episode's seconds (default: to its end)")
-    ap.add_argument("--quality", type=int, default=70, help=".webp: the lossy WebP's quality")
+    ap.add_argument("--quality", type=int, default=None, help=".webp: the lossy WebP's quality (default 70)")
     a = ap.parse_args()
+    if a.speed <= 0 or a.fps <= 0 or (a.distance is not None and a.distance <= 0):
+        ap.error("--speed > 0, --fps > 0, --distance > 0")
+    if a.quality is not None and not a.out.endswith(".webp"):
+        ap.error("--quality is an animated WebP's: not used by this --out")
+    a.quality = a.quality or 70
     check_egl_device()
     d = np.load(a.rollout)
     animal = str(d["animal"])
