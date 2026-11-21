@@ -4,7 +4,7 @@
     0
   ],
   "iteration": 1500,
-  "wall_time_s": 418.95336842536926,
+  "wall_time_s": 407.94214487075806,
   "control_dt": 0.05,
   "num_envs": 256,
   "solver_iterations": [
@@ -15,60 +15,60 @@
     "0": {
       "frames": 137,
       "nominal": {
-        "success_rate": 0.0,
+        "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 6.800000190734863,
-        "object_mm": 17.738355323672295,
-        "object_final_mm": 99.61440414190292,
-        "object_deg": 24.292901377585792,
-        "keypoint_mm": 25.3289882093668,
-        "joint_rad": 0.09908238053321838,
-        "finger_mm": 5.409502889961004
+        "object_mm": 2.8931081760674715,
+        "object_final_mm": 6.6698468290269375,
+        "object_deg": 1.314026477081432,
+        "keypoint_mm": 6.785101722925901,
+        "joint_rad": 0.044151488691568375,
+        "finger_mm": 1.2263768585398793
       },
       "policy": {
-        "success_rate": 0.90625,
-        "terminated": 0.01171875,
-        "tracked_s": 6.781836032867432,
-        "object_mm": 9.04750544577837,
-        "object_final_mm": 13.802055269479752,
-        "object_deg": 5.965360008815845,
-        "keypoint_mm": 13.407359831035137,
-        "joint_rad": 0.08727046847343445,
-        "finger_mm": 3.3278230112046003
-      },
-      "reference_targets": {
-        "success_rate": 0.0703125,
+        "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 6.800000190734863,
-        "object_mm": 21.262606605887413,
-        "object_final_mm": 104.0501594543457,
-        "object_deg": 11.574044977852687,
-        "keypoint_mm": 11.419694870710373,
-        "joint_rad": 0.026240181177854538,
-        "finger_mm": 2.238473854959011
+        "object_mm": 2.8845611959695816,
+        "object_final_mm": 6.6102310083806515,
+        "object_deg": 1.3185456077127475,
+        "keypoint_mm": 6.843721494078636,
+        "joint_rad": 0.04427852854132652,
+        "finger_mm": 1.2444695457816124
+      },
+      "reference_targets": {
+        "success_rate": 0.0546875,
+        "terminated": 0.0,
+        "tracked_s": 6.800000190734863,
+        "object_mm": 21.42234332859516,
+        "object_final_mm": 105.65394163131714,
+        "object_deg": 11.69447060443012,
+        "keypoint_mm": 11.418537236750126,
+        "joint_rad": 0.026238875463604927,
+        "finger_mm": 2.240572590380907
       }
     }
   },
   "policy": {
-    "success_rate": 0.90625,
-    "terminated": 0.01171875,
-    "tracked_s": 6.781836032867432,
-    "object_mm": 9.04750544577837,
-    "object_final_mm": 13.802055269479752,
-    "object_deg": 5.965360008815845,
-    "keypoint_mm": 13.407359831035137,
-    "joint_rad": 0.08727046847343445,
-    "finger_mm": 3.3278230112046003
-  },
-  "reference_targets": {
-    "success_rate": 0.0703125,
+    "success_rate": 1.0,
     "terminated": 0.0,
     "tracked_s": 6.800000190734863,
-    "object_mm": 21.262606605887413,
-    "object_final_mm": 104.0501594543457,
-    "object_deg": 11.574044977852687,
-    "keypoint_mm": 11.419694870710373,
-    "joint_rad": 0.026240181177854538,
-    "finger_mm": 2.238473854959011
+    "object_mm": 2.8845611959695816,
+    "object_final_mm": 6.6102310083806515,
+    "object_deg": 1.3185456077127475,
+    "keypoint_mm": 6.843721494078636,
+    "joint_rad": 0.04427852854132652,
+    "finger_mm": 1.2444695457816124
+  },
+  "reference_targets": {
+    "success_rate": 0.0546875,
+    "terminated": 0.0,
+    "tracked_s": 6.800000190734863,
+    "object_mm": 21.42234332859516,
+    "object_final_mm": 105.65394163131714,
+    "object_deg": 11.69447060443012,
+    "keypoint_mm": 11.418537236750126,
+    "joint_rad": 0.026238875463604927,
+    "finger_mm": 2.240572590380907
   }
 }

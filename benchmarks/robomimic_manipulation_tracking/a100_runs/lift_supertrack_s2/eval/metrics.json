@@ -4,7 +4,7 @@
     0
   ],
   "iteration": 1500,
-  "wall_time_s": 187.98106217384338,
+  "wall_time_s": 189.41320180892944,
   "control_dt": 0.05,
   "num_envs": 256,
   "solver_iterations": [
@@ -18,34 +18,34 @@
         "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 0.5443369736894965,
-        "object_final_mm": 1.1342186480760574,
-        "object_deg": 0.33999817242506647,
-        "keypoint_mm": 2.0086178556084633,
-        "joint_rad": 0.006397908087819815,
-        "finger_mm": 0.9118528105318546
+        "object_mm": 0.6118034943938255,
+        "object_final_mm": 2.2261440753936768,
+        "object_deg": 0.36353217617972716,
+        "keypoint_mm": 1.9937707111239433,
+        "joint_rad": 0.006065873894840479,
+        "finger_mm": 0.998389208689332
       },
       "policy": {
         "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 0.609938520938158,
-        "object_final_mm": 1.6548247076570988,
-        "object_deg": 0.3158112986352877,
-        "keypoint_mm": 2.253203419968486,
-        "joint_rad": 0.006684883031994104,
-        "finger_mm": 0.9133903658948839
+        "object_mm": 0.6152424612082541,
+        "object_final_mm": 2.2309240885078907,
+        "object_deg": 0.3558030167210644,
+        "keypoint_mm": 2.1299109794199467,
+        "joint_rad": 0.006283559370785952,
+        "finger_mm": 1.0023950599133968
       },
       "reference_targets": {
         "success_rate": 0.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 10.482905432581902,
-        "object_final_mm": 54.71489578485489,
-        "object_deg": 0.8375612851220695,
-        "keypoint_mm": 8.016315288841724,
+        "object_mm": 10.482856072485447,
+        "object_final_mm": 54.714590311050415,
+        "object_deg": 0.8422896436575694,
+        "keypoint_mm": 8.016285486519337,
         "joint_rad": 0.024344023317098618,
-        "finger_mm": 1.7008037539198995
+        "finger_mm": 1.7008058493956923
       }
     }
   },
@@ -53,22 +53,22 @@
     "success_rate": 1.0,
     "terminated": 0.0,
     "tracked_s": 3.4000000953674316,
-    "object_mm": 0.609938520938158,
-    "object_final_mm": 1.6548247076570988,
-    "object_deg": 0.3158112986352877,
-    "keypoint_mm": 2.253203419968486,
-    "joint_rad": 0.006684883031994104,
-    "finger_mm": 0.9133903658948839
+    "object_mm": 0.6152424612082541,
+    "object_final_mm": 2.2309240885078907,
+    "object_deg": 0.3558030167210644,
+    "keypoint_mm": 2.1299109794199467,
+    "joint_rad": 0.006283559370785952,
+    "finger_mm": 1.0023950599133968
   },
   "reference_targets": {
     "success_rate": 0.0,
     "terminated": 0.0,
     "tracked_s": 3.4000000953674316,
-    "object_mm": 10.482905432581902,
-    "object_final_mm": 54.71489578485489,
-    "object_deg": 0.8375612851220695,
-    "keypoint_mm": 8.016315288841724,
+    "object_mm": 10.482856072485447,
+    "object_final_mm": 54.714590311050415,
+    "object_deg": 0.8422896436575694,
+    "keypoint_mm": 8.016285486519337,
     "joint_rad": 0.024344023317098618,
-    "finger_mm": 1.7008037539198995
+    "finger_mm": 1.7008058493956923
   }
 }
