@@ -21,7 +21,12 @@ the air, and a peg that one arm inserts into a socket that the other arm holds.
   full MuJoCo state of every control step of that replay is kept: the arms, the fingers and the objects' poses. 400
   control steps at 50 Hz (8 s). A demonstration is kept only if ACT's reward reaches its maximum of 4 in the replay. The
   objects start where ACT draws them (the cube in 20 x 20 cm of the table; the peg and the socket in 10 x 20 cm each),
-  from a seeded generator.
+  from a seeded generator. `tools/make_aloha_demos.py` writes ten demonstrations per task and checks their SHA-256.
+- **MuJoCo 2.3.7 for the generation.** The tool runs with the version that ACT's instructions install, in an
+  environment of its own. With the library's MuJoCo 3.15 the grippers follow their mocap bodies differently in the
+  end-effector scene and the scripted grasps miss (Transfer Cube: 1 of 12 episodes reaches the reward of 4, Insertion
+  none; with 2.3.7, 12 of 12 each). The joint-controlled scene, which the task simulates, differs less: 2.3.7's targets
+  replayed open loop in 3.15 reach the reward of 4 in 12 of 12 Transfer Cube episodes and 4 of 12 Insertion episodes.
 - **The public recordings are not used.** ACT's recordings of these tasks (`sim_transfer_cube_*`, `sim_insertion_*`; on
   the Hugging Face Hub as `lerobot/aloha_sim_*`, 50 episodes each) hold the arms' joint positions, the actions and a
   camera image, and not the objects' poses, so a rollout cannot be compared with them object by object.
@@ -29,11 +34,14 @@ the air, and a peg that one arm inserts into a socket that the other arm holds.
   end-effector versions for the generation) and meshes, downloaded at a pinned revision and checked against SHA-256
   sums. Two ViperX 300 arms: six joints and two finger slides each, 16 position actuators with ACT's gains and force
   ranges; a free cube of 50 g; a free peg and a free socket of 50 g each.
-- **Action:** 14 values, as ACT's: six joint position targets and one gripper command per arm, the two fingers mirrored
-  (to fix: as offsets from the demonstration's targets, as the manipulation task has them).
-- **Simulator:** MuJoCo-Warp alone at ACT's 50 Hz control with the scenes' own physics step, the control step as one
-  CUDA graph; the path of the manipulation tracking task (#10) with the world model of generalized coordinates
-  (`worldmodels/mjcf.py`). A test compares a control step with MuJoCo's.
+- **Action:** 14 values, as ACT's: six joint position targets and one gripper command per arm, the two fingers mirrored;
+  each an offset about the reference's joint position at the next frame, as the manipulation task has them (at most
+  0.25 rad on a joint, 2 cm on a finger). The policy does not get the position targets that a demonstration recorded
+  (ACT's actions); the evaluation replays them open loop beside the policy.
+- **Simulator:** MuJoCo-Warp alone at ACT's 50 Hz control with the scenes' own physics step (2 ms, 10 steps a control
+  step), the control step as one CUDA graph, the solver at 20 iterations as in the manipulation task; the path of the
+  manipulation tracking task (#10) with the world model of generalized coordinates (`worldmodels/mjcf.py`). A test
+  compares a control step with MuJoCo's.
 
 ## Deliverables
 
@@ -48,28 +56,48 @@ the air, and a peg that one arm inserts into a socket that the other arm holds.
 
 ## What will be measured
 
-Rules fixed here before the runs they apply to. The items marked "to fix" are open; each is fixed in this file by a
-commit before the reported runs start.
+Rules fixed here before the runs they apply to.
 
-- **Tasks:** Transfer Cube and Insertion, one policy per demonstration (each task's demonstration 0, the generator's
-  first kept episode). One policy on several demonstrations, and initial poses held out of training: to fix.
+- **Tasks:** Transfer Cube and Insertion, one policy per demonstration: each task's demonstration 0 (the generator's
+  first kept episode). One policy on several demonstrations, and start poses held out of training, are not in this
+  version.
 - **Algorithms:** SuperTrack and SuperMimic, treated alike: the same starting point (the manipulation task's
-  configurations), the same seeds, budget, checkpoints and evaluation starts. If the starting point is changed, both
-  algorithms get a tuning round of the same number of runs and the same budget, on demonstrations that the reported runs
-  do not use, and the round is reported with its runs.
-- **Stopping:** one rule for both algorithms, with a cap in iterations (to fix: the target held over consecutive
-  checkpoints, or a plateau of the objects' error). The last checkpoint is the one evaluated.
+  configurations, `robomimic-supertrack` and `robomimic-supermimic`), the same seeds, budget, checkpoints and
+  evaluation starts.
+- **Tuning round:** the starting point is changed (its budget of 1,500 iterations is the manipulation task's, at 20 Hz),
+  so both algorithms get one round of the same runs at the same budget, on demonstration 1 of each task with seed 0 (the
+  reported runs use demonstration 0). Four variants per algorithm and task, each 6,000 iterations with the learning
+  rate's cosine over them:
+  1. nothing else changed;
+  2. the imagined window of 40 control steps (0.8 s: the manipulation task's 16 steps at its 20 Hz);
+  3. episodes of up to 500 control steps (10 s: the manipulation task's 200 steps at its 20 Hz);
+  4. both.
+
+  Per algorithm the variant with the highest success at its last checkpoint, averaged over the two tasks, is taken;
+  among those within 0.02 of it the one with the lowest objects' position error (averaged over the tasks, over the
+  rollouts that do not terminate), then the one with the fewest changes. The round is reported with every run.
+- **Budget and stopping:** one rule for both algorithms. Every reported run trains for the round's 6,000 iterations
+  (the cap) and its last checkpoint is the one evaluated. A run has settled if its last five kept checkpoints (the last
+  1,000 iterations) agree: their successes within 0.05 of one another and their objects' errors within 1 mm or a
+  quarter of their mean, whichever is larger. The results say per run whether it settled; where runs of a case did
+  not, its numbers are named the cap's and no comparison is drawn from them.
 - **Seeds:** training seeds 0, 1, 2 per configuration, every seed reported; mean and sample SD.
-- **Evaluation:** 256 rollouts of the whole demonstration from perturbed starts, without exploration noise. Beside them,
-  the demonstration's own position targets, open loop, from the same starts.
-- **Measures:** the success, the objects' position and rotation error, the joints' error and the share of the rollouts
-  that end early; SuperTrack first, both numbers side by side. The success is ACT's test of a task's final stage (the
-  cube in the left gripper and off the table; the peg touching the pin), read at the demonstration's last frame or at
-  any step (to fix), and named a proxy where it is not ACT's success of a learned policy.
+- **Evaluation:** 256 rollouts of the whole demonstration from perturbed starts, without exploration noise. Beside them
+  the same rollouts without a policy: under the reference's joint positions as the targets, and under the position
+  targets the demonstration recorded, open loop.
+- **Success:** ACT scores a state by the geoms in contact (`get_reward` of its `TransferCubeTask` and `InsertionTask`,
+  stages 0 to 4; the last: the cube touches the left gripper's finger and not the table; the peg touches the pin) and
+  counts an episode a success if its highest reward is 4. The evaluation reads MuJoCo-Warp's contacts after every
+  control step for the same pairs of geoms; a rollout succeeds if it never terminates and its highest reward is 4. The
+  share of the rollouts that reach each stage is reported with it. These rollouts track one demonstration from
+  perturbed starts: the number is not ACT's success rate of an imitation policy from images.
+- **Measures:** the success and the stages, the objects' position and rotation error, the joints' error and the share
+  of the rollouts that end early (a tracked object 15 cm or a gripper keypoint 20 cm from the reference); SuperTrack
+  first, both numbers side by side.
 - **Time:** each run alone on one A100 (80 GB). The clock starts at the first training iteration, and the text says what
-  it includes. A checkpoint is kept every 100 iterations; the time to the target is that of the first checkpoint from
-  which every later one holds the target (to fix: the target's success and error). Without a per-phase time table of
-  the path: time to the target, not engineered.
+  it includes. A checkpoint is kept every 200 iterations; the time to the target is that of the first checkpoint from
+  which every later one has a success of at least 0.99 with the objects within 10 mm (the manipulation task's target).
+  Without a per-phase time table of the path: time to the target, not engineered.
 - **Length:** a run is expected to take minutes.
 
 Not in the first version: ALOHA's real recordings; the public simulated recordings (no object poses); image
