@@ -20,12 +20,55 @@ each of the 40 LAFAN1 clips once from its first frame, without noise or
 randomization. Differences come with Welch 95% intervals over seeds. Every section below except the training speed and the policy-gradient
 diagnostic fixed its rule before its runs. Both algorithms are re-implementations on this pipeline, not
 the authors' code; the configuration SuperMimic's tuning rounds selected differs from the paper's (action noise 0.3 instead
-of 0.1, imagination kicks 0.3, reward kernels ×0.7). Its 3 h configuration with the speed options takes the paper's action
-noise 0.1 and SuperTrack's offsets about the reference pose ([below](#the-3-h-configurations-at-one-budget)).
+of 0.1, imagination kicks 0.3, reward kernels ×0.7). Its most accurate configuration takes the paper's action noise
+0.1 and SuperTrack's offsets about the reference pose; how the named configurations were chosen after the tuning rounds:
+[below](#the-most-accurate-configurations).
+
+## The most accurate configurations
+
+The named most accurate configurations with the MLP world model: 3 h of training each on one A100 40GB SXM4, seeds
+7-9, scored as the main comparison (the last checkpoint's three standard evaluations and its pushes of 1 and 2 m/s);
+mean ± sd over the seeds. No run dropped late (an evaluation during training below 0.60 after its first at or above
+0.82).
+
+| MLP world model | `lafan1-supertrack-accurate` | `lafan1-supermimic-accurate` | SuperTrack - SuperMimic |
+|---|---|---|---|
+| return | 0.898 ± 0.002 | 0.915 ± 0.005 | **-0.017 [-0.028, -0.006]** |
+| failed clips | 0.00 ± 0.00 | 0.00 ± 0.00 | +0.00 [0.00, 0.00] |
+| MPJPE-local (mm) | 10.8 ± 0.0 | 16.7 ± 0.1 | **-5.9 [-6.2, -5.6]** |
+| joint angle (deg) | 2.07 ± 0.03 | 2.96 ± 0.02 | **-0.89 [-0.95, -0.84]** |
+| failed at 1 m/s pushes | 2.0 ± 0.0 | 2.3 ± 0.6 | -0.3 [-1.8, 1.1] |
+| failed at 2 m/s pushes | 15.7 ± 3.5 | 11.7 ± 0.6 | +4.0 [-4.4, 12.4] |
+| iterations in 3 h | 63,200, 63,393, 63,324 | 66,837, 67,208, 67,058 | |
+
+The intervals are Welch 95% intervals of SuperTrack's row minus SuperMimic's, from each seed's scores; bold where they
+exclude 0.
+
+- **How they were chosen.** Each starts from its algorithm's configuration from the tuning rounds, changed in rounds for
+  the time to return 0.82, each algorithm with its own options ([training speed](#training-speed)). These configurations
+  then trained 3 h
+  with the learning rate's cosine over the 3 h (`--lr_decay_hours 3`), which scored higher than the schedule as published
+  in a 3 h pilot run of each (seed 0). At 3 h only the cosine, SuperMimic's action noise and the lean options on SuperTrack's
+  MLP were compared; the changes for the time to 0.82 were not tuned for accuracy after 3 h.
+- **What was tried for which.** In the rounds for the time to 0.82 the simulator's action noise was varied for SuperMimic
+  only (SuperTrack's runs kept the default 0.1), and the imagination kicks in five values for SuperMimic and one for
+  SuperTrack.
+- **The action noise.** SuperMimic's MLP configuration runs with 0.1, the default that SuperTrack's runs keep, in place of
+  its fast configuration's 0.3: with 0.3 its three 3 h runs on these seeds dropped late (return 0.298 ± 0.054 at 3 h), and in a
+  development screen of the noise at 3 h (four seeds per arm) all four runs with 0.3 dropped late (at least 20 failures in
+  two consecutive probe sweeps after iteration 24,000) and none with 0.1; SuperTrack's configuration dropped at neither 0.1
+  nor 0.035.
+- **The lean options.** Both MLP configurations carry the same lean options (`--eprobe_lean --imag_hoist --wm_presample
+  --muon_batched --gc_freeze`). SuperTrack's MLP runs without them, with the same
+  cosine, scored a return of 0.895 ± 0.001 and an MPJPE-local of 11.0 ± 0.2 mm (seeds 7-9).
+- **The budget is 3 h of wall clock:** about 63,310 iterations for SuperTrack, 67,030 for SuperMimic. At equal iterations
+  the order is the same: SuperTrack 0.898 ± 0.003 and 10.8 ± 0.0 mm at its last checkpoints, SuperMimic 0.913 ± 0.001
+  and 16.7 ± 0.2 mm at 64,000 iterations (one evaluation per run).
 
 ## The 3 h configurations at one budget
 
-SuperTrack's and SuperMimic's 3 h configurations, two arms each, on seeds 7, 8 and 9: 3 h of training each with the speed
+These were the named 3 h configurations until [the most accurate configurations](#the-most-accurate-configurations)
+replaced them. SuperTrack's and SuperMimic's 3 h configurations, two arms each, on seeds 7, 8 and 9: 3 h of training each with the speed
 options (`SPEED` of `ndm_gym/configs.py`; SuperMimic also `--critic_cudagraphs`), one A100 40GB SXM4 per run, all on one
 code version. Each algorithm's second arm takes a setting of the other algorithm's configuration that it can take. Both of
 SuperMimic's arms use the paper's action noise 0.1: with 0.3 and the speed options its return falls late
@@ -34,10 +77,10 @@ evaluations and its pushes of 1 and 2 m/s; mean ± sd over the seeds.
 
 | algorithm | arm | return | failed clips | MPJPE-local (mm) | joint angle (deg) | failed at 1 m/s pushes | failed at 2 m/s pushes | iterations in 3 h | late drop, seeds 7 / 8 / 9 |
 |---|---|---|---|---|---|---|---|---|---|
-| SuperTrack | `lafan1-supertrack-accurate` | 0.857 ± 0.004 | 0.00 ± 0.00 | 15.2 ± 1.0 | 2.02 ± 0.03 | 4.0 ± 2.6 | 19.3 ± 2.1 | 36077, 36226, 36338 | no / no / no |
+| SuperTrack | the tuning rounds' configuration | 0.857 ± 0.004 | 0.00 ± 0.00 | 15.2 ± 1.0 | 2.02 ± 0.03 | 4.0 ± 2.6 | 19.3 ± 2.1 | 36077, 36226, 36338 | no / no / no |
 | SuperTrack | with SuperMimic's imagination kicks, `--imag_start_perturb 0.3` | 0.842 ± 0.007 | 0.56 ± 0.38 | 16.1 ± 0.5 | 2.12 ± 0.03 | 2.3 ± 1.2 | 14.3 ± 5.8 | 35982, 36176, 36200 | no / no / no |
 | SuperMimic | the tuning rounds' configuration with action noise 0.1 | 0.863 ± 0.002 | 0.44 ± 0.38 | 24.3 ± 0.9 | 4.05 ± 0.08 | 3.7 ± 1.5 | 10.0 ± 1.0 | 33818, 33669, 33874 | no / no / no |
-| SuperMimic | the same with SuperTrack's offsets about the reference pose, `--sm_residual` (`lafan1-supermimic-accurate`) | 0.872 ± 0.003 | 0.00 ± 0.00 | 21.2 ± 0.3 | 3.40 ± 0.10 | 3.0 ± 1.0 | 12.0 ± 0.0 | 33778, 33687, 33827 | no / no / no |
+| SuperMimic | the same with SuperTrack's offsets about the reference pose, `--sm_residual` | 0.872 ± 0.003 | 0.00 ± 0.00 | 21.2 ± 0.3 | 3.40 ± 0.10 | 3.0 ± 1.0 | 12.0 ± 0.0 | 33778, 33687, 33827 | no / no / no |
 
 Each algorithm's row is its arm with the higher mean return or, when the other arm's is within 0.01 of it, the one with
 the lower MPJPE-local: SuperTrack's configuration as it was; SuperMimic's with action noise 0.1 and `--sm_residual` (0.872
@@ -64,27 +107,43 @@ SuperTrack's configuration scored 0.861 ± 0.003 and 14.5 ± 0.2 mm in its earli
 ## Training speed
 
 Minutes to return 0.82 with MLP world models, BlinkMimic's recipe and systems options, and each algorithm's fastest
-configuration ([commands](../../README.md#training-speed)): one run at a time on A100 40GB SXM4 GPUs with nothing else
-running, the two algorithms' runs of each GPU count in one session (seeds 0-2 on one GPU, 3-5 on four, with the same-session
-runs without `--fk_fused` below). Every run trained 3,000 iterations with a checkpoint
-every 100, evaluated after training (`ndm-eval --group 18 --repeats 4 --graph`); time starts at iteration 50, after
-compilation and graph capture, and ends at the first checkpoint whose four evaluations on all 40 clips average at least 0.82.
-Means and standard deviations use unrounded times.
+configuration ([commands](../../README.md#training-speed)), one run at a time on A100 40GB SXM4 GPUs. Every run trained
+3,000 iterations with a checkpoint every 100, evaluated after training (`ndm-eval --group 18 --repeats 4 --graph`); time
+starts at iteration 50, after compilation and graph capture, and ends at the first checkpoint whose four evaluations on all
+40 clips average at least 0.82. Means and standard deviations use unrounded times.
 
-| configuration | GPUs | minutes to 0.82, per seed | mean ± std | iterations to 0.82 | return there | MPJPE-local there (mm) | ms per iteration, 200-1000 / 1000-1500 |
-|---|---|---|---|---|---|---|---|
-| `lafan1-supertrack-fast` | 1 | 4.29 / 3.99 / 4.30 | 4.19 ± 0.18 | 1700, 1600, 1700 | 0.828 ± 0.007 | 22.7 ± 0.9 | 127.4 / 188.7 |
-| `lafan1-supermimic-fast` | 1 | 3.23 / 3.54 / 3.82 | 3.53 ± 0.30 | 1500, 1600, 1700 | 0.824 ± 0.003 | 27.4 ± 0.4 | 116.4 / 165.0 |
-| `lafan1-supertrack-fast-4gpu` | 4 | 1.41 / 1.49 / 1.50 | 1.47 ± 0.05 | 1700, 1800, 1800 | 0.827 ± 0.001 | 21.9 ± 0.5 | 51.0 / 51.2 |
-| `lafan1-supermimic-fast-4gpu` | 4 | 1.42 / 1.34 / 1.51 | 1.42 ± 0.09 | 1700, 1600, 1800 | 0.826 ± 0.002 | 26.9 ± 0.4 | 51.6 / 51.7 |
+One GPU, seeds 0-2: the two configurations and SuperTrack's without the lean options in one block, the arms' order rotated
+with the seed.
+
+| configuration | minutes to 0.82, per seed | mean ± std | iterations to 0.82 | MPJPE-local there (mm) | ms per iteration, 200-1000 / 1000-1500 |
+|---|---|---|---|---|---|
+| `lafan1-supertrack-fast` | 4.35 / 4.03 / 4.03 | 4.13 ± 0.18 | 1,800, 1,700, 1,700 | 22.4 ± 0.7 | 124.4 / 170.7 |
+| the same without the lean options | 3.93 / 3.99 / 3.96 | 3.96 ± 0.03 | 1,600, 1,600, 1,600 | 23.2 ± 0.4 | 127.3 / 188.7 |
+| `lafan1-supermimic-fast` | 3.83 / 3.22 / 3.52 | 3.52 ± 0.30 | 1,700, 1,500, 1,600 | 27.0 ± 1.0 | 116.3 / 164.9 |
+
+Four GPUs, seeds 3-5: the two configurations in one session with nothing else running (with the same-session runs without
+`--fk_fused` below).
+
+| configuration | minutes to 0.82, per seed | mean ± std | iterations to 0.82 | return there | MPJPE-local there (mm) | ms per iteration, 200-1000 / 1000-1500 |
+|---|---|---|---|---|---|---|
+| `lafan1-supertrack-fast-4gpu` | 1.41 / 1.49 / 1.50 | 1.47 ± 0.05 | 1700, 1800, 1800 | 0.827 ± 0.001 | 21.9 ± 0.5 | 51.0 / 51.2 |
+| `lafan1-supermimic-fast-4gpu` | 1.42 / 1.34 / 1.51 | 1.42 ± 0.09 | 1700, 1600, 1800 | 0.826 ± 0.002 | 26.9 ± 0.4 | 51.6 / 51.7 |
 
 The return and MPJPE-local are those of the checkpoint where the time is read (its four evaluations' means). There
-SuperTrack's MPJPE-local is lower, on one GPU and on four (by 4.7 and 4.9 mm); the global MPJPE at that point is above 1 m
-for both, the roots having drifted on the long clips (SuperTrack 1.25 and 1.23 m, SuperMimic 1.11 and 1.06 m).
+SuperTrack's MPJPE-local is lower, on one GPU and on four (22.4 against 27.0 mm, 21.9 against 26.9 mm); the times are level
+within the seeds' spread (one GPU: SuperTrack's minus SuperMimic's +0.61 [-0.01, 1.24] min, Welch 95 %). In an earlier
+one-GPU session and on four GPUs the global MPJPE at that point is above 1 m for both, the roots having drifted on the long
+clips (SuperTrack 1.25 and 1.23 m, SuperMimic 1.11 and 1.06 m).
+
+**The rule for an option that keeps the computation:** it is adopted when every run with it is faster per iteration than
+every run without, by more than the two arms' standard deviations together, over iterations 200-1000 and over 1000-1500.
+The lean options meet it on SuperTrack's one-GPU path (by 2.9 and 18.0 ms, against 0.2 and 6.2 ms), so
+`lafan1-supertrack-fast` takes them, as `lafan1-supermimic-fast` does. Its time to 0.82 is level with and without them
+(+0.18 [-0.27, 0.62] min, Welch 95 %): the runs with them needed 100-200 more iterations on two seeds.
 
 The four-GPU configurations compute the forward kinematics as two Triton kernels with a hand-written backward pass
-(`--fk_fused`; equal to the default up to float rounding). In their session every run with it was faster per iteration than
-every run without, for both algorithms and in both windows:
+(`--fk_fused`; equal to the default up to float rounding). In their session it meets the rule for both algorithms, in both
+windows:
 
 | four GPUs, seeds 3-5 | without `--fk_fused` | with it |
 |---|---|---|
@@ -93,30 +152,57 @@ every run without, for both algorithms and in both windows:
 
 Why it helps there: on four GPUs the iteration is the policy learner's step, whose imagined steps and losses run the
 kinematics, and the seeds' times per iteration agree within 0.3 ms, so the 0.4-0.9 ms the fused kernels save shows in every
-run. On one GPU the same saving (4.2 ms of SuperTrack's 127, 1.0 ms of SuperMimic's 116) stays within the seeds' spread
-in iterations to 0.82, so the one-GPU configurations do without it.
+run. On one GPU it meets the rule over iterations 200-1000 and not over 1000-1500, where the probe sweeps from iteration
+1,000 spread the baseline seeds' times by 9.3 ms (SuperTrack) and 5.0 ms (SuperMimic), so the one-GPU configurations do
+without it (the one-GPU arms, seeds 3-5, four runs sharing the node):
 
-Time per iteration by phase on one GPU, iterations 200-1000, ms (the same configurations, synchronized profiles):
+| one GPU, ms per iteration, 200-1000 / 1000-1500 | without `--fk_fused` | with it | faster by, against the two arms' standard deviations together |
+|---|---|---|---|
+| SuperTrack | 127.6 / 191.1 | 123.2 / 186.4 | 4.42 against 0.28; 4.71 against 9.44 |
+| SuperMimic | 116.2 / 162.1 | 115.1 / 161.1 | 1.10 against 0.15; 1.07 against 4.76 |
 
-| configuration | total | collection (2.5 steps) | world-model updates | policy update with the critic | the rest |
+Time per iteration by phase on one GPU, ms, from each arm's timer run in the one-GPU block (seed 0; the rest: the
+iteration less its three phases, the probe sweeps running from iteration 1000):
+
+| configuration | iterations | collection (2.5 steps) | world-model updates | policy update with the critic | the rest |
 |---|---|---|---|---|---|
-| `lafan1-supertrack-fast` | 127.4 | 42.3 | 35.0 | 50.0 | 0.1 |
-| `lafan1-supermimic-fast` | 116.3 | 45.8 | 24.0 | 46.0 | 0.4 |
+| `lafan1-supertrack-fast` | 200-1000 | 42.2 | 32.9 | 49.0 | 0.4 |
+| | 1000-1500 | 42.2 | 32.8 | 49.0 | 46.8 |
+| the same without the lean options | 200-1000 | 42.4 | 35.0 | 50.0 | 0.0 |
+| | 1000-1500 | 42.2 | 35.0 | 50.0 | 61.5 |
+| `lafan1-supermimic-fast` | 200-1000 | 45.8 | 24.0 | 47.0 | -0.5 |
+| | 1000-1500 | 45.6 | 24.0 | 46.9 | 48.4 |
 
-On one GPU an iteration runs its phases one after another, and the host adds under 1 ms. SuperMimic's configuration encodes
-each imagined step's goal once per rollout instead of inside every step (`--pi_encode_once`, which SuperTrack's configuration
-has too) and runs with the lean options (`--eprobe_lean --imag_hoist --wm_presample --muon_batched --gc_freeze`): its policy
-update takes 46.0 ms instead of 55.0, and `--eprobe_lean` computes only what a probe sweep reads.
+On one GPU an iteration runs its phases one after another, and the host adds under 1 ms. Both configurations encode each
+imagined step's goal once per rollout instead of inside every step (`--pi_encode_once`) and run with the lean options
+(`--eprobe_lean --imag_hoist --wm_presample --muon_batched --gc_freeze`). On SuperTrack's path they take 2 ms off the
+world-model updates and 1 ms off the policy update, and each of its four probe sweeps over iterations 1000-1500 takes 9.2
+instead of 11.2 s, `--eprobe_lean` computing only what a sweep reads. The world-model updates take 24.0 ms of SuperMimic's
+iteration and 32.9 ms of SuperTrack's.
 
-Both algorithms were timed with and without the lean options in one session, under the same conditions (seeds 0-2):
+In an earlier session both algorithms were timed with and without the lean options under the same conditions (seeds 0-2);
+with them SuperMimic's policy update took 46.0 ms instead of 55.0:
 
-| one GPU, minutes to 0.82 | SuperTrack | SuperMimic |
+| one GPU, minutes to 0.82; ms per iteration, 200-1000 / 1000-1500 | SuperTrack | SuperMimic |
 |---|---|---|
-| without the lean options (SuperMimic also without `--pi_encode_once`) | 4.30 ± 0.01 | 4.22 ± 0.42 |
-| with them | 4.04 ± 0.30 | 3.43 ± 0.18 |
+| without the lean options (SuperMimic also without `--pi_encode_once`) | 4.30 ± 0.01; 127.4 / 188.7 | 4.22 ± 0.42; 127.1 / 191.9 |
+| with them | 4.04 ± 0.30; 124.5 / 170.8 | 3.43 ± 0.18; 116.3 / 164.9 |
 
-SuperTrack's two times are level within the seeds' spread, so its configuration stays without them; SuperMimic's
-configuration carries them.
+SuperTrack's two times are level within the seeds' spread; its configuration took the lean options later, in the
+one-GPU block above, by its time per iteration.
+
+With the lean options SuperTrack's iteration is shorter in both windows: its world-model updates take 32.4 ms instead of
+35.0, its policy update 49.1 instead of 50.0. SuperMimic's arm also added `--pi_encode_once`, which SuperTrack's
+configuration already had.
+
+The one-GPU configurations in four sessions on the same GPU type, each time seeds 0-2, one run at a time (minutes to 0.82):
+
+| session | SuperTrack, without the lean options | SuperTrack, with them (`lafan1-supertrack-fast`) | `lafan1-supermimic-fast` |
+|---|---|---|---|
+| the one-GPU block above | 3.96 ± 0.03 | 4.13 ± 0.18 | 3.52 ± 0.30 |
+| the session of the lean options (above) | 4.30 ± 0.01 | 4.04 ± 0.30 | 3.43 ± 0.18 |
+| a session of single changes, as its baselines | 4.18 ± 0.20 | - | 3.32 ± 0.17 |
+| the session of the earlier published rows | 4.19 ± 0.18 | - | 3.53 ± 0.30 |
 
 The four-GPU path by device, from the layout's timer (`LAYOUT_PROFILE=1`: CUDA events on each device's stream around the
 iteration's steps, every 20th iteration, one `[prof-layout]` line each); seed 0, two runs of each configuration, the lines
@@ -261,7 +347,7 @@ of 250 × 4096 states instead of 1000 × 4096 (`--replay-steps 250`). It is not 
 | mean ± sd | 0.72 ± 0.00 | 1583 / 19.16 ± 1.72 / 18.48 ± 1.72 | 17.93 ± 2.33 | | | | |
 
 **Beside this library's fastest configurations.** On one A100 40GB SXM4, SuperTrack reaches return 0.82 after
-4.19 ± 0.18 min and SuperMimic after 3.53 ± 0.30 min ([Training speed](#training-speed), seeds 0-2). NablaMimic's rows
+4.13 ± 0.18 min and SuperMimic after 3.52 ± 0.30 min ([Training speed](#training-speed), seeds 0-2). NablaMimic's rows
 stand beside these numbers and are not ranked with them. The same in both: the 40 clips, the return's formula, each
 clip's start, the fall thresholds, the reward's terms and weights, the G1's joints, gains and mass. Not the same: the
 evaluator and its simulator, the G1's colliders and self-collisions, the anchor body, the clips' heights, one evaluation
@@ -495,9 +581,10 @@ Held-out clips at every checkpoint (mean over seeds 1-3; context):
 
 ## RigidFormer tuned online
 
-SuperTrack-RF and SuperMimic-RF tuned online as the MLP was (selected: SuperTrack `--st_balance_w 2`, SuperMimic
-`--imag_start_perturb 0.4`; RF-S, world-model learning rate 4e-4), on seeds 1-3, one A100 40GB each, against the MLP
-finals and against RigidFormer before its tuning. Equal iterations: the MLP finals' counts at 3 h. Mean ± std over seeds;
+SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, 12 tuning runs each as the MLP had (selected: SuperTrack
+`--st_balance_w 2`, SuperMimic `--imag_start_perturb 0.4`; RF-S, world-model learning rate 4e-4), on seeds 1-3, one A100
+40GB each, against the MLP finals and against RigidFormer before its tuning. Equal iterations: the MLP finals' counts at
+3 h. Mean ± std over seeds;
 difference [Welch 95% interval], bold when it excludes 0.
 
 At equal iterations no metric differs significantly from the MLP finals. At 3 h without the speed options, where
@@ -520,7 +607,8 @@ Checkpoints of the selected configurations: SuperTrack last: iterations 12670, 1
 ## RigidFormer's final configurations
 
 SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
-40GB each), ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
+40GB each; the RigidFormer after 21 and 19 tuning runs in all, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12),
+ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
 SuperMimic-RF `--imag_start_perturb 0.4 --wm_batches 7`, both `--wm_lr 4e-4`. The selected configurations then ran on
 fresh seeds 7-9, 3 h each, scored as the main comparison, next to the MLP configurations with the speed options that
 apply to them. Differences with Welch 95% intervals; bold when the interval excludes 0.
@@ -544,7 +632,7 @@ Iterations reached in 3 h: SuperTrack-RF 12654, 12677, 12696; SuperMimic-RF 1071
 | SuperMimic | MLP iterations in 3 h | 33184, 33205, 33244 | | | | | |
 
 With the speed options the MLP runs about 3x more iterations in 3 h. SuperTrack's MLP return is 0.861 ± 0.003 and its
-MPJPE-local 14.5 ± 0.2 mm in these runs (seeds 7-9; `lafan1-supertrack-accurate`). SuperMimic's MLP with action noise 0.3
+MPJPE-local 14.5 ± 0.2 mm in these runs (seeds 7-9; the tuning rounds' configuration with the speed options). SuperMimic's MLP with action noise 0.3
 drops late, as on the H100 (return 0.137 at about 33k iterations); its highest per-checkpoint evaluation averages 0.841
 over the seeds, SuperMimic-RF's 0.811. With action noise 0.1 and `--sm_residual` it does not drop (0.872 ± 0.003, the
 [3 h configurations at one budget](#the-3-h-configurations-at-one-budget), where SuperTrack's configuration scores

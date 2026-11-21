@@ -13,7 +13,7 @@ the library, with flight phases and fast gaits.
   BSD-3-Clause), its motors as joint position servos within their torque limits, the joints' damping that of Unitree's own
   model ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco)).
 - **Retargeting:** [supermimic-quadruped](https://github.com/Houserz/supermimic-quadruped)'s `quadmotion` package (MIT;
-  the results used `46a81c2`), called from the user's own checkout by `tools/convert_lifelike.py`; none of its code is
+  pinned at `46a81c2`), called from the user's own checkout by `tools/convert_lifelike.py`; none of its code is
   copied here. 65 clips, 488 s at the robot's time scale.
 
 | file | |
@@ -21,21 +21,18 @@ the library, with flight phases and fast gaits.
 | `tasks.json` | the benchmark's tasks: a walk, a run and a play clip (`walk`, `run`, `play`) and one policy on all 65 clips (`all`) |
 | `run.sh` | train and evaluate one task and seed (with pushes), then time the run |
 | `time_to.sh` | the training time from which a run holds the target (its kept checkpoints, evaluated together) |
-| `summarize.py` | the tables of `results.md` from the runs |
-| `results.md` | setup, results, findings |
+| `summarize.py` | the results' tables from the runs |
+| `results.md` | the benchmark's tasks and commands |
 
 ## Rules
-
-Fixed before the three-seed runs.
 
 - **Tasks:** one policy on all 65 clips; and one clip of each kind, chosen for their gaits before their runs: a walk
   (`dog_quad_walk_002_1`, 6.0 s), a run (`dog_quad_run_002_0`, 5.5 s, up to 2.95 m/s) and a play clip
   (`dog_play_002_0`, 10.1 s). The two long clips (70 s and 79 s) stay whole.
 - **Algorithms:** SuperTrack and SuperMimic, each from the library's selected options (the hand task's systems and
-  SuperTrack options; HOI's optimizer options for SuperMimic), then any change that improves on them, reported beside the
-  starting point.
+  SuperTrack options; HOI's optimizer options for SuperMimic), then any change that improves on them.
 - **Seeds:** three training seeds (0, 1, 2) per reported configuration; mean and sample SD; one run per GPU, no other job on
-  it (a run that shared its GPU was run again).
+  it (a run that shares its GPU is run again).
 - **Evaluation:** `ndm_gym.evaluate_quadruped` on the last checkpoint: rollouts of the whole clip from perturbed starts,
   without exploration noise and without resets; a rollout succeeds if it never terminates. Reported: the success rate, the
   normalized return, the failed clips, the feet's, the trunk's and the joints' errors, and the failed clips under trunk

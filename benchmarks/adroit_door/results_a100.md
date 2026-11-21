@@ -38,9 +38,9 @@ learned on top of a control that already works has little to gain on one clip.
 Every training episode and every evaluation start except the nominal one begins with the door and the latch raised by
 U(0, 0.3) rad each (the hand perturbed as above). The replayed controls then open the door on 167 of 256 starts (65.2 %)
 at a tracking return of 6.1016. Each algorithm's configurations were chosen in a screen of eight arms (seed 0, 6,000
-iterations, the same shared arms for both): the most accurate and the one first at 99 % opening. Training time: the
-trainer's clock at the first snapshot (every 500 iterations) with 99 % (or 95 %) of the starts open, evaluation on
-another GPU not included.
+iterations, the same shared arms for both; [below](#the-settings-screen)): the most accurate and the one first at 99 %
+opening. Training time: the trainer's clock at the first snapshot (every 500 iterations) with 99 % (or 95 %) of the
+starts open, evaluation on another GPU not included.
 
 | method | configuration | opened | return ↑ | hand RMSE ↓ (rad) | door RMSE ↓ (rad) | to 99 % | to 95 % |
 |---|---|---:|---:|---:|---:|---:|---:|
@@ -67,6 +67,35 @@ another GPU not included.
 
 These times are the contributed implementation's, not engineered: its updates take about 0.24 s (SuperTrack) and
 0.33 s (SuperMimic) an iteration and its CPU physics about 0.1 s.
+
+The two most accurate configurations' opening rates are within their seeds' spread (99.3 ± 0.8 % and 99.5 ± 0.9 %):
+SuperTrack's has the higher return and the lower hand error, SuperMimic's the lower door error. `--method supertrack
+--lr 8e-4` first shows 99 % of the starts open after 35.5 ± 13.6 min and ends at 91.1 ± 6.4 %.
+
+## The settings screen
+
+A development screen with the door and latch started open: per algorithm the contributed configuration and seven single
+changes, five of them the same for both and two of its own terms; training seed 0, 6,000 iterations, a snapshot every
+500 evaluated on the 256 starts. Opened and return: the mean of the snapshots at 5,000 and 6,000 iterations; first at
+99 %: the first snapshot with 99 % of the starts open, in iterations (-: none). The contributed configuration and the
+shared changes ran on A100 40GB, the algorithms' own terms on an RTX 3090.
+
+| arm | SuperTrack: opened | return | first at 99 % | SuperMimic: opened | return | first at 99 % |
+|---|---:|---:|---:|---:|---:|---:|
+| the contributed configuration | 87.3 % | 7.664 | - | 99.0 % | 7.843 | 1,000 |
+| learning rate halved (2e-4, 1e-4) | 88.5 % | 7.485 | - | 98.8 % | 7.779 | 2,000 |
+| learning rate doubled (8e-4, 4e-4) | 93.2 % | 7.733 | 4,000 | 78.1 % | 6.446 | - |
+| `--residual-scale 0.2` | 99.8 % | 8.149 | 5,000 | 82.2 % | 7.407 | - |
+| `--action-noise 0.2` | 85.0 % | 7.394 | - | 98.0 % | 7.686 | 3,500 |
+| `--wm-only-iters 1000` | 92.4 % | 7.652 | - | 96.7 % | 7.613 | 4,500 |
+| own term: SuperTrack `--correction-imag-noise 0.4`, SuperMimic `--gamma 0.995` | 94.1 % | 7.720 | - | 98.4 % | 7.625 | 4,000 |
+| own term: SuperTrack `--correction-reg 0`, SuperMimic `--gamma 0.98` | 88.7 % | 7.607 | - | 93.4 % | 7.614 | 2,500 |
+
+Each algorithm's most accurate candidate is the arm with the highest opening rate; arms within twice the seeds' spread
+of each other go by the return, and a change replaces the contributed configuration only when ahead of it by more than
+that spread: SuperTrack's `--residual-scale 0.2`, SuperMimic's contributed configuration. Its time candidate is the
+other arm first at 99 %: SuperTrack's doubled learning rate, SuperMimic's halved one (its contributed configuration,
+first of all at 1,000 iterations, is already its most accurate).
 
 ## The world model as the simulator
 

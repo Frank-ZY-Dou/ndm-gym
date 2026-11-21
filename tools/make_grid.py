@@ -38,9 +38,6 @@ The README's grids, from the repository's root:
   python tools/make_grid.py $M/quadrotor/grid.webp --columns 3 --tile 320 180 --quality 45 --hold 0.8 --max_mb 8 --col_labels ellipse lemniscate "race track" \\
       --row_labels "autonomous\\nSuperTrack" "autonomous\\nSuperMimic" "piloted\\nSuperTrack" "piloted\\nSuperMimic" \\
       $(for r in st sm stp smp; do for t in ellipse lemniscate race_track; do echo --clip ${r}_$t.webp; done; done)
-  python tools/make_grid.py $M/go2/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 --col_labels walk run play \\
-      --row_labels SuperTrack SuperMimic $(for r in st sm; do for t in walk run play; do echo --clip $M/go2/${t}_$r.webp; done; done)
-      (tools/render_quadruped.py's renders of seed 0's single-clip runs, 640 x 360)
       (tools/render_quadrotor.py's renders of 9 s, one lap each, at 20 fps; the piloted ones with --path_seconds 2)
   python tools/make_grid.py $M/animals/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
       --col_labels "stick insect" "fruit fly (quarter speed)" rat --row_labels SuperTrack SuperMimic \\
@@ -49,14 +46,14 @@ The README's grids, from the repository's root:
       stick insect clip 3 at --distance 2, fruit fly clip 3 at --speed 0.25, rat clip 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
-marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above.
-The third: three tools/render_quadrotor.py renders (the chase camera at 1.25 m, --lens_clear 0.4, 6 s windows of the
-flights at 20 fps, 1050 x 776; their marks left out) and the Go2 on `play` ($M/go2/play_st.webp, in real time; its mark
-left out). The fourth: the Adroit door's rollout of SuperTrack with the door and latch started open (--door-latch-offset
-0.3, seed 0, the nominal start), drawn brighter at half speed, and SuperTrack's Adroit pen, hammer and relocate renders
-($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each frame shown twice as
-long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its rollout:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 2 5 --tile 256 192 --seconds 6 --quality 52 --max_mb 12 \\
+marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above. The
+third: three tools/render_quadrotor.py renders (the chase camera at 1.25 m, --lens_clear 0.4, 6 s windows of the flights at
+20 fps, 1050 x 776; their marks left out). The fourth: the Adroit door's rollout of SuperTrack with the door and latch
+started open (--door-latch-offset 0.3, seed 0, the nominal start), drawn brighter at half speed, and SuperTrack's Adroit pen,
+hammer and relocate renders ($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each
+frame shown twice as long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its
+rollout:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 --tile 256 192 --seconds 6 --quality 52 --max_mb 12 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -71,7 +68,7 @@ long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the ham
       --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
       --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4 \\
       --block "Racing quadrotor" 3 1 522 388 --clip race_track.mp4 0 44 0 961 714 --clip race_track_piloted.mp4 0 44 0 961 714 \\
-      --clip ellipse.mp4 0 44 0 961 714 --block "Go2 tracking" 1 1 522 388 --clip $M/go2/play_st.webp 0 108 0 444 330 \\
+      --clip ellipse.mp4 0 44 0 961 714 \\
       --block "Adroit door" 1 1 414 388 --clip door.mkv 0 104 0 421 395 --block "Adroit pen" 1 1 414 388 --clip pen_half.mkv 0 120 70 400 375 \\
       --block "Adroit hammer" 1 1 414 388 --clip hammer_half.mkv 2 120 70 400 375 \\
       --block "Adroit relocate" 1 1 414 388 --clip relocate_half.mkv 0 80 70 400 375 \\

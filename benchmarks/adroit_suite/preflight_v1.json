@@ -518,12 +518,12 @@
         "reference.npz": "a4eaf54613c9494687543e5994a7323ce22afb90174ad2c9e0a9a6b582fa3d5d"
       },
       "evidence_sha256": {
-        "/data/YifanKang/adroit-suite-v1/pen/preparation.json": "3ed9a1e3e11ea7802cc528c84dba6343fd1407361659f8b872d9c3ce1ebb08d6",
-        "/data/YifanKang/adroit-suite-v1/prechecks-pen/native.json": "ad3049d0bb681071ab4c3b230eeede8095dd8be6cb5bd87d4bc99918dedf4d14",
-        "/data/YifanKang/adroit-suite-v1/prechecks-pen/recovery/result.json": "e5931e638a26eea84e4d9a36359f99fb7968e7e874b385cb3699de5b0447da35",
-        "/data/YifanKang/adroit-suite-v1/prechecks-pen/prior/result.json": "fbbed1f8c85701532f44bf8dfd575b26eb7ca1cf2bb64ee0ed587f107336dfee",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-pen/preflight.json": "aa1773a4cbcf8148ef85ba91a3a896521581b6315c7baff497984bb6d198194b",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-pen/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
+        "<data-root>/adroit-suite-v1/pen/preparation.json": "3ed9a1e3e11ea7802cc528c84dba6343fd1407361659f8b872d9c3ce1ebb08d6",
+        "<data-root>/adroit-suite-v1/prechecks-pen/native.json": "ad3049d0bb681071ab4c3b230eeede8095dd8be6cb5bd87d4bc99918dedf4d14",
+        "<data-root>/adroit-suite-v1/prechecks-pen/recovery/result.json": "e5931e638a26eea84e4d9a36359f99fb7968e7e874b385cb3699de5b0447da35",
+        "<data-root>/adroit-suite-v1/prechecks-pen/prior/result.json": "fbbed1f8c85701532f44bf8dfd575b26eb7ca1cf2bb64ee0ed587f107336dfee",
+        "<data-root>/adroit-suite-v1/guard-prechecks-pen/preflight.json": "aa1773a4cbcf8148ef85ba91a3a896521581b6315c7baff497984bb6d198194b",
+        "<data-root>/adroit-suite-v1/guard-prechecks-pen/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
       }
     },
     "hammer": {
@@ -1043,12 +1043,12 @@
         "reference.npz": "0d10ff0c5d2afab0e00cab3510e99b38de042cda1914d80ac2f3ddaa7672aed2"
       },
       "evidence_sha256": {
-        "/data/YifanKang/adroit-suite-v1/hammer/preparation.json": "cc8609d4b240bafcacbe34de2b07136d6f27b1741cd15cb9db9e913622d2732f",
-        "/data/YifanKang/adroit-suite-v1/prechecks-hammer/native.json": "f65d1c41bb9afdc50be8f36097e6ea6cc575b8c0423aca38e04d6c8b664d61ed",
-        "/data/YifanKang/adroit-suite-v1/prechecks-hammer/recovery/result.json": "5b3903ac939536b21048d09976e63c5b0e15e8d867738b3bb5f33b774ee7bb7a",
-        "/data/YifanKang/adroit-suite-v1/prechecks-hammer/prior/result.json": "903e21611d5dd3cec6553d93b2a2fde91a830e02e409cdb4bd19449bba109d6b",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-hammer/preflight.json": "a3bfcf71bff34bd74f922cad28aab4a4e5af41556e0e7a88df8396cbbb7567d6",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-hammer/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
+        "<data-root>/adroit-suite-v1/hammer/preparation.json": "cc8609d4b240bafcacbe34de2b07136d6f27b1741cd15cb9db9e913622d2732f",
+        "<data-root>/adroit-suite-v1/prechecks-hammer/native.json": "f65d1c41bb9afdc50be8f36097e6ea6cc575b8c0423aca38e04d6c8b664d61ed",
+        "<data-root>/adroit-suite-v1/prechecks-hammer/recovery/result.json": "5b3903ac939536b21048d09976e63c5b0e15e8d867738b3bb5f33b774ee7bb7a",
+        "<data-root>/adroit-suite-v1/prechecks-hammer/prior/result.json": "903e21611d5dd3cec6553d93b2a2fde91a830e02e409cdb4bd19449bba109d6b",
+        "<data-root>/adroit-suite-v1/guard-prechecks-hammer/preflight.json": "a3bfcf71bff34bd74f922cad28aab4a4e5af41556e0e7a88df8396cbbb7567d6",
+        "<data-root>/adroit-suite-v1/guard-prechecks-hammer/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
       }
     },
     "relocate": {
@@ -1568,12 +1568,12 @@
         "reference.npz": "850c6feaeb8ba84bcb0f2a8f7dc78961262be8e97d15332b4ceae69aaff97f69"
       },
       "evidence_sha256": {
-        "/data/YifanKang/adroit-suite-v1/relocate/preparation.json": "d6bbecc01b2059fcb4b770e346de25b8df29fbf41535b1e299b408a43e767923",
-        "/data/YifanKang/adroit-suite-v1/prechecks-relocate/native.json": "f177b42c1218d7605234917816ea990009e96b6eeb04ff0eda5cb63b39cc4d99",
-        "/data/YifanKang/adroit-suite-v1/prechecks-relocate/recovery/result.json": "486aa6d58bc1fc56f07ff3f4dc2d3125418d093a2a09714dabe30f4e612a2730",
-        "/data/YifanKang/adroit-suite-v1/prechecks-relocate/prior/result.json": "a3578bd1bd9bf5ef634c6453390b0b8fcf889a9f994f5daf1f573c6af8ec95a0",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-relocate/preflight.json": "a06b16258f49c2d7b07547a43bf4432cb1d829eaee939b5339cd2ccb7973f215",
-        "/data/YifanKang/adroit-suite-v1/guard-prechecks-relocate/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
+        "<data-root>/adroit-suite-v1/relocate/preparation.json": "d6bbecc01b2059fcb4b770e346de25b8df29fbf41535b1e299b408a43e767923",
+        "<data-root>/adroit-suite-v1/prechecks-relocate/native.json": "f177b42c1218d7605234917816ea990009e96b6eeb04ff0eda5cb63b39cc4d99",
+        "<data-root>/adroit-suite-v1/prechecks-relocate/recovery/result.json": "486aa6d58bc1fc56f07ff3f4dc2d3125418d093a2a09714dabe30f4e612a2730",
+        "<data-root>/adroit-suite-v1/prechecks-relocate/prior/result.json": "a3578bd1bd9bf5ef634c6453390b0b8fcf889a9f994f5daf1f573c6af8ec95a0",
+        "<data-root>/adroit-suite-v1/guard-prechecks-relocate/preflight.json": "a06b16258f49c2d7b07547a43bf4432cb1d829eaee939b5339cd2ccb7973f215",
+        "<data-root>/adroit-suite-v1/guard-prechecks-relocate/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628"
       }
     }
   },

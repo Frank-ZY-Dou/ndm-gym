@@ -72,3 +72,28 @@ def test_the_muscle_rigidformer_configurations_are_their_3h_runs():
         got, want = vars(parse("train_muscles", ["--config", name])), vars(parse("train_muscles", run.split()))
         assert got.pop("config") == name and want.pop("config") is None
         assert got == want, name
+
+
+# the options of the runs' code that this trainer does not have, as the runs recorded them: each at its default, off
+NOT_HERE = {"rf_bptt_keep_readout": False, "rf_fused_inputs": False, "rf_fused_readout": False, "rwm_init_std": 1.0, "rwm_mix_real": 0,
+            "rwm_persist_imag": False, "rwm_imag_max_len": 256, "rwm_ppo": None, "rwm_real_only": False, "st_surface_w": 0.0,
+            "st_surface_only": False, "dcm_reward": 0.0, "imag_ref_replay": 0.0, "reward_std_adapt": 0.0, "st_calib_iter": 0, "st_dcm_w": 0.0,
+            "st_task_weights": False}
+
+
+@pytest.mark.parametrize("name", ["lafan1-supertrack-accurate", "lafan1-supermimic-accurate"])
+def test_the_lafan1_accurate_configurations_are_their_3h_runs(name):
+    """lafan1-supertrack-accurate and lafan1-supermimic-accurate parse to the arguments their 3 h runs recorded (seed 7's,
+    tests/data/configs/<name>.args.json, kept without the run's configuration name and log directory): every recorded
+    argument but the seed and the motion directory; the options added after the runs are at their defaults here, and the
+    recorded options this trainer does not have (NOT_HERE) were off."""
+    import json
+    import os
+
+    rec = json.load(open(os.path.join(os.path.dirname(__file__), "data", "configs", f"{name}.args.json")))
+    got = vars(parse("train", ["--config", name]))
+    assert got["config"] == name
+    absent = {k: rec.pop(k) for k in set(rec) - set(got)}
+    assert absent.items() <= NOT_HERE.items(), absent
+    skip = {"seed", "motion_dir"}
+    assert {k: v for k, v in got.items() if k in rec and k not in skip} == {k: v for k, v in rec.items() if k not in skip}

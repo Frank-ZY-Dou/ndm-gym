@@ -19,7 +19,7 @@ repository's NOTICE).
 | Go2 jumping | 0.69 / 0.68 → 0.21 / 0.21 ms (3.2x / 3.3x) | 65 → 31 / 30 s (2.1x / 2.2x) | 20 of 20 / 20 of 20 (MuJoCo Warp 10 of 10) |
 
 One A100 40GB SXM4, the planner's own worlds (2,047 for the G1s, 1,228 for Go2), the median over twenty plans (the planner's
-seeds 0-9, twice); each plan read by the example's own check;
+seeds 0-9, twice; SuperTrack's model on G1 box carrying: ten, seeds 0-9 once); each plan read by the example's own check;
 SuperTrack's acceleration model and SuperMimic's increment model, one fit per task and model (fit seed 0). The method and every command are in the
 [results](https://github.com/Frank-ZY-Dou/ndm-gym/blob/main/benchmarks/robokit_ndm/results.md).
 
