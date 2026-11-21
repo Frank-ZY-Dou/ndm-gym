@@ -6,13 +6,12 @@ at f51b8e5) and their time to the target (`python benchmarks/mimic_mjx_animal_tr
 Per run: `train_log.csv`, `eval_train/metrics.json` (clips 0-9), `eval_heldout/metrics.json` (clips 10-19) and, for the
 stick insect and the fruit fly, `time_to.json`. No checkpoints.
 
-- **GPU:** NVIDIA A100-SXM4-80GB; each run alone on its GPU (its own job). The two algorithms' queues of the animal task and
-  the manipulation task's queue ran at the same time on different nodes; within a queue the runs ran one after another.
+- **GPU:** NVIDIA A100-SXM4-80GB; each run alone on its GPU.
 - **Software:** Python 3.12.9, PyTorch 2.11.0 (CUDA 12.6 build), warp-lang 1.17.0 (CUDA 12 build), MuJoCo and MuJoCo-Warp 3.15.0.
-- **Seed 0:** each configuration's seed 0 ran first, on a cold compilation cache, so its clock held a one-time compilation
-  of several minutes. The seed-0 runs here were run again on the warm cache, as seeds 1 and 2 were; the first seed-0 runs
-  are in `cold_cache_seed0/`.
-- **Clock:** `train_log.csv`'s `wall_h`, from the first training iteration; the compilation is in it, evaluations are not.
+- **Compilation:** every run here had the kernels' compilation in the cache. `cold_cache_seed0/` holds each configuration's
+  seed-0 run on an empty cache, 8 to 26 min longer.
+- **Clock:** `train_log.csv`'s `wall_h`, from the first training iteration; a compilation during the run is in it,
+  evaluations are not.
 - Mean ± sample SD over seeds 0, 1, 2.
 
 ## Results

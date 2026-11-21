@@ -175,9 +175,9 @@ options beside them); both methods are on offer for every task.
 | **Adroit Pen, Hammer, Relocate** (`train_adroit`; contributed runs on an L40S, not re-verified on an A100) | most accurate, Pen | `--method supertrack`: native final success 96.7 %, normalized tracking RMSE 0.0519 | `--method supermimic`: 79.4 %, 0.2380 |
 | | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
 | | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
-| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.40 mm; the target in 2.7 min (each run alone on an A100 80GB SXM4) | `stick-supermimic`: 0.39 mm; 3.8 min |
-| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.068 mm; the target in 6.5 min, 2 of 3 runs (each run alone on an A100 80GB SXM4) | `fly-supermimic`: 0.047 mm; 4.4 min |
-| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 71 % of the episodes ended, bodies 34.7 mm | `rat-supermimic`: 19 %, 21.3 mm |
+| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.40 mm; the target in 2.7 min (seeds 0-2, each run alone on an A100 80GB SXM4) | `stick-supermimic`: 0.39 mm; 3.8 min |
+| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.068 mm; the target in 6.5 min, 2 of 3 runs (seeds 0-2, each run alone on an A100 80GB SXM4) | `fly-supermimic`: 0.047 mm; 4.4 min |
+| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 71 % of the episodes ended, bodies 34.7 mm (seeds 0-2, A100 80GB SXM4) | `rat-supermimic`: 19 %, 21.3 mm |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
@@ -1280,9 +1280,9 @@ a stick insect with 41 torque actuators. One policy per body on ten clips; ten m
 | goal | configuration (`train_animal`) | result, SuperTrack / SuperMimic |
 |---|---|---|
 | most accurate, stick insect | `--config stick-supertrack` / `--config stick-supermimic` | bodies 0.40 / 0.39 mm, no episode ended; held-out clips 0.75 / 0.87 mm, 3.3 / 2.0 % ended (seeds 0-2, A100 80GB SXM4) |
-| most accurate, fruit fly | `--config fly-supertrack` / `--config fly-supermimic` | bodies 0.068 / 0.047 mm, 1.3 / 0 % of the episodes ended; held-out clips 0.096 / 0.065 mm, 6.7 / 0 % ended |
-| time to the target, not engineered | the same | stick insect 2.7 / 3.8 min, every run; fruit fly 6.5 min (2 of 3 runs) / 4.4 min (every run) (each run alone on an A100 80GB SXM4) |
-| rat, a fixed budget of 10,000 iterations | `--config rat-supertrack` / `--config rat-supermimic` | not solved: 71 / 19 % of the episodes ended, bodies 34.7 / 21.3 mm |
+| most accurate, fruit fly | `--config fly-supertrack` / `--config fly-supermimic` | bodies 0.068 / 0.047 mm, 1.3 / 0 % of the episodes ended; held-out clips 0.096 / 0.065 mm, 6.7 / 0 % ended (seeds 0-2, A100 80GB SXM4) |
+| time to the target, not engineered | the same | stick insect 2.7 / 3.8 min, every run; fruit fly 6.5 min (2 of 3 runs) / 4.4 min (every run) (seeds 0-2, each run alone on an A100 80GB SXM4) |
+| rat, a fixed budget of 10,000 iterations | `--config rat-supertrack` / `--config rat-supermimic` | not solved: 71 / 19 % of the episodes ended, bodies 34.7 / 21.3 mm (seeds 0-2, A100 80GB SXM4) |
 
 **In short:** both algorithms track the stick insect and the fruit fly to 2-3 % of the body's size with 0-1.3 % of the
 episodes ended, and neither solves the rat within 10,000 iterations.
@@ -1312,7 +1312,7 @@ episodes ended, and neither solves the rat within 10,000 iterations.
 | joints ↓, SuperTrack / SuperMimic | 8.2 / 4.2° | 4.6 / 3.7° | 12.0 / 9.8° |
 | held-out clips: ended ↓, SuperTrack / SuperMimic | 3.3 / 2.0 % | 6.7 / 0 % | 84 / 42 % |
 | held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.75 / 0.87 mm | 0.096 / 0.065 mm | 52.4 / 39.6 mm |
-| training (min), SuperTrack / SuperMimic | 6.4 / 7.6 | 11.1 / 12.9 | 22.1 / 24.9 |
+| training (min), SuperTrack / SuperMimic, each run alone on an A100 80GB SXM4 | 6.4 / 7.6 | 11.1 / 12.9 | 22.1 / 24.9 |
 | to the target ↓, SuperTrack / SuperMimic | 2.7 / 3.8 min | 6.5 (2 of 3 runs) / 4.4 min | not reached |
 
 ### BlinkMimic's options
