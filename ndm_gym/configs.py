@@ -169,7 +169,7 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
     },
     "train_animal": {
-        f"{animal}-{algo}": (f"{opts} --animal {animal} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 1000 --ckpt_keep",
+        f"{animal}-{algo}": (f"{opts} --animal {animal} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 250 --ckpt_keep",
                              f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, A100 80GB SXM4)")
         for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
         for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))

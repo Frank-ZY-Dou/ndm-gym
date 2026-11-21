@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# A's formal runs: one algorithm's queue over the three animals and seeds 0-2, fixed iteration budgets (stick 4000, fly 6000,
-# rat 10000), the learning rate decayed over the budget, a checkpoint kept every 1000 iterations; then each run's last
-# checkpoint evaluated on its training clips (0-9, with 4 perturbed repeats) and on held-out clips (10-19).
+# The benchmark's runs: one algorithm's queue over the three animals and seeds 0-2, fixed iteration budgets (stick 4000,
+# fly 6000, rat 10000), the learning rate decayed over the budget, a checkpoint kept every 250 iterations; then each run's
+# last checkpoint evaluated on its training clips (0-9, with 4 perturbed repeats) and on held-out clips (10-19).
 #   benchmarks/mimic_mjx_animal_tracking/run_formal.sh supertrack|supermimic   (OUT=..., DATA=... to override)
-set -uo pipefail
+set -euo pipefail  # a run that fails stops the queue
 ALGO=$1
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${OUT:-$REPO/logs/mimic_mjx_formal}
@@ -26,7 +26,7 @@ for animal in stick fly rat; do
     rm -rf "$OUT/$name"
     it=${ITERS[$animal]}
     cd "$REPO"; $RUN -m ndm_gym.train_animal --animal $animal --clip_ids 0-9 --data_dir "$DATA" $OPTS \
-      --iterations $it --lr_decay_iters $it --log_every 250 --ckpt_every 1000 --ckpt_keep --seed $seed --log_dir "$OUT/$name" > "$OUT/$name.log" 2>&1
+      --iterations $it --lr_decay_iters $it --log_every 250 --ckpt_every 250 --ckpt_keep --seed $seed --log_dir "$OUT/$name" > "$OUT/$name.log" 2>&1
     $RUN -m ndm_gym.evaluate_animal --ckpt "$OUT/$name/last.pt" --repeats 4 --out "$OUT/$name/eval_train" > "$OUT/${name}_eval_train.log" 2>&1
     $RUN -m ndm_gym.evaluate_animal --ckpt "$OUT/$name/last.pt" --clip_ids 10-19 --repeats 4 --out "$OUT/$name/eval_heldout" \
       > "$OUT/${name}_eval_heldout.log" 2>&1

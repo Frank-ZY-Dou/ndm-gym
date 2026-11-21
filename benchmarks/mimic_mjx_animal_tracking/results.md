@@ -12,7 +12,7 @@ budget.
   (`--lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95` and the same). Both with the same changes:
   `--pi_batch 2048 --fused_fk` (from the rat's SuperTrack iteration time, Development notes), `--wm_lr 2e-3` (LAFAN1's
   configurations'), the iterations below with the learning rate decayed over them (`--lr_decay_iters`), a checkpoint every
-  1,000 (`--ckpt_every 1000 --ckpt_keep`); `train_animal`'s defaults otherwise, 2,048 worlds. No other tuning on the bodies
+  250 (`--ckpt_every 250 --ckpt_keep`); `train_animal`'s defaults otherwise, 2,048 worlds. No other tuning on the bodies
   for either algorithm. `benchmarks/mimic_mjx_animal_tracking/run_formal.sh` runs them (`--config <body>-<algorithm>`).
 - **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat);
   seeds 0, 1, 2. The stick insect's bodies' error changes by at most 0.01 mm over the last two checkpoints and the fly's by
@@ -56,8 +56,8 @@ held-out clips); the bodies' error here is a mean over the body frames' origins,
 
 The target: at most 2 % of the episodes ended, with the bodies' error within 3 % of the body's size (stick insect 17.58 mm,
 fly 2.623 mm, rat 156.6 mm: 0.53, 0.079 and 4.7 mm), set after the runs. `time_to.py` evaluates every kept checkpoint
-(every 1,000 iterations) as the last one is, and reports the wall time of the first checkpoint from which every later one
-meets the target. The times are the runs' own wall clock, each run alone on its GPU; the checkpoints are 1,000 iterations
+(every 250 iterations) as the last one is, and reports the wall time of the first checkpoint from which every later one
+meets the target. The times are the runs' own wall clock, each run alone on its GPU; the checkpoints are 250 iterations
 apart, so a time is its checkpoint's and an upper bound.
 
 ```bash
