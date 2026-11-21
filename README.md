@@ -50,7 +50,7 @@ MuJoCo model.
 | Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
 | RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
 | mbrl-lib planning | its CEM controller planning on SuperTrack's acceleration model, each plan executed in MuJoCo: the cart-pole (planner seed 10) and the pusher (seed 17), recorded again on a CPU in fp32 with the A100 runs' fits; half speed | returns 175.96 and -65.89 (175.77 and -62.53 in the A100 runs) |
-| Racing quadrotor | `quadrotor-supertrack-accurate --lr 4e-4 --horizon 64`, seed 0, 6,000 iterations, trained on an A100 40GB SXM4; from the unperturbed start, the chase camera at 1.25 m, in real time | position 2.23, 3.16 and 3.44 mm (that configuration's mean of seeds 0-2 on A100 40GB SXM4 GPUs, over 256 perturbed starts) |
+| Racing quadrotor | `quadrotor-supertrack-accurate`, seed 0, 6,000 iterations, trained on an A100 40GB SXM4; from the unperturbed start, the chase camera at 1.25 m, in real time | position 1.98, 2.75 and 3.06 mm (the configuration's mean of seeds 0-2 on A100 40GB SXM4 GPUs, over 256 perturbed starts) |
 | Adroit door | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` (the door and latch started up to 0.3 rad open), training seed 0, 20,000 iterations on an A100 40GB SXM4: its evaluation's nominal start (door and latch closed, the hand unperturbed), in a brighter scene; half speed, its last frame held | that start: return 9.022, the door opened; the configuration: the door open on 99.3 % of 256 starts, return 8.165 ± 0.054 (seeds 0-2, A100 40GB) |
 | Adroit pen, hammer, relocate | SuperTrack's runs at 20,000 iterations in 2,048 worlds on an L40S: pen seed 0, hammer seed 1, relocate seed 0, each the lowest tracking error of its task's six runs; the nominal episode at half speed (the hammer from 1 s), last frames held | normalized tracking RMSE 0.049, 0.022 and 0.048; 251, 256 and 256 of 256 native final successes |
 | Wuji piano | `supertrack --horizon 3 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.921, 19 of 19 notes; the configuration: Eden F1 0.903 ± 0.015 on 256 starts (seeds 0-2, A100 40GB) |
@@ -1034,17 +1034,16 @@ target on all three flights; SuperMimic's have the lower rotation error on all s
   with the average and from 450-500 without (0.93 against 0.48 min, nine runs each); SuperMimic with it first meets it 200
   to 250 iterations later (seed 0). At the end of 6,000 iterations it costs nothing (the two policies within 0.01 mm on
   average), and the most accurate configurations keep it.
-- **Why Muon:** with Adam, SuperMimic meets the target and loses it again in 5 of 9 runs (first at 0.84 min, held from
-  1.55); with Muon for both networks it keeps it in all 9, from 0.86 min. SuperTrack's time changes little with Adam in
-  Muon's place (0.87 against 0.91 min, seed 0). Muon also lowers both algorithms' error at the end of 6,000 iterations
-  (seed 0).
+- **Muon:** for SuperMimic it keeps the target once met: 0 of 9 runs lose it, against 5 of 9 with Adam (held from 0.86
+  against 1.55 min). SuperTrack's time changes little with Adam in Muon's place (0.87 against 0.91 min, seed 0). Muon also
+  lowers both algorithms' error at the end of 6,000 iterations (seed 0).
 - **Why smaller batches when time counts:** an iteration is mostly the policy update through the imagined window, whose
   cost grows with the policy's batch. With batches of 1,024 SuperTrack runs 19.4 instead of 10.4 iterations/s, and
   SuperMimic with a policy batch of 2,048 10.9 instead of 7.8, each needing about as many iterations to the target
   ([each option](benchmarks/quadrotor_racing_tracking/results.md#what-each-option-does)).
-- **Selection:** both algorithms' configurations were chosen by the same rule among the same changes (for accuracy also
-  two options of each algorithm's own), first with seed 0, then with seeds 0-2 on the three autonomous flights, whose runs
-  are the ones reported; the piloted flights and all 18 flights run them as they are.
+- **Selection:** both algorithms were tried with the same changes (for accuracy also two options of each algorithm's own)
+  and chosen by the same rule: first on seed 0, then on seeds 0-2 of the three autonomous flights. The reported runs are
+  those seeds' runs. The piloted flights and all 18 flights run the chosen configurations as they are.
 - **Runs:** 2,048 worlds on one A100 40GB SXM4 per run; the last checkpoint plays 256 rollouts of the whole flight from
   perturbed starts, a rollout succeeding if the position stays within 1 m of the reference. Every rollout of every run
   succeeds; the reference's feedforward command alone, open loop, leaves the reference by 1 m after 1.3 to 1.6 s
@@ -1052,8 +1051,9 @@ target on all three flights; SuperMimic's have the lower rotation error on all s
   [task](docs/tasks/quadrotor.md)).
 - **All flights, and the pilots':** one policy on all 18 autonomous flights tracks them to 2.31 ± 0.00 mm (SuperTrack)
   and 4.94 ± 0.12 mm (SuperMimic). The pilots' flights, 8 to 14 laps with a line of their own on every one (the race
-  track a professional's at up to 19.3 m/s and 9 g), are tracked with the same configurations
-  ([the tables](benchmarks/quadrotor_racing_tracking/results.md#the-most-accurate-configurations)).
+  track a professional's at up to 19.3 m/s and 9 g), are tracked with the same configurations; the policy of the 18
+  autonomous flights flies them without a termination, zero-shot, at 4.7 / 4.1 / 18.1 mm (SuperTrack) and 11.0 / 10.9 /
+  35.7 mm (SuperMimic) ([the tables](benchmarks/quadrotor_racing_tracking/results.md#the-most-accurate-configurations)).
 - **The world model as the simulator:** at 4,096 worlds on one A100 40GB SXM4, the fused step in fp32 with the network as
   one kernel runs SuperTrack's acceleration model at 74.3 M world-steps/s, 22.8x MuJoCo Warp, and SuperMimic's increment model
   at 73.7 M, 22.6x; 34.2x / 34.1x at 1,024 worlds and 11.5x at 65,536. The kernel keeps each layer's activations on the chip;
@@ -1075,6 +1075,7 @@ target on all three flights; SuperMimic's have the lower rotation error on all s
 | position ↓, SuperTrack | 1.11 ± 0.01 mm | 0.99 ± 0.00 mm | 2.75 ± 0.03 mm |
 | position ↓, SuperMimic | 4.48 ± 0.04 mm | 4.00 ± 0.05 mm | 6.63 ± 0.06 mm |
 | rotation ↓, SuperTrack / SuperMimic | 2.77 / 2.62 deg | 2.40 / 2.28 deg | 3.33 / 3.00 deg |
+| position ↓, the autonomous flights' policy, zero-shot, SuperTrack / SuperMimic | 4.74 / 11.05 mm | 4.08 / 10.85 mm | 18.09 / 35.73 mm |
 
 Position and rotation: the most accurate configurations; time: the fast ones. Reference's command, open loop: the same
 rollouts with the reference's feedforward thrust and body rates and no policy.

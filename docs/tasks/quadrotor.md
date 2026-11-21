@@ -126,8 +126,8 @@ What the options change, both algorithms tried with the same ones (nine runs: se
   200 updates, so the target is met that much later (SuperTrack 0.93 min with it, 0.48 without; nine runs each). At the
   end of 6,000 iterations it changes the error by 0.01 mm or less on average, and the most accurate configurations keep
   it.
-- **Muon:** with Adam, SuperMimic meets the target and loses it again in 5 of 9 runs (held from 1.55 min); with Muon for
-  both networks it keeps it in all 9 (0.86 min). SuperTrack's time changes little with Adam in Muon's place (seed 0).
+- **Muon** keeps the target once met: 0 of 9 SuperMimic runs lose it, against 5 of 9 with Adam (held from 0.86 against
+  1.55 min). SuperTrack's time changes little with Adam in Muon's place (seed 0).
 - **Smaller batches** when time counts: an iteration is mostly the policy update, whose cost grows with its batch. With
   batches of 1,024 SuperTrack runs 19.4 instead of 10.4 iterations/s, SuperMimic with a policy batch of 2,048 10.9 instead
   of 7.8, each needing about as many iterations to the target.

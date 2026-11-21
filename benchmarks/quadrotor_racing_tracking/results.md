@@ -87,6 +87,18 @@ within 0.31 mm. SuperMimic has the lower rotation error on all seven tasks (1.31
 the reference's attitude and its acceleration do not agree for the model, a policy trades the one error for the other
 ([the drone](../../docs/tasks/quadrotor.md#the-drone)).
 
+**The 18 flights' policy on the pilots' flights, zero-shot.** The policy trained on all 18 autonomous flights (`all`), flown on
+the three piloted flights it never saw (mean ± SD over its training seeds 0-2, each seed in brackets; 256 perturbed starts):
+
+| | ellipse, piloted | lemniscate, piloted | race track, piloted |
+|---|---|---|---|
+| success, SuperTrack / SuperMimic | 100 / 100 % | 100 / 100 % | 100 / 100 % |
+| position, SuperTrack | 4.74 ± 1.35 mm (3.58 / 6.22 / 4.43) | 4.08 ± 1.41 mm (3.12 / 5.70 / 3.44) | 18.09 ± 2.32 mm (15.42 / 19.41 / 19.45) |
+| position, SuperMimic | 11.05 ± 0.97 mm (11.90 / 9.99 / 11.26) | 10.85 ± 0.53 mm (10.49 / 10.62 / 11.46) | 35.73 ± 1.29 mm (34.52 / 35.59 / 37.09) |
+| position, largest after 1 s, SuperTrack / SuperMimic | 23 / 36 mm | 20 / 52 mm | 88 / 125 mm |
+
+No rollout terminates. The professional pilot's race track, faster than the laps the policy trained on, costs both the most.
+
 ### The time to the target
 
 The training time from which a run keeps a success of at least 0.99 with a mean position error below 20 mm: the trainer's
@@ -122,10 +134,10 @@ seeds 0-2 on each flight.
   instead of 600-650 (seed 0). At the end of 6,000 iterations it costs nothing: on the last checkpoints of the most
   accurate configurations (nine runs each) the trained policy's error differs from the average's by +0.003 mm (SuperTrack)
   and -0.008 mm (SuperMimic) on average, per run by at most 0.02 and 0.10 mm, either way.
-- **Muon keeps SuperMimic at the target.** With Adam, SuperMimic first meets the target at iteration 550-650 (0.84 ± 0.11
-  min) and loses it again in 5 of 9 runs, holding it from 1.55 ± 0.75 min. With Muon for both networks (`--pi_opt muon
-  --wm_opt muon`) it meets it no sooner (0.86 ± 0.08 min) and keeps it in all 9 runs. With the policy batch of 2,048, Adam
-  loses it again in 7 of 9 runs (held from 1.29 ± 0.45 min) and Muon in none (0.69 ± 0.03 min). SuperTrack's time changes
+- **Muon keeps the target once met.** With Muon for both networks (`--pi_opt muon --wm_opt muon`) 0 of 9 SuperMimic runs
+  lose the target after meeting it, against 5 of 9 with Adam: it holds it from 0.86 ± 0.08 min against 1.55 ± 0.75 min,
+  though it first meets it no sooner (0.86 against 0.84 ± 0.11 min, iterations 550-650). With the policy batch of 2,048, 0
+  of 9 against 7 of 9 (held from 0.69 ± 0.03 against 1.29 ± 0.45 min). SuperTrack's time changes
   little with Adam in Muon's place (0.87 against 0.91 min, seed 0). At the end of 6,000 iterations Muon lowers both errors:
   SuperMimic's from 6.16 to 5.59 mm with Muon alone, SuperTrack's is 2.84 mm with Muon and 2.97 mm with Adam in its place
   (seed 0, the mean of the ellipse and the race track).
