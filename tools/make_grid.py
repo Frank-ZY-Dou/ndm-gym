@@ -43,6 +43,10 @@ The README's grids, from the repository's root:
       --col_labels Lift Square "Transport (4x speed)" --row_labels SuperTrack SuperMimic \\
       $(for r in st sm; do for t in lift square transport; do echo --clip $M/robomimic/${t}_$r.webp; done; done)
       (tools/render_robomimic.py's renders of each case's best seed's unperturbed rollout, 640 x 360 at 20 fps, Transport at --speed 4 and --quality 55)
+  python tools/make_grid.py $M/aloha/grid.webp --columns 2 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
+      --col_labels "Transfer Cube" Insertion --row_labels SuperTrack SuperMimic \\
+      $(for r in st sm; do for t in transfer_cube insertion; do echo --clip $M/aloha/${t}_$r.webp; done; done)
+      (tools/render_robomimic.py's renders of each case's best seed's unperturbed rollout, 640 x 360 at 20 fps)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above. The

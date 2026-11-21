@@ -183,10 +183,14 @@ CONFIGS = {
                                  "SXM4)"),
         "aloha-supertrack": (f"{ROBOMIMIC_ST} {ALOHA_RUN}",
                              "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
-                             "default), 6,000 iterations (benchmarks/aloha_bimanual_tracking)"),
+                             "default), 6,000 iterations, the cap's last checkpoint: success 100 / 30.9 / 100 % with the cube within 2.22 / 2.07 / "
+                             "1.37 mm on Transfer Cube, 0 / 0 / 100 % with the objects within 1.92 / 1.60 / 1.84 mm on Insertion (seeds 0 / 1 / 2, "
+                             "256 perturbed rollouts, A100 80GB SXM4; not every run settled)"),
         "aloha-supermimic": (f"{ROBOMIMIC_SM} {ALOHA_RUN}",
                              "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
-                             "default), 6,000 iterations (benchmarks/aloha_bimanual_tracking)"),
+                             "default), 6,000 iterations, the cap's last checkpoint: success 69.1 / 0.4 / 69.5 % with the cube within 13.4 / 24.0 / "
+                             "10.1 mm on Transfer Cube, 0.4 / 0 / 0 % on Insertion (seeds 0 / 1 / 2, 256 perturbed rollouts, A100 80GB SXM4; no run "
+                             "settled)"),
     },
 }
 

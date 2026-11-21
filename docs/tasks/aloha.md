@@ -95,4 +95,24 @@ Both algorithms fit MjcfWorldModel (worldmodels.mjcf, the scene in generalized c
 free joints) over one control step on windows of simulator transitions, and train the policy through imagined rollouts of
 the frozen model (`ndm_gym/algos/robomimic_algos.py`), as in the manipulation task.
 
-`--config list` prints the configurations with what each measured.
+`--config list` prints the configurations with what each measured. `aloha-supertrack` and `aloha-supermimic` take
+`robomimic-supertrack`'s and `robomimic-supermimic`'s algorithm options with episodes of up to 500 control steps (10 s; the
+choice of the benchmark's tuning round on demonstration 1, for both), `--solver_iterations 20` and the benchmark's budget
+(6,000 iterations with the learning rate's cosine over them).
+
+Results: [benchmarks/aloha_bimanual_tracking](../../benchmarks/aloha_bimanual_tracking/results.md). In short (demonstration
+0, seeds 0 / 1 / 2, the last checkpoint of 6,000 iterations, each run alone on an A100 80GB SXM4; in every case some run
+had not settled, so these are the cap's numbers and no comparison is drawn from them): SuperTrack a success of
+100 / 30.9 / 100 % on Transfer Cube with the cube within 2.22 / 2.07 / 1.37 mm, and 0 / 0 / 100 % on Insertion with the peg
+and the socket within 1.92 / 1.60 / 1.84 mm and no rollout ended early; SuperMimic 69.1 / 0.4 / 69.5 % on Transfer Cube
+with the cube within 13.4 / 24.0 / 10.1 mm, and 0.4 / 0 / 0 % on Insertion with 69 to 100 % of the rollouts ended early.
+On Insertion a checkpoint's rollouts mostly all touch the pin or none does (SuperTrack: 8 / 2 / 12 of a run's 30
+checkpoints meet the target). Success is ACT's reward of 4 from the simulator's contacts on a rollout that never
+terminated.
+
+![SuperTrack and SuperMimic on Transfer Cube and Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/grid.webp)
+
+Per case the seed with the highest success, then the lowest object error, from the unperturbed start, the demonstration's
+arms and objects in translucent blue (in SuperMimic's Insertion rollout the peg stays on the table). The animations:
+[Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_st.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_st.webp) (SuperTrack);
+[Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_sm.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_sm.webp) (SuperMimic).

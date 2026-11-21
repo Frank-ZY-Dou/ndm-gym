@@ -1,0 +1,21 @@
+{
+  "iteration": 6000,
+  "minutes": 23.12778,
+  "sim_steps": 12288000.0,
+  "it_per_s": 5.02482,
+  "config": "robomimic-supermimic",
+  "options": {
+    "task": "aloha_insertion",
+    "demo": [
+      1
+    ],
+    "seed": 0,
+    "algo": "supermimic",
+    "iterations": 6000,
+    "lr_decay_iters": 6000,
+    "horizon": 40,
+    "episode": 500,
+    "ckpt_every": 500,
+    "solver_iterations": 20
+  }
+}
