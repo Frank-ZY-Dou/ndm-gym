@@ -12,7 +12,7 @@ Transport) track robomimic's first proficient-human demonstration of Lift, Squar
   - **SuperMimic** (`--config robomimic-supermimic`): `hand-supermimic-accurate`'s options, SuperMimic's defaults with the
     hand task's systems options;
   - **both:** `--task <task> --demo 0 --solver_iterations 20`, 2,048 worlds, 1,500 iterations with the learning rate on
-    a schedule of 4,000 (`--lr_decay_iters 4000`), a checkpoint kept every 500; seeds 0, 1, 2. Neither was tuned on these
+    a schedule of 4,000 (`--lr_decay_iters 4000`), a checkpoint kept every 100; seeds 0, 1, 2. Neither was tuned on these
     tasks.
 - **Budget:** fixed and the same for both algorithms, 1,500 iterations; the numbers are the last checkpoint's.
 - **Evaluation:** `evaluate_robomimic` on the last checkpoint: 256 rollouts of the whole demonstration from perturbed starts
@@ -62,8 +62,8 @@ budget's numbers, not final ones.
 ## Time to the target
 
 The target is the hand task's: a success of at least 0.99 with the tracked objects within 10 mm. `time_to.py` evaluates
-every kept checkpoint (every 500 iterations) as the last one is, without the reference's targets, and reports the wall time
-of the first checkpoint from which every later one meets the target. The checkpoints are 500 iterations apart, so a time
+every kept checkpoint (every 100 iterations) as the last one is, without the reference's targets, and reports the wall time
+of the first checkpoint from which every later one meets the target. The checkpoints are 100 iterations apart, so a time
 is its checkpoint's and an upper bound (every Lift run meets the target at its first checkpoint).
 
 ```bash

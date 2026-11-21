@@ -55,8 +55,8 @@ GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadrupe
 ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights {HAND_SYSTEMS}"
 ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
 # the benchmark's runs (benchmarks/robomimic_manipulation_tracking): 1,500 iterations on the schedule of 4,000, the solver at 20
-# iterations, a checkpoint kept every 500
-ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 500 --ckpt_keep"
+# iterations, a checkpoint kept every 100
+ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 100 --ckpt_keep"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
