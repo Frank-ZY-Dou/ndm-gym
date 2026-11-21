@@ -152,8 +152,8 @@ drone's speed, its distance from the reference and a map of the path from above.
 same start under the reference's command, open loop. No mesh of the dataset's drone is published: the renderer builds one
 after it from the paper's specification, a carbon H-frame with the battery, the camera and the antenna, and 5.1-inch
 tri-blade propellers of its own making (the shape of the T-Motor T5147 it flies, in size) that turn as it flies. The drones
-are drawn 1.5 times their size; a dark disc on the floor stands for the drone's shadow. The README's grid (`tools/make_grid.py`, the command in its docstring) joins twelve
-such renders of 9 s, one lap of each flight from a second after it reaches 3 m/s (the piloted flights' with
+are drawn 1.5 times their size; a dark disc on the floor stands for the drone's shadow. The README's grid (`tools/make_grid.py`, the command in its docstring) joins the 30-fps
+previews of twelve such renders of 9 s, one lap of each flight from a second after it reaches 3 m/s (the piloted flights' with
 `--path_seconds 2`: a pilot's dozen laps drawn whole are a tangle); the animations below are the `--preview` of the same 9 s of
 each task's autonomous flight (960 pixels wide, 30 fps).
 
@@ -162,9 +162,8 @@ each task's autonomous flight (960 pixels wide, 30 fps).
 | ![SuperTrack on the ellipse](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/ellipse.webp) | ![SuperTrack on the lemniscate](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/lemniscate.webp) |
 | ![SuperTrack on the race track](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/race_track.webp) | |
 
-SuperTrack with `quadrotor-supertrack-accurate --lr 4e-4 --horizon 64`
-([the contributed study's](../../benchmarks/quadrotor_racing_tracking/results.md#the-contributed-study-on-an-h200) selected
-configuration), the last checkpoint of seed 0 from the unperturbed start, in real time, on the ellipse
+SuperTrack's most accurate configuration (`quadrotor-supertrack-accurate`), the last checkpoint of seed 0 from the unperturbed
+start, in real time, on the ellipse
 (up to 21.7 m/s), the lemniscate and the race track; the flown reference in blue, the gates, the drone's trail in orange.
 
 Tasks and results: [`benchmarks/quadrotor_racing_tracking`](../../benchmarks/quadrotor_racing_tracking/results.md).

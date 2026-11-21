@@ -1019,7 +1019,7 @@ for 500 iterations, with warm compile caches.
 target on all three flights; SuperMimic's have the lower rotation error on all seven (1.31 to 3.17 against 1.37 to 3.33 deg).
 
 <p align="center"><img src="docs/media/quadrotor/grid.webp" alt="SuperTrack and SuperMimic on the ellipse, the lemniscate and the race track, flown by the dataset's controller and by its human pilots" width="100%"/></p>
-<p align="center"><i>The three flights, autonomous and piloted (on the race track a professional pilot's, at 9 g), with SuperTrack and SuperMimic (64 imagined steps, seed 0), real time.<br>The flown reference in blue, the gates where the motion capture placed them, the drone's trail in orange (<a href="docs/tasks/quadrotor.md">single animations</a>).</i></p>
+<p align="center"><i>The three flights, autonomous and piloted (on the race track a professional pilot's, at 9 g), with SuperTrack and SuperMimic; seed 0, real time.<br>The flown reference in blue, the gates where the motion capture placed them, the drone's trail in orange (<a href="docs/tasks/quadrotor.md">single animations</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking flights of Race Against the Machine (TII Racing; CC BY 4.0), with a model of its drone written from the paper's specification (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 - **Why the imagined window matters:** a body rate moves the position only through the attitude and then the
