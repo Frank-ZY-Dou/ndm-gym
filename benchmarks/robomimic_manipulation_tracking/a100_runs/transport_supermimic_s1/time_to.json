@@ -1,0 +1,111 @@
+{
+  "minutes_to_target": null,
+  "iteration_to_target": null,
+  "checkpoints": [
+    {
+      "iteration": 100,
+      "minutes": 0.6946853955586751,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 200,
+      "minutes": 1.1640771905581155,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 300,
+      "minutes": 1.6336923281351725,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 400,
+      "minutes": 2.544690187772115,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 3.1935310920079547,
+      "success_rate": 0.01171875,
+      "object_mm": 17.788171768188477,
+      "target": false
+    },
+    {
+      "iteration": 600,
+      "minutes": 3.8295123895009358,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 700,
+      "minutes": 4.458314983050029,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 800,
+      "minutes": 5.094859699408214,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 900,
+      "minutes": 5.719480490684509,
+      "success_rate": 0.00390625,
+      "object_mm": 18.986105918884277,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 6.340273451805115,
+      "success_rate": 0.27734375,
+      "object_mm": 10.671447031199932,
+      "target": false
+    },
+    {
+      "iteration": 1100,
+      "minutes": 6.9538781563440955,
+      "success_rate": 0.55078125,
+      "object_mm": 7.674295920878649,
+      "target": false
+    },
+    {
+      "iteration": 1200,
+      "minutes": 7.571203494071961,
+      "success_rate": 0.640625,
+      "object_mm": 7.342601660639048,
+      "target": false
+    },
+    {
+      "iteration": 1300,
+      "minutes": 8.184610251585642,
+      "success_rate": 0.83984375,
+      "object_mm": 7.951441220939159,
+      "target": false
+    },
+    {
+      "iteration": 1400,
+      "minutes": 8.794204040368397,
+      "success_rate": 0.21875,
+      "object_mm": 11.089688166975975,
+      "target": false
+    },
+    {
+      "iteration": 1500,
+      "minutes": 9.40567786693573,
+      "success_rate": 0.625,
+      "object_mm": 7.707977667450905,
+      "target": false
+    }
+  ]
+}
