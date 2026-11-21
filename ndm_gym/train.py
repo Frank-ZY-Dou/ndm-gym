@@ -222,7 +222,7 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
     parser.add_argument("--fk_fused", action="store_true",
                         help="the forward kinematics of training (ArticulationKinematics.forward: the world-model and policy losses, the "
                              "rewards, the critic's input, the reference's bodies) as two Triton kernels with a hand-written backward pass "
-                             "(kernels/fk.py; changes results by rounding; a RigidFormer world model's own kinematics: --rf_fused_inputs)")
+                             "(kernels/fk.py; changes results by rounding)")
     parser.add_argument("--st_wm_fused", action="store_true",
                         help="supertrack: the world-model window loss (wm_window_terms: the forward kinematics of the predicted and the target "
                              "states and the four errors of every body) as two Triton kernels with a hand-written backward pass, no body's "
