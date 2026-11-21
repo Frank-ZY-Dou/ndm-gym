@@ -4,6 +4,11 @@ The contributed study: both algorithms' starting configurations (seeds 0-2, one 
 transitions per seed). The A100 runs of both algorithms, each after the same settings screen, are in
 [results_a100.md](results_a100.md).
 
+How to read SuperMimic's numbers on this page: it ran with the library's default discount (0.99) and critic settings,
+untuned on this task, on settings shared with SuperTrack that were fixed after a pilot run of SuperTrack alone; its
+critic overpredicts the return on every seed ([critic diagnostics](#critic-diagnostics)). With the configuration the
+A100 page's screen selected at this horizon (`--gamma 0.95 --bptt-decay 0.95`) its Eden F1 is 0.833 ± 0.079.
+
 Neither algorithm reached the validation target of 0.95 within the fixed budget. These measurements describe performance at round 20. Each checkpoint played the same 256 held-out starts, including the nominal start. Uncertainties are sample standard deviations across training seeds.
 
 ## Fixed-budget results

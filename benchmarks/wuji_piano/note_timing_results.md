@@ -2,6 +2,8 @@
 
 The contributed study's note-timing diagnostic of its runs (both algorithms' starting configurations, seeds 0-2) and of a
 scripted reference. The A100 runs of both algorithms, each after the same settings screen, are in [results_a100.md](results_a100.md).
+SuperMimic's runs here are at the library's default discount (0.99) and critic settings, untuned on this task
+([how to read them](ode_to_joy_results.md)).
 
 All seven evaluations ran on an RTX 3060 and used the same 256 starting poses and full 230-frame score. The primary result uses Eden framewise F1. This diagnostic counts each written and played note once. A single held note can cover several correct frames and still miss a repeated attack.
 
@@ -22,15 +24,6 @@ Match equal MIDI pitches within one control tick (±50 ms), maximizing the numbe
 The score-driven reference solves static hover and press joint positions for seven pitches. Its left wrist shifts 70 mm, and each command leads the score by one control tick. Both hands use the same actuator limits and physical key-down threshold as the policies. These hand and finger assignments belong only to the scripted controller. It was evaluated once without training.
 
 The script scored 0.6325 Eden F1, precision 0.9977 and recall 0.5717. It reached 12.0/19 note events and held both pitches on 23.8% of two-note frames. Both onsets were timely on 512/1,024 written paired attacks. Evaluation took 26.3 seconds on the RTX 3060, excluding scene and IK setup.
-
-## Validation under a shared time limit
-
-A secondary timing diagnostic: the last completed round at or before 300 synchronized training seconds of each seed (a cutoff set after training), with its logged 32-start validation result. The primary tables use the 256-start final evaluations after equal experience.
-
-| Method | Rounds (seeds 0/1/2) | Validation F1 (seeds 0/1/2) | Mean ± sample SD |
-|---|---|---|---:|
-| SuperTrack | 19 / 19 / 17 | 0.9153 / 0.7110 / 0.7089 | 0.7784 ± 0.1186 |
-| SuperMimic | 17 / 15 / 16 | 0.4435 / 0.3387 / 0.3425 | 0.3749 ± 0.0595 |
 
 ## World-model onset predictions
 

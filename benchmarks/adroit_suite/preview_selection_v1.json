@@ -7,7 +7,7 @@
     "episode": 0,
     "nominal_native_success_final": true,
     "checkpoint_sha256": "f3ba430c3be4e7e780628dbf40d3d540046ff712e047beab9d3a16220a2cff53",
-    "evaluation": "/data/YifanKang/adroit-suite-v1/formal-v1/relocate-supertrack-seed0-evaluation/result.json"
+    "evaluation": "<data-root>/adroit-suite-v1/formal-v1/relocate-supertrack-seed0-evaluation/result.json"
   },
   "hammer": {
     "method": "supermimic",
@@ -17,7 +17,7 @@
     "episode": 0,
     "nominal_native_success_final": false,
     "checkpoint_sha256": "0b1817ced35132a9321b826d8be0a25ef02082e84c0c15d6f564bf7d20679d11",
-    "evaluation": "/data/YifanKang/adroit-suite-v1/formal-v1/hammer-supermimic-seed0-evaluation/result.json"
+    "evaluation": "<data-root>/adroit-suite-v1/formal-v1/hammer-supermimic-seed0-evaluation/result.json"
   },
   "pen": {
     "method": "supertrack",
@@ -27,6 +27,6 @@
     "episode": 0,
     "nominal_native_success_final": true,
     "checkpoint_sha256": "c8a3b4da39b2a924632c070bdcc5180853e9fcdc807c68de02aa55650cd2c5ae",
-    "evaluation": "/data/YifanKang/adroit-suite-v1/formal-v1/pen-supertrack-seed0-evaluation/result.json"
+    "evaluation": "<data-root>/adroit-suite-v1/formal-v1/pen-supertrack-seed0-evaluation/result.json"
   }
 }

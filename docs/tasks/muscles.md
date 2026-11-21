@@ -16,5 +16,8 @@ python tools/replay_musclevae.py --out_dir replay
 MUJOCO_GL=egl python tools/render_musclevae.py walk.mp4 --states replay/states_lafan_walk_0.npz --ref
 ```
 
+SuperTrack's muscle targets are offsets about the reference action, SuperMimic's are about the T-pose; `--sm_residual`
+(SuperMimic with offsets about the reference pose) is not implemented by `train_muscles`.
+
 Selected configurations and results: [README](../../README.md#muscle-actuated-character), [`results.md`](../../benchmarks/musclevae/results.md). The character and the
 models: [design](../musclevae_design.md).

@@ -1,6 +1,6 @@
 # Preflight performance and correctness
 
-Measurements use 2,048 worlds, eight physical CPU cores and one NVIDIA L40S per learner on the shared gpu156 host. Each collection comparison uses the same task states and original solver settings. These are short preflight measurements, not complete training runtimes. Shared-host scheduling and contact phase affect the results.
+Measurements use 2,048 worlds, eight physical CPU cores and one NVIDIA L40S per learner on a shared host. Each collection comparison uses the same task states and original solver settings. These are short preflight measurements, not complete training runtimes. Shared-host scheduling and contact phase affect the results.
 
 | Task | Physical phase | Serial Python collection (ms) | Native collection (ms) | Python / native |
 | --- | ---: | ---: | ---: | ---: |

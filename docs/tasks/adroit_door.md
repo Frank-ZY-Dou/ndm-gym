@@ -1,5 +1,7 @@
 # Adroit Door demonstration tracking
 
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#3](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)).
+
 A native Adroit hand tracks a physically replayed door-opening demonstration.
 The 28 hand actuators must move the hand, turn the passive latch and open the
 passive door. The task measures hand, door and latch tracking separately from
@@ -155,7 +157,7 @@ python -m ndm_gym.eval_door_full --checkpoint /path/outside/repository/st-offset
   --model ... --reference ... --native-library ... --output /path/outside/repository/st-offset-seed0-evaluation
 ```
 
-Results on A100 40GB, both settings, every seed: [results](../../benchmarks/adroit_door/results_a100.md).
+Results on A100 40GB, both settings, every seed and the settings screen: [results](../../benchmarks/adroit_door/results_a100.md).
 
 ## Render saved physical trajectories
 

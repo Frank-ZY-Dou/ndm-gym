@@ -1,5 +1,7 @@
 # Quadrotor trajectory tracking: results on A100 40GB
 
+Contributed by [Zhengming Yu](https://github.com/Yzmblog) ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
+
 The task and the contributed study on an H200: [README](../../README.md#quadrotor-trajectory-tracking), [results](results.md).
 On an A100: [the world model as the simulator](#the-world-model-as-the-simulator), [the runs again](#the-runs-again-on-an-a100).
 

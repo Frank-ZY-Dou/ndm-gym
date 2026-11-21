@@ -1,5 +1,8 @@
 # Quadruped motion tracking
 
+Contributed by [Jionghao Wang](https://github.com/shanemankiw) ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4),
+[#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
+
 A Unitree Go2 tracks the motion capture of a Labrador retriever: walking, trotting, running, turning, backing, jumping
 and playing, on MuJoCo-Warp directly (no Isaac Lab; `ndm_gym/sim/rigid/quadruped_sim.py`). One policy tracks one clip
 or all of them.
@@ -20,16 +23,16 @@ make the trunk follow.
 pip install -e '.[hand]'                             # MuJoCo-Warp
 tools/download_lifelike.sh                           # the motion capture and the Go2, at pinned commits, into data/
 git clone https://github.com/Houserz/supermimic-quadruped data/third_party/supermimic-quadruped
-git -C data/third_party/supermimic-quadruped checkout 46a81c2                          # the commit of the results
+git -C data/third_party/supermimic-quadruped checkout 46a81c2                          # the pinned commit
 python tools/convert_lifelike.py --quadmotion data/third_party/supermimic-quadruped/src    # 65 clips into data/lifelike_go2
 
-# SuperMimic, then SuperTrack, one policy on all clips, at their selected settings (ndm_gym/configs.py);
-# one clip: --config go2-supermimic-clip --clips <name> (--clips <name>,<name>: on those)
-python -m ndm_gym.train_quadruped --config go2-supermimic --log_dir logs/go2_sm
+# SuperTrack, then SuperMimic, one policy on all clips, with their named configurations (ndm_gym/configs.py);
+# one clip: --config go2-supertrack-clip --clips <name> (--clips <name>,<name>: on those)
 python -m ndm_gym.train_quadruped --config go2-supertrack --log_dir logs/go2_st
-python -m ndm_gym.evaluate_quadruped --ckpt logs/go2_sm/last.pt --out logs/go2_sm/evaluation --push 1 2 --save_rollout
-python -m ndm_gym.evaluate_quadruped --ckpts logs/go2_sm --out logs/go2_sm/evaluation --success_trunk_mm 20   # the time to the target
-MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_sm/evaluation/rollout.npz --clip dog_play_002_0 --out play.webp
+python -m ndm_gym.train_quadruped --config go2-supermimic --log_dir logs/go2_sm
+python -m ndm_gym.evaluate_quadruped --ckpt logs/go2_st/last.pt --out logs/go2_st/evaluation --push 1 2 --save_rollout
+python -m ndm_gym.evaluate_quadruped --ckpts logs/go2_st --out logs/go2_st/evaluation --success_trunk_mm 20   # the time to the target
+MUJOCO_GL=egl python tools/render_quadruped.py --rollout logs/go2_st/evaluation/rollout.npz --clip dog_play_002_0 --out play.webp
 ```
 
 ## Clips
@@ -110,16 +113,5 @@ it shows where the two overlap (`--plain_ghost`: a faint ghost in the scene inst
 `.webp`) or as a contact sheet of frames at even steps. `--source reference_targets` draws the rollout with the
 reference pose as the targets.
 
-![SuperTrack and SuperMimic on the walk, the run and the play clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/grid.webp)
-
-*Seed 0 of each algorithm's single-clip runs from the unperturbed start, real time; the reference laid over the robot in translucent blue (where the robot's white shows, it is off the
-reference). Single
-animations: [walk](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/walk_sm.webp), [run](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/run_sm.webp), [play](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/play_sm.webp)
-(SuperMimic); [walk](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/walk_st.webp), [run](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/run_st.webp), [play](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/go2/play_st.webp)
-(SuperTrack).*
-
-Tasks, rules and results: [`benchmarks/go2_lifelike_tracking`](../../benchmarks/go2_lifelike_tracking/README.md),
-[results](../../benchmarks/go2_lifelike_tracking/results.md). In short, on all 65 clips (seeds 0-2, 10,000 iterations,
-each run alone on an RTX 6000 Ada): SuperTrack (`--config go2-supertrack`) a success of 0.999, a return of 0.977, the
-feet within 7.3 mm, the target after 4.43 min; SuperMimic (`--config go2-supermimic`) 1.000, 0.986, 5.3 mm, 1.31 min
-(time to the target, not engineered).
+Tasks and rules: [`benchmarks/go2_lifelike_tracking`](../../benchmarks/go2_lifelike_tracking/README.md). Tracking results
+on this task are not reported here.

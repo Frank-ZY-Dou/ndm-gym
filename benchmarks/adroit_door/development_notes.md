@@ -140,7 +140,7 @@ above is distinct from this programmatic policy collector.
 
 Replay sampling speed (round2941): cached flat indices preserve the original
 uniform window ordering, RNG consumption, frame/reset sentinel and episode
-boundaries, including unequal episode lengths. On gpu156's CPU, float32, one
+boundaries, including unequal episode lengths. On a shared host's CPU, float32, one
 thread, CUDA hidden, 300 calls after 10 warmups: batch32/H4 sampling measured
 0.229 ms original versus 0.064 ms cached; batch256/H4 1.571 versus 0.168 ms;
 batch256/H16 1.577 versus 0.417 ms. These are sampling timings, not whole-training
@@ -156,7 +156,7 @@ The [frozen online three-seed study](online_study_2943.md) reports genuine Super
 
 `python -m ndm_gym.train_door_online --model /path/native-scene.xml
 --reference /path/reference.npz --bootstrap /path/physical-rollouts.npz
---method supertrack --seed 2944 --output /data/YifanKang/adroit-door/new-run`
+--method supertrack --seed 2944 --output /path/adroit-door/new-run`
 (join the lines into one command). Use `--method supermimic` for the reward/critic
 method. Inputs are required; no historical audit script or checkpoint is loaded.
 The bootstrap file uses `episodeN_qpos`, `episodeN_qvel`, `episodeN_actions` from
@@ -198,7 +198,7 @@ Generate a new physical bootstrap without a historical learned checkpoint:
 
 ```sh
 python -m ndm_gym.collect_door --model /path/native-scene.xml \
-  --reference /path/reference.npz --output /data/YifanKang/adroit-door/bootstrap-new \
+  --reference /path/reference.npz --output /path/adroit-door/bootstrap-new \
   --seed 2945 --noise .01 --offsets -.01 0 .01 .005
 ```
 
@@ -211,7 +211,7 @@ when both methods use the same dataset, reported separately from each training
 process. The XML hash identifies that file only: preserve its referenced assets
 and the original native model contract too. This generates new development data;
 it does not recreate the historical mixed2934 source or its acquisition costs.
-On gpu156, MuJoCo3.15.0, CPU one thread, seed2945, four226-control episodes took
+On a shared host, MuJoCo3.15.0, CPU one thread, seed2945, four226-control episodes took
 0.374s for904physical transitions (GPU compute0). This collection timing excludes
 process startup, model loading and file serialization; it is not a method speedup.
 
