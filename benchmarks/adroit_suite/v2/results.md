@@ -1,5 +1,9 @@
 # Native Adroit tracking: complete three-seed study
 
+Contributed by [Yifan Kang](https://github.com/YIFANK) ([#11](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)).
+
+These are the contributed runs, each on one L40S; they have not been re-verified on an A100.
+
 Pen, Hammer and Relocate each run SuperTrack and SuperMimic with fresh training seeds 0, 1 and 2: **18 complete runs**, 20,000 iterations and 2,048 worlds per run. Every final checkpoint is evaluated on the same 256 starts for its task, with all 4,608 learned-policy episodes retained. Means ± sample SD below are across three **training-seed means**, not 768 independent training seeds. The float32 reference-control prior is evaluated once on those same starts.
 
 This is online demonstration tracking on native MuJoCo scenes, not the standard D4RL offline-RL benchmark. There is one reference per task (Pen clip 1, Hammer clip 3, Relocate clip 0), with one nominal and 255 hand-only perturbed evaluation starts. Passive-object starts are unchanged.
@@ -90,7 +94,7 @@ The reference finishes only 0.0872 mm inside the strict native threshold. Recomp
 
 Each run collects 40,960,000 training transitions plus 65,536 warmup transitions, performs 80,000 model optimizer steps and 19,700 policy updates. SuperMimic additionally performs 394,000 critic optimizer steps. This matches transition/iteration budgets, not identical optimizer work or wall time. No original v1 seed is pooled into this study.
 
-Each job uses one L40S, eight bounded physical CPU cores and native CPU physics with eager FP32 Torch learning and fused Adam. Six jobs run concurrently at most; resource admission, exact-capacity warmups, resumable checkpoints and pressure monitoring are enabled. Data, environments, outputs, caches and temporary files stay on `/data/YifanKang/` on gpu156. Unrelated jobs are not stopped.
+Each job uses one L40S, eight bounded physical CPU cores and native CPU physics with eager FP32 Torch learning and fused Adam. Six jobs run concurrently at most; resource admission, exact-capacity warmups, resumable checkpoints and pressure monitoring are enabled. Data, environments, outputs, caches and temporary files stay outside the repository, on the training machine's own disk; the runs' records are the JSON files beside this page. Unrelated jobs are not stopped.
 
 Measured training takes 93.7–154.9 minutes per seed. Formal guards reserve 38.17 GPU-hours; the union of active guard intervals is 6.77 hours. The elapsed span is 8.14 hours, including a 1.37-hour pause after the Hammer gate. Development, checks, diagnostics and rendering are separate costs. [Timing definitions](execution-timing.json), [all 18 resource guards](resource-summary.json).
 

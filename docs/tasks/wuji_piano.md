@@ -1,5 +1,7 @@
 # Wuji Hand piano playing
 
+Contributed by [Anna Mei](https://github.com/annamei1) ([#9](https://github.com/Frank-ZY-Dou/ndm-gym/pull/9)).
+
 Two floating Wuji Hand 2 beta2 hands play Eden's 90 BPM arrangement of *Ode to Joy*: 15 melody notes and four held bass
 notes, two pitches due together on 164 of the 230 control frames, 11.5 s with a one-second lead-in.
 [Benchmark, commands and results](../../benchmarks/wuji_piano/README.md)
@@ -26,10 +28,12 @@ configuration after the same settings screen:
 | 8 | `--st-imag-noise 0.1 --st-reg 0.01`: 0.801 ± 0.027 | `--gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 ± 0.135 |
 
 SuperTrack at horizon 3 is the most accurate; at horizon 8 SuperMimic's mean is the higher. SuperTrack's seeds lie closer
-together and its runs take less time at both horizons (7.2 and 7.7 min, SuperMimic's 8.7 and 10.4).
+together and its runs take less time at both horizons (7.2 and 7.7 min, SuperMimic's 8.7 and 10.4; the contributed
+implementation, not engineered). An earlier set of finals differs on the order at horizon 8 and on the seeds' spread.
 
-The contributed study ran both starting configurations on one RTX 3060 (seeds 0-2, the same budget): SuperTrack
-0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090.
+Anna Mei's study ran both starting configurations on one RTX 3060 (seeds 0-2, the same budget): SuperTrack
+0.8490 ± 0.0705 and SuperMimic 0.4123 ± 0.2090, SuperMimic there with the library's default discount (0.99) and critic
+settings, untuned on this task.
 [Every seed, the settings screen and the world model's speed](../../benchmarks/wuji_piano/results_a100.md)
 
 ```bash

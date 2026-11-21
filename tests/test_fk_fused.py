@@ -24,6 +24,7 @@ from ndm_gym.core.rotations import so3_exp
 
 CUDA = torch.cuda.is_available()
 INTERPRET = os.environ.get("TRITON_INTERPRET") == "1"
+TRITON = importlib.util.find_spec("triton") is not None  # the kernels' package; CPU-only installs may not have it
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HAVE_LAFAN1 = os.path.isdir(os.path.join(REPO, "data", "lafan1_g1"))  # recorded states: LAFAN1's reference frames
 RTOL, ATOL = 1e-5, 1e-5
@@ -41,6 +42,7 @@ def fk_interp():
 
 
 @pytest.mark.skipif(INTERPRET, reason="this process runs the interpreter's tests itself")
+@pytest.mark.skipif(not TRITON, reason="needs Triton")
 def test_interpreter():
     """This module's CPU tests through Triton's interpreter, in a process of their own: triton.jit decides between the
     interpreter and the compiler when Triton and the kernels are imported, so TRITON_INTERPRET=1 is set from the start."""
@@ -157,6 +159,7 @@ def test_unused_outputs(fk_interp, kin):
     assert not out[2].any() and not out[3].any() and not out[5].any()
 
 
+@pytest.mark.skipif(not TRITON, reason="needs Triton")
 def test_default_path_unchanged(kin):
     """Without the option the kinematics object runs the class's own forward; with it, ``forward`` is the kernels' and
     the class's forward is unchanged on the same object."""
@@ -202,6 +205,7 @@ def test_compiled_graphs(fk_interp, kin):
     assert "ndm_gym.fk_fused" in graphs["fused"] and "fk_fused" not in graphs["default"]
 
 
+@pytest.mark.skipif(not TRITON, reason="needs Triton")
 def test_refusals(kin, monkeypatch):
     """Other dtypes, mismatched shapes, unknown trees or bodies, trees the kernels do not cover, and CPU tensors for
     compiled kernels raise."""

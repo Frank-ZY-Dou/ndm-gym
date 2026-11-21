@@ -4,8 +4,8 @@
   "frozen_training_commit": "bebd40b45ce1016e663c6306afd3e4e7cb7562e9",
   "upstream_sync": "cc1d71cfceb99cbefe1dcb2c25e503839726b769",
   "sources": {
-    "frozen": "/data/YifanKang/adroit-door/parent3066",
-    "merged": "/data/YifanKang/adroit-door/check-parent3084"
+    "frozen": "<data-root>/adroit-door/parent3066",
+    "merged": "<data-root>/adroit-door/check-parent3084"
   },
   "evidence": [
     {
@@ -126,11 +126,11 @@
     "merged": "ec1655cebeb25c91c83a5881726b22a89ad9a2c1ae391437c029d5e7eab3a568"
   },
   "evidence_sha256": {
-    "/data/YifanKang/adroit-door/d0/parent3084-revision-check/result.json": "d3631d7a45b4ff0e2f26f62ebb2c960a5d7675d0014d0881138f3d42455e9d6b",
-    "/data/YifanKang/adroit-door/d0/guard-parent3084-revision/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
-    "/data/YifanKang/adroit-door/door-source3084.json": "db92f5cf45070162ad3e777dbe1d8b69c780a045b89250707bb8a5beb66d3b64",
-    "/data/YifanKang/adroit-door/door-source3084-verification.json": "e46d48d6171814035a565ac244f49ead3082b6508244f8379bf9d796b11fa608",
-    "/data/YifanKang/adroit-door/d0/parent3084-revision-check.py": "ebbe89895d9d94c7712aa06834f17bc8f7b8221411544637f4d7cdfc4dc66e80"
+    "<data-root>/adroit-door/d0/parent3084-revision-check/result.json": "d3631d7a45b4ff0e2f26f62ebb2c960a5d7675d0014d0881138f3d42455e9d6b",
+    "<data-root>/adroit-door/d0/guard-parent3084-revision/result.json": "9e644bfbd7b95295fb3deb0bcaed1a54e63c63764ce9f8925d536032eb488628",
+    "<data-root>/adroit-door/door-source3084.json": "db92f5cf45070162ad3e777dbe1d8b69c780a045b89250707bb8a5beb66d3b64",
+    "<data-root>/adroit-door/door-source3084-verification.json": "e46d48d6171814035a565ac244f49ead3082b6508244f8379bf9d796b11fa608",
+    "<data-root>/adroit-door/d0/parent3084-revision-check.py": "ebbe89895d9d94c7712aa06834f17bc8f7b8221411544637f4d7cdfc4dc66e80"
   },
   "reproduction": "Run tools/benchmark_door_full.py --method METHOD --steps 20 with identical explicit model/reference/native-library in frozen and merged checkouts. Compare saved algo/optimizer, collector, replay and RNG state with tools/validate_door_full_recovery.py:identical, excluding wall timers. Re-run ndm_gym.eval_door_full on each of the six original final checkpoints in the merged checkout and compare all saved physical arrays, per-episode metrics and starts. This is not additional full-budget training."
 }

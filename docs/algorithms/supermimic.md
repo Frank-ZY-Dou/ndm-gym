@@ -40,7 +40,7 @@ Options of both algorithms: [Algorithms](../algorithms.md#options). HOI training
 
 | task | configuration |
 |---|---|
-| LAFAN1 motion tracking | `--reward_std_scale 0.7 --action_noise 0.1 --imag_start_perturb 0.3 --sm_residual` with the speed options (`--config lafan1-supermimic-accurate`; [results](../../README.md#lafan1-motion-tracking)); [the fastest](../../README.md#training-speed) |
+| LAFAN1 motion tracking | its fastest configuration with action noise 0.1 in place of 0.3, trained 3 h with the learning rate's cosine over the 3 h (`--config lafan1-supermimic-accurate`; [results](../../README.md#lafan1-motion-tracking)); [the fastest](../../README.md#training-speed) |
 | Two G1s | [README](../../README.md#two-g1s-one-two-person-clip) |
 | Human-object interaction | [commands](../tasks/hoi.md) |
 | Muscle-actuated character | [README](../../README.md#muscle-actuated-character) |

@@ -14,7 +14,9 @@ Full preparation commands, verified archive hashes, units, training settings and
 
 ## Results and limitations
 
-Normalized tracking RMSE and native final success, means over training seeds 0-2 ([every seed](v2/results.md)):
+Normalized tracking RMSE and native final success, means over training seeds 0-2 ([every seed](v2/results.md)), from
+the contributed runs, each on one L40S, not re-verified on an A100. SuperMimic's Hammer runs train with
+`--nail-tracking-std .001`:
 
 | task | the prior | SuperTrack | SuperMimic |
 |---|---|---|---|
@@ -24,6 +26,6 @@ Normalized tracking RMSE and native final success, means over training seeds 0-2
 
 Every evaluation, successful or not, remains in the report.
 
-The [Hammer precision experiment](v2/README.md) selected a 1 mm reward kernel in a matched 6,000-iteration development screen. Its full-budget results did not pass the initially specified ≥95%-success-on-every-seed quality gate. The [scope addendum](v2/publication-scope-addendum.json) retains that negative result and completes all originally planned tasks without changing budgets, references, metrics or success predicates. Algorithm performance is not conflated with software validity.
+The [Hammer precision experiment](v2/README.md) selected a 1 mm reward kernel for SuperMimic in a 6,000-iteration development screen of three widths; SuperTrack had no such screen and keeps the default 10 mm, although the option also changes its term weights. The 1 mm kernel's full-budget results did not pass the initially specified ≥95%-success-on-every-seed quality gate. The [scope addendum](v2/publication-scope-addendum.json) retains that negative result and completes all originally planned tasks without changing budgets, references, metrics or success predicates. Algorithm performance is not conflated with software validity.
 
 The independent Door PR and its historical study are unchanged. The original six-run, single-seed extension is archived in [results_v1.md](results_v1.md); it is not pooled into the new three-seed study, and its failed Hammer policy remains visible as historical evidence. Three training seeds on one reference per task do not establish held-out-motion generalization.

@@ -37,6 +37,9 @@ not engineered; the world models' step is the one after the second round of its 
     updates), and keeps its best state (Fits).
   - The pusher's fits are made again once, after four recordings of the planner on the model's own first fit (one
     planner-in-the-loop round). Three fit seeds per model.
+  - The recipe (the stop rule, the pusher's contact inputs and its round) was developed on SuperTrack's acceleration model
+    and applied to SuperMimic's increment model unchanged. The mean velocity (`--accel_mean_velocity`) is an option of the
+    acceleration model alone; the increment model has no counterpart.
   - The planner runs the world model as a bf16 copy, its step compiled into one CUDA graph. The two models' steps share one
     code path (the inputs, the kinematics and contact gaps, the network) and differ in the last operation: an acceleration
     integrated, an increment applied.
