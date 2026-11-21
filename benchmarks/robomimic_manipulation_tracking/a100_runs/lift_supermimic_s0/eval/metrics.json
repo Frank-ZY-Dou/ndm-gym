@@ -4,7 +4,7 @@
     0
   ],
   "iteration": 1500,
-  "wall_time_s": 208.11409640312195,
+  "wall_time_s": 211.2181715965271,
   "control_dt": 0.05,
   "num_envs": 256,
   "solver_iterations": [
@@ -18,34 +18,34 @@
         "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 0.7473822333849967,
-        "object_final_mm": 2.363411011174321,
-        "object_deg": 0.7411435066729662,
-        "keypoint_mm": 3.462382359430194,
-        "joint_rad": 0.025496378540992737,
-        "finger_mm": 2.1612432319670916
+        "object_mm": 0.6927467184141278,
+        "object_final_mm": 1.2452102964743972,
+        "object_deg": 0.5995776975624028,
+        "keypoint_mm": 3.9933202788233757,
+        "joint_rad": 0.03852681815624237,
+        "finger_mm": 3.8705402985215187
       },
       "policy": {
         "success_rate": 1.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 0.747406855225563,
-        "object_final_mm": 2.3637800477445126,
-        "object_deg": 0.7411682661087076,
-        "keypoint_mm": 3.6276679020375013,
-        "joint_rad": 0.02568425051867962,
-        "finger_mm": 2.148568630218506
+        "object_mm": 0.6920340820215642,
+        "object_final_mm": 1.2630245182663202,
+        "object_deg": 0.6002149862284767,
+        "keypoint_mm": 4.162864293903112,
+        "joint_rad": 0.038663916289806366,
+        "finger_mm": 3.8722469471395016
       },
       "reference_targets": {
         "success_rate": 0.0,
         "terminated": 0.0,
         "tracked_s": 3.4000000953674316,
-        "object_mm": 10.482999496161938,
-        "object_final_mm": 54.71457540988922,
+        "object_mm": 10.482660494744778,
+        "object_final_mm": 54.714903235435486,
         "object_deg": 0.8391210228520654,
-        "keypoint_mm": 8.016282692551613,
-        "joint_rad": 0.02434401586651802,
-        "finger_mm": 1.7007907154038548
+        "keypoint_mm": 8.016325533390045,
+        "joint_rad": 0.024344027042388916,
+        "finger_mm": 1.7008240101858974
       }
     }
   },
@@ -53,22 +53,22 @@
     "success_rate": 1.0,
     "terminated": 0.0,
     "tracked_s": 3.4000000953674316,
-    "object_mm": 0.747406855225563,
-    "object_final_mm": 2.3637800477445126,
-    "object_deg": 0.7411682661087076,
-    "keypoint_mm": 3.6276679020375013,
-    "joint_rad": 0.02568425051867962,
-    "finger_mm": 2.148568630218506
+    "object_mm": 0.6920340820215642,
+    "object_final_mm": 1.2630245182663202,
+    "object_deg": 0.6002149862284767,
+    "keypoint_mm": 4.162864293903112,
+    "joint_rad": 0.038663916289806366,
+    "finger_mm": 3.8722469471395016
   },
   "reference_targets": {
     "success_rate": 0.0,
     "terminated": 0.0,
     "tracked_s": 3.4000000953674316,
-    "object_mm": 10.482999496161938,
-    "object_final_mm": 54.71457540988922,
+    "object_mm": 10.482660494744778,
+    "object_final_mm": 54.714903235435486,
     "object_deg": 0.8391210228520654,
-    "keypoint_mm": 8.016282692551613,
-    "joint_rad": 0.02434401586651802,
-    "finger_mm": 1.7007907154038548
+    "keypoint_mm": 8.016325533390045,
+    "joint_rad": 0.024344027042388916,
+    "finger_mm": 1.7008240101858974
   }
 }

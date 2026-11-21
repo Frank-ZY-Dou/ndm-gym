@@ -170,11 +170,12 @@ CONFIGS = {
     },
     "train_robomimic": {
         "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 66.5 %, object 0.63 / 1.78 / "
-                                 "5.11 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, A100 80GB SXM4)"),
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 100 / 70.4 %, object 0.62 / 1.57 / "
+                                 "5.69 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, A100 80GB SXM4)"),
         "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
-                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 96.9 / 6.6 %, object 0.79 / 5.96 / "
-                                 "12.6 mm on Lift / Square / Transport (seeds 0-2, 256 perturbed rollouts, A100 80GB SXM4)"),
+                                 "one demonstration (add --task; --demo 0 by default), 1,500 iterations: success 100 / 84.9 / 29.7 %, object 0.87 / 5.34 / "
+                                 "10.6 mm on Lift / Square / Transport (seeds 0-2, Transport's object error 2 of them; 256 perturbed rollouts, A100 80GB "
+                                 "SXM4)"),
     },
 }
 
