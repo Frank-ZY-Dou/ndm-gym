@@ -193,12 +193,12 @@ CONFIGS = {
         for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
         for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))
         for result in [{
-            ("stick", "supertrack"): "no episode ended, bodies 0.40 mm; held-out clips 2.7 % ended, 0.75 mm",
-            ("stick", "supermimic"): "no episode ended, bodies 0.39 mm; held-out clips none ended, 0.84 mm",
-            ("fly", "supertrack"): "no episode ended, bodies 0.064 mm; held-out clips 6.0 % ended, 0.097 mm",
-            ("fly", "supermimic"): "no episode ended, bodies 0.046 mm; held-out clips none ended, 0.064 mm",
-            ("rat", "supertrack"): "69 % of the episodes ended, bodies 35.2 mm (not solved)",
-            ("rat", "supermimic"): "21 % of the episodes ended, bodies 22.7 mm (not solved)",
+            ("stick", "supertrack"): "no episode ended, bodies 0.35 mm; held-out clips 10.7 % ended, 0.64 mm",
+            ("stick", "supermimic"): "no episode ended, bodies 0.33 mm; held-out clips none ended, 0.74 mm",
+            ("fly", "supertrack"): "1.3 % of the episodes ended, bodies 0.066 mm; held-out clips 9.3 % ended, 0.091 mm",
+            ("fly", "supermimic"): "no episode ended, bodies 0.049 mm; held-out clips none ended, 0.064 mm",
+            ("rat", "supertrack"): "39 % of the episodes ended, bodies 13.6 mm (not solved)",
+            ("rat", "supermimic"): "16 % of the episodes ended, bodies 20.1 mm (not solved)",
         }[animal, algo]]
     },
 }

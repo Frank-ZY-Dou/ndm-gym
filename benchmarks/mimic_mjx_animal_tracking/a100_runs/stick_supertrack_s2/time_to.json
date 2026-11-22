@@ -1,117 +1,117 @@
 {
-  "minutes_to_target": 1.9865267554918924,
-  "iteration_to_target": 1250,
+  "minutes_to_target": 1.587613574663798,
+  "iteration_to_target": 1000,
   "checkpoints": [
     {
       "iteration": 250,
-      "minutes": 0.2799562851587931,
+      "minutes": 0.2682348330815633,
       "ended_share": 1.0,
-      "body_mm": 8.661961555480957,
+      "body_mm": 8.016297340393066,
       "target": false
     },
     {
       "iteration": 500,
-      "minutes": 0.8071594754854838,
+      "minutes": 0.786611553033193,
       "ended_share": 0.699999988079071,
-      "body_mm": 5.856889247894287,
+      "body_mm": 4.082488059997559,
       "target": false
     },
     {
       "iteration": 750,
-      "minutes": 1.2006129145622253,
+      "minutes": 1.187221384048462,
       "ended_share": 0.0,
-      "body_mm": 1.221762776374817,
+      "body_mm": 0.9838910698890686,
       "target": false
     },
     {
       "iteration": 1000,
-      "minutes": 1.5935664653778077,
+      "minutes": 1.587613574663798,
       "ended_share": 0.0,
-      "body_mm": 0.5613332390785217,
-      "target": false
+      "body_mm": 0.5050106048583984,
+      "target": true
     },
     {
       "iteration": 1250,
-      "minutes": 1.9865267554918924,
+      "minutes": 1.9878971695899963,
       "ended_share": 0.0,
-      "body_mm": 0.45309707522392273,
+      "body_mm": 0.3991716802120209,
       "target": true
     },
     {
       "iteration": 1500,
-      "minutes": 2.3794429779052733,
+      "minutes": 2.388382343451182,
       "ended_share": 0.0,
-      "body_mm": 0.42554429173469543,
+      "body_mm": 0.3791990876197815,
       "target": true
     },
     {
       "iteration": 1750,
-      "minutes": 2.7724673748016357,
+      "minutes": 2.7879352927207948,
       "ended_share": 0.0,
-      "body_mm": 0.4186628758907318,
+      "body_mm": 0.35752546787261963,
       "target": true
     },
     {
       "iteration": 2000,
-      "minutes": 3.165407383441925,
+      "minutes": 3.183961550394694,
       "ended_share": 0.0,
-      "body_mm": 0.4072228670120239,
+      "body_mm": 0.34981584548950195,
       "target": true
     },
     {
       "iteration": 2250,
-      "minutes": 3.558373749256134,
+      "minutes": 3.5799015402793883,
       "ended_share": 0.0,
-      "body_mm": 0.39876243472099304,
+      "body_mm": 0.3539276719093323,
       "target": true
     },
     {
       "iteration": 2500,
-      "minutes": 3.9513472437858583,
+      "minutes": 3.9758370399475096,
       "ended_share": 0.0,
-      "body_mm": 0.393771231174469,
+      "body_mm": 0.3532197177410126,
       "target": true
     },
     {
       "iteration": 2750,
-      "minutes": 4.344581115245819,
+      "minutes": 4.371720858414968,
       "ended_share": 0.0,
-      "body_mm": 0.39539676904678345,
+      "body_mm": 0.3499700725078583,
       "target": true
     },
     {
       "iteration": 3000,
-      "minutes": 4.737613081932068,
+      "minutes": 4.769504896799723,
       "ended_share": 0.0,
-      "body_mm": 0.38997870683670044,
+      "body_mm": 0.3469183146953583,
       "target": true
     },
     {
       "iteration": 3250,
-      "minutes": 5.131269510587057,
+      "minutes": 5.165581639607748,
       "ended_share": 0.0,
-      "body_mm": 0.3949967920780182,
+      "body_mm": 0.34547990560531616,
       "target": true
     },
     {
       "iteration": 3500,
-      "minutes": 5.5242414196332295,
+      "minutes": 5.561500811576844,
       "ended_share": 0.0,
-      "body_mm": 0.39286625385284424,
+      "body_mm": 0.3456842601299286,
       "target": true
     },
     {
       "iteration": 3750,
-      "minutes": 5.917247148354848,
+      "minutes": 5.958067524433136,
       "ended_share": 0.0,
-      "body_mm": 0.39158180356025696,
+      "body_mm": 0.34846964478492737,
       "target": true
     },
     {
       "iteration": 4000,
-      "minutes": 6.3102391521135965,
+      "minutes": 6.355295733610789,
       "ended_share": 0.0,
-      "body_mm": 0.39224159717559814,
+      "body_mm": 0.35022228956222534,
       "target": true
     }
   ]

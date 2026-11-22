@@ -1,117 +1,117 @@
 {
-  "minutes_to_target": 2.1292431513468424,
-  "iteration_to_target": 1250,
+  "minutes_to_target": 1.8217465082804363,
+  "iteration_to_target": 1000,
   "checkpoints": [
     {
       "iteration": 250,
-      "minutes": 0.3134226640065511,
+      "minutes": 0.37420150836308796,
       "ended_share": 1.0,
-      "body_mm": 8.663330078125,
+      "body_mm": 8.02762508392334,
       "target": false
     },
     {
       "iteration": 500,
-      "minutes": 0.9478977243105571,
-      "ended_share": 0.699999988079071,
-      "body_mm": 5.8762006759643555,
+      "minutes": 1.0238574147224426,
+      "ended_share": 0.5999999642372131,
+      "body_mm": 5.735903739929199,
       "target": false
     },
     {
       "iteration": 750,
-      "minutes": 1.3425840854644775,
+      "minutes": 1.4254492243131003,
       "ended_share": 0.0,
-      "body_mm": 1.097568154335022,
+      "body_mm": 1.0088547468185425,
       "target": false
     },
     {
       "iteration": 1000,
-      "minutes": 1.7360338846842447,
+      "minutes": 1.8217465082804363,
       "ended_share": 0.0,
-      "body_mm": 0.5473776459693909,
-      "target": false
+      "body_mm": 0.5005941987037659,
+      "target": true
     },
     {
       "iteration": 1250,
-      "minutes": 2.1292431513468424,
+      "minutes": 2.2228525479634604,
       "ended_share": 0.0,
-      "body_mm": 0.4416697919368744,
+      "body_mm": 0.40022552013397217,
       "target": true
     },
     {
       "iteration": 1500,
-      "minutes": 2.5223985234896342,
+      "minutes": 2.619998327891032,
       "ended_share": 0.0,
-      "body_mm": 0.41370952129364014,
+      "body_mm": 0.36691904067993164,
       "target": true
     },
     {
       "iteration": 1750,
-      "minutes": 2.9156623125076293,
+      "minutes": 3.0159584244092303,
       "ended_share": 0.0,
-      "body_mm": 0.40953168272972107,
+      "body_mm": 0.3468313217163086,
       "target": true
     },
     {
       "iteration": 2000,
-      "minutes": 3.309000603357951,
+      "minutes": 3.413472787539164,
       "ended_share": 0.0,
-      "body_mm": 0.4038240313529968,
+      "body_mm": 0.33812999725341797,
       "target": true
     },
     {
       "iteration": 2250,
-      "minutes": 3.702400267124176,
+      "minutes": 3.8099225878715517,
       "ended_share": 0.0,
-      "body_mm": 0.40584999322891235,
+      "body_mm": 0.3341674506664276,
       "target": true
     },
     {
       "iteration": 2500,
-      "minutes": 4.095753065745035,
+      "minutes": 4.206323246161143,
       "ended_share": 0.0,
-      "body_mm": 0.4068341553211212,
+      "body_mm": 0.3349197506904602,
       "target": true
     },
     {
       "iteration": 2750,
-      "minutes": 4.489101294676463,
+      "minutes": 4.602637577056885,
       "ended_share": 0.0,
-      "body_mm": 0.4027390480041504,
+      "body_mm": 0.3377951383590698,
       "target": true
     },
     {
       "iteration": 3000,
-      "minutes": 4.88241091966629,
+      "minutes": 4.998968156178792,
       "ended_share": 0.0,
-      "body_mm": 0.4026935398578644,
+      "body_mm": 0.3392239212989807,
       "target": true
     },
     {
       "iteration": 3250,
-      "minutes": 5.275675308704376,
+      "minutes": 5.395163269837697,
       "ended_share": 0.0,
-      "body_mm": 0.4045184254646301,
+      "body_mm": 0.3422842025756836,
       "target": true
     },
     {
       "iteration": 3500,
-      "minutes": 5.668990508715312,
+      "minutes": 5.79131338596344,
       "ended_share": 0.0,
-      "body_mm": 0.40415048599243164,
+      "body_mm": 0.3445984721183777,
       "target": true
     },
     {
       "iteration": 3750,
-      "minutes": 6.062320224444071,
+      "minutes": 6.187695928414663,
       "ended_share": 0.0,
-      "body_mm": 0.40124258399009705,
+      "body_mm": 0.3455599546432495,
       "target": true
     },
     {
       "iteration": 4000,
-      "minutes": 6.456022838751475,
+      "minutes": 6.587495251496633,
       "ended_share": 0.0,
-      "body_mm": 0.3995418846607208,
+      "body_mm": 0.3442002236843109,
       "target": true
     }
   ]
