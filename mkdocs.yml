@@ -106,6 +106,7 @@ nav:
       - Adroit Door tracking: tasks/adroit_door.md
       - Adroit manipulation suite: tasks/adroit_suite.md
       - Quadruped motion tracking: tasks/quadruped.md
+      - Manipulation demonstration tracking: tasks/robomimic.md
       - RoboKit's planner on a world model: tasks/robokit.md
       - "mbrl-lib's planner on a world model": tasks/mbrl.md
   - Algorithms:

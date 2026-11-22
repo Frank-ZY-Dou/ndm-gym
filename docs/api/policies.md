@@ -13,3 +13,5 @@
 ::: ndm_gym.policies.quadrotor_policy
 
 ::: ndm_gym.policies.quadruped_policy
+
+::: ndm_gym.policies.robomimic_policy

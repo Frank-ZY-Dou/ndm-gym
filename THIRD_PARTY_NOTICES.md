@@ -47,6 +47,21 @@ reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`)
 pinned at `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
 of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
 
+## Manipulation demonstration tracking
+
+The manipulation tracking task ([`docs/tasks/robomimic.md`](docs/tasks/robomimic.md)) copies no third-party file. What it
+reads is downloaded by the user at pinned revisions (`tools/download_robomimic.py`) and is not redistributed:
+
+- robomimic's proficient-human demonstrations ("What Matters in Learning from Offline Human Demonstrations for Robot
+  Manipulation", Mandlekar et al., CoRL 2021;
+  [robomimic/robomimic_datasets](https://huggingface.co/datasets/robomimic/robomimic_datasets) @ `74fa018`, v1.5, MIT),
+  each with the scene it was recorded in;
+- the meshes and textures of [robosuite](https://github.com/ARISE-Initiative/robosuite) @ `dc7fcf9` (v1.5.0, MIT) that
+  those scenes name.
+
+`ndm_gym/robots/robomimic_scenes.py` writes robosuite's success tests (`_check_success` of Lift, NutAssemblySquare and
+TwoArmTransport) as functions of the state; robosuite itself is not imported.
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from

@@ -1,0 +1,111 @@
+{
+  "minutes_to_target": null,
+  "iteration_to_target": null,
+  "checkpoints": [
+    {
+      "iteration": 100,
+      "minutes": 0.6900668183962504,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 200,
+      "minutes": 1.1598965724309285,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 300,
+      "minutes": 1.6278129816055298,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 400,
+      "minutes": 2.5076362609863283,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 3.1250612139701843,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 600,
+      "minutes": 3.7442702213923136,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 700,
+      "minutes": 4.361026259263356,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 800,
+      "minutes": 4.9835562666257225,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 900,
+      "minutes": 5.6055955529212955,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 6.228354247411092,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 1100,
+      "minutes": 6.845319851239522,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 1200,
+      "minutes": 7.467779322465261,
+      "success_rate": 0.03515625,
+      "object_mm": 10.180836543440819,
+      "target": false
+    },
+    {
+      "iteration": 1300,
+      "minutes": 8.087098948160808,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    },
+    {
+      "iteration": 1400,
+      "minutes": 8.695394810040792,
+      "success_rate": 0.0078125,
+      "object_mm": 11.567746289074421,
+      "target": false
+    },
+    {
+      "iteration": 1500,
+      "minutes": 9.30871928135554,
+      "success_rate": 0.0,
+      "object_mm": NaN,
+      "target": false
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "task": "transport",
+  "demos": [
+    0
+  ],
+  "iteration": 1500,
+  "wall_time_s": 558.5231568813324,
+  "control_dt": 0.05,
+  "num_envs": 256,
+  "solver_iterations": [
+    20,
+    50
+  ],
+  "per_demo": {
+    "0": {
+      "frames": 724,
+      "nominal": {
+        "success_rate": 0.0,
+        "terminated": 1.0,
+        "tracked_s": 22.399999618530273,
+        "object_mm": NaN,
+        "object_final_mm": 333.84788036346436,
+        "object_deg": NaN,
+        "keypoint_mm": NaN,
+        "joint_rad": NaN,
+        "finger_mm": NaN
+      },
+      "policy": {
+        "success_rate": 0.0,
+        "terminated": 1.0,
+        "tracked_s": 21.224414825439453,
+        "object_mm": NaN,
+        "object_final_mm": 333.95931124687195,
+        "object_deg": NaN,
+        "keypoint_mm": NaN,
+        "joint_rad": NaN,
+        "finger_mm": NaN
+      },
+      "reference_targets": {
+        "success_rate": 0.0,
+        "terminated": 1.0,
+        "tracked_s": 13.3740234375,
+        "object_mm": NaN,
+        "object_final_mm": 408.00246596336365,
+        "object_deg": NaN,
+        "keypoint_mm": NaN,
+        "joint_rad": NaN,
+        "finger_mm": NaN
+      }
+    }
+  },
+  "policy": {
+    "success_rate": 0.0,
+    "terminated": 1.0,
+    "tracked_s": 21.224414825439453,
+    "object_mm": NaN,
+    "object_final_mm": 333.95931124687195,
+    "object_deg": NaN,
+    "keypoint_mm": NaN,
+    "joint_rad": NaN,
+    "finger_mm": NaN
+  },
+  "reference_targets": {
+    "success_rate": 0.0,
+    "terminated": 1.0,
+    "tracked_s": 13.3740234375,
+    "object_mm": NaN,
+    "object_final_mm": 408.00246596336365,
+    "object_deg": NaN,
+    "keypoint_mm": NaN,
+    "joint_rad": NaN,
+    "finger_mm": NaN
+  }
+}
