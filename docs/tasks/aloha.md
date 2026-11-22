@@ -101,18 +101,20 @@ choice of the benchmark's tuning round on demonstration 1, for both), `--solver_
 (12,000 iterations with the learning rate's cosine over them, the choice of its second round, for both).
 
 Results: [benchmarks/aloha_bimanual_tracking](../../benchmarks/aloha_bimanual_tracking/results.md). In short (demonstration
-0, seeds 0 / 1 / 2, the last checkpoint of 6,000 iterations, each run alone on an A100 80GB SXM4; in every case some run
-had not settled, so these are the cap's numbers and no comparison is drawn from them): SuperTrack a success of
-100 / 30.9 / 100 % on Transfer Cube with the cube within 2.22 / 2.07 / 1.37 mm, and 0 / 0 / 100 % on Insertion with the peg
-and the socket within 1.92 / 1.60 / 1.84 mm and no rollout ended early; SuperMimic 69.1 / 0.4 / 69.5 % on Transfer Cube
-with the cube within 13.4 / 24.0 / 10.1 mm, and 0.4 / 0 / 0 % on Insertion with 69 to 100 % of the rollouts ended early.
-On Insertion a checkpoint's rollouts mostly all touch the pin or none does (SuperTrack: 8 / 2 / 12 of a run's 30
-checkpoints meet the target). Success is ACT's reward of 4 from the simulator's contacts on a rollout that never
-terminated.
+0, seeds 0 / 1 / 2, the last checkpoint of 12,000 iterations, each run alone on an A100 80GB SXM4; SuperTrack's three
+runs on Transfer Cube settled, in each other case some run had not, so those are the cap's numbers and no comparison
+between the algorithms is drawn): SuperTrack a success of 100 / 100 / 100 % on Transfer Cube with the cube within
+2.69 / 1.14 / 1.56 mm, and 0 / 0 / 0 % on Insertion with the peg and the socket within 5.14 / 4.12 / 4.34 mm and no
+rollout ended early; SuperMimic 97.3 / 99.2 / 82.0 % on Transfer Cube with the cube within 6.98 / 6.42 / 6.48 mm, and
+0 / 0.4 / 0 % on Insertion with 7 to 28 % of the rollouts ended early. On Insertion a checkpoint's rollouts mostly all
+touch the pin or none does (SuperTrack: 5 / 7 / 7 of a run's 60 checkpoints meet the target). Success is ACT's reward of 4
+from the simulator's contacts on a rollout that never terminated. The first runs, at 6,000 iterations, are on the results
+page beside these.
 
 ![SuperTrack and SuperMimic on Transfer Cube and Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/grid.webp)
 
 Per case the seed with the highest success, then the lowest object error, from the unperturbed start, the demonstration's
-arms and objects in translucent blue (in SuperMimic's Insertion rollout the peg stays on the table). The animations:
+arms and objects in translucent blue (in both Insertion rollouts the peg meets the socket off the table and does not
+touch the pin). The animations:
 [Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_st.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_st.webp) (SuperTrack);
 [Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_sm.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_sm.webp) (SuperMimic).

@@ -93,8 +93,9 @@ the position within 20 mm. Adroit Pen, Hammer
 and Relocate: native final success and normalized tracking RMSE over 256 starts, from contributed runs on an L40S, not
 re-verified on an A100. Manipulation: Lift / Square / Transport; the target is the hand task's, a success of 0.99
 (robosuite's test at the last frame, a tracking proxy) with the object within 10 mm. Bimanual manipulation: Transfer
-Cube / Insertion; the same target, with success as ACT's reward of 4 read off the simulator's contacts; in every case some
-run had not settled at the cap of 6,000 iterations, so the numbers are the cap's and no comparison is drawn from them.
+Cube / Insertion; the same target, with success as ACT's reward of 4 read off the simulator's contacts; at the cap of
+12,000 iterations SuperTrack's three runs on Transfer Cube had settled and some run of each other case had not, so those
+numbers are the cap's and no comparison between the algorithms is drawn.
 Commands:
 [Recommended settings](#-recommended-settings), [Results](#-results).
 
@@ -128,8 +129,8 @@ Commands:
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB); in an earlier set of finals with the same configurations, seeds and GPU type, 0.804 ± 0.140 and 0.708 ± 0.115, with SuperTrack's horizon-8 configuration the most accurate (0.888 ± 0.092) |
 | **[Manipulation demonstration tracking](#manipulation-demonstration-tracking)**, a Panda, robomimic's Lift / Square / Transport | ⏱ time to the target, not engineered | `robomimic-supertrack`, `robomimic-supermimic` | 0.9 / 3.7 min, every run, and 1.1 / 4.3 min (Square: 2 of 3 runs) on Lift / Square; Transport not reached in 1,500 iterations (mean of seeds 0-2, each run alone on an A100 80GB SXM4) |
 |  | 🎯 most accurate | `robomimic-supertrack`, `robomimic-supermimic` | object position 0.62 / 1.57 / 5.69 mm and 0.87 / 5.34 / 10.6 mm at a success of 100 / 100 / 70.4 % and 100 / 84.9 / 29.7 % (the reference's targets alone: 0 / 6 / 0 %; seeds 0-2, 1,500 iterations, A100 80GB SXM4; SuperMimic's Transport object error: 2 of 3 seeds, every rollout of the third ended) |
-| **[Bimanual demonstration tracking](#bimanual-demonstration-tracking)**, ALOHA's two arms, ACT's Transfer Cube / Insertion | ⏱ time to the target, not engineered | `aloha-supertrack`, `aloha-supermimic` | 6.8 min (2 of 3 runs) / 7.8 min (1 of 3 runs), and not reached / not reached in 6,000 iterations (seeds 0-2, each run alone on an A100 80GB SXM4) |
-|  | 🎯 most accurate | `aloha-supertrack`, `aloha-supermimic` | object position 1.89 / 1.79 mm and 15.8 / 21.5 mm at a success of 77.0 / 33.3 % and 46.4 / 0.1 %, the cap's numbers (seeds 0 / 1 / 2: 100 / 30.9 / 100 and 0 / 0 / 100 %; 69.1 / 0.4 / 69.5 and 0.4 / 0 / 0 %; the demonstration's recorded targets alone: 100 / 34-39 %; 6,000 iterations, A100 80GB SXM4) |
+| **[Bimanual demonstration tracking](#bimanual-demonstration-tracking)**, ALOHA's two arms, ACT's Transfer Cube / Insertion | ⏱ time to the target, not engineered | `aloha-supertrack`, `aloha-supermimic` | 12.6 min / not reached, and 21.9 min (1 of 3 runs) / not reached in 12,000 iterations (seeds 0-2, each run alone on an A100 80GB SXM4) |
+|  | 🎯 most accurate | `aloha-supertrack`, `aloha-supermimic` | object position 1.79 / 4.53 mm and 6.63 / 13.1 mm at a success of 100 / 0 % and 92.8 / 0.1 % (seeds 0 / 1 / 2: 100 / 100 / 100 and 0 / 0 / 0 %; 97.3 / 99.2 / 82.0 and 0 / 0.4 / 0 %; SuperTrack's Transfer Cube runs settled, the other numbers are the cap's; the demonstration's recorded targets alone: 100 / 34-39 %; 12,000 iterations, A100 80GB SXM4) |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); `muscles-supermimic-rf` **60.2 ± 2.0 mm** (heading frame: 35.1 ± 0.7 and 38.5 ± 3.4 mm), with the lower joint error, 8.7 ± 0.4 against 10.1 ± 0.3 deg; with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm and `muscles-supermimic` 65.6 ± 8.1 mm, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -184,7 +185,7 @@ options beside them); both methods are on offer for every task.
 | | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
 | | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
 | **Manipulation**, one demonstration (`train_robomimic`, add `--task`) | most accurate | `robomimic-supertrack`: object 0.62 / 1.57 / 5.69 mm at a success of 100 / 100 / 70.4 % (Lift / Square / Transport; seeds 0-2, A100 80GB SXM4) | `robomimic-supermimic`: 0.87 / 5.34 / 10.6 mm at 100 / 84.9 / 29.7 % (Transport's object error: 2 of 3 seeds) |
-| **Bimanual manipulation**, one demonstration (`train_robomimic`, add `--task aloha_transfer_cube` or `aloha_insertion`) | most accurate, at the cap of 6,000 iterations | `aloha-supertrack`: object 1.89 / 1.79 mm at a success of 77.0 / 33.3 % (Transfer Cube / Insertion; seeds 0-2, A100 80GB SXM4; 2 and 1 of 3 runs settled) | `aloha-supermimic`: 15.8 / 21.5 mm at 46.4 / 0.1 % (no run settled) |
+| **Bimanual manipulation**, one demonstration (`train_robomimic`, add `--task aloha_transfer_cube` or `aloha_insertion`) | most accurate, at the cap of 12,000 iterations | `aloha-supertrack`: object 1.79 / 4.53 mm at a success of 100 / 0 % (Transfer Cube / Insertion; seeds 0-2, A100 80GB SXM4; 3 and 1 of 3 runs settled) | `aloha-supermimic`: 6.63 / 13.1 mm at 92.8 / 0.1 % (0 and 2 of 3 runs settled) |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
@@ -1374,26 +1375,30 @@ until it touches the pin inside.
 
 | goal | configuration (`train_robomimic`) | result |
 |---|---|---|
-| most accurate | `--config aloha-supertrack`, `--config aloha-supermimic` | object position 1.89 / 1.79 mm and 15.8 / 21.5 mm at a success of 77.0 / 33.3 % and 46.4 / 0.1 % on Transfer Cube / Insertion, the last checkpoint of the 6,000-iteration cap (seeds 0-2, 256 perturbed rollouts each, A100 80GB SXM4) |
-| time to the target, not engineered | the same | a success of 0.99 with the objects within 10 mm, held: 6.8 ± 3.0 min (2 of 3 runs) / 7.8 min (1 of 3 runs), and not reached / not reached (seeds 0-2, each run alone on an A100 80GB SXM4) |
+| most accurate | `--config aloha-supertrack`, `--config aloha-supermimic` | object position 1.79 / 4.53 mm and 6.63 / 13.1 mm at a success of 100 / 0 % and 92.8 / 0.1 % on Transfer Cube / Insertion, the last checkpoint of the 12,000-iteration cap (seeds 0-2, 256 perturbed rollouts each, A100 80GB SXM4) |
+| time to the target, not engineered | the same | a success of 0.99 with the objects within 10 mm, held: 12.6 ± 4.5 min / not reached, and 21.9 min (1 of 3 runs) / not reached (seeds 0-2, each run alone on an A100 80GB SXM4) |
 
-**In short:** at the cap of 6,000 iterations some run of every case had not settled, so no comparison is drawn from these
-numbers. SuperTrack's rollouts succeed in 100 / 30.9 / 100 % (seeds 0 / 1 / 2) on Transfer Cube and in 0 / 0 / 100 % on
-Insertion, where they track the peg and the socket within 1.6 to 1.9 mm in every seed and a checkpoint's rollouts mostly
-all touch the pin or none does; SuperMimic's succeed in 69.1 / 0.4 / 69.5 % and in at most 0.4 %.
+**In short:** at the cap of 12,000 iterations SuperTrack's three runs on Transfer Cube settled, with every rollout
+succeeding (seeds 0 / 1 / 2: 100 / 100 / 100 %) and the cube within 1.1 to 2.7 mm. In each other case some run had not
+settled, so no comparison between the algorithms is drawn. SuperMimic's rollouts succeed in 97.3 / 99.2 / 82.0 % on
+Transfer Cube. On Insertion no rollout of SuperTrack's ends early and none touches the pin at the last checkpoint
+(0 / 0 / 0 %, the peg and the socket within 4.1 to 5.1 mm): a checkpoint's rollouts mostly all touch the pin or none
+does, and 5 / 7 / 7 of a run's 60 checkpoints meet the target. SuperMimic's succeed there in at most 0.4 %.
 
 <p align="center"><img src="docs/media/aloha/grid.webp" alt="SuperTrack and SuperMimic tracking demonstrations of ACT's Transfer Cube and Insertion with ALOHA's two arms" width="100%"/></p>
-<p align="center"><i>Transfer Cube and Insertion with SuperTrack and SuperMimic from the unperturbed start, the whole demonstration (in SuperMimic's Insertion rollout the peg stays on the table); per case the seed with the highest success, then the lowest object error.<br>The demonstration's arms and objects are the translucent blue ghost (<a href="docs/tasks/aloha.md">the task</a>).</i></p>
+<p align="center"><i>Transfer Cube and Insertion with SuperTrack and SuperMimic from the unperturbed start, the whole demonstration (in both Insertion rollouts the peg meets the socket off the table and does not touch the pin); per case the seed with the highest success, then the lowest object error.<br>The demonstration's arms and objects are the translucent blue ghost (<a href="docs/tasks/aloha.md">the task</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking demonstrations of ACT's scripted policies in ACT's scenes (MIT); see <a href="NOTICE">NOTICE</a>.</sub></p>
 
-- **Runs:** demonstration 0 of each task, 6,000 iterations in 2,048 worlds for both algorithms (the learning rate's cosine
+- **Runs:** demonstration 0 of each task, 12,000 iterations in 2,048 worlds for both algorithms (the learning rate's cosine
   over them), the solver at 20 iterations; the last checkpoint plays 256 rollouts of the whole demonstration from perturbed
   starts. A rollout succeeds if it never terminates and reaches ACT's reward of 4, read off the simulator's contacts (the
   cube touches the left gripper's finger and not the table; the peg touches the pin). The rollouts track one
   demonstration: the number is not ACT's success rate of an imitation policy
   ([results](benchmarks/aloha_bimanual_tracking/results.md), [task](docs/tasks/aloha.md)).
 - **Configurations:** the manipulation task's, with episodes of up to 500 control steps: the choice, for both algorithms,
-  of one tuning round of the same four variants on demonstration 1 of each task.
+  of one tuning round of the same four variants on demonstration 1 of each task. The budget is the choice, for both, of a
+  second round there (12,000 or 24,000 iterations, with or without the policy's average), added to the rules after the
+  first runs at 6,000 iterations, where some run of every case had not settled; those runs stay on the results page.
 - **Stopping:** a run has settled if its last five checkpoints (one every 200 iterations) agree: their successes within
   0.05 and their objects' errors within 1 mm or a quarter of their mean. Where runs of a case did not, its numbers are
   the cap's.
@@ -1401,14 +1406,14 @@ all touch the pin or none does; SuperMimic's succeed in 69.1 / 0.4 / 69.5 % and 
 | | Transfer Cube | Insertion |
 |---|---|---|
 | seeds | 0, 1, 2 | 0, 1, 2 |
-| success ↑, SuperTrack / SuperMimic | 77.0 / 46.4 % | 33.3 / 0.1 % |
-| success per seed, SuperTrack; SuperMimic | 100 / 30.9 / 100 %; 69.1 / 0.4 / 69.5 % | 0 / 0 / 100 %; 0.4 / 0 / 0 % |
-| runs settled, SuperTrack / SuperMimic | 2 of 3 / 0 of 3 | 1 of 3 / 0 of 3 |
+| success ↑, SuperTrack / SuperMimic | 100.0 / 92.8 % | 0.0 / 0.1 % |
+| success per seed, SuperTrack; SuperMimic | 100 / 100 / 100 %; 97.3 / 99.2 / 82.0 % | 0 / 0 / 0 %; 0 / 0.4 / 0 % |
+| runs settled, SuperTrack / SuperMimic | 3 of 3 / 0 of 3 | 1 of 3 / 2 of 3 |
 | open loop, success: the reference's joint positions; the demonstration's recorded targets | 0 %; 100 % | 0 %; 34-39 % |
-| object position ↓, SuperTrack / SuperMimic | 1.89 / 15.8 mm | 1.79 / 21.5 mm (SuperMimic: 2 of 3 seeds) |
-| episodes ended ↓, SuperTrack / SuperMimic | 23.0 / 53.4 % | 0 / 89.3 % |
-| training (min), SuperTrack / SuperMimic, each run alone on an A100 80GB SXM4 | 10.0 / 11.5 | 11.7 / 13.0 |
-| to the target ↓, SuperTrack / SuperMimic | 6.8 min (2 of 3 runs) / not reached | 7.8 min (1 of 3 runs) / not reached |
+| object position ↓, SuperTrack / SuperMimic | 1.79 / 6.63 mm | 4.53 / 13.1 mm |
+| episodes ended ↓, SuperTrack / SuperMimic | 0 / 7.2 % | 0 / 16.9 % |
+| training (min), SuperTrack / SuperMimic, each run alone on an A100 80GB SXM4 | 19.8 / 22.8 | 23.2 / 26.2 |
+| to the target ↓, SuperTrack / SuperMimic | 12.6 min / 21.9 min (1 of 3 runs) | not reached / not reached |
 
 ### BlinkMimic's options
 

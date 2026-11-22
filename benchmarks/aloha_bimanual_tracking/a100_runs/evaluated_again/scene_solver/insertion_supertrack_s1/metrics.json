@@ -3,8 +3,8 @@
   "demos": [
     0
   ],
-  "iteration": 6000,
-  "wall_time_s": 700.788298368454,
+  "iteration": 12000,
+  "wall_time_s": 1389.513753414154,
   "control_dt": 0.02,
   "num_envs": 256,
   "solver_iterations": [
@@ -18,16 +18,16 @@
         "success_rate": 0.0,
         "terminated": 0.0,
         "tracked_s": 8.5,
-        "object_mm": 1.6008212696760893,
-        "object_final_mm": 2.1801842376589775,
-        "object_deg": 0.8845914597866914,
-        "keypoint_mm": 3.213356016203761,
-        "joint_rad": 0.019339080899953842,
-        "finger_mm": 0.4899957566522062,
+        "object_mm": 4.113215953111649,
+        "object_final_mm": 10.156831704080105,
+        "object_deg": 2.544407469379126,
+        "keypoint_mm": 6.453190930187702,
+        "joint_rad": 0.046765781939029694,
+        "finger_mm": 0.5809402209706604,
         "stage_rates": [
           1.0,
           1.0,
-          0.0,
+          1.0,
           0.0
         ],
         "final_state_rate": 0.0
@@ -36,19 +36,19 @@
         "success_rate": 0.0,
         "terminated": 0.0,
         "tracked_s": 8.5,
-        "object_mm": 1.6023695934563875,
-        "object_final_mm": 2.2421847097575665,
-        "object_deg": 0.889879627029868,
-        "keypoint_mm": 3.235137090086937,
-        "joint_rad": 0.019412346184253693,
-        "finger_mm": 0.49098365707322955,
+        "object_mm": 4.127300810068846,
+        "object_final_mm": 10.253852233290672,
+        "object_deg": 2.533659099503053,
+        "keypoint_mm": 6.484266836196184,
+        "joint_rad": 0.046775296330451965,
+        "finger_mm": 0.5677012959495187,
         "stage_rates": [
           1.0,
           1.0,
-          0.0390625,
+          1.0,
           0.0
         ],
-        "final_state_rate": 0.00390625
+        "final_state_rate": 0.0
       }
     }
   },
@@ -56,18 +56,18 @@
     "success_rate": 0.0,
     "terminated": 0.0,
     "tracked_s": 8.5,
-    "object_mm": 1.6023695934563875,
-    "object_final_mm": 2.2421847097575665,
-    "object_deg": 0.889879627029868,
-    "keypoint_mm": 3.235137090086937,
-    "joint_rad": 0.019412346184253693,
-    "finger_mm": 0.49098365707322955,
+    "object_mm": 4.127300810068846,
+    "object_final_mm": 10.253852233290672,
+    "object_deg": 2.533659099503053,
+    "keypoint_mm": 6.484266836196184,
+    "joint_rad": 0.046775296330451965,
+    "finger_mm": 0.5677012959495187,
     "stage_rates": [
       1.0,
       1.0,
-      0.0390625,
+      1.0,
       0.0
     ],
-    "final_state_rate": 0.00390625
+    "final_state_rate": 0.0
   }
 }

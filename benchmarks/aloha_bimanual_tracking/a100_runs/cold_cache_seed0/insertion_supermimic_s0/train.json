@@ -1,8 +1,8 @@
 {
-  "iteration": 6000,
-  "minutes": 18.456599999999998,
-  "sim_steps": 12288000.0,
-  "it_per_s": 7.73005,
+  "iteration": 12000,
+  "minutes": 30.7524,
+  "sim_steps": 24576000.0,
+  "it_per_s": 7.71015,
   "config": "aloha-supermimic",
   "options": {
     "task": "aloha_insertion",
@@ -11,11 +11,12 @@
     ],
     "seed": 0,
     "algo": "supermimic",
-    "iterations": 6000,
-    "lr_decay_iters": 6000,
+    "iterations": 12000,
+    "lr_decay_iters": 12000,
     "horizon": 16,
     "episode": 500,
     "ckpt_every": 200,
-    "solver_iterations": 20
+    "solver_iterations": 20,
+    "pi_ema": 0.0
   }
 }
