@@ -1,14 +1,15 @@
 {
   "checkpoint": "logs/mimic_mjx_formal/stick_supertrack_s0/last.pt",
   "iteration": 4000,
-  "minutes": 12.374766949812571,
+  "minutes": 12.49634220202764,
   "animal": "stick",
+  "ref_qvel": "positions",
   "clips": 10,
   "episodes": 50,
-  "ended_share": 0.03999999910593033,
-  "body_mm": 0.8220011591911316,
-  "end_eff_mm": 1.2708861827850342,
-  "root_pos_mm": 0.5038235783576965,
-  "joint_deg": 10.693345872119256,
-  "lived_share": 0.9810267686843872
+  "ended_share": 0.09999999403953552,
+  "body_mm": 0.6111782789230347,
+  "end_eff_mm": 1.0248887538909912,
+  "root_pos_mm": 0.2870589792728424,
+  "joint_deg": 10.093465725242668,
+  "lived_share": 0.9613839387893677
 }

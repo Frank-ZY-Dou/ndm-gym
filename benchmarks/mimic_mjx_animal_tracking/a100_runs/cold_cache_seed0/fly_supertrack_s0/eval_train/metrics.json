@@ -1,14 +1,15 @@
 {
   "checkpoint": "logs/mimic_mjx_formal/fly_supertrack_s0/last.pt",
   "iteration": 6000,
-  "minutes": 17.10549275080363,
+  "minutes": 16.821235954761505,
   "animal": "fly",
+  "ref_qvel": "positions",
   "clips": 10,
   "episodes": 50,
-  "ended_share": 0.019999999552965164,
-  "body_mm": 0.05946643278002739,
-  "end_eff_mm": 0.10681203007698059,
-  "root_pos_mm": 0.02600380778312683,
-  "joint_deg": 3.998368834463369,
-  "lived_share": 0.9808012843132019
+  "ended_share": 0.0,
+  "body_mm": 0.05835646390914917,
+  "end_eff_mm": 0.10893300175666809,
+  "root_pos_mm": 0.02031177654862404,
+  "joint_deg": 4.7516012423587295,
+  "lived_share": 1.0
 }
