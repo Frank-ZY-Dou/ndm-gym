@@ -72,11 +72,27 @@ Fixed before the runs they apply to.
   Per algorithm the variant with the highest success at its last checkpoint, averaged over the two tasks, is taken;
   among those within 0.02 of it the one with the lowest objects' position error (averaged over the tasks, over the
   rollouts that do not terminate), then the one with the fewest changes. The round is reported with every run.
-- **Budget and stopping:** one rule for both algorithms. Every reported run trains for the round's 6,000 iterations
+- **Second round:** at the first round's 6,000 iterations some run of every case had not settled (below;
+  [results](results.md)). One more round follows, as the first: on demonstration 1 of each task with seed 0, the same
+  runs for both algorithms, from the first round's choice (episodes of up to 500 control steps). Four variants per
+  algorithm and task, the learning rate's cosine over each one's iterations, a checkpoint every 200:
+  1. 12,000 iterations;
+  2. 12,000 iterations with the policy's average (`--pi_ema 0.995`, the value of the hand task's fast configurations:
+     the checkpoints hold the average and the evaluation plays it);
+  3. 24,000 iterations;
+  4. 24,000 iterations with the policy's average.
+
+  One variant is taken for both algorithms, so that their budgets stay the same: the one with the most settled runs
+  among its four (two algorithms, two tasks); among those, the one with the highest success at its last checkpoint
+  averaged over the four; among those within 0.02 of it the one with the lowest objects' position error (as in the
+  first round), then the one with fewer iterations, then the one without the average. The round is reported with every
+  run. There is no third round.
+- **Budget and stopping:** one rule for both algorithms. Every reported run trains for the second round's iterations
   (the cap) and its last checkpoint is the one evaluated. A run has settled if its last five kept checkpoints (the last
   1,000 iterations) agree: their successes within 0.05 of one another and their objects' errors within 1 mm or a
   quarter of their mean, whichever is larger. The results say per run whether it settled; where runs of a case did
-  not, its numbers are named the cap's and no comparison is drawn from them.
+  not, its numbers are named the cap's and no comparison is drawn from them. The runs at the first round's 6,000
+  iterations stay in the results beside them, as they were.
 - **Seeds:** training seeds 0, 1, 2 per configuration, every seed reported; mean and sample SD; the GPU and settings
   stated.
 - **Evaluation:** 256 rollouts of the whole demonstration from perturbed starts, without exploration noise. Beside them
