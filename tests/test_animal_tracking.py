@@ -21,7 +21,7 @@ from ndm_gym.algos.animal_algos import ANIMAL_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.algos.hand_fast import add_hand_fast_args
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.core.rotations import quat_to_mat
-from ndm_gym.motion.sources.mimic_mjx import resample
+from ndm_gym.motion.sources.mimic_mjx import resample, velocities_from_positions
 from ndm_gym.robots.animals import activation_filter
 from ndm_gym.tasks.animal_tracking import AnimalKinematics, AnimalTask, RewardCfg, build_reference
 from ndm_gym.train import add_train_args
@@ -130,6 +130,49 @@ def test_resample():
     assert torch.allclose(2 * torch.atan2(q2[:, 6], q2[:, 3]), torch.linspace(0, 1.0, q2.shape[0]), atol=1e-5)
     q3, v3 = resample(q, v, 100.0, 0.01, [3])  # the control rate: unchanged
     assert torch.allclose(q3, q) and torch.allclose(v3, v)
+
+
+def test_velocities_from_positions():
+    """The velocities of a clip's positions: each frame's takes it to the next (MuJoCo's integration), a constant velocity is
+    recovered (the root's angular velocity in the body's frame), the last frame repeats the one before, and a file's
+    velocities scaled as MIMIC-MJX's are (10 times the root's) are not used."""
+    model, dt, T = body(), CTRL_DT, 12
+    v0 = np.array([0.3, -0.2, 0.1, 0.5, -1.0, 2.0, 0.7, -0.4])  # root linear (world), root angular (body), two hinges
+    q = np.zeros((T, model.nq))
+    q[0, 2], q[0, 3:7] = 0.2, (0.9, 0.1, -0.3, 0.3)
+    q[0, 3:7] /= np.linalg.norm(q[0, 3:7])
+    for t in range(T - 1):
+        q[t + 1] = q[t]
+        mujoco.mj_integratePos(model, q[t + 1], v0, dt)
+    v = velocities_from_positions(model, torch.tensor(q, dtype=torch.float32), dt)
+    assert v.shape == (T, model.nv) and v.dtype == torch.float32
+    assert torch.allclose(v, torch.tensor(v0, dtype=torch.float32).expand(T, -1), atol=2e-3)
+    assert torch.equal(v[-1], v[-2])
+    # a simulated clip: its positions' velocities take every frame to the next
+    qs, vs = clip(model, 30, 0)
+    vp = velocities_from_positions(model, qs, dt).double().numpy()
+    for t in range(qs.shape[0] - 1):
+        q1 = qs[t].double().numpy().copy()
+        mujoco.mj_integratePos(model, q1, vp[t], dt)
+        assert np.allclose(q1, qs[t + 1].double().numpy(), atol=1e-5)
+    # the simulator's own velocities are close to them, a file's with the root's linear velocity 10 times are not
+    assert float((torch.tensor(vp[1:-1, :3]) - vs[1:-1, :3].double()).abs().max()) < 0.25
+    assert float((torch.tensor(vp[1:-1, :3]) - 10 * vs[1:-1, :3].double()).abs().max()) > 1.0
+    with pytest.raises(ValueError):
+        velocities_from_positions(model, qs[:, :-1], dt)
+
+
+def test_ref_qvel_option(capsys):
+    """--ref_qvel: the file's velocities by default, the positions' in the named configurations; another value is refused."""
+    base = ["--animal", "rat", "--clip_ids", "0"]
+    assert parse_args(base).ref_qvel == "stored"
+    assert parse_args([*base, "--ref_qvel", "positions"]).ref_qvel == "positions"
+    for name in ("stick-supertrack", "fly-supermimic", "rat-supertrack", "rat-supermimic"):
+        assert parse_args(["--config", name]).ref_qvel == "positions"
+    assert parse_args(["--config", "rat-supertrack", "--ref_qvel", "stored"]).ref_qvel == "stored"
+    with pytest.raises(SystemExit):
+        parse_args([*base, "--ref_qvel", "fitted"])
+    assert "--ref_qvel" in capsys.readouterr().err
 
 
 def test_world_model_control_input():
@@ -286,6 +329,35 @@ def test_bodies_match_their_clips(animal):
         assert f["qpos"].shape[1] == m.nq and f["qvel"].shape[1] == m.nv
     lay = MjcfLayout.from_model(build_model(animal, DATA, activation=False))
     assert lay.anchor == (0, 0) and m.opt.noslip_iterations == 0
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(DATA, "rat", "reference.h5")), reason="MIMIC-MJX's data not downloaded")
+@pytest.mark.parametrize("animal,factor", [("rat", 10.0), ("fly", 0.1), ("stick", 10.0)])
+def test_reference_velocities(animal, factor):
+    """At the pinned revision the files' velocities are not those of their positions (the root's linear velocity ``factor``
+    times); with --ref_qvel positions the task's reference velocities take each of its frames to the next."""
+    pytest.importorskip("h5py")
+    from ndm_gym.motion.sources.mimic_mjx import load_clips
+    from ndm_gym.robots.animals import ANIMALS
+    from ndm_gym.train_animal import build
+
+    if not os.path.exists(os.path.join(DATA, animal, "reference.h5")):
+        pytest.skip(f"{animal}'s data not downloaded")
+    data = load_clips(DATA, animal, [0, 1])
+    fd = np.diff(data["qpos"][:, :, :3].astype(np.float64), axis=1) * ANIMALS[animal].mocap_hz
+    stored = data["qvel"][:, :-1, :3].astype(np.float64)
+    assert abs((stored * fd).sum() / (fd * fd).sum() / factor - 1) < 0.01
+    model, _, _, task = build(animal, [0, 1], DATA, "cpu", ref_qvel="positions")
+    ref, dt = task.ref, ANIMALS[animal].ctrl_dt
+    q, v = ref.qpos.double().numpy(), ref.qvel.double().numpy()
+    inner = np.flatnonzero((torch.arange(ref.frames) < ref.end).numpy())  # every frame but each clip's last
+    for t in inner[:: max(1, len(inner) // 200)]:
+        q1 = q[t].copy()
+        mujoco.mj_integratePos(model, q1, v[t], dt)
+        assert np.allclose(q1, q[t + 1], atol=1e-4)
+    from_file = build(animal, [0, 1], DATA, "cpu")[3]
+    assert torch.equal(from_file.ref.qpos, ref.qpos) and not torch.allclose(from_file.ref.qvel, ref.qvel, atol=1e-2)
+    assert from_file.joint_speed != task.joint_speed  # the joint-velocity reward's scale follows the reference's velocities
 
 
 def test_fused_kinematics_match():

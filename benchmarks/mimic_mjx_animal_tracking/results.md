@@ -10,7 +10,9 @@ budget.
 - **Runs:** SuperTrack with `hand-supertrack-fast`'s options (`--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`,
   Muon, the policy average, the learning-rate ramp, the hand task's systems options), SuperMimic with `hand-supermimic-fast`'s
   (`--lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95` and the same). Both with the same changes:
-  `--pi_batch 2048 --fused_fk` (from the rat's SuperTrack iteration time, Development notes), `--wm_lr 2e-3` (LAFAN1's
+  `--ref_qvel positions` (the reference's velocities from its positions; the files' are not theirs at the pinned revision,
+  [the task](../../docs/tasks/animals.md)), `--pi_batch 2048 --fused_fk` (from the rat's SuperTrack iteration time,
+  Development notes), `--wm_lr 2e-3` (LAFAN1's
   configurations'), the iterations below with the learning rate decayed over them (`--lr_decay_iters`), a checkpoint every
   250 (`--ckpt_every 250 --ckpt_keep`); `train_animal`'s defaults otherwise, 2,048 worlds. No other tuning on the bodies
   for either algorithm. `benchmarks/mimic_mjx_animal_tracking/run_formal.sh` runs them (`--config <body>-<algorithm>`).

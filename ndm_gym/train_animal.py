@@ -44,7 +44,9 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
 UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "elementwise_3x3",
                        "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
 # the options a resumed run must share with its checkpoint
-RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
+RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "ref_qvel")
+# what a checkpoint written before an option existed ran with
+RESUME_ABSENT = {"ref_qvel": "stored"}
 
 
 def parse_clips(tokens: list[str]) -> list[int]:
@@ -68,6 +70,10 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--goal_stride", type=int, default=1, help="the goal's frames are 1, 1 + stride, 1 + 2 stride, ... control steps ahead")
     parser.add_argument("--episode", type=int, default=1000, help="an episode's longest length in control steps")
     parser.add_argument("--action_scale", type=float, default=0.5, help="a position servo's offset from the reference's joint at action 1 (rad)")
+    parser.add_argument("--ref_qvel", type=str, default="stored", choices=["stored", "positions"],
+                        help="the reference's velocities (the episodes' starts, the goal, the joint-velocity reward and its scale): the "
+                        "reference file's qvel, or the velocities of its positions at the control rate. At the pinned revision the file's "
+                        "are not those of its positions (the root's linear velocity 10 or 0.1 times, joint speeds clipped at 20 rad/s)")  # fmt: skip
     parser.add_argument("--fused_fk", action="store_true",
                         help="the bodies' forward kinematics body by body with elementwise 3 x 3 products and no scatter (MjcfWorldModel.fused's "
                         "path): far fewer kernels once compiled (changes results by rounding)")  # fmt: skip
@@ -115,13 +121,14 @@ def parse_args(argv: list[str] | None = None):
 
 
 def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_std_scale: float = 1.0, action_scale: float = 0.5,
-          goal_stride: int = 1, fused_fk: bool = False):  # fmt: skip
-    """The body's MjModel, the world model's layout and its position lead, and the task of the clips."""
+          goal_stride: int = 1, fused_fk: bool = False, ref_qvel: str = "stored"):  # fmt: skip
+    """The body's MjModel, the world model's layout and its position lead, and the task of the clips. ``ref_qvel``: the
+    reference's velocities are the file's ("stored") or those of its positions at the control rate ("positions")."""
     import dataclasses
 
     import torch
 
-    from ndm_gym.motion.sources.mimic_mjx import load_clips, resample
+    from ndm_gym.motion.sources.mimic_mjx import load_clips, resample, velocities_from_positions
     from ndm_gym.robots.animals import ANIMALS, activation_filter, build_model
     from ndm_gym.tasks.animal_tracking import AnimalKinematics, AnimalTask, RewardCfg, build_reference
     from ndm_gym.worldmodels.mjcf import MjcfLayout, mean_velocity_lead
@@ -140,6 +147,10 @@ def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_s
     data = load_clips(data_dir, animal, clip_ids)
     quat = [lay.anchor[0] + 3]
     clips = [resample(torch.from_numpy(q), torch.from_numpy(v), spec.mocap_hz, spec.ctrl_dt, quat) for q, v in zip(data["qpos"], data["qvel"], strict=True)]
+    if ref_qvel == "positions":  # --ref_qvel
+        clips = [(q, velocities_from_positions(model, q, spec.ctrl_dt)) for q, _ in clips]
+    elif ref_qvel != "stored":
+        raise ValueError(f"ref_qvel is 'stored' or 'positions', not {ref_qvel!r}")
     ref = build_reference(clips, kin, device)
     r, rbar = activation_filter(model, substeps)
     task = AnimalTask(animal, model, kin, ref, ee, spec.ctrl_dt, r, rbar, RewardCfg().scaled(reward_std_scale), action_scale, goal_stride)
@@ -172,8 +183,9 @@ def main():
     resume_ck = torch.load(args.resume, map_location=dev, weights_only=False) if args.resume else None
     if resume_ck is not None:
         for k in RESUME_MATCH:
-            if resume_ck["args"][k] != getattr(args, k):
-                raise ValueError(f"--resume: --{k} must match the checkpoint's run ({resume_ck['args'][k]!r})")
+            ran = resume_ck["args"][k] if k in resume_ck["args"] else RESUME_ABSENT[k]
+            if ran != getattr(args, k):
+                raise ValueError(f"--resume: --{k} must match the checkpoint's run ({ran!r})")
     if os.path.exists(log_path):
         if resume_ck is None:
             raise ValueError(f"{log_path} exists: continue that run with --resume (its last.pt) or use another --log_dir")
@@ -185,7 +197,7 @@ def main():
 
     spec = ANIMALS[args.animal]
     model, wm_lay, pos_lead, task = build(args.animal, parse_clips(args.clip_ids), args.data_dir, dev, args.reward_std_scale, args.action_scale,
-                                          args.goal_stride, args.fused_fk)  # fmt: skip
+                                          args.goal_stride, args.fused_fk, args.ref_qvel)  # fmt: skip
     print(f"{args.animal}: {task.ref.frames} reference frames, {task.nq} qpos, {task.nu} actuators, {task.na} activations, size {task.length:.4g}, "
           f"obs {task.obs_dim}, goal {task.goal_frame_dim} x {args.goal_frames}", flush=True)  # fmt: skip
     sim = AnimalSim(model, task, args.num_envs, dev, spec.ctrl_dt, episode=args.episode, stagger=True, nconmax=spec.nconmax, njmax=spec.njmax)
