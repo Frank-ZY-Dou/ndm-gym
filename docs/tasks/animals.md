@@ -32,6 +32,15 @@ Every body runs at MIMIC-MJX's solver settings (Newton, 5 iterations and 5 line-
 none). The clips hold stac-mjx's qpos and qvel of the body per frame; their layouts match the bodies' exactly, and a control
 step on MuJoCo-Warp from the clips' frames matches MuJoCo's to 2e-8 (median).
 
+**The reference's velocities.** At the pinned revision the clips' `qvel` is not the velocity of their `qpos`: the root's linear
+velocity is 10 times the positions' forward difference for the rat and the stick insect and 0.1 times for the fly, and joint
+speeds are clipped at 20 rad/s (1.7 % of the rat's joint entries and 25.5 % of the stick insect's, over the first 20 clips;
+stac-mjx's #135 fixed both after that revision). The task reads the reference's velocities at an episode's start, in the goal,
+in the joint-velocity reward and in that reward's scale (the reference's RMS joint speed). `--ref_qvel positions` takes them
+from the reference's positions at the control rate (`motion.sources.mimic_mjx.velocities_from_positions`: MuJoCo's velocity
+from each frame to the next, the last frame's that of the frame before); `--ref_qvel stored`, the default, reads the file's.
+The named configurations and the benchmark use `--ref_qvel positions`.
+
 **The rat's activations.** Its actuators filter their controls (an activation a with da/dt = (u - a) / 40 ms), so qpos and
 qvel are not its whole state. Over a control step with the control held, MuJoCo's Euler step of the filter has a closed form
 (`robots.animals.activation_filter`): from a0 under u the step ends at u + (a0 - u) r and its physics steps' forces see the
@@ -51,7 +60,7 @@ filters) reads the mean and the start activation in the controls' place, which f
 | goal | 5 reference frames ahead about the state in the root's frame: the root's offset and relative rotation, the joints' offsets, the root's velocity, the end effectors about the reference's root |
 | reward | kernels on the root's position and rotation, the joints and their velocities, the tracked bodies' and the end effectors' positions; lengths in fractions of the body's size (the bodies' median largest distance from the root), so one setting serves the three bodies' units; an action-rate and a control cost |
 | termination | MIMIC-MJX's: the root farther than 0.1 m (rat), 0.5 cm (fly) or 0.05 m (stick insect) from its reference, turned more than 120 / 30 / 120 degrees away, or the joints' L2 error above 4.5 / 20 / 4.5 rad |
-| episode | from a random frame of a clip at the reference's state (noise of 0.02 rad on the joints), to its clip's end |
+| episode | from a random frame of a clip at the reference's state (its velocities by `--ref_qvel`; noise of 0.02 rad on the joints), to its clip's end |
 
 ## Method
 

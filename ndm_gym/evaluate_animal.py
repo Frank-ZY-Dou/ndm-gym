@@ -57,8 +57,9 @@ def main():
     clip_ids = parse_clips(args.clip_ids or run.clip_ids)
     data_dir = args.data_dir or run.data_dir
     spec = ANIMALS[run.animal]
+    ref_qvel = getattr(run, "ref_qvel", "stored")  # a run from before --ref_qvel trained on the file's velocities
     model, _, _, task = build(run.animal, clip_ids, data_dir, dev, run.reward_std_scale, run.action_scale, run.goal_stride,
-                             fused_fk=run.fused_fk)
+                             fused_fk=run.fused_fk, ref_qvel=ref_qvel)
     ref = task.ref
     starts = torch.unique(ref.start)
     reps = 1 + args.repeats
@@ -108,7 +109,8 @@ def main():
         mm = MM[run.animal]
         n = steps.clamp_min(1)
         metrics = {
-            "checkpoint": os.path.abspath(path), "iteration": ck.get("iteration"), "minutes": ck.get("wall_time", float("nan")) / 60, "animal": run.animal, "clips": len(starts),
+            "checkpoint": os.path.abspath(path), "iteration": ck.get("iteration"), "minutes": ck.get("wall_time", float("nan")) / 60, "animal": run.animal, "ref_qvel": ref_qvel,
+            "clips": len(starts),
             "episodes": N, "ended_share": float(ended.float().mean()),
             "body_mm": float((sums["body"] / n).mean() * mm), "end_eff_mm": float((sums["end_eff"] / n).mean() * mm),
             "root_pos_mm": float((sums["root_pos"] / n).mean() * mm), "joint_deg": float(np.degrees(float((sums["joint"] / n).mean()))),

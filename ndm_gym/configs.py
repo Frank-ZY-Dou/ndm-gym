@@ -65,6 +65,8 @@ ANIMAL_SPEED = "--pi_batch 2048 --wm_lr 2e-3 --fused_fk --clip_ids 0-9"
 ANIMAL_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
 ANIMAL_SM = f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
 ANIMAL_ITERS = {"stick": 4000, "fly": 6000, "rat": 10000}
+# the reference's velocities from its own positions: at the pinned revision the files' qvel is not theirs (train_animal --ref_qvel)
+ANIMAL_REF = "--ref_qvel positions"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -186,7 +188,7 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
     },
     "train_animal": {
-        f"{animal}-{algo}": (f"{opts} --animal {animal} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 250 --ckpt_keep",
+        f"{animal}-{algo}": (f"{opts} --animal {animal} {ANIMAL_REF} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 250 --ckpt_keep",
                              f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, A100 80GB SXM4)")
         for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
         for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))

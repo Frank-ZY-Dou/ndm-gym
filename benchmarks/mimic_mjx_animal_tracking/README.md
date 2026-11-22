@@ -11,8 +11,11 @@ published.
   (MIT), at a pinned revision: the rat's `rodent_reference_clips.h5` (842 clips of 250 frames, 5 s at 50 Hz, from DANNCE
   keypoints), the fly's `fly_reference_clip.h5` (1,730 clips of 600 frames, 1.2 s of treadmill walking at 500 Hz) and the
   stick insect's `stick_mesh_reference.h5` (75 clips of 225 frames at 50 Hz, the clips of its mesh model). Each holds
-  stac-mjx's qpos and qvel of the body per frame (none are retargeted here), resampled to the control rate. 2.9 GB of the
-  dataset's 101 GB; downloaded by a script, not redistributed.
+  stac-mjx's qpos and qvel of the body per frame (none are retargeted here), resampled to the control rate. At this revision
+  the files' qvel is not the velocity of their qpos (the root's linear velocity is 10 times the positions' for the rat and
+  the stick insect and 0.1 times for the fly; joint speeds are clipped at 20 rad/s), so the benchmark takes the reference's
+  velocities from its positions ([the task](../../docs/tasks/animals.md)). 2.9 GB of the dataset's 101 GB; downloaded by a
+  script, not redistributed.
 - **Bodies:** the rat's, the fly's and the stick insect's models of
   [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) (BSD-3-Clause; its fly is
   [flybody](https://github.com/TuragaLab/flybody)'s, Apache-2.0), built as MIMIC-MJX's environments build them
@@ -32,6 +35,8 @@ Fixed before the three-seed runs.
 - **Clips:** one policy per body on clips 0-9 of its reference; clips 10-19 held out, never trained on.
 - **Configurations:** one per algorithm, the same for the three bodies apart from the budget (`--config <body>-<algorithm>`,
   [results](results.md#how-the-numbers-were-obtained)).
+- **Reference velocities:** those of the reference's positions at the control rate (`--ref_qvel positions`), for both
+  algorithms.
 - **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat); a
   checkpoint kept every 250.
 - **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD; the GPU stated.
