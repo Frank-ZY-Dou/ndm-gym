@@ -2,7 +2,7 @@
 # The benchmark's runs: Transfer Cube and Insertion (demonstration 0), SuperTrack and SuperMimic at their configurations
 # (aloha-supertrack, aloha-supermimic), seeds 0-2; then each run's last checkpoint evaluated (256 perturbed rollouts, the
 # reference's joint positions and the demonstration's recorded targets open loop beside).
-#   benchmarks/aloha_bimanual_tracking/run_formal.sh   (OUT=..., DATA=... to override; TASKS, ALGOS: a part of the runs)
+#   benchmarks/aloha_bimanual_tracking/run_formal.sh   (OUT=..., DATA=... to override; TASKS, ALGOS, SEEDS: a part of the runs)
 set -euo pipefail  # a run that fails stops the queue
 REPO=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${OUT:-$REPO/logs/aloha_formal}
@@ -11,7 +11,7 @@ mkdir -p "$OUT"
 cd "$REPO"
 for task in ${TASKS:-transfer_cube insertion}; do
   for algo in ${ALGOS:-supertrack supermimic}; do
-    for seed in 0 1 2; do
+    for seed in ${SEEDS:-0 1 2}; do
       name=${task}_${algo}_s${seed}
       [ -f "$OUT/$name/eval/metrics.json" ] && continue
       rm -rf "$OUT/$name"

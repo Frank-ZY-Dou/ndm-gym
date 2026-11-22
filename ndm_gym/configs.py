@@ -67,9 +67,9 @@ ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
 ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 1500 --lr_decay_iters 4000 --ckpt_every 100 --ckpt_keep"
 # bimanual demonstration tracking (benchmarks/aloha_bimanual_tracking): the manipulation task's options with episodes of up to
 # 500 control steps (10 s at ACT's 50 Hz, the manipulation task's 200 steps at 20 Hz), its tuning round's choice for both
-# algorithms; the benchmark's runs: 6,000 iterations with the cosine over them, the solver at 20 iterations, a checkpoint
-# kept every 200
-ALOHA_RUN = "--episode 500 --solver_iterations 20 --iterations 6000 --lr_decay_iters 6000 --ckpt_every 200 --ckpt_keep"
+# algorithms; the benchmark's runs: 12,000 iterations with the cosine over them (its second round's choice for both), the
+# solver at 20 iterations, a checkpoint kept every 200
+ALOHA_RUN = "--episode 500 --solver_iterations 20 --iterations 12000 --lr_decay_iters 12000 --ckpt_every 200 --ckpt_keep"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {

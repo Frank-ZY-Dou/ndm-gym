@@ -98,7 +98,7 @@ the frozen model (`ndm_gym/algos/robomimic_algos.py`), as in the manipulation ta
 `--config list` prints the configurations with what each measured. `aloha-supertrack` and `aloha-supermimic` take
 `robomimic-supertrack`'s and `robomimic-supermimic`'s algorithm options with episodes of up to 500 control steps (10 s; the
 choice of the benchmark's tuning round on demonstration 1, for both), `--solver_iterations 20` and the benchmark's budget
-(6,000 iterations with the learning rate's cosine over them).
+(12,000 iterations with the learning rate's cosine over them, the choice of its second round, for both).
 
 Results: [benchmarks/aloha_bimanual_tracking](../../benchmarks/aloha_bimanual_tracking/results.md). In short (demonstration
 0, seeds 0 / 1 / 2, the last checkpoint of 6,000 iterations, each run alone on an A100 80GB SXM4; in every case some run

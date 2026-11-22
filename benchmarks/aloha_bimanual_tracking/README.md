@@ -87,6 +87,10 @@ Fixed before the runs they apply to.
   averaged over the four; among those within 0.02 of it the one with the lowest objects' position error (as in the
   first round), then the one with fewer iterations, then the one without the average. The round is reported with every
   run. There is no third round.
+
+  Its outcome: variant 1, 12,000 iterations without the average. Two of every variant's four runs settled, and variant 1
+  has the highest success at its last checkpoint averaged over the four (54.1 % against 41.0, 44.7 and 41.3 % for
+  variants 2 to 4); so the reported runs train 12,000 iterations.
 - **Budget and stopping:** one rule for both algorithms. Every reported run trains for the second round's iterations
   (the cap) and its last checkpoint is the one evaluated. A run has settled if its last five kept checkpoints (the last
   1,000 iterations) agree: their successes within 0.05 of one another and their objects' errors within 1 mm or a
