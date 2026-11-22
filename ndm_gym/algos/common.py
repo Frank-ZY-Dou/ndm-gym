@@ -310,6 +310,15 @@ class Algo:
         # transition, as a compiled function (eagerly, the RigidFormer's forward kinematics are hundreds of small launches)
         self.compile_eager = getattr(args, "compile_eager", False)
         self.norm_inputs = torch.compile(self.wm.inputs) if self.compile_eager else self.wm.inputs
+        # optional (train.py --compile_norms): the world-model normalizers' updates of every collected transition
+        # (update_wm_norms) as one compiled function: the network's inputs, its targets and, with --wm_structured, the plain
+        # increments, computed once (the targets build on them), the statistics written in place (--no_sync). Equal up to
+        # float rounding.
+        self.compile_norms = getattr(args, "compile_norms", False)
+        if self.compile_norms:
+            if not self.no_sync or rf:
+                raise ValueError("--compile_norms needs --no_sync (the statistics written in place) and the MLP world model")
+            self.wm_norms_c = torch.compile(self._wm_norms)
         self.fail_starts = 0
 
     def optimizer_kw(self, lr: float) -> dict:
@@ -412,10 +421,23 @@ class Algo:
     def update_wm_norms(self, S0, S1, a, xi):
         """Fit the world model's input and output normalizers on simulator transitions (states S0 -> S1, setpoints a,
         context xi)."""
+        if self.compile_norms:
+            return self.wm_norms_c(S0, S1, a, xi)
         self._update_norm(self.wm.in_norm, self.norm_inputs(S0, a, normalize_xi(xi)))
         self._update_norm(self.wm.out_norm, self.wm.targets(S0, S1))
         if getattr(self.wm, "structured", False):  # --wm_structured: the plain increments' scale normalizes the fit's loss
             self._update_norm(self.wm.inc_norm, self.wm.increments(S0, S1))
+
+    def _wm_norms(self, S0, S1, a, xi):
+        """--compile_norms: ``update_wm_norms`` with the plain increments computed once (--wm_structured), the statistics
+        written in place (RunningNorm.update with --no_sync)."""
+        self.wm.in_norm.update(self.wm.inputs(S0, a, normalize_xi(xi)))
+        if getattr(self.wm, "structured", False):
+            inc = self.wm.increments(S0, S1)
+            self.wm.out_norm.update(self.wm.targets(S0, S1, inc))
+            self.wm.inc_norm.update(inc)
+        else:
+            self.wm.out_norm.update(self.wm.targets(S0, S1))
 
     @torch.no_grad()
     def update_pi_norms(self, o, g):

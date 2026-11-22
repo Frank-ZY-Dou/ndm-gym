@@ -68,9 +68,10 @@ class SemiImplicitIncrementWorldModel(IncrementWorldModel):
         Ht, Rt = yaw_mat(R).transpose(-1, -2), R.transpose(-1, -2)
         return (Ht @ (a * v + b * v1).unsqueeze(-1)).squeeze(-1), (Rt @ (a * w + b * w1).unsqueeze(-1)).squeeze(-1), a * qd + b * qd1
 
-    def targets(self, S, S1):
-        """The velocity increments and the position corrections on top of the drift from S to S1."""
-        dp, dth, dv, dw, dq, dqd = self.increments(S, S1).split((3, 3, 3, 3, NUM_J, NUM_J), -1)
+    def targets(self, S, S1, inc=None):
+        """The velocity increments and the position corrections on top of the drift from S to S1; ``inc``: the plain
+        increments ``increments(S, S1)`` where the caller has them (train.py --compile_norms)."""
+        dp, dth, dv, dw, dq, dqd = (self.increments(S, S1) if inc is None else inc).split((3, 3, 3, 3, NUM_J, NUM_J), -1)
         gp, gth, gq = self.drift(S, S1[2], S1[3], S1[5])
         return torch.cat((dp - gp, dth - gth, dv, dw, dq - gq, dqd), -1)
 

@@ -97,3 +97,22 @@ def test_the_lafan1_accurate_configurations_are_their_3h_runs(name):
     assert absent.items() <= NOT_HERE.items(), absent
     skip = {"seed", "motion_dir"}
     assert {k: v for k, v in got.items() if k in rec and k not in skip} == {k: v for k, v in rec.items() if k not in skip}
+
+
+@pytest.mark.parametrize("name", list(configs.CONFIGS["train_quadrotor"]))
+def test_the_quadrotor_configurations_are_their_runs(name):
+    """Each quadrotor configuration parses to the arguments a run of its README row recorded (seed 0's on one flight,
+    tests/data/configs/<name>.args.json, kept without the configuration's name and the run's directories): every recorded argument
+    but the seed. The fast configurations' runs were capped at 3,000 iterations and stopped once the target had held for 500; the
+    cap sets only where a run ends (the learning rate's schedule is --lr_decay_iters'). The recorded options this trainer does not
+    have (NOT_HERE) were off."""
+    import json
+    import os
+
+    rec = json.load(open(os.path.join(os.path.dirname(__file__), "data", "configs", f"{name}.args.json")))
+    got = vars(parse("train_quadrotor", ["--config", name, "--flight", *rec["flight"]]))
+    assert got["config"] == name
+    absent = {k: rec.pop(k) for k in set(rec) - set(got)}
+    assert absent.items() <= NOT_HERE.items(), absent
+    assert rec.pop("iterations") == (3000 if name.endswith("-fast") else got["iterations"])
+    assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
