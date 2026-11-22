@@ -46,6 +46,7 @@ def fk_interp():
 def test_interpreter():
     """This module's CPU tests through Triton's interpreter, in a process of their own: triton.jit decides between the
     interpreter and the compiler when Triton and the kernels are imported, so TRITON_INTERPRET=1 is set from the start."""
+    pytest.importorskip("triton")  # find_spec also finds a Triton that fails to import (a broken or stand-in install)
     env = dict(os.environ, TRITON_INTERPRET="1", CUDA_VISIBLE_DEVICES="")
     cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", os.path.abspath(__file__), "-k", "not test_interpreter and not test_gpu"]
     r = subprocess.run(cmd, cwd=REPO, env=env, capture_output=True, text=True)
@@ -163,6 +164,7 @@ def test_unused_outputs(fk_interp, kin):
 def test_default_path_unchanged(kin):
     """Without the option the kinematics object runs the class's own forward; with it, ``forward`` is the kernels' and
     the class's forward is unchanged on the same object."""
+    pytest.importorskip("triton")  # find_spec also finds a Triton that fails to import (a broken or stand-in install)
     from ndm_gym.robots import g1
 
     assert kin.fused is False and "forward" not in vars(kin) and kin.forward.__func__ is ArticulationKinematics.forward
@@ -209,6 +211,7 @@ def test_compiled_graphs(fk_interp, kin):
 def test_refusals(kin, monkeypatch):
     """Other dtypes, mismatched shapes, unknown trees or bodies, trees the kernels do not cover, and CPU tensors for
     compiled kernels raise."""
+    pytest.importorskip("triton")  # find_spec also finds a Triton that fails to import (a broken or stand-in install)
     from ndm_gym.kernels import fk
     from ndm_gym.robots import g1
 
