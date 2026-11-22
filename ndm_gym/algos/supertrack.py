@@ -155,6 +155,13 @@ class SuperTrack(Algo):
         self.term_mult[[self.terms.index("hei"), self.terms.index("up")]] = args.st_balance_w
         # optional trick: later steps of the imagined window weigh more (1 at the first step, 1 + st_late_w at the last)
         self.late = 1 + args.st_late_w * torch.arange(self.HZ, device=dev) / (self.HZ - 1) if args.st_late_w != 0 else None
+        # optional (train.py --st_wm_fused): the world-model window loss (wm_window_terms) as two Triton kernels with a hand-written
+        # backward pass (kernels/wm_loss.py: both states' forward kinematics and the errors in registers)
+        self.wm_fused = getattr(args, "st_wm_fused", False)
+        if self.wm_fused:
+            from ..kernels import fk, wm_loss
+
+            self.wm_tree, self.wm_terms_fused = fk.register(kin), wm_loss.window_terms
         self.st_wm_terms = torch.compile(self._st_wm_terms, **self.wm_compile)
         self.st_imag_step = torch.compile(self._st_imag_step, **self.pi_compile)
         self.st_track = torch.compile(self._st_track, **self.pi_compile)
@@ -196,8 +203,11 @@ class SuperTrack(Algo):
     def _st_wm_terms(self, S_hat, s1, mask):
         """Per-window terms (sum over the valid steps) and their mean over windows."""
         B, k = s1.shape[:2]
-        E = wm_window_terms(self.kin, tuple(x.flatten(0, 1) for x in S_hat), unflatten_state(s1.flatten(0, 1)),
-                            squared=self.args.st_wm_loss == "l2").view(B, k, -1)  # fmt: skip
+        S_hat, S = tuple(x.flatten(0, 1) for x in S_hat), unflatten_state(s1.flatten(0, 1))
+        if self.wm_fused:  # --st_wm_fused
+            E = self.wm_terms_fused(self.wm_tree, S_hat, S, squared=self.args.st_wm_loss == "l2").view(B, k, -1)
+        else:
+            E = wm_window_terms(self.kin, S_hat, S, squared=self.args.st_wm_loss == "l2").view(B, k, -1)
         Ew = (E * mask.unsqueeze(-1)).sum(1)
         return Ew.mean(0), Ew
 

@@ -127,48 +127,66 @@ it trained on.
 
 ## Time to return 0.88
 
-Minutes of training from iteration 50 to the first checkpoint whose evaluations (the mean of two) return at least 0.88; seeds 0-2;
-a checkpoint every 250 iterations, evaluated after training; A100 40GB SXM4 GPUs that ran nothing else. Times to the target, not
-engineered.
+Minutes of training from iteration 50 to the first checkpoint whose evaluations (the mean of two) return at least 0.88; a
+checkpoint every 250 iterations, evaluated after training; A100 40GB SXM4 GPUs that ran nothing else, both algorithms in one session
+on the same GPUs. One GPU per run on seeds 0-3, three GPUs per run (actor, world-model learner, policy learner) on seeds 0-2.
+Each configuration with its fused and compiled kernels and a halved policy batch (below); each path's per-phase table follows.
 
-| configuration | GPUs | minutes to 0.88, seeds 0 / 1 / 2 | mean ± sd | iterations to 0.88 | ms per iteration, 500-2000 |
+| configuration | GPUs | minutes to 0.88, per seed | mean ± sd | iterations to 0.88 | ms per iteration, 500-2000 |
 |---|---|---|---|---|---|
-| `two-g1-supertrack` | 1 | 3.66 / 3.66 / 3.66 | 3.66 ± 0.00 | 1,250, 1,250, 1,250 | 182.4 |
-| `two-g1-supermimic` | 1 | 3.26 / 3.26 / 3.26 | 3.26 ± 0.00 | 1,250, 1,250, 1,250 | 162.1 |
-| `two-g1-supertrack-3gpu` | 3 | 1.73 / 2.08 / 1.73 | 1.85 ± 0.21 | 1,250, 1,500, 1,250 | 86.3 |
-| `two-g1-supermimic-3gpu` | 3 | 1.51 / 1.52 / 1.83 | 1.62 ± 0.18 | 1,250, 1,250, 1,500 | 75.3 |
+| `two-g1-supertrack` | 1 | 4.08 / 3.47 / 2.88 / 3.48 | 3.48 ± 0.49 | 1,750, 1,500, 1,250, 1,500 | 143.3 |
+| `two-g1-supermimic` | 1 | 2.57 / 2.56 / 2.56 / 3.09 | 2.70 ± 0.27 | 1,250, 1,250, 1,250, 1,500 | 127.2 |
+| `two-g1-supertrack-3gpu` | 3 | 1.54 / 1.81 / 1.55 | 1.63 ± 0.15 | 1,500, 1,750, 1,500 | 63.7 |
+| `two-g1-supermimic-3gpu` | 3 | 1.57 / 1.57 / 1.30 | 1.48 ± 0.16 | 1,500, 1,500, 1,250 | 64.4 |
 
-At that checkpoint, from the same evaluations, mean ± sd over seeds 0-2:
+At that checkpoint, from the same evaluations:
 
 | configuration | GPUs | return | global MPJPE (mm) | root-relative MPJPE (mm) |
 |---|---|---|---|---|
-| `two-g1-supertrack` | 1 | 0.8823 ± 0.0010 | 79.9 ± 4.6 | 16.8 ± 0.4 |
-| `two-g1-supermimic` | 1 | 0.8886 ± 0.0042 | 67.8 ± 7.2 | 19.9 ± 1.4 |
-| `two-g1-supertrack-3gpu` | 3 | 0.8840 ± 0.0004 | 72.2 ± 2.0 | 16.1 ± 0.5 |
-| `two-g1-supermimic-3gpu` | 3 | 0.8861 ± 0.0021 | 81.4 ± 7.6 | 20.0 ± 0.4 |
+| `two-g1-supertrack` | 1 | 0.8813 ± 0.0004 | 80.0 ± 9.5 | 16.8 ± 0.9 |
+| `two-g1-supermimic` | 1 | 0.8821 ± 0.0012 | 96.3 ± 1.5 | 20.5 ± 0.4 |
+| `two-g1-supertrack-3gpu` | 3 | 0.8823 ± 0.0010 | 79.9 ± 6.4 | 16.1 ± 0.3 |
+| `two-g1-supermimic-3gpu` | 3 | 0.8874 ± 0.0022 | 76.4 ± 12.7 | 20.6 ± 0.5 |
 
-Time per iteration by phase, seed 0, iterations 200-1000, ms:
+SuperTrack minus SuperMimic, Welch 95% intervals:
+
+| | minutes to 0.88 | iterations to 0.88 | root-relative MPJPE there (mm) | global MPJPE there (mm) |
+|---|---|---|---|---|
+| one GPU | +0.78 [0.05, 1.51] | +188 [-121, 496] | -3.7 [-5.0, -2.4] | -16.3 [-31.2, -1.4] |
+| three GPUs | +0.15 [-0.20, 0.51] | +167 [-161, 494] | -4.5 [-5.6, -3.5] | +3.5 [-22.9, 29.9] |
+
+Time per iteration by phase, one GPU, seed 0, iterations 200-1000, ms:
 
 | configuration | total | collection | world-model updates | policy update with the critic |
 |---|---|---|---|---|
-| `two-g1-supertrack` | 182.2 | 62.0 | 35.0 | 85.0 |
-| `two-g1-supermimic` | 162.5 | 65.0 | 26.0 | 71.0 |
+| `two-g1-supertrack` | 143.1 | 62.0 | 30.0 | 51.0 |
+| `two-g1-supermimic` | 127.5 | 63.3 | 26.0 | 38.0 |
 
-On three GPUs (`--layout AWL`) each device's steps, ms:
+On three GPUs (`--layout AWL`), each device's work and its part of the exchange, seed 0, iterations 200-1000, ms:
 
-| configuration | total | actor: collection | world-model learner: updates | policy learner: update |
+| configuration | iteration | actor: collection | world-model learner: updates | policy learner: update |
 |---|---|---|---|---|
-| `two-g1-supertrack-3gpu` | 86.3 | 48.9 | 35.1 | 84.9 |
-| `two-g1-supermimic-3gpu` | 75.5 | 52.0 | 26.7 | 70.0 |
+| `two-g1-supertrack-3gpu` | 63.6 | 49.5 + 2.3 | 29.8 + 21.9 | 50.6 + 1.0 |
+| `two-g1-supermimic-3gpu` | 64.9 | 50.8 + 1.2 | 26.2 + 25.6 | 37.5 + 14.3 |
 
-- Both reach 0.88 in the same iterations on average: SuperTrack with the lower root-relative MPJPE (16.8 against 19.9 mm on one
-  GPU, 16.1 against 20.0 mm on three), SuperMimic sooner, as its iteration is shorter. There the global MPJPE is lower for
-  SuperMimic on one GPU and for SuperTrack on three, with a wide spread between seeds, and the return is slightly higher for
-  SuperMimic.
-- On one GPU the policy update is the largest phase: 85 against 71 ms. SuperTrack's policy batch is twice SuperMimic's
-  (`--pi_batch` 4,096 against 2,048).
-- On three GPUs the collection and the world-model updates run beside the policy update, so the iteration is the policy update
-  (84.9 and 70.0 ms): about half the time of one GPU, at 5.5 and 4.9 GPU-minutes against 3.66 and 3.26.
+- Both reach 0.88 in about the same iterations, SuperTrack with the lower root-relative MPJPE there (16.8 against 20.5 mm on one
+  GPU, 16.1 against 20.6 mm on three). On one GPU SuperMimic gets there sooner: its policy update, the largest phase, takes 38
+  against 51 ms. On three GPUs the times are level: each device's work takes about 52 ms for both, and about 12 ms of each
+  iteration lies outside the devices' timed work.
+- Why each option is faster, measured one at a time against the configuration without it (same values up to float rounding):
+  - SuperTrack's world-model loss as fused kernels (`--st_wm_fused`): the kinematics of the predicted and the target states and
+    each body's errors in registers, no body's state in memory; the world-model updates 35 to 30 ms per iteration.
+  - SuperMimic's critic compiled (`--critic_compile`): about 1,000 eager kernels per policy update fused into three compiled
+    functions, its inputs normalized once per update; the policy update 71 to 59 ms.
+  - SuperMimic's normalizer updates compiled (`--compile_norms`): its world model's plain increments computed once, not twice;
+    the collection 65.3 to 63.3 ms (level for SuperTrack, whose world model does not compute them twice).
+  - SuperMimic's critic step fused (`--critic_fused`): each minibatch step's about 45 kernel launches become 12, the products in
+    cuBLAS; the critic's steps of one update 8.41 to 6.44 ms.
+  - The policy batch halved (SuperTrack 4,096 to 2,048, SuperMimic 2,048 to 1,024): the policy update 85 to 51 ms and 59 to 40 ms.
+    It needs more iterations to 0.88, and the return at the published budget stays within the seeds' spread (0.8929 against
+    0.8925, 0.9053 against 0.9055).
+- Before these options, the same configurations took 3.66 ± 0.00 and 3.26 ± 0.00 min on one GPU (182.4 and 162.1 ms per
+  iteration) and 1.85 ± 0.21 and 1.62 ± 0.18 min on three (86.3 and 75.3 ms), seeds 0-2.
 - The goal encoded once (`--goal_table --pi_encode_once`) computes each policy update's values up to float rounding; it shortens
   the update by 14 ms (SuperTrack) and 12 ms (SuperMimic), because the goal encoder runs once over all imagined steps.
 

@@ -43,6 +43,7 @@ this repository yet.
 | MuJoCo | [google-deepmind/mujoco](https://github.com/google-deepmind/mujoco) | models, CPU simulation; MJX in the differentiable-simulator comparison |
 | MuJoCo Warp | [google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp) | GPU simulation; the baseline of the speed comparisons |
 | Newton | [newton-physics/newton](https://github.com/newton-physics/newton) | MuscleVAE's simulation; MimicKit's *(ongoing)* |
+| Steel (Skild AI) | [skild-ai/steel](https://github.com/skild-ai/steel), [skild-ai/newton](https://github.com/skild-ai/newton) | Newton's `SolverSteel`: timed beside world models, and a simulation backend *(ongoing)* |
 | NablaEngine | [sailab-ai/NablaEngine](https://github.com/sailab-ai/NablaEngine) | differentiable simulator in the speed comparison |
 | Genesis | [Genesis-Embodied-AI/genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) | timed beside the differentiable simulators; Eden's simulator *(ongoing)* |
 | SPlisHSPlasH | [InteractiveComputerGraphics/SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH) | fluid ground truth for CFC *(ongoing)* |
@@ -65,6 +66,7 @@ this repository yet.
 | On Your Own | [paper](https://doi.org/10.1109/LRA.2026.3653405), [release v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0) | the professional pilot's race-track flights |
 | robomimic | [ARISE-Initiative/robomimic](https://github.com/ARISE-Initiative/robomimic), [data](https://huggingface.co/datasets/robomimic/robomimic_datasets), [paper](https://arxiv.org/abs/2108.03298) | its proficient-human demonstrations of Lift, Square and Transport, for manipulation tracking |
 | Lifelike agility and play | [Tencent-RoboticsX/lifelike-agility-and-play](https://github.com/Tencent-RoboticsX/lifelike-agility-and-play), [paper](https://doi.org/10.1038/s42256-024-00861-3) | a Labrador's motion capture, retargeted to the Go2 for quadruped tracking |
+| MIMIC-MJX | [talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX), [talmolab/track-mjx](https://github.com/talmolab/track-mjx), [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) | a rat's, a fruit fly's and a stick insect's reference clips and bodies, tracked on MuJoCo-Warp *(ongoing)* |
 
 ## Robots and hands
 
@@ -72,6 +74,7 @@ this repository yet.
 |---|---|---|---|
 | Unitree G1 | humanoid, 29 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros) | tracking, two G1s, human-object interaction, RoboKit's G1 tasks |
 | Unitree G1, mjlab's model | humanoid, primitive colliders | [mujocolab/mjlab](https://github.com/mujocolab/mjlab) | the differentiable-simulator comparison |
+| Unitree H1 | humanoid, 19 DoF | [unitreerobotics/unitree_ros](https://github.com/unitreerobotics/unitree_ros), through the [LAFAN1 Retargeting Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset) | LAFAN1 tracking on the dataset's H1 retargets, on MuJoCo-Warp *(ongoing)* |
 | Unitree Go2 | quadruped | [google-deepmind/mujoco_menagerie](https://github.com/google-deepmind/mujoco_menagerie) | RoboKit's Go2 jumping; quadruped motion tracking |
 | LimX TRON 1 | wheel-legged biped | [limxdynamics/tron1-robot-description](https://github.com/limxdynamics/tron1-robot-description) | driving and a ramp, planned on world models *(ongoing)* |
 | XHand | dexterous hand | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object tracking |

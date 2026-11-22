@@ -2,16 +2,18 @@
 
 Contributed by [Zhengming Yu](https://github.com/Yzmblog) ([#7](https://github.com/Frank-ZY-Dou/ndm-gym/pull/7)).
 
-The task and the contributed study on an H200: [README](../../README.md#quadrotor-trajectory-tracking), [results](results.md).
-On an A100: [the world model as the simulator](#the-world-model-as-the-simulator), [the runs again](#the-runs-again-on-an-a100).
+The task and the contributed study on an H200: [README](../../README.md#quadrotor-trajectory-tracking), [results](results.md);
+the named configurations on an A100 40GB SXM4: [results](results.md#the-named-configurations-on-an-a100-40gb-sxm4). Here, on
+an A100: [the world model as the simulator](#the-world-model-as-the-simulator), [the contributed study's runs again](#the-runs-again-on-an-a100).
 
 ## The world model as the simulator
 
-The world models of the most accurate configurations (`quadrotor-supertrack-accurate`, an acceleration MLP of 3 × 256;
-`quadrotor-supermimic-accurate`, an increment MLP of 3 × 256), trained on the ellipse (flight-01a) with seeds 0-2 for 6,000
-iterations on an A100 40GB SXM4, step the drone in place of its physics. A world-step is one 10 ms control step, the command
-held; MuJoCo Warp runs its four physics steps of a control step as one CUDA graph. One A100 40GB SXM4 with nothing else on
-it; every figure the median of five runs of 500 steps after 50 and 2 s of stepping; mean ± SD over the three seeds.
+The world models of the contributed study's selected configurations (SuperTrack's, an acceleration MLP of 3 × 256;
+SuperMimic's, an increment MLP of 3 × 256; [the runs again](#the-runs-again-on-an-a100)), trained on the ellipse (flight-01a)
+with seeds 0-2 for 6,000 iterations on an A100 40GB SXM4, step the drone in place of its physics. A world-step is one 10 ms
+control step, the command held; MuJoCo Warp runs its four physics steps of a control step as one CUDA graph. One A100 40GB SXM4
+with nothing else on it; every figure the median of five runs of 500 steps after 50 and 2 s of stepping; mean ± SD over the
+three seeds.
 
 The fused step: the world model's inference copy (`ndm_gym/worldmodels/quad_infer.py`) with its network in fp32 (TF32
 products, as training runs it); the input's features and normalization, and the output's de-normalization and integration,
