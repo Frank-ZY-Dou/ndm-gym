@@ -53,11 +53,15 @@ def _world_model(kind="accel", rf=True, seed=0, dev=DEV, **rf_kw):
     from ndm_gym.robots.g1 import kinematics
     from ndm_gym.worldmodels.accel import AccelWorldModel
     from ndm_gym.worldmodels.increment import IncrementWorldModel
+    from ndm_gym.worldmodels.semi_implicit import SemiImplicitIncrementWorldModel
 
     torch.manual_seed(seed)
     rigid = dict(kin=kinematics("cpu"), **{"dim": 128, "layers": 3, "heads": 4, "registers": 2, **rf_kw}) if rf else None
     hidden = (256, 256)
-    wm = AccelWorldModel(hidden=hidden, rigidformer=rigid) if kind == "accel" else IncrementWorldModel(hidden=hidden, rigidformer=rigid)
+    if kind == "semi":  # the semi-implicit model (--wm_structured): the MLP only
+        wm = SemiImplicitIncrementWorldModel(hidden=hidden)
+    else:
+        wm = AccelWorldModel(hidden=hidden, rigidformer=rigid) if kind == "accel" else IncrementWorldModel(hidden=hidden, rigidformer=rigid)
     with torch.no_grad():
         if rf:
             for m in [wm.net.root_head, wm.net.joint_head] + [b.film for b in wm.net.blocks]:
@@ -131,10 +135,11 @@ def test_fused_features_match_inputs(rf):
 
 
 @gpu
-@pytest.mark.parametrize("kind,rf", [("accel", True), ("increment", True), ("accel", False), ("increment", False)])
+@pytest.mark.parametrize("kind,rf", [("accel", True), ("increment", True), ("accel", False), ("increment", False), ("semi", False)])
 def test_fused_step_matches_step(kind, rf):
     """With fp32 everywhere (no autocast, TF32 off, sdpa attention) the fused step (features, network, integration)
-    equals the model's step up to float rounding over a few open-loop steps; also with SuperTrack's 4 substeps."""
+    equals the model's step up to float rounding over a few open-loop steps; also with SuperTrack's 4 substeps; also for
+    the semi-implicit model (its drift in the fused integration)."""
     import ndm_gym.core.nets as nets
     from ndm_gym.worldmodels.g1_infer import inference_copy
 
@@ -157,7 +162,7 @@ def test_fused_step_matches_step(kind, rf):
 
 
 @gpu
-@pytest.mark.parametrize("kind,rf", [("accel", True), ("increment", True), ("accel", False)])
+@pytest.mark.parametrize("kind,rf", [("accel", True), ("increment", True), ("accel", False), ("semi", False)])
 def test_bf16_copy(kind, rf):
     """The bf16 copy (the network bf16 end to end, token attention, the fused step), compiled with CUDA graphs: within
     the documented bound of the model under bf16 autocast (check_copy's: twice its mean, four times its largest error)."""

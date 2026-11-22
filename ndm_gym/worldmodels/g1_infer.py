@@ -11,6 +11,7 @@
              gathered once. The MLP takes None.
   fused      the features (the RigidFormer's forward kinematics and token features, the MLP's invariant features) and the
              integration as two Triton kernels (``g1_fused``), the normalizers fused with the network's casts; CUDA only.
+             The semi-implicit MLP world model (``--wm_structured``) integrates with its own drift there.
 The RigidFormer's blocks or its whole network can then run as fused Triton kernels (``kernels.rf_block.fused_copy`` of an
 fp32 copy, dtype None; a bf16 copy is refused there).
 
@@ -119,6 +120,7 @@ class G1InferenceModel(nn.Module):
         super().__init__()
         self.wm, self.fused = wm, fused
         self.accel = isinstance(wm, AccelWorldModel)
+        self.semi = bool(getattr(wm, "structured", False))  # the semi-implicit model (--wm_structured): its own integration
         self.rf = isinstance(wm.net, RigidFormerNet)
         with torch.no_grad():
             self.register_buffer("in_scale", 1 / torch.sqrt(wm.in_norm.var + wm.in_norm.eps**2), persistent=False)
@@ -164,6 +166,8 @@ class G1InferenceModel(nn.Module):
         """The next state from the network's normalized outputs y, by the fused kernel (``fused``)."""
         from . import g1_fused
 
+        if self.semi:
+            return tuple(g1_fused.integrate(y * self.out_std + self.wm.out_norm.mean, *S, False, self.wm.DRIFT_W, True))
         return tuple(g1_fused.integrate(y * self.out_std + self.wm.out_norm.mean, *S, self.accel, getattr(self.wm, "pos_coef", 0.0)))
 
     def step(self, S, a, xi_n, input_noise: float = 0.0):
@@ -181,8 +185,6 @@ def inference_copy(wm: nn.Module, dtype: torch.dtype | None = torch.bfloat16, at
     device first (``check_copy``)."""
     if not isinstance(wm, (AccelWorldModel, IncrementWorldModel)):
         raise TypeError(f"expected an AccelWorldModel or IncrementWorldModel, got {type(wm).__name__}")
-    if fused and getattr(wm, "structured", False):
-        raise ValueError("the fused integration takes plain increments, not the semi-implicit world model's outputs (--wm_structured)")
     rf = isinstance(wm.net, RigidFormerNet)
     if type(wm.net) not in (RigidFormerNet, nn.Sequential):
         raise TypeError(f"the world model's network must be as trained (a RigidFormerNet or the MLP), got {type(wm.net).__name__}")
@@ -252,8 +254,14 @@ def check_copy(wm: nn.Module, m: G1InferenceModel, n: int = 64):
                 raise RuntimeError(f"the fused features differ from the model's by {float((got - ref).abs().max()):.3g} on "
                                    f"{torch.cuda.get_device_name()}")  # fmt: skip
             y = 0.5 * torch.randn(n, wm.out_norm.mean.numel(), device=dev, generator=torch.Generator(device=dev).manual_seed(1))
+            # the model's step with its network's output fixed to y
             proxy = types.SimpleNamespace(in_norm=lambda x: x, inputs=lambda *s: torch.zeros(n, 1, device=dev), net=lambda x: y, amp=False,
-                                          out_norm=wm.out_norm, pos_coef=getattr(wm, "pos_coef", None))  # fmt: skip
+                                          net_out=lambda x, taps=None: (y, None), out_norm=wm.out_norm,
+                                          pos_coef=getattr(wm, "pos_coef", None))  # fmt: skip
+            if getattr(wm, "structured", False):  # the semi-implicit model's step integrates through its own methods
+                proxy.DRIFT_W = wm.DRIFT_W
+                proxy.drift = lambda *s: type(wm).drift(proxy, *s)
+                proxy.integrate = lambda *s: type(wm).integrate(proxy, *s)
             ref_next = _fp32(lambda: type(wm).step(proxy, S, a, xi_n))
             got_next = _fp32(lambda: m.integrate(y, S))
             for r_, g_ in zip(ref_next, got_next):

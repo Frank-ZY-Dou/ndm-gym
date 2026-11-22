@@ -46,7 +46,7 @@ class SemiImplicitIncrementWorldModel(IncrementWorldModel):
     """``IncrementWorldModel`` whose network outputs (the ``targets`` layout) are the velocity increments and the position
     corrections on top of the drift. The fit's loss is normalized by the plain increments' scale (``inc_norm``)."""
 
-    structured = True  # the fused inference copy (g1_infer.inference_copy) integrates plain increments and refuses it
+    structured = True  # the fused inference copy (g1_infer.inference_copy) integrates it with its own drift (g1_fused.integrate's semi)
     # weight of the new velocity in the drift: n semi-implicit substeps with a linearly changing velocity give
     # sum_k k / n^2 = (n + 1) / (2 n); 0.625 for n = 4 (BlinkMimic measured the residual std of the joint-position
     # increment at 16% with 0.5, 11% with 0.625 and 17% with 1.0)

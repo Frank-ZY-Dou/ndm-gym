@@ -136,10 +136,12 @@ def _g1_mlp_features_kernel(P, R, V, W, OUT, N, sp, sr, sv, sw, BLOCK: tl.conste
 
 @triton.jit
 def _g1_integrate_kernel(Y, P, R, V, W, Q, QD, NP, NR, NV, NW, NQ, NQD, N, sy, sp, sr, sv, sw, sq, sqd, dt, pc, ACCEL: tl.constexpr,
-                         NJ: tl.constexpr, BLOCK: tl.constexpr):  # fmt: skip
+                         NJ: tl.constexpr, BLOCK: tl.constexpr, SEMI: tl.constexpr = 0):  # fmt: skip
     """The robot's next state from the de-normalized outputs y: accelerations in the root's frame and of the joints,
     integrated as AccelWorldModel.step (velocities gain dt a, positions dt (v + pc a), the rotation exp(dt (w + pc aw)) R),
-    or frame-local increments as IncrementWorldModel.step."""
+    or frame-local increments as IncrementWorldModel.step; SEMI: the semi-implicit model's outputs as
+    SemiImplicitIncrementWorldModel.integrate (velocity increments, position corrections on top of the drift
+    dt ((1 - pc) v + pc v'), pc its drift weight)."""
     n = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     m = n < N
     row = n * sy
@@ -163,6 +165,21 @@ def _g1_integrate_kernel(Y, P, R, V, W, Q, QD, NP, NR, NV, NW, NQ, NQD, N, sy, s
         w1 = (w[0] + dt * aw[0], w[1] + dt * aw[1], w[2] + dt * aw[2])
         p1 = (p[0] + dt * (v[0] + pc * av[0]), p[1] + dt * (v[1] + pc * av[1]), p[2] + dt * (v[2] + pc * av[2]))
         r1 = _mm3(_exp(dt * (w[0] + pc * aw[0]), dt * (w[1] + pc * aw[1]), dt * (w[2] + pc * aw[2])), r)
+    elif SEMI:
+        y3 = (_ld(Y, row, m, 6), _ld(Y, row, m, 7), _ld(Y, row, m, 8), _ld(Y, row, m, 9), _ld(Y, row, m, 10), _ld(Y, row, m, 11))
+        c, s = _yaw(r[0], r[3])
+        dv, dw = _mv3(r, y3[0], y3[1], y3[2]), _mv3(r, y3[3], y3[4], y3[5])
+        v1 = (v[0] + dv[0], v[1] + dv[1], v[2] + dv[2])
+        w1 = (w[0] + dw[0], w[1] + dw[1], w[2] + dw[2])
+        ca, cb = dt * (1 - pc), dt * pc
+        u = (ca * v[0] + cb * v1[0], ca * v[1] + cb * v1[1], ca * v[2] + cb * v1[2])  # the drift, in the world frame
+        g = (c * u[0] + s * u[1], c * u[1] - s * u[0], u[2])  # in the heading frame
+        e = (y[0] + g[0], y[1] + g[1], y[2] + g[2])
+        p1 = (p[0] + (c * e[0] - s * e[1]), p[1] + (s * e[0] + c * e[1]), p[2] + e[2])
+        uw = (ca * w[0] + cb * w1[0], ca * w[1] + cb * w1[1], ca * w[2] + cb * w1[2])
+        gw = (r[0] * uw[0] + r[3] * uw[1] + r[6] * uw[2], r[1] * uw[0] + r[4] * uw[1] + r[7] * uw[2],
+              r[2] * uw[0] + r[5] * uw[1] + r[8] * uw[2])  # R^T uw: in the body frame  # fmt: skip
+        r1 = _mm3(r, _exp(y[3] + gw[0], y[4] + gw[1], y[5] + gw[2]))
     else:
         y3 = (_ld(Y, row, m, 6), _ld(Y, row, m, 7), _ld(Y, row, m, 8), _ld(Y, row, m, 9), _ld(Y, row, m, 10), _ld(Y, row, m, 11))
         c, s = _yaw(r[0], r[3])
@@ -181,6 +198,9 @@ def _g1_integrate_kernel(Y, P, R, V, W, Q, QD, NP, NR, NV, NW, NQ, NQD, N, sy, s
         if ACCEL:
             q1 = qs[k] + dt * (qds[k] + pc * y1[k])
             qd1 = qds[k] + dt * y1[k]
+        elif SEMI:
+            qd1 = qds[k] + y2[k]
+            q1 = qs[k] + (y1[k] + (dt * (1 - pc) * qds[k] + dt * pc * qd1))
         else:
             q1 = qs[k] + y1[k]
             qd1 = qds[k] + y2[k]
@@ -231,20 +251,27 @@ def _(p, R, v, w):
 
 @torch.library.custom_op("ndm_gym::g1_integrate", mutates_args=())
 def integrate(y: torch.Tensor, p: torch.Tensor, R: torch.Tensor, v: torch.Tensor, w: torch.Tensor, q: torch.Tensor, qd: torch.Tensor,
-              accel: bool, pos_coef: float) -> list[torch.Tensor]:  # fmt: skip
+              accel: bool, pos_coef: float, semi: bool = False) -> list[torch.Tensor]:  # fmt: skip
     """y (N, 6 + J accelerations, or 12 + 2 J increments) the de-normalized fp32 outputs -> the robot's next
-    [p, R, v, w, q, qd]; pos_coef: AccelWorldModel's position coefficient (s), unused for increments."""
+    [p, R, v, w, q, qd]; pos_coef: AccelWorldModel's position coefficient (s), unused for increments; semi: the increments
+    are SemiImplicitIncrementWorldModel's (velocity increments, position corrections), pos_coef its drift weight."""
+    if semi and accel:
+        raise ValueError("g1_fused.integrate: semi takes increments, not accelerations")
     N = p.shape[0]
     width = (6 if accel else 12) + (1 if accel else 2) * NUM_J
     if y.stride(-1) != 1 or y.dtype != torch.float32 or y.shape[-1] != width:
         raise ValueError(f"g1_fused.integrate: y needs fp32, a unit last stride and {width} columns, got {y.dtype} {tuple(y.shape)}")
     nxt = [torch.empty(t.shape, device=t.device, dtype=t.dtype) for t in (p, R, v, w, q, qd)]
     st = [y.stride(0), _rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3), _rows(q, NUM_J), _rows(qd, NUM_J)]
+    if semi:
+        _g1_integrate_kernel[(triton.cdiv(N, BLOCK),)](y, p, R, v, w, q, qd, *nxt, N, *st, CONTROL_DT, pos_coef, ACCEL=0, NJ=NUM_J, BLOCK=BLOCK,
+                                                       SEMI=1, num_warps=WARPS)  # fmt: skip
+        return nxt
     _g1_integrate_kernel[(triton.cdiv(N, BLOCK),)](y, p, R, v, w, q, qd, *nxt, N, *st, CONTROL_DT, pos_coef, ACCEL=int(accel), NJ=NUM_J, BLOCK=BLOCK,
                                                    num_warps=WARPS)  # fmt: skip
     return nxt
 
 
 @integrate.register_fake
-def _(y, p, R, v, w, q, qd, accel, pos_coef):
+def _(y, p, R, v, w, q, qd, accel, pos_coef, semi=False):
     return [t.new_empty(t.shape) for t in (p, R, v, w, q, qd)]
