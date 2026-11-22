@@ -7,6 +7,12 @@ row's ``a`` unless an episode started, ``xi`` holds and ``f``, ``ep_step`` count
 rows that differ from that, with their positions; ``unpack`` restores every value bit for bit (checked when saving).
 ``fit.load_buffer`` reads both this and the earlier layout of every field in full.
 
+``--eval_conditions`` collects under evaluate.py's conditions instead of training's (the recording that
+benchmarks/steel/results.md scores the engines and the world models against): friction 1.0 on every shape, no torso
+centre-of-mass or joint offsets, no reset noise, episodes ending only at a termination or their clip's end, observations
+without sensor noise and setpoints without action noise. The simulator's evaluation mode does not reset ended worlds, so
+the collection resets them after each step.
+
 Run: ``python -m ndm_gym.wmbench.collect --ckpt logs/<run>/ckpt_012000.pt --out data_wm/<name>.pt``
 """
 
@@ -93,13 +99,26 @@ def unpack(data: dict, device) -> dict:
     return out
 
 
+def collection_conditions(args) -> tuple[bool, float, bool]:
+    """The simulator's evaluation mode, the action noise and whether the observations take sensor noise: training's by
+    default (--action_noise, 0.1 unless given); with --eval_conditions evaluate.py's, which refuse noise and pushes."""
+    if not args.eval_conditions:
+        return False, 0.1 if args.action_noise is None else args.action_noise, True
+    if args.action_noise not in (None, 0.0) or args.push_mag > 0:
+        raise ValueError("--eval_conditions collects as evaluate.py runs: no --action_noise or --push_mag")
+    return True, 0.0, False
+
+
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", type=str, required=True, help="policy checkpoint")
     parser.add_argument("--out", type=str, required=True)
     parser.add_argument("--num_envs", type=int, default=1024)
     parser.add_argument("--steps", type=int, default=400, help="control steps per environment")
-    parser.add_argument("--action_noise", type=float, default=0.1)
+    parser.add_argument("--action_noise", type=float, default=None,
+                        help="noise on the setpoints (action units; default 0.1, 0 with --eval_conditions)")
+    parser.add_argument("--eval_conditions", action="store_true",
+                        help="evaluate.py's conditions instead of training's (the module's docstring); no --action_noise or pushes")
     parser.add_argument("--push_mag", type=float, default=0.0, help="horizontal root-velocity pushes (m/s); 0 disables")
     parser.add_argument("--push_every", type=int, default=100)
     parser.add_argument("--seed", type=int, default=0)
@@ -122,6 +141,7 @@ def main():
     from ndm_gym.sim.rigid.isaaclab_mjwarp import TrackingSim, make_sim
     from ndm_gym.tasks.tracking import MDP, OBS_DIM
 
+    eval_mode, action_noise, sensor_noise = collection_conditions(args)
     torch.manual_seed(args.seed)
     dev = "cuda:0"
     kin = g1.kinematics(dev)
@@ -138,7 +158,7 @@ def main():
 
     sim_cfg = make_sim(dev, args)
     with launch_simulation(sim_cfg, args), torch.no_grad():
-        env = TrackingSim(sim_cfg, args.num_envs, motion, mdp)
+        env = TrackingSim(sim_cfg, args.num_envs, motion, mdp, eval_mode=eval_mode)
         ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
         buffer = ReplayBuffer(args.steps, args.num_envs, dev, priorities=False)  # the file stores the transitions only
         obs_hist = torch.zeros(args.num_envs, Hh, OBS_DIM, device=dev)
@@ -152,21 +172,29 @@ def main():
                 env.robot.write_root_link_velocity_to_sim_index(root_velocity=torch.cat((S[2] + dv, S[3]), -1), env_ids=ids)
                 env.refresh()
             S = env.state()
-            o = mdp.add_noise(mdp.obs(S, env.a_prev, env.xi, env.f))
+            o = mdp.obs(S, env.a_prev, env.xi, env.f)
+            if sensor_noise:
+                o = mdp.add_noise(o)
             fresh = env.ep_step == 0
             obs_hist = torch.where(fresh[:, None, None], o.unsqueeze(1).expand_as(obs_hist), torch.cat((obs_hist[:, 1:], o.unsqueeze(1)), 1))
             a = pi(obs_hist, motion.goal(env.f, K))
             if residual:
                 a = a + ref_u[env.f + 1]
-            a = torch.clamp(a + args.action_noise * torch.randn_like(a), -20, 20)
+            a = torch.clamp(a + action_noise * torch.randn_like(a), -20, 20) if not eval_mode else torch.clamp(a, -20, 20)
             out = env.step(a, S)  # S: the state just read, nothing written since
             buffer.add(out)
             n_term = n_term + out["term"].sum()  # on the device: no synchronization per step
+            if eval_mode:  # the evaluation mode's step leaves ended worlds as they are: reset them as training's step does
+                ended = out["done"].nonzero().squeeze(-1)
+                if len(ended):
+                    env.reset(ended)
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         n_term = int(n_term)
         meta = {"ckpt": args.ckpt, "algo": a_["algo"], "iteration": ck["iteration"], "num_envs": args.num_envs, "steps": args.steps,
-                "action_noise": args.action_noise, "push_mag": args.push_mag, "push_every": args.push_every, "seed": args.seed,
+                "action_noise": action_noise, "push_mag": args.push_mag, "push_every": args.push_every, "seed": args.seed,
                 "terminations": n_term}  # fmt: skip
+        if eval_mode:
+            meta["eval_conditions"] = True
         packed = pack(buffer.data, G1_RULES)
         cpu = lambda v: {**v, "idx": v["idx"].cpu(), "rows": v["rows"].cpu()} if isinstance(v, dict) else v.cpu()  # noqa: E731
         torch.save({"meta": meta, "data": {k: cpu(v) for k, v in packed.items()}}, args.out)

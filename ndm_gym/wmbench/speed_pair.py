@@ -33,6 +33,13 @@ and its ms per step the forward and backward time per control step.
 physics drives the PD targets with the default pose plus noise, as speed_hoi.py. Each mode times --steps control steps
 after --warmup, synchronizing the GPU around the timed loop, --repeats times; the median is reported. Development numbers
 only on a shared GPU.
+--replay (--single, physics or ndm; the workload of benchmarks/steel/results.md) replaces the start states and setpoints by
+open-loop windows of a recording (wmbench/collect.py): --replay_windows windows of --replay_len steps drawn once with
+--replay_seed as wmbench/fit.py draws its scoring windows (``fixed_windows``). The timed steps run as segments of
+--replay_len steps (the last one shorter); before each segment every robot restarts from a window's first recorded state
+(physics: written into the simulator as a reset writes it; ndm: the world model's state) and then takes that window's
+recorded setpoints, the PD targets default pose + recorded joint offsets + action scale x setpoint. Only the segments are
+timed, never the restarts between them.
 
 Run: ``python -m ndm_gym.wmbench.speed_pair --pair <clip>.npz --mode physics --num_envs 1024 --out results/speed_pair.csv``
 (``--num_envs``: envs, i.e. pairs; twice as many robots).
@@ -49,6 +56,7 @@ import time
 import torch
 
 from ndm_gym.sim.launcher import add_launcher_args, launch_simulation
+from ndm_gym.wmbench.warm import keep_busy
 
 
 def parse_args():
@@ -58,6 +66,9 @@ def parse_args():
     p.add_argument("--num_envs", type=int, default=1024, help="envs (pairs); the robots are twice as many")
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--warmup", type=int, default=20)
+    p.add_argument("--warm_seconds", type=float, default=0.0,
+                   help="after --warmup, keep calling this many seconds before the first timed run (wmbench/warm.py: an idle GPU's "
+                   "clock)")
     p.add_argument("--repeats", type=int, default=3, help="timed runs; the median is reported")
     p.add_argument("--wm_args", type=str, default=None,
                    help="ndm: the training arguments that build the world model (default --algo supertrack); not with --wm_ckpt")
@@ -74,6 +85,15 @@ def parse_args():
                    help="ndm, the G1 world models as trained: time rollouts of this many steps with the reverse-mode gradient of their loss "
                    "with respect to every step's setpoints instead of the step (0: the step); --steps and --warmup then count rollouts")
     p.add_argument("--single", action="store_true", help="one G1 per env (the one-robot scene) instead of the pair; not with --mode env")
+    p.add_argument("--replay", type=str, default=None, help="--single, physics or ndm: a recording (wmbench/collect.py) whose windows are the "
+                   "workload (the module's docstring)")
+    p.add_argument("--replay_len", type=int, default=32, help="--replay: steps per window and timed segment")
+    p.add_argument("--replay_windows", type=int, default=8192,
+                   help="--replay: windows drawn; robot i takes window (i + k N) mod this in segment k")
+    p.add_argument("--replay_seed", type=int, default=0, help="--replay: the windows' draw")
+    p.add_argument("--barrier", type=str, default=None, help="--replay: a folder where --barrier_n processes meet after their warm-up, "
+                   "to start their first timed run together (the multi-GPU rows of benchmarks/steel)")
+    p.add_argument("--barrier_n", type=int, default=0, help="--barrier: the processes that meet")
     p.add_argument("--amp", type=str, default="bf16", choices=["none", "bf16"])
     p.add_argument("--action_noise", type=float, default=0.2, help="env: noise on the reference setpoints (action units)")
     p.add_argument("--out", type=str, required=True, help="csv to append one row to")
@@ -90,7 +110,44 @@ def parse_args():
     if args.grad_horizon and (args.mode != "ndm" or args.inference_copy != "none" or args.fused or args.rf_kernels != "none" or args.check_steps):
         p.error("--grad_horizon differentiates the G1 world models as trained (--mode ndm): not with --inference_copy, --fused, --rf_kernels or "
                 "--check_steps")
+    if args.replay is not None:
+        if not args.single or args.mode not in ("physics", "ndm"):
+            p.error("--replay: one G1 per env (--single) in --mode physics or ndm")
+        if args.grad_horizon or args.check_steps:
+            p.error("--replay times the step: not with --grad_horizon or --check_steps")
+        if args.replay_len < 1 or args.replay_windows < 1:
+            p.error("--replay_len and --replay_windows: positive")
+    if (args.barrier is None) != (args.barrier_n == 0) or (args.barrier is not None and (args.replay is None or args.barrier_n < 1)):
+        p.error("--barrier and --barrier_n go together, with --replay")
     return args
+
+
+def build_world_model(args, dev: str):
+    """The world model that --mode ndm times, on ``dev``: from a training checkpoint's arguments and weights (--wm_ckpt),
+    or untrained from training arguments (--wm_args). Returns the model, its arguments and the source's description."""
+    from ndm_gym.algos import ALGOS
+    from ndm_gym.train import add_speed_args, add_train_args
+
+    if args.wm_ckpt:  # the run's arguments and its world model's weights
+        ck = torch.load(args.wm_ckpt, map_location=dev, weights_only=False)
+        ta = argparse.Namespace(**ck["args"])
+        wm = ALGOS[ta.algo].world_model_cls(ck["args"]).to(dev)
+        wm.load_state_dict(ck["wm"])
+        source = f"ckpt {args.wm_ckpt} (iteration {ck.get('iteration')})"
+    else:
+        tp = argparse.ArgumentParser()
+        add_train_args(tp)
+        add_speed_args(tp)
+        wm_args = args.wm_args if args.wm_args is not None else "--algo supertrack"
+        ta = tp.parse_args(shlex.split(wm_args))
+        wm = ALGOS[ta.algo].world_model_cls(vars(ta)).to(dev)
+        source = f"wm_args {wm_args}"
+    if getattr(ta, "elementwise_3x3", False):  # the run's compiled functions as its training compiled them
+        from ndm_gym.train import elementwise_3x3_products
+
+        elementwise_3x3_products()
+        source += " | elementwise_3x3"
+    return wm, ta, source
 
 
 def inference_model(wm, args):
@@ -189,10 +246,110 @@ def rollout_gradient(step, S, actions, xi_n, q_ref):
     return loss.detach(), grad
 
 
-def timed(fn, warmup: int, steps: int) -> float:
+def segment_lengths(steps: int, length: int) -> list[int]:
+    """--replay: the timed steps as segments of ``length`` steps, the last one shorter."""
+    return [length] * (steps // length) + ([steps % length] if steps % length else [])
+
+
+def replay_schedule(n_windows: int, robots: int, segments: int, device=None) -> torch.Tensor:
+    """--replay: (segments, robots) window indices, robot i taking window (i + k robots) mod n_windows in segment k."""
+    i = torch.arange(robots, device=device)
+    return torch.stack([(i + k * robots) % n_windows for k in range(segments)])
+
+
+def timed_segments(fn, restart, lengths: list[int], warmup: int = 0, warm_seconds: float = 0.0, sync=None, wait=None) -> float:
+    """--replay's timing: ``restart(k)`` sets segment k's start (untimed); ``fn(j)`` is the segment's step j. The warm-up
+    runs from segment 0's start, then each segment restarts and its steps are timed between two synchronizations; returns
+    the segments' time summed. ``wait``: called after the warm-up, before the first segment (--barrier)."""
+    sync = torch.cuda.synchronize if sync is None else sync
+    restart(0)
+    for j in range(warmup):
+        fn(j % lengths[0])
+    sync()
+    keep_busy(lambda: fn(0), sync, warm_seconds)
+    if wait is not None:
+        wait()
+    total = 0.0
+    for k, n in enumerate(lengths):
+        restart(k)
+        sync()
+        t0 = time.perf_counter()
+        for j in range(n):
+            fn(j)
+        sync()
+        total += time.perf_counter() - t0
+    return total
+
+
+def replay_windows(path: str, n: int, length: int, seed: int, dev: str, full: bool = False) -> dict:
+    """--replay: ``n`` continuous windows of ``length`` steps of the recording at ``path`` (wmbench/fit.py's fixed_windows,
+    seed ``seed``, drawn on the CPU so that every tool and device gets the same windows; a ``.npz`` is replay_engine export's
+    file of windows drawn so, read instead of drawn), on ``dev``: the first states (n,
+    STATE_DIM), the setpoints (n, length, NUM_J) and the context (n, XI_DIM); ``full``: also every recorded state after each
+    step (n, length, STATE_DIM), the frames (n, length) and the window's first row and env."""
+    if path.endswith(".npz"):  # replay_engine export's windows, drawn by this function with their seed
+        import numpy as np
+
+        e = np.load(path, allow_pickle=False)
+        if int(e["seed"]) != seed or len(e["s0"]) < n or e["a"].shape[1] < length:
+            raise ValueError(f"{path}: {len(e['s0'])} windows of {e['a'].shape[1]} steps with seed {int(e['seed'])}, not {n} of {length} "
+                             f"with seed {seed}")
+        out = {"s0": torch.as_tensor(e["s0"][:n]), "a": torch.as_tensor(e["a"][:n, :length]), "xi": torch.as_tensor(e["xi"][:n])}
+        if full:
+            out.update(s1=torch.as_tensor(e["s1"][:n, :length]), f=torch.as_tensor(e["f"][:n, :length]), t0=torch.as_tensor(e["t0"][:n]),
+                       env=torch.as_tensor(e["env"][:n]))  # fmt: skip
+        return {k: v.contiguous().to(dev) for k, v in out.items()}
+    from ndm_gym.wmbench.fit import fixed_windows, load_buffer
+
+    buf, _ = load_buffer([path], "cpu")
+    w = fixed_windows(buf, n, length, seed, index=full)
+    out = {"s0": w["s"][:, 0], "a": w["a"], "xi": w["xi"][:, 0]}
+    if full:
+        rows = w["t0"].unsqueeze(-1) + torch.arange(length)  # load_buffer keeps the file's rows in time order
+        out.update(s1=w["s1"], f=buf.data["f"][rows, w["env"].unsqueeze(-1).expand_as(rows)], t0=w["t0"], env=w["env"])
+    return {k: v.contiguous().to(dev) for k, v in out.items()}
+
+
+def barrier(path: str, n: int, lead: float = 2.0) -> float:
+    """--barrier: this process is ready (``path``/ready.<pid>.<thread>); wait for ``n`` of them, then until the common start, written once
+    by the first caller to see ``n`` (``path``/go, ``lead`` s later), so that the processes' timed runs overlap. Returns that start."""
+    import threading
+
+    os.makedirs(path, exist_ok=True)
+    me = f"{os.getpid()}.{threading.get_ident()}"
+    open(os.path.join(path, f"ready.{me}"), "w").close()  # one per caller
+    go = os.path.join(path, "go")
+    while not os.path.exists(go):
+        if len([f for f in os.listdir(path) if f.startswith("ready.")]) >= n and not os.path.exists(go):
+            tmp = os.path.join(path, f"go.{me}")
+            with open(tmp, "w") as f:
+                f.write(f"{time.time() + lead:.3f}")
+            try:  # one start for all: a link fails if another caller that saw n made go first (a rename would replace its start)
+                os.link(tmp, go)
+            except FileExistsError:
+                pass
+            os.remove(tmp)
+            break
+        time.sleep(0.01)
+    t_go = float(open(go).read())  # whole: go appears by the link, after its contents were written
+    while time.time() < t_go:
+        time.sleep(0.001)
+    return t_go
+
+
+def gpu_driver(uuid: str) -> str:
+    """The driver version for the row: $NDM_GPU_DRIVER when set (a block that runs no nvidia-smi while timing), else nvidia-smi's."""
+    if os.environ.get("NDM_GPU_DRIVER"):
+        return os.environ["NDM_GPU_DRIVER"]
+    return subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader", "-i", uuid], capture_output=True, text=True,
+                          check=True).stdout.strip()  # fmt: skip
+
+
+def timed(fn, warmup: int, steps: int, warm_seconds: float = 0.0) -> float:
     for _ in range(warmup):
         fn()
     torch.cuda.synchronize()
+    keep_busy(fn, torch.cuda.synchronize, warm_seconds)
     t0 = time.perf_counter()
     for _ in range(steps):
         fn()
@@ -204,7 +361,6 @@ def main():
     args = parse_args()
 
     import ndm_gym.core.nets as nets
-    from ndm_gym.algos import ALGOS
     from ndm_gym.algos.common import reference_setpoints
     from ndm_gym.core.rotations import mat_to_quat
     from ndm_gym.motion.library import MotionLib
@@ -224,6 +380,13 @@ def main():
     mdp = MDP(kin, motion, torch.tensor(g1.default_joint_pos_list(), device=dev))
     pc = motion_pairs(motion)[:, 0]  # the file's first pair
     f0 = motion.clip_start[pc.to(dev)]  # both sides' first frames
+    win = lengths = sched = restart = fn_seg = None  # --replay: the windows, the timed segments, each segment's windows
+    if args.replay is not None:
+        from ndm_gym.state import unflatten_state
+
+        win = replay_windows(args.replay, args.replay_windows, args.replay_len, args.replay_seed, dev)
+        lengths = segment_lengths(args.steps, args.replay_len)
+        sched = replay_schedule(args.replay_windows, N, len(lengths), dev)
     sim_cfg = make_sim(dev, args, paired=args.mode != "physics" or not args.single)
     with launch_simulation(sim_cfg, args):
         if args.mode == "physics":
@@ -254,6 +417,31 @@ def main():
                 scene.update(sim_cfg.dt)
 
             extra = "clip frame 0, default pose targets + noise"
+            if win is not None:  # restarts written as TrackingSim.reset writes them, targets as TrackingSim.step sets them
+                robot = robots[0]
+                assert list(robot.joint_names) == g1.G1_JOINT_NAMES, robot.joint_names
+                alpha = torch.tensor([g1.action_scale(n) for n in g1.G1_JOINT_NAMES], device=dev)
+                default_q = robot.data.default_joint_pos.torch[0].clone()
+                cur = {}
+
+                def restart(k):
+                    sel = sched[k]
+                    p, R, v, w, q, qd = unflatten_state(win["s0"][sel])
+                    quat = mat_to_quat(R)
+                    robot.write_root_link_pose_to_sim_index(root_pose=torch.cat((p + scene.env_origins, quat[:, 1:4], quat[:, :1]), -1), env_ids=ids)
+                    robot.write_root_link_velocity_to_sim_index(root_velocity=torch.cat((v, w), -1), env_ids=ids)
+                    robot.write_joint_position_to_sim_index(position=q.contiguous(), env_ids=ids)
+                    robot.write_joint_velocity_to_sim_index(velocity=qd.contiguous(), env_ids=ids)
+                    scene.reset(ids)
+                    cur["target"] = (default_q + win["xi"][sel, 1:30]).unsqueeze(0) + alpha * win["a"][sel].transpose(0, 1)
+
+                def fn_seg(j):
+                    robot.set_joint_position_target_index(target=cur["target"][j])
+                    scene.write_data_to_sim()
+                    sim.step(render=False)
+                    scene.update(sim_cfg.dt)
+
+                extra = "replayed windows: their recorded start states and setpoints"
         elif args.mode == "env":
             env = PairedTrackingSim(sim_cfg, 2 * N, motion, mdp)
             ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
@@ -264,32 +452,22 @@ def main():
 
             extra = "reference setpoints + noise, rewards, terminations, paired resets"
         else:
-            from ndm_gym.train import add_speed_args, add_train_args
-
-            if args.wm_ckpt:  # the run's arguments and its world model's weights
-                ck = torch.load(args.wm_ckpt, map_location=dev, weights_only=False)
-                ta = argparse.Namespace(**ck["args"])
-                wm = ALGOS[ta.algo].world_model_cls(ck["args"]).to(dev)
-                wm.load_state_dict(ck["wm"])
-                source = f"ckpt {args.wm_ckpt} (iteration {ck.get('iteration')})"
-            else:
-                tp = argparse.ArgumentParser()
-                add_train_args(tp)
-                add_speed_args(tp)
-                wm_args = args.wm_args if args.wm_args is not None else "--algo supertrack"
-                ta = tp.parse_args(shlex.split(wm_args))
-                wm = ALGOS[ta.algo].world_model_cls(vars(ta)).to(dev)
-                source = f"wm_args {wm_args}"
+            wm, ta, source = build_world_model(args, dev)
             wm.requires_grad_(False)
             n_par = sum(t.numel() for t in wm.net.parameters())
-            env = PairedTrackingSim(sim_cfg, 2 * min(N, 512), motion, mdp, eval_mode=True)  # the reference states and contexts
-            env.reset(torch.arange(env.N, device=dev), f0.repeat_interleave(env.P))
-            env.refresh()
-            idx = torch.arange(per_env * N, device=dev) % env.N
-            S = tuple(t[idx].contiguous() for t in env.state())
-            xi_n = normalize_xi(env.xi)[idx].contiguous()
-            ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
-            a = ref_u[env.f[idx] + 1].contiguous()
+            if win is None:
+                env = PairedTrackingSim(sim_cfg, 2 * min(N, 512), motion, mdp, eval_mode=True)  # the reference states and contexts
+                env.reset(torch.arange(env.N, device=dev), f0.repeat_interleave(env.P))
+                env.refresh()
+                idx = torch.arange(per_env * N, device=dev) % env.N
+                S = tuple(t[idx].contiguous() for t in env.state())
+                xi_n = normalize_xi(env.xi)[idx].contiguous()
+                ref_u = reference_setpoints(motion, mdp.default_q, env.alpha)
+                a = ref_u[env.f[idx] + 1].contiguous()
+            else:  # the windows hold the states, setpoints and contexts (the reference's environment is not built)
+                S = tuple(t.contiguous() for t in unflatten_state(win["s0"][sched[0]]))
+                xi_n = normalize_xi(win["xi"][sched[0]]).contiguous()
+                a = win["a"][sched[0], 0].contiguous()
             graphs = args.compile == "reduce-overhead"
             if args.grad_horizon:  # the model as trained: its step compiled, the whole call one CUDA graph (--compile)
                 step = wm.step if args.compile == "none" else torch.compile(wm.step)
@@ -306,6 +484,22 @@ def main():
                 state["S"] = tuple(t.clone() for t in S1) if graphs else S1
 
             extra = f"{ta.wm_backbone} ({n_par / 1e6:.2f} M parameters) {path} | {source}"
+            if win is not None:  # the world model's state from each window's first recorded state, its setpoints and context
+                xi_win = normalize_xi(win["xi"])
+                cur = {}
+
+                def restart(k):
+                    sel = sched[k]
+                    state["S"] = tuple(t.contiguous() for t in unflatten_state(win["s0"][sel]))
+                    cur["a"] = win["a"][sel].transpose(0, 1).contiguous()
+                    cur["xi"] = xi_win[sel].contiguous()
+
+                @torch.no_grad()
+                def fn_seg(j):
+                    if graphs:
+                        torch.compiler.cudagraph_mark_step_begin()
+                    S1 = step(state["S"], cur["a"][j], cur["xi"])
+                    state["S"] = tuple(t.clone() for t in S1) if graphs else S1
             if args.grad_horizon:  # rollouts with their gradient instead of steps: the setpoints of the clip's next frames
                 from ndm_gym.algos.blinkmimic import Graphed
 
@@ -336,17 +530,25 @@ def main():
                 acts = [ref_u[frames + 1 + k].contiguous() for k in range(K)]
                 extra += " | " + check_rollouts(wm, step, S_chk, acts, normalize_xi(env.xi).contiguous(), graphs)
         torch.cuda.reset_peak_memory_stats()
-        runs = sorted(timed(fn, args.warmup if r == 0 else 0, args.steps) for r in range(args.repeats))
+        first = lambda r: (args.warmup, args.warm_seconds) if r == 0 else (0, 0.0)  # noqa: E731
+        if win is None:
+            runs = sorted(timed(fn, first(r)[0], args.steps, first(r)[1]) for r in range(args.repeats))
+        else:
+            wait = (lambda: barrier(args.barrier, args.barrier_n)) if args.barrier else None
+            runs = sorted(timed_segments(fn_seg, restart, lengths, *first(r), wait=wait if r == 0 else None) for r in range(args.repeats))
+            extra += (f" | replay {os.path.basename(args.replay)}: {args.replay_windows} windows of {args.replay_len} steps (seed "
+                      f"{args.replay_seed}), segments {lengths}, restarts untimed")  # fmt: skip
         sec = runs[len(runs) // 2]
         extra += " | runs " + " ".join(f"{r:.4f}" for r in runs)
+        extra += f" | warm {args.warm_seconds:g} s" if args.warm_seconds > 0 else ""
         steps = args.steps * max(args.grad_horizon, 1)  # control steps of a timed run
         robots_rate = per_env * N * steps / sec
         mem = torch.cuda.max_memory_allocated() / 2**30
         uuid = "GPU-" + str(torch.cuda.get_device_properties(0).uuid)
-        driver = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader", "-i", uuid], capture_output=True, text=True,
-                                check=True).stdout.strip()  # fmt: skip
+        driver = gpu_driver(uuid)
         # --single: mode "<mode>_single", and the per-env column holds env-steps, one robot each
         mode = args.mode + ("_single" if args.single else "") + (f"_grad{args.grad_horizon}" if args.grad_horizon else "")
+        mode += "_replay" if args.replay is not None else ""
         row = (f"{os.path.basename(args.pair)},{mode},{N},{per_env * N},{steps},{sec:.4f},{robots_rate:.1f},{robots_rate / per_env:.1f},"
                f"{1e3 * sec / steps:.3f},{args.amp},{torch.cuda.get_device_name()},{driver},{mem:.2f},{extra}")  # fmt: skip
         new = not os.path.exists(args.out)

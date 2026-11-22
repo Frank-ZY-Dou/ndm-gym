@@ -63,9 +63,10 @@ def load_buffer(paths: list[str], dev: str):
 
 
 @torch.no_grad()
-def fixed_windows(buf, n: int, k: int, seed: int):
+def fixed_windows(buf, n: int, k: int, seed: int, index: bool = False):
     """n continuous k-step windows, sampled once with a fixed seed: no episode end inside, and every step starts
-    where the previous one ended (excludes the instants of external pushes, which no world model can predict)."""
+    where the previous one ended (excludes the instants of external pushes, which no world model can predict).
+    ``index``: also each window's first row "t0" and its env "env" (the same windows)."""
     g = torch.Generator(device=buf.device).manual_seed(seed)
     out = []
     while sum(len(w["s"]) for w in out) < n:
@@ -75,6 +76,10 @@ def fixed_windows(buf, n: int, k: int, seed: int):
         e = env.unsqueeze(-1).expand_as(rows)
         w = {key: buf.data[key][rows, e] for key in ("s", "s1", "a", "xi", "done")}
         ok = ~w["done"][:, :-1].any(-1) & ((w["s1"][:, :-1] - w["s"][:, 1:]).abs().amax((-1, -2)) == 0)
+        if not bool(ok.any()):  # e.g. episodes shorter than k steps: without this the loop would not end
+            raise ValueError(f"no continuous {k}-step window among {2 * n} drawn from the dataset ({buf.size} x {buf.N} transitions)")
+        if index:
+            w.update(t0=rows[:, 0], env=env)
         out.append({key: v[ok] for key, v in w.items()})
     return {key: torch.cat([w[key] for w in out])[:n] for key in out[0]}
 
