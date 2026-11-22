@@ -196,6 +196,17 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
                         help="the policy update's compiled imagination step and losses as CUDA graphs (same kernels)")
     parser.add_argument("--critic_cudagraphs", action="store_true",
                         help="supermimic: the critic's minibatch step as a CUDA graph, with capturable Adam (changes results)")
+    parser.add_argument("--critic_compile", action="store_true",
+                        help="supermimic: what its critic's terms run eagerly, as compiled functions: the policy loss's terms after the rollout "
+                             "(survival, discounted rewards, the critic's bootstrap value), the critic's values and GAE targets, and its minibatch "
+                             "steps on the inputs normalized once per update (equal up to float rounding)")
+    parser.add_argument("--critic_fused", action="store_true",
+                        help="supermimic, with --critic_compile: each critic minibatch step (the loss, its backward pass, the clipping and Adam's "
+                             "step) by Triton kernels around cuBLAS's products, the critic's parameters, gradients and Adam's state in "
+                             "flat buffers (kernels/critic_fused.py; changes results by rounding)")
+    parser.add_argument("--compile_norms", action="store_true",
+                        help="supertrack, supermimic: the collection's world-model normalizer updates as one compiled function, with "
+                             "--wm_structured the plain increments computed once (needs --no_sync; the MLP world model; equal up to float rounding)")
     parser.add_argument("--combo_kernels", action="store_true",
                         help="independent small kernels of compiled functions launched together (combo_kernels; may change results by rounding)")
     parser.add_argument("--compile_eager", action="store_true",
@@ -211,7 +222,11 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
     parser.add_argument("--fk_fused", action="store_true",
                         help="the forward kinematics of training (ArticulationKinematics.forward: the world-model and policy losses, the "
                              "rewards, the critic's input, the reference's bodies) as two Triton kernels with a hand-written backward pass "
-                             "(kernels/fk.py; changes results by rounding; a RigidFormer world model's own kinematics: --rf_fused_inputs)")
+                             "(kernels/fk.py; changes results by rounding)")
+    parser.add_argument("--st_wm_fused", action="store_true",
+                        help="supertrack: the world-model window loss (wm_window_terms: the forward kinematics of the predicted and the target "
+                             "states and the four errors of every body) as two Triton kernels with a hand-written backward pass, no body's "
+                             "state in memory (kernels/wm_loss.py; changes results by rounding)")
     if not rigidformer:
         return
     parser.add_argument("--rf_fused_train", action="store_true",
@@ -249,8 +264,16 @@ def parse_args():
         print(f"--algo blinkmimic: SuperMimic with BlinkMimic's recipe; not ported: {NOT_PORTED}", flush=True)
     if args.critic_cudagraphs and args.algo != "supermimic":
         parser.error("--critic_cudagraphs: only SuperMimic's critic step has a CUDA graph")
+    if args.critic_compile and args.algo != "supermimic":
+        parser.error("--critic_compile: SuperMimic's critic (--algo supermimic)")
+    if args.critic_fused and not args.critic_compile:
+        parser.error("--critic_fused: with --critic_compile (SuperMimic's critic; the steps read the inputs normalized once per update)")
+    if args.compile_norms and args.algo not in ("supertrack", "supermimic"):
+        parser.error("--compile_norms: SuperTrack's and SuperMimic's world-model normalizers")
     if args.pi_encode_once and args.algo not in ("supertrack", "supermimic"):
         parser.error("--pi_encode_once: SuperTrack's and SuperMimic's imagination only")
+    if args.st_wm_fused and args.algo != "supertrack":
+        parser.error("--st_wm_fused: SuperTrack's world-model window loss (--algo supertrack)")
     if args.paired and (args.motions != "interhuman" or args.num_envs % 2):
         parser.error("--paired: two-person clips (--motions interhuman) and an even --num_envs (two robots per env)")
     return args

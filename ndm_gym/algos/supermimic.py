@@ -10,7 +10,7 @@ import torch
 import torch.nn as nn
 
 from ..buffer import ReplayBuffer
-from ..core.nets import deferred_grads, mlp_taps, run_mlp, run_mlp_deferred
+from ..core.nets import deferred_dtype, deferred_grads, mlp_taps, run_mlp, run_mlp_deferred
 from ..policies.critic import Critic
 from ..robots.g1 import G1_JOINT_NAMES, NUM_J, action_scale
 from ..state import INV_DIM, normalize_xi, unflatten_state
@@ -39,6 +39,28 @@ class SuperMimic(Algo):
         else:
             self.opt_v = torch.optim.Adam(self.critic.parameters(), **self.optimizer_kw(args.lr))  # --update_graphs: capturable
         self.critic_graph = None  # with --critic_cudagraphs: the static inputs, then the captured step
+        # optional (train.py --critic_compile): what the critic's terms otherwise run eagerly, as compiled functions: the policy loss's
+        # terms after the rollout (the survival products, the discounted rewards, the critic's value of the last state; forward and
+        # backward), the critic's values and GAE(lambda) targets over the imagined transitions, and each minibatch step's loss (forward
+        # and backward) on the transitions' inputs normalized once per update and cast once to the first product's dtype (the
+        # normalizer does not change during the steps). Equal to the default up to float rounding.
+        self.critic_compile = getattr(args, "critic_compile", False)
+        if self.critic_compile:
+            if args.no_critic or self.critic_graphs:
+                raise ValueError("--critic_compile needs the critic (no --no_critic) and steps it itself (not with --critic_cudagraphs)")
+            self.loss_terms_c = torch.compile(self._loss_terms)
+            self.critic_targets_c = torch.compile(self._critic_targets)
+            self.critic_loss_c = torch.compile(self._critic_loss)
+        # optional (train.py --critic_fused, with --critic_compile): each minibatch step (the loss, its backward pass, the clipping and
+        # Adam's step) by Triton kernels around cuBLAS's products (kernels/critic_fused.py), the critic's parameters, their
+        # gradients and Adam's state in flat buffers. Equal to --critic_compile's steps up to float rounding.
+        self.critic_fused = getattr(args, "critic_fused", False)
+        if self.critic_fused:
+            if not self.critic_compile:
+                raise ValueError("--critic_fused needs --critic_compile (its steps read the inputs normalized once per update)")
+            from ..kernels.critic_fused import CriticFused
+
+            self.cfused = CriticFused(self.critic, self.opt_v)
         # optional, for ablations of the action parameterization: offsets about the reference pose of the next frame
         # (SuperTrack's) instead of setpoints about the default pose
         self.residual = self.is_residual(vars(args))
@@ -98,6 +120,8 @@ class SuperMimic(Algo):
     def load_state_dict(self, ck):
         super().load_state_dict(ck)
         self.critic.load_state_dict(ck["critic"]), self.opt_v.load_state_dict(ck["opt_v"])
+        if self.critic_fused:  # Adam's state back into the flat buffers, the parameters' bf16 copies from the loaded ones
+            self.cfused.attach(), self.cfused.refresh()
 
     # ------------------------------------------------------------------ world model (Eq. 1, state term)
     def _wm_err(self, S_hat, s1, mask):
@@ -207,6 +231,40 @@ class SuperMimic(Algo):
     def _critic_input(self, S, f, xi_n, g):
         return torch.cat((self.mdp.critic_features(S, f, xi_n), g), -1)
 
+    def _loss_terms(self, r, d, S, f, xi_n, g):
+        """--critic_compile: the policy loss's terms after the rollout, from its rewards and termination probabilities r, d (H, B)
+        and its last state S, frame f, context xi_n and goal g: the objective J (B,) with the critic's bootstrap value, each step's
+        survival c_t (H, B), the last step's survival c and the survival-weighted reward sums (B,). The survival products are a loop
+        of multiplications (``survival``, the graphable update's)."""
+        args, (HZ, B) = self.args, r.shape
+        alive = survival(d)  # c_{t+1}
+        c_t = torch.cat((torch.ones(1, B, device=r.device), alive[:-1]), 0)
+        disc = args.gamma ** torch.arange(HZ, device=r.device, dtype=torch.float32).unsqueeze(-1)
+        J = (disc * c_t * r).sum(0)
+        c = alive[-1]
+        J = J + (args.gamma**HZ) * c * self.critic(self._critic_input(S, f, xi_n, g))
+        return J, c_t, c, (c_t * r).detach().sum(0)
+
+    def _critic_targets(self, X, rews, dones):
+        """--critic_compile: from the critic's inputs X (H + 1, B, D) of the imagined transitions and their rewards and
+        terminations (H, B), the GAE(lambda) targets (H, B) as the default's loop computes them, and the first H steps' inputs
+        normalized (H * B, D) in the dtype of the critic's first product (``run_mlp``'s autocast: its cast of them), which the
+        minibatch steps read (``_critic_loss``)."""
+        args = self.args
+        Xn = self.critic.norm(X)
+        V = run_mlp(self.critic.net, Xn).squeeze(-1)  # self.critic(X)
+        R = V[-1]
+        targets = []
+        for t in range(self.HZ - 1, -1, -1):
+            R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
+            targets.append(R)
+        return torch.stack(targets[::-1]), Xn[:-1].reshape(-1, X.shape[-1]).to(deferred_dtype(X.device))
+
+    def _critic_loss(self, Xn, Y, idx):
+        """--critic_compile: a minibatch step's loss on the rows ``idx`` of the normalized inputs (``_critic_targets``) and the
+        targets: the default's ``((self.critic(X[idx]) - Y[idx]) ** 2).mean()``, the normalizer's work done once per update."""
+        return ((run_mlp(self.critic.net, Xn[idx]).squeeze(-1) - Y[idx]) ** 2).mean()
+
     def policy_update(self, buffer: ReplayBuffer):
         args, dev, HZ, K = self.args, self.dev, self.HZ, self.K
         if self.pi_graphs:
@@ -246,16 +304,19 @@ class SuperMimic(Algo):
         f_all = flat(Fs)
         r, d = self.reward_term(S_all, f_all, flat(As), flat(Aps))
         r, d = r.view(HZ, B), d.view(HZ, B)
-        alive = torch.cumprod(1 - d, 0)  # c_{t+1}
-        c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
-        disc = args.gamma ** torch.arange(HZ, device=dev, dtype=torch.float32).unsqueeze(-1)
-        J = (disc * c_t * r).sum(0)
-        c = alive[-1]
-        r_sum = (c_t * r).detach().sum(0)
         rews, dones = r.detach(), d.detach()
-        if not args.no_critic:
-            critic_input = self.critic_input_c if self.compile_eager else self._critic_input  # --compile_eager: the compiled one
-            J = J + (args.gamma**HZ) * c * self.critic(critic_input(S, f, xi_n, g))
+        if self.critic_compile:  # the survival products, the discounted rewards and the bootstrap value in one compiled function
+            J, c_t, c, r_sum = self.loss_terms_c(r, d, S, f, xi_n, g)
+        else:
+            alive = torch.cumprod(1 - d, 0)  # c_{t+1}
+            c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
+            disc = args.gamma ** torch.arange(HZ, device=dev, dtype=torch.float32).unsqueeze(-1)
+            J = (disc * c_t * r).sum(0)
+            c = alive[-1]
+            r_sum = (c_t * r).detach().sum(0)
+            if not args.no_critic:
+                critic_input = self.critic_input_c if self.compile_eager else self._critic_input  # --compile_eager: the compiled one
+                J = J + (args.gamma**HZ) * c * self.critic(critic_input(S, f, xi_n, g))
         loss = -J.mean()
         if PROFILE:
             torch.cuda.synchronize()
@@ -293,14 +354,18 @@ class SuperMimic(Algo):
             else:
                 self.critic.norm.update(X)
             with torch.no_grad():
-                V = self.critic(X)
-                R = V[-1]
-                targets = []
-                for t in range(HZ - 1, -1, -1):
-                    R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
-                    targets.append(R)
-                targets = torch.stack(targets[::-1])  # (H, B)
-            Xf, Yf = X[:-1].reshape(-1, X.shape[-1]), targets.reshape(-1)
+                if self.critic_compile:  # the values, their targets and the steps' normalized inputs in one compiled function
+                    targets, Xf = self.critic_targets_c(X, rews, dones)
+                else:
+                    V = self.critic(X)
+                    R = V[-1]
+                    targets = []
+                    for t in range(HZ - 1, -1, -1):
+                        R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
+                        targets.append(R)
+                    targets = torch.stack(targets[::-1])  # (H, B)
+                    Xf = X[:-1].reshape(-1, X.shape[-1])
+            Yf = targets.reshape(-1)
             n = Xf.shape[0]
             mb = n // args.critic_minibatches
             if self.critic_graphs:
@@ -310,7 +375,10 @@ class SuperMimic(Algo):
                     perm = torch.randperm(n, device=dev)
                     for i in range(args.critic_minibatches):
                         idx = perm[i * mb : (i + 1) * mb]
-                        v_loss = ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
+                        if self.critic_fused:  # the step by the kernels
+                            v_loss = self.cfused.step(Xf, Yf, idx)
+                            continue
+                        v_loss = self.critic_loss_c(Xf, Yf, idx) if self.critic_compile else ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
                         self.opt_v.zero_grad(set_to_none=True)
                         v_loss.backward()
                         nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
@@ -355,16 +423,19 @@ class SuperMimic(Algo):
         f_all = flat(Fs)
         r, d = self.reward_term(S_all, f_all, flat(As), flat(Aps))
         r, d = r.view(HZ, B), d.view(HZ, B)
-        alive = survival(d)  # c_{t+1}: cumprod(1 - d, 0) as a loop
-        c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
-        disc = args.gamma ** torch.arange(HZ, device=dev, dtype=torch.float32).unsqueeze(-1)
-        J = (disc * c_t * r).sum(0)
-        c = alive[-1]
-        r_sum = (c_t * r).detach().sum(0)
         rews, dones = r.detach(), d.detach()
-        if not args.no_critic:
-            critic_input = self.critic_input_c if self.compile_eager else self._critic_input
-            J = J + (args.gamma**HZ) * c * self.critic(critic_input(S, f, xi_n, g))
+        if self.critic_compile:  # the survival products, the discounted rewards and the bootstrap value in one compiled function
+            J, c_t, c, r_sum = self.loss_terms_c(r, d, S, f, xi_n, g)
+        else:
+            alive = survival(d)  # c_{t+1}: cumprod(1 - d, 0) as a loop
+            c_t = torch.cat((torch.ones(1, B, device=dev), alive[:-1]), 0)
+            disc = args.gamma ** torch.arange(HZ, device=dev, dtype=torch.float32).unsqueeze(-1)
+            J = (disc * c_t * r).sum(0)
+            c = alive[-1]
+            r_sum = (c_t * r).detach().sum(0)
+            if not args.no_critic:
+                critic_input = self.critic_input_c if self.compile_eager else self._critic_input
+                J = J + (args.gamma**HZ) * c * self.critic(critic_input(S, f, xi_n, g))
         loss = -J.mean()
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
@@ -394,21 +465,28 @@ class SuperMimic(Algo):
                 X = self.critic_input_c(S_c, f_c, xi_c, g_c).view(HZ + 1, B, -1)
             self.critic.norm.update(X)  # --no_sync: in place
             with torch.no_grad():
-                V = self.critic(X)
-                R = V[-1]
-                targets = []
-                for t in range(HZ - 1, -1, -1):
-                    R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
-                    targets.append(R)
-                targets = torch.stack(targets[::-1])  # (H, B)
-            Xf, Yf = X[:-1].reshape(-1, X.shape[-1]), targets.reshape(-1)
+                if self.critic_compile:  # the values, their targets and the steps' normalized inputs in one compiled function
+                    targets, Xf = self.critic_targets_c(X, rews, dones)
+                else:
+                    V = self.critic(X)
+                    R = V[-1]
+                    targets = []
+                    for t in range(HZ - 1, -1, -1):
+                        R = rews[t] + args.gamma * (1 - dones[t]) * ((1 - args.lam) * V[t + 1] + args.lam * R)
+                        targets.append(R)
+                    targets = torch.stack(targets[::-1])  # (H, B)
+                    Xf = X[:-1].reshape(-1, X.shape[-1])
+            Yf = targets.reshape(-1)
             n = Xf.shape[0]
             mb = n // args.critic_minibatches
             for _ in range(args.critic_epochs):
                 perm = torch.randperm(n, device=dev)
                 for i in range(args.critic_minibatches):
                     idx = perm[i * mb : (i + 1) * mb]
-                    v_loss = ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
+                    if self.critic_fused:  # the step by the kernels
+                        v_loss = self.cfused.step(Xf, Yf, idx)
+                        continue
+                    v_loss = self.critic_loss_c(Xf, Yf, idx) if self.critic_compile else ((self.critic(Xf[idx]) - Yf[idx]) ** 2).mean()
                     self.opt_v.zero_grad(set_to_none=True)
                     v_loss.backward()
                     nn.utils.clip_grad_norm_(self.critic.parameters(), 1.0)
