@@ -35,6 +35,10 @@ TWO_G1_ST = (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com {RECIPE
 TWO_G1_SM = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 {RECIPE} --pi_lr_mult 2 --contact_reward 0.25 "
              f"--ref_contact_fix --sm_residual --wm_structured {ENCODE_ONCE} {SYSTEMS} {PAIRED} --ckpt_every 1000 --iterations 9396")  # fmt: skip
 AWL3 = "--layout AWL"  # three GPUs: actor | world-model learner | policy learner (the two-G1 configurations run no probe sweeps)
+# each algorithm's speed options on the two G1s and its policy batch halved (4,096 to 2,048 and 2,048 to 1,024): shorter iterations, the
+# same accuracy at the published budget within the seeds' spread
+TWO_G1_ST_FAST = f"{TWO_G1_ST.replace('--pi_batch 4096', '--pi_batch 2048')} --st_wm_fused"
+TWO_G1_SM_FAST = f"{TWO_G1_SM.replace('--pi_batch 2048', '--pi_batch 1024')} --critic_compile --compile_norms --critic_fused"
 MUSCLE_RECIPE = ("--pi_ema 0.995 --lr 4e-4 --pi_opt muon --wm_opt muon --wm_only_iters 0 --pi_batch 2048 --lr_decay_len 300 --lr_decay_by 1400 "
                  "--wm_hidden 1024 1024 1024")  # fmt: skip
 MUSCLE_SYS = "--no_sync --fused_adam --update_graphs --graph_early --collect_graph --reset_masked --ckpt_light"
@@ -43,9 +47,13 @@ MUSCLE_RF = ("--wm_backbone rigidformer --rf_muscle_tokens body --rf_dim 128 --r
 HAND_SYSTEMS = "--fused_adam --reset_masked --no_sync --compile_eager --collect_graph --update_graphs"
 HOI_OPT = "--pi_opt muon --wm_opt muon --pi_ema 0.995 --pi_lr_mult 2 --lr_decay_ret 0.95 --lr_decay_by 1400 --lr_decay_len 300"  # HOI's optimizer options
 QUAD_SYSTEMS = "--fused_adam --reset_masked --no_sync --collect_graph --update_graphs"  # the hand task's, without the forward kinematics' option
-# the quadrotor's selected settings: an imagined window of 0.64 s, a world model of 3 x 256
-QUAD_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_task_weights --horizon 64 {HOI_OPT} --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
-QUAD_SM = f"--algo supermimic --lr 4e-4 --horizon 64 --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+# the quadrotor's settings: a world model of 3 x 256; the most accurate configurations imagine 100 steps (1 s) with HOI's optimizer
+# options, the fast ones 64 steps (0.64 s) with Muon, no policy average and smaller batches
+QUAD_ST = f"--algo supertrack --st_fail_w 2 --st_task_weights --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+QUAD_SM = f"--algo supermimic --wm_hidden 256 256 256 {QUAD_SYSTEMS}"
+QUAD_ST_OPT = HOI_OPT.replace("--pi_ema 0.995", "--pi_ema 0")  # HOI's optimizer options without the policy average
+# the 6,000-iteration runs' cosine; a checkpoint every 50 iterations for the time to the target (time_to.sh <run> 1500 500)
+QUAD_TIMED = "--iterations 1500 --lr_decay_iters 6000 --ckpt_every 50 --ckpt_keep"
 # the Go2's selected settings (benchmarks/go2_lifelike_tracking): SuperTrack with the hand task's options, SuperMimic with HOI's
 # optimizer options and a discount of 0.95
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
@@ -84,24 +92,29 @@ CONFIGS = {
         "lafan1-supermimic-rf-accurate": (f"--algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 "
                                           f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
                                           "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
-        "two-g1-supertrack": (TWO_G1_ST,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.66 +- 0.00 min, root-relative MPJPE there "
-                              "16.8 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.8925 +- 0.0011, MPJPE 46.2 / 14.1 mm global / root-relative "
-                              "(seeds 0-2 to 9,396 iterations: seed 0 on an A100 80GB, in 0.5 h, seeds 1-2 on an A100 40GB SXM4; measured before "
-                              "the goal was encoded once, which computes the same values up to float rounding)"),
-        "two-g1-supermimic": (TWO_G1_SM,
-                              "two G1s, InterHuman clip 1566 (add --motion_dir): return 0.88 after 3.26 +- 0.00 min, root-relative MPJPE there "
-                              "19.9 mm, on an A100 40GB SXM4 (seeds 0-2); return 0.9055 +- 0.0011, MPJPE 45.3 / 16.0 mm global / root-relative "
-                              "(seeds 0-2 to two-g1-supertrack's 9,396 iterations, A100 40GB SXM4; for 0.3 h, 6,264 iterations: 0.9042 +- 0.0015, "
-                              "47.5 / 16.1 mm; measured before the goal was encoded once, which computes the same values up to float rounding)"),
-        "two-g1-supertrack-3gpu": (f"{TWO_G1_ST} {AWL3}",
+        "two-g1-supertrack": (TWO_G1_ST_FAST,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir); its world-model loss as fused kernels (--st_wm_fused) and its "
+                              "policy batch halved (--pi_batch 2048): return 0.88 after 3.48 +- 0.49 min, root-relative MPJPE there 16.8 mm, "
+                              "143.3 ms per iteration on an A100 40GB SXM4 (seeds 0-3); at its 9,396 iterations return 0.8925 +- 0.0011, MPJPE "
+                              "46.2 / 14.1 mm global / root-relative with the policy batch of 4,096 (seeds 0-2: seed 0 on an A100 80GB, in 0.5 h, "
+                              "seeds 1-2 on an A100 40GB SXM4; before the goal was encoded once, which computes the same values up to float "
+                              "rounding), 0.8929 +- 0.0011, 44.7 / 14.3 mm with 2,048 (seeds 0-2, A100 40GB SXM4)"),
+        "two-g1-supermimic": (TWO_G1_SM_FAST,
+                              "two G1s, InterHuman clip 1566 (add --motion_dir); its critic's update and its world-model normalizer updates "
+                              "compiled (--critic_compile --compile_norms), the critic's steps as fused kernels (--critic_fused) and its policy "
+                              "batch halved (--pi_batch 1024): return 0.88 after 2.70 +- 0.27 min, root-relative MPJPE there 20.5 mm, 127.2 ms "
+                              "per iteration on an A100 40GB SXM4 (seeds 0-3); at two-g1-supertrack's 9,396 iterations return 0.9055 +- 0.0011, "
+                              "MPJPE 45.3 / 16.0 mm global / root-relative with the policy batch of 2,048 (seeds 0-2, A100 40GB SXM4; for 0.3 h, "
+                              "6,264 iterations: 0.9042 +- 0.0015, 47.5 / 16.1 mm; before the goal was encoded once, which computes the same "
+                              "values up to float rounding), 0.9053 +- 0.0007, 45.6 / 16.2 mm with 1,024 (seeds 0-2)"),
+        "two-g1-supertrack-3gpu": (f"{TWO_G1_ST_FAST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.85 +- 0.21 min, root-relative MPJPE there 16.1 mm "
-                                   "(seeds 0-2)"),
-        "two-g1-supermimic-3gpu": (f"{TWO_G1_SM} {AWL3}",
+                                   "learner and policy learner one GPU each, two-g1-supertrack's options; return 0.88 after 1.63 +- 0.15 min, "
+                                   "root-relative MPJPE there 16.1 mm, 63.7 ms per iteration (seeds 0-2)"),
+        "two-g1-supermimic-3gpu": (f"{TWO_G1_SM_FAST} {AWL3}",
                                    "two G1s on three A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of three GPUs; add --motion_dir): actor, world-model "
-                                   "learner and policy learner one GPU each; return 0.88 after 1.62 +- 0.18 min, root-relative MPJPE there 20.0 mm "
-                                   "(seeds 0-2)"),
+                                   "learner and policy learner one GPU each, two-g1-supermimic's options; return 0.88 after 1.48 +- 0.16 min, "
+                                   "root-relative MPJPE there 20.6 mm, 64.4 ms per iteration (seeds 0-2)"),
         "two-g1-supertrack-rf": (f"--algo supertrack --st_fail_w 2 --st_balance_w 2 --st_com {RF_RECIPE} --wm_backbone rigidformer --wm_lr 3.5e-3 "
                                  f"{RF_SMALL} {RF_SPEED} {SYSTEMS} {PAIRED} --ckpt_every 1000 --max_hours 0.5",
                                  "two G1s, small RigidFormer (add --motion_dir): return 0.894 +- 0.002, MPJPE 47.2 / 14.7 mm global / root-relative "
@@ -145,18 +158,22 @@ CONFIGS = {
                                   "0.009 (seeds 1-3)"),
     },
     "train_quadrotor": {
-        "quadrotor-supertrack-accurate": (f"{QUAD_ST} --iterations 6000 --lr_decay_iters 6000",
-                                          "racing quadrotor (add --flight), 6,000 iterations, 5.6-5.9 min on an H200: position 3.38 / 2.02 / 2.19 mm on "
-                                          "the ellipse, the lemniscate and the race track at a success of 100 % (seeds 0-2)"),
-        "quadrotor-supermimic-accurate": (f"{QUAD_SM} --iterations 6000 --lr_decay_iters 6000",
-                                          "racing quadrotor (add --flight), 6,000 iterations, 7.0-7.3 min on an H200: position 6.55 / 4.96 / 5.08 mm on "
-                                          "the ellipse, the lemniscate and the race track at a success of 100 % (seeds 0-2)"),
-        "quadrotor-supertrack-fast": (f"{QUAD_ST} --iterations 1000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep",
-                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm after 0.79 / 0.68 / 0.75 min "
-                                      "(H200, mean of seeds 0-2, checkpoints every 250 iterations; not engineered)"),
-        "quadrotor-supermimic-fast": (f"{QUAD_SM} --iterations 1000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep",
-                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm after 0.93 / 0.78 / 0.89 min "
-                                      "(H200, mean of seeds 0-2, checkpoints every 250 iterations; not engineered)"),
+        "quadrotor-supertrack-accurate": (f"{QUAD_ST} --lr 8e-4 --horizon 100 {HOI_OPT} --iterations 6000 --lr_decay_iters 6000",
+                                          "racing quadrotor (add --flight), 6,000 iterations, 13.1-13.6 min on an A100 40GB SXM4: position 3.06 / "
+                                          "1.89 / 1.98 mm on the ellipse, the lemniscate and the race track, 1.11 / 0.99 / 2.75 mm on their piloted "
+                                          "flights, 2.31 mm with one policy on all 18 autonomous flights, at a success of 100 % (seeds 0-2)"),
+        "quadrotor-supermimic-accurate": (f"{QUAD_SM} --lr 4e-4 --horizon 100 {HOI_OPT} --iterations 6000 --lr_decay_iters 6000",
+                                          "racing quadrotor (add --flight), 6,000 iterations, 17.6-18.1 min on an A100 40GB SXM4: position 5.71 / "
+                                          "3.95 / 4.08 mm on the ellipse, the lemniscate and the race track, 4.48 / 4.00 / 6.63 mm on their piloted "
+                                          "flights, 4.94 mm with one policy on all 18 autonomous flights, at a success of 100 % (seeds 0-2)"),
+        "quadrotor-supertrack-fast": (f"{QUAD_ST} --lr 4e-4 --horizon 64 {QUAD_ST_OPT} --pi_batch 1024 --wm_batch 1024 {QUAD_TIMED}",
+                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm, held for 500 iterations, "
+                                      "from 0.38 / 0.32 / 0.36 min on the ellipse, the lemniscate and the race track (A100 40GB SXM4, mean of seeds "
+                                      "0-2, every run; a checkpoint every 50 iterations, 64 perturbed starts, warm compile caches; not engineered)"),
+        "quadrotor-supermimic-fast": (f"{QUAD_SM} --lr 4e-4 --horizon 64 --pi_opt muon --wm_opt muon --pi_batch 2048 {QUAD_TIMED}",
+                                      "racing quadrotor (add --flight): a success of 0.99 with the position within 20 mm, held for 500 iterations, "
+                                      "from 0.71 / 0.69 / 0.67 min on the ellipse, the lemniscate and the race track (A100 40GB SXM4, mean of seeds "
+                                      "0-2, every run; a checkpoint every 50 iterations, 64 perturbed starts, warm compile caches; not engineered)"),
     },
     "train_quadruped": {
         "go2-supertrack": (f"{GO2_ST} --iterations 10000 --lr_decay_iters 10000 {GO2_TIMED}",

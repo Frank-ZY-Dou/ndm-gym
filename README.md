@@ -51,7 +51,7 @@ MuJoCo model.
 | Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
 | RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
 | mbrl-lib planning | its CEM controller planning on SuperTrack's acceleration model, each plan executed in MuJoCo: the cart-pole (planner seed 10) and the pusher (seed 17), recorded again on a CPU in fp32 with the A100 runs' fits; half speed | returns 175.96 and -65.89 (175.77 and -62.53 in the A100 runs) |
-| Racing quadrotor | `quadrotor-supertrack-accurate`, seed 0, 6,000 iterations, trained on an A100 40GB SXM4; from the unperturbed start, the chase camera at 1.25 m, in real time | position 2.19, 3.08 and 3.38 mm (the configuration's mean of seeds 0-2 on an H200, over 256 perturbed starts) |
+| Racing quadrotor | `quadrotor-supertrack-accurate`, seed 0, 6,000 iterations, trained on an A100 40GB SXM4; from the unperturbed start, the chase camera at 1.25 m, in real time | position 1.98, 2.75 and 3.06 mm (the configuration's mean of seeds 0-2 on A100 40GB SXM4 GPUs, over 256 perturbed starts) |
 | Adroit door | `--method supertrack --residual-scale 0.2 --door-latch-offset 0.3` (the door and latch started up to 0.3 rad open), training seed 0, 20,000 iterations on an A100 40GB SXM4: its evaluation's nominal start (door and latch closed, the hand unperturbed), in a brighter scene; half speed, its last frame held | that start: return 9.022, the door opened; the configuration: the door open on 99.3 % of 256 starts, return 8.165 ± 0.054 (seeds 0-2, A100 40GB) |
 | Adroit pen, hammer, relocate | SuperTrack's runs at 20,000 iterations in 2,048 worlds on an L40S: pen seed 0, hammer seed 1, relocate seed 0, each the lowest tracking error of its task's six runs; the nominal episode at half speed (the hammer from 1 s), last frames held | normalized tracking RMSE 0.049, 0.022 and 0.048; 251, 256 and 256 of 256 native final successes |
 | Wuji piano | `supertrack --horizon 3 --st-reg 0.01`, training seed 0, 20 rounds on an A100 40GB SXM4: its replay's nominal start, the song's first 6 s (the episode's 1-7 s), in a light scene, in real time | that start: Eden F1 0.921, 19 of 19 notes; the configuration: Eden F1 0.903 ± 0.015 on 256 starts (seeds 0-2, A100 40GB) |
@@ -98,8 +98,8 @@ body's size. Commands: [Recommended settings](#-recommended-settings), [Results]
 |  | 📈 highest return | `lafan1-supermimic-accurate`, 3 h on an A100 40GB SXM4 | return **0.915 ± 0.005**, MPJPE-local 16.7 ± 0.1 mm (seeds 7-9); `lafan1-supertrack-accurate` **0.898 ± 0.002** |
 | **LAFAN1 tracking**, 40 clips, MLP world model, four GPUs | 🚀 fastest | `lafan1-supertrack-fast-4gpu` and `lafan1-supermimic-fast-4gpu` ([XMimic](docs/algorithms/xmimic.md)'s layout AWL: actor, world model, policy and probe sweeps on a GPU each; the kinematics as fused kernels) | return 0.82 after **1.47 ± 0.05** and **1.42 ± 0.09 min**, MPJPE-local there **21.9 ± 0.5** and **26.9 ± 0.4 mm**, on four A100 40GB SXM4 (seeds 3-5); XMimic's own code, run here on the same GPUs with its evaluator: 1.81 ± 0.13 min (not ranked) |
 | **LAFAN1 tracking**, RigidFormer world model | 🎯 most accurate | `lafan1-supertrack-rf-accurate`, 3 h on an A100 40GB | return **0.832 ± 0.003**, MPJPE **21.0 ± 1.3 mm** (seeds 7-9) |
-| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | ⏱ time to the target, not engineered | `two-g1-supertrack` and `two-g1-supermimic` | return 0.88 after **3.66 ± 0.00** and **3.26 ± 0.00 min**, root-relative MPJPE there **16.8 ± 0.4** and **19.9 ± 1.4 mm**, on an A100 40GB SXM4 (MLP world model, seeds 0-2) |
-|  | ⏱ time to the target, not engineered, three GPUs | `two-g1-supertrack-3gpu` and `two-g1-supermimic-3gpu` (layout AWL: actor, world model and policy on a GPU each) | return 0.88 after **1.85 ± 0.21** and **1.62 ± 0.18 min**, root-relative MPJPE there **16.1 ± 0.5** and **20.0 ± 0.4 mm**, on three A100 40GB SXM4 (seeds 0-2) |
+| **[Two G1s](#two-g1s-one-two-person-clip)**, one two-person clip | 🚀 fastest, one GPU | `two-g1-supertrack` and `two-g1-supermimic` (each algorithm's [fused kernels](#two-g1s-one-two-person-clip) and a halved policy batch) | return 0.88 after **3.48 ± 0.49** and **2.70 ± 0.27 min**, root-relative MPJPE there **16.8 ± 0.9** and **20.5 ± 0.4 mm**, on an A100 40GB SXM4 (MLP world model, seeds 0-3) |
+|  | 🚀 fastest, three GPUs | `two-g1-supertrack-3gpu` and `two-g1-supermimic-3gpu` (the same with layout AWL: actor, world model and policy on a GPU each) | return 0.88 after **1.63 ± 0.15** and **1.48 ± 0.16 min**, level within the seeds' spread; root-relative MPJPE there **16.1 ± 0.3** and **20.6 ± 0.5 mm**, on three A100 40GB SXM4 (seeds 0-2) |
 |  | 🎯 lowest pose error (root-relative) | `two-g1-supertrack` | root-relative MPJPE **14.1 ± 0.2 mm** (MLP world model, seeds 0-2, 9,396 iterations) |
 |  | 📈 highest return | `two-g1-supermimic` | return **0.9055 ± 0.0011** (MLP world model, seeds 0-2, 9,396 iterations) |
 | **[Hand-object tracking](#hand-object-tracking)**, Inspire hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast` with the [speed options](#hand-object-tracking) | **1.0 / 0.8 / 2.0 min**, every run, mean 1.30 min (an A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 2.19 min) |
@@ -111,8 +111,8 @@ body's size. Commands: [Recommended settings](#-recommended-settings), [Results]
 | **Hand-object tracking**, XHand, three clips | 🚀 fastest, one GPU | `hand-supermimic-fast` with the speed options | **0.8 / 1.1 / 1.2 min**, every run, mean 1.03 min (an A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.7 / 0.9 / 1.8 min, mean 1.16 min, faster per iteration (18.4 against 15.7 it/s) |
 |  | 🚀 fastest, three GPUs | `hand-supermimic-fast` with the speed options and `--layout AWL` | **0.6 / 0.7 / 0.8 min**, every run, mean 0.72 min (three A100 40GB, seeds 0-2); `hand-supertrack-fast` 0.6 / 0.6 / 1.2 min, mean 0.78 min, faster per iteration (39.4 against 30.3 it/s) |
 |  | 🎯 most accurate | `hand-supertrack-accurate` | object position **2.4 / 1.6 / 2.3 mm** at a success of 99.9-100 % (seeds 0-2, A100 40GB) |
-| **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.79 / 0.68 / 0.75 min** on the autonomous flights, every run (an H200, mean of seeds 0-2); `quadrotor-supermimic-fast` **0.93 / 0.78 / 0.89 min**, without the optimizer options SuperTrack's configuration has |
-|  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.38 / 2.02 / 2.19 mm** on the autonomous flights, **1.34 / 1.20 / 3.08 mm** on the piloted ones, at a success of 100 % (seeds 0-2, H200); `quadrotor-supermimic-accurate` **6.55 / 4.96 / 5.08 mm** and **5.51 / 4.71 / 8.13 mm**, without those options |
+| **[Quadrotor trajectory tracking](#quadrotor-trajectory-tracking)**, a racing quadrotor, three tracks | ⏱ time to the target, not engineered | `quadrotor-supertrack-fast` | **0.38 / 0.32 / 0.36 min** on the autonomous flights, every run (an A100 40GB SXM4, mean of seeds 0-2); `quadrotor-supermimic-fast` **0.71 / 0.69 / 0.67 min** |
+|  | 🎯 most accurate | `quadrotor-supertrack-accurate` | position **3.06 / 1.89 / 1.98 mm** on the autonomous flights, **1.11 / 0.99 / 2.75 mm** on the piloted ones, at a success of 100 % (seeds 0-2, A100 40GB SXM4); `quadrotor-supermimic-accurate` **5.71 / 3.95 / 4.08 mm** and **4.48 / 4.00 / 6.63 mm** |
 | **[Adroit Door tracking](#adroit-door-tracking)**, door and latch started up to 0.3 rad open | 🎯 most accurate | `train_door_full --door-latch-offset 0.3` with `--method supertrack --residual-scale 0.2` and with `--method supermimic`, openings level | the door open on **99.3 ± 0.8 %** and **99.5 ± 0.9 %** of 256 starts (the demonstration's controls: 65.2 %); return **8.165 ± 0.054** and **7.927 ± 0.066**, door RMSE 0.1403 ± 0.0054 and 0.1320 ± 0.0060 rad (seeds 0-2, A100 40GB) |
 |  | ⏱ time to the target, not engineered | `train_door_full --method supermimic --door-latch-offset 0.3` | 99 % of the starts open after **13.1 ± 7.9 min**, the runs ending at 99.5 % open (seeds 0-2, A100 40GB); `--method supertrack --lr 8e-4` **35.5 ± 13.6 min**, ending at 91.1 %; both in the contributed implementation |
 | **[Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking)**, one demonstration each; contributed runs on an L40S, not re-verified on an A100 | 🎯 most accurate, Pen | `train_adroit --method supertrack` | native final success **96.7 ± 1.2 %**, normalized tracking RMSE **0.0519 ± 0.0043**; `--method supermimic` **79.4 ± 28.5 %**, **0.2380 ± 0.1386**; the demonstration's controls alone 58.6 %, 0.4024 (seeds 0-2, L40S) |
@@ -154,8 +154,8 @@ options beside them); both methods are on offer for every task.
 | | fastest, four GPUs | `lafan1-supertrack-fast-4gpu`: 1.47 min, 21.9 mm (four A100 40GB SXM4) | `lafan1-supermimic-fast-4gpu`: 1.42 min, 26.9 mm |
 | **LAFAN1**, RigidFormer | most accurate | `lafan1-supertrack-rf-accurate`: 0.832, 21.0 mm | `lafan1-supermimic-rf-accurate`: 0.804, 33.1 mm |
 | **Two G1s**, MLP world model (add `--motion_dir`) | lowest pose error, highest return | `two-g1-supertrack`: MPJPE 46.2 / 14.1 mm, return 0.8925 (seeds 0-2, 9,396 iterations) | `two-g1-supermimic`: 45.3 / 16.0 mm, return 0.9055 (the same) |
-| | time to the target, not engineered, one GPU | `two-g1-supertrack`: return 0.88 in 3.66 ± 0.00 min, root-relative MPJPE there 16.8 mm (seeds 0-2, A100 40GB SXM4) | `two-g1-supermimic`: 3.26 ± 0.00 min, 19.9 mm |
-| | time to the target, not engineered, three GPUs (`--layout AWL`) | `two-g1-supertrack-3gpu`: 1.85 ± 0.21 min, 16.1 mm (three A100 40GB SXM4) | `two-g1-supermimic-3gpu`: 1.62 ± 0.18 min, 20.0 mm |
+| | fastest, one GPU | `two-g1-supertrack`: return 0.88 in 3.48 ± 0.49 min, root-relative MPJPE there 16.8 mm (seeds 0-3, A100 40GB SXM4) | `two-g1-supermimic`: 2.70 ± 0.27 min, 20.5 mm |
+| | fastest, three GPUs (`--layout AWL`) | `two-g1-supertrack-3gpu`: 1.63 ± 0.15 min, 16.1 mm (seeds 0-2, three A100 40GB SXM4) | `two-g1-supermimic-3gpu`: 1.48 ± 0.16 min, 20.6 mm |
 | **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm (0.5 h, 4,373 iterations) | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm (0.5 h, 5,718 iterations) |
 | **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast`: the target in 1.0 / 0.8 / 2.0 min (9 of 9 runs, mean 1.30) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min (8 of 9, mean 2.19) |
@@ -168,8 +168,8 @@ options beside them); both methods are on offer for every task.
 | | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 1.2 min (mean 0.78, 39.4 it/s) | `hand-supermimic-fast`: 0.6 / 0.7 / 0.8 min (mean 0.72, 30.3 it/s) |
 | **Muscles**, MLP world model (`train_muscles`) | | `muscles-supertrack`: MPJPE 38.1 mm | `muscles-supermimic`: 65.6 mm |
 | **Muscles**, RigidFormer | | `muscles-supertrack-rf`: MPJPE 34.9 mm | `muscles-supermimic-rf`: 60.2 mm |
-| **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.38 / 2.02 / 2.19 mm | `quadrotor-supermimic-accurate`: 6.55 / 4.96 / 5.08 mm |
-| | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.79 / 0.68 / 0.75 min (H200) | `quadrotor-supermimic-fast`: 0.93 / 0.78 / 0.89 min |
+| **Quadrotor** (`train_quadrotor`, add `--flight`) | most accurate | `quadrotor-supertrack-accurate`: position 3.06 / 1.89 / 1.98 mm (A100 40GB SXM4) | `quadrotor-supermimic-accurate`: 5.71 / 3.95 / 4.08 mm |
+| | time to the target, not engineered | `quadrotor-supertrack-fast`: the target in 0.38 / 0.32 / 0.36 min (A100 40GB SXM4) | `quadrotor-supermimic-fast`: 0.71 / 0.69 / 0.67 min |
 | **Adroit door**, door and latch up to 0.3 rad open (`train_door_full --door-latch-offset 0.3`) | most accurate | `--method supertrack --residual-scale 0.2`: opened 99.3 %, return 8.165 | `--method supermimic`: 99.5 %, 7.927 |
 | | time to the target, not engineered | `--method supertrack --lr 8e-4`: 99 % open in 35.5 min, the runs ending at 91.1 % | `--method supermimic`: 13.1 min, ending at 99.5 % |
 | **Adroit Pen, Hammer, Relocate** (`train_adroit`; contributed runs on an L40S, not re-verified on an A100) | most accurate, Pen | `--method supertrack`: native final success 96.7 %, normalized tracking RMSE 0.0519 | `--method supermimic`: 79.4 %, 0.2380 |
@@ -216,8 +216,11 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   ([BlinkMimic's](#blinkmimics-options)), multi-GPU layouts ([XMimic's](docs/algorithms/xmimic.md)) with four-GPU
   configurations of both algorithms; [time to return 0.82](#training-speed) on one and four GPUs, with
   [NablaMimic](docs/algorithms/nablamimic.md)'s own code timed beside; the hands' [speed options](#hand-object-tracking),
-  the target 1.4-2.7x sooner on one GPU and another 1.4-1.9x on three; [two G1s](#two-g1s-one-two-person-clip) on three GPUs,
-  return 0.88 in 1.85 and 1.62 min at root-relative MPJPE 16.1 and 20.0 mm (SuperTrack, SuperMimic).
+  the target 1.4-2.7x sooner on one GPU and another 1.4-1.9x on three; [two G1s](#two-g1s-one-two-person-clip) with each
+  algorithm's fused kernels and a halved policy batch, return 0.88 in 3.48 and 2.70 min on one GPU and 1.63 and 1.48 min on
+  three, at root-relative MPJPE 16.8 and 20.5, 16.1 and 20.6 mm (SuperTrack, SuperMimic); the
+  [quadrotor's](#quadrotor-trajectory-tracking) configurations on an A100 40GB SXM4, the target in 0.32-0.38 and 0.67-0.71 min,
+  position 1.89-3.06 and 3.95-5.71 mm on the autonomous flights (SuperTrack, SuperMimic).
 - **[2026-11] Contributed** by [Dechen Gao](https://github.com/gaodechen): the hand-object task with SuperMimic on it;
   the Allegro and the Inspire hand, each read from its scene with no code of its own; by
   [Zhengming Yu](https://github.com/Yzmblog): quadrotor trajectory tracking on Race Against the Machine's flights; by
@@ -435,6 +438,9 @@ MUJOCO_GL=egl python tools/render_quadrotor.py --rollout logs/ellipse_st/evaluat
 
 # a task and seed of the benchmark (benchmarks/quadrotor_racing_tracking/tasks.json: ellipse, lemniscate, race_track, all)
 benchmarks/quadrotor_racing_tracking/run.sh ellipse 0 logs/quad_st --config quadrotor-supertrack-accurate
+# the time to the target: a fast configuration, then its checkpoints in order, the target held for 500 iterations
+benchmarks/quadrotor_racing_tracking/run.sh ellipse 0 logs/quad_st_fast --config quadrotor-supertrack-fast
+benchmarks/quadrotor_racing_tracking/time_to.sh logs/quad_st_fast/ellipse/seed_0 1500 500
 ```
 
 </details>
@@ -732,17 +738,17 @@ redistributed). One policy controls both.
 |---|---|---|
 | lowest pose error (root-relative) | `--config two-g1-supertrack` | root-relative MPJPE 14.1 ± 0.2 mm (MLP world model, seeds 0-2, 9,396 iterations) |
 | highest return | `--config two-g1-supermimic` | return 0.9055 ± 0.0011 (MLP world model, seeds 0-2, 9,396 iterations) |
-| time to the target, not engineered | `--config two-g1-supertrack`, `--config two-g1-supermimic` | return 0.88 after 3.66 ± 0.00 and 3.26 ± 0.00 min; there MPJPE 79.9 / 16.8 and 67.8 / 19.9 mm, global / root-relative (MLP world model, seeds 0-2, A100 40GB SXM4) |
-| time to the target, not engineered, three GPUs | `--config two-g1-supertrack-3gpu`, `--config two-g1-supermimic-3gpu` | return 0.88 after 1.85 ± 0.21 and 1.62 ± 0.18 min; there MPJPE 72.2 / 16.1 and 81.4 / 20.0 mm, global / root-relative (seeds 0-2, three A100 40GB SXM4) |
+| fastest, one GPU | `--config two-g1-supertrack`, `--config two-g1-supermimic` | return 0.88 after 3.48 ± 0.49 and 2.70 ± 0.27 min; there MPJPE 80.0 / 16.8 and 96.3 / 20.5 mm, global / root-relative (MLP world model, seeds 0-3, A100 40GB SXM4) |
+| fastest, three GPUs | `--config two-g1-supertrack-3gpu`, `--config two-g1-supermimic-3gpu` | return 0.88 after 1.63 ± 0.15 and 1.48 ± 0.16 min, level; there MPJPE 79.9 / 16.1 and 76.4 / 20.6 mm, global / root-relative (seeds 0-2, three A100 40GB SXM4) |
 
-Add `--motion_dir`; seeds 0-2, GPUs below.
+Add `--motion_dir`; GPUs below.
 
 **In short:** SuperTrack minimizes the pose errors directly and SuperMimic maximizes the return directly; each leads on
 the measure it optimizes (root-relative MPJPE 14.1 against 16.0 mm, return 0.9055 against 0.8925), and the global MPJPE is
-level (46.2 against 45.3 mm). Both reach return 0.88 in the same iterations on average: SuperTrack with the lower root-relative
-MPJPE, SuperMimic sooner (16.8 against 19.9 mm and 3.66 against 3.26 min on one GPU, 16.1 against 20.0 mm and 1.85 against 1.62 min
-on three; not engineered). SuperMimic's iteration is shorter: the policy update, the longest step, takes 85 against 71 ms, and
-SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,048; [details](benchmarks/g1_boxing/results.md#time-to-return-088)).
+level (46.2 against 45.3 mm). Both reach return 0.88 in about the same iterations, SuperTrack with the lower root-relative
+MPJPE there (16.8 against 20.5 mm on one GPU, 16.1 against 20.6 mm on three). On one GPU SuperMimic gets there sooner (2.70
+against 3.48 min): its policy update, the longest step, takes 38 against 51 ms. On three GPUs the times are level (1.63 and
+1.48 min): each device's work takes about 52 ms for both ([details](benchmarks/g1_boxing/results.md#time-to-return-088)).
 
 <p align="center"><img src="docs/media/boxing/selections_1566.webp" alt="two G1s, InterHuman clip 1566" width="800"/></p>
 <p align="center"><i>SuperTrack, MLP world model, on InterHuman clip 1566: seed 0's best checkpoint (iteration 7,000); blue ghosts: the references.<br>MPJPE in this recorded evaluation: 37.6 mm in the world frame, 14.2 mm root-relative.</i><br><sub>Render of InterHuman clip 1566 (CC BY-NC-SA 4.0), retargeted to the G1; shared under that license, not the MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
@@ -755,8 +761,13 @@ SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,04
   5,718: SuperMimic-RF's configuration has two world-model batches per iteration, SuperTrack-RF's five. Two batches were
   tried for SuperMimic-RF only, three for both ([each round's runs](benchmarks/g1_boxing/results.md#training-seeds-0-2)).
 - **Table:** mean ± standard deviation over training seeds 0-2 of each run's best checkpoint, evaluated five times. The accuracy
-  rows were measured before the two configurations took the goal encoded once (`--goal_table --pi_encode_once`), which computes
-  the same values up to float rounding.
+  rows were measured with the policy batches of 4,096 and 2,048 and before the two configurations took the goal encoded once
+  (`--goal_table --pi_encode_once`) and their fused and compiled kernels, which compute the same values up to float rounding.
+  With the halved batches (2,048 and 1,024) the return at 9,396 iterations is within the seeds' spread: 0.8929 and 0.9053.
+- **Speed:** SuperTrack's world-model loss runs as fused kernels (`--st_wm_fused`); SuperMimic's critic and normalizers are
+  compiled and its critic step fused (`--critic_compile --compile_norms --critic_fused`). The kernels compute the same values up
+  to float rounding in a shorter iteration. Each policy batch is also halved: a shorter policy update, more iterations to 0.88
+  ([why each is faster](benchmarks/g1_boxing/results.md#time-to-return-088)).
 - **GPUs and budgets:** with the MLP both train 9,396 iterations: SuperTrack's seed 0 on an A100 80GB (0.5 h), its seeds 1
   and 2 on an A100 40GB SXM4, SuperMimic's seeds 0-2 on an A100 40GB SXM4 (for 0.3 h, 6,264 iterations: return 0.9042).
   The RigidFormer's seed 0 on an A100 80GB for 0.5 h, seeds 1 and 2 on an A100 40GB SXM4 to seed 0's iteration counts
@@ -769,20 +780,21 @@ SuperTrack's policy batch is twice SuperMimic's (`--pi_batch` 4,096 against 2,04
 | normalized return, RigidFormer | 0.8938 ± 0.0016 | 0.9038 ± 0.0010 |
 | MPJPE, global / root-relative (mm), MLP world model | 46.2 ± 7.5 / 14.1 ± 0.2 | 45.3 ± 3.3 / 16.0 ± 0.7 |
 | MPJPE, global / root-relative (mm), RigidFormer | 47.2 ± 5.2 / 14.7 ± 0.2 | 45.8 ± 2.5 / 17.0 ± 0.7 |
-| training to return 0.88 (min), MLP world model, one GPU / three GPUs, not engineered | 3.66 ± 0.00 / 1.85 ± 0.21 | 3.26 ± 0.00 / 1.62 ± 0.18 |
-| MPJPE there, global / root-relative (mm), one GPU; three GPUs | 79.9 ± 4.6 / 16.8 ± 0.4; 72.2 ± 2.0 / 16.1 ± 0.5 | 67.8 ± 7.2 / 19.9 ± 1.4; 81.4 ± 7.6 / 20.0 ± 0.4 |
+| training to return 0.88 (min), MLP world model, one GPU (seeds 0-3) / three GPUs (seeds 0-2) | 3.48 ± 0.49 / 1.63 ± 0.15 | 2.70 ± 0.27 / 1.48 ± 0.16 |
+| MPJPE there, global / root-relative (mm), one GPU; three GPUs | 80.0 ± 9.5 / 16.8 ± 0.9; 79.9 ± 6.4 / 16.1 ± 0.3 | 96.3 ± 1.5 / 20.5 ± 0.4; 76.4 ± 12.7 / 20.6 ± 0.5 |
 
 With the MLP, SuperTrack minus SuperMimic (Welch 95% intervals): return -0.0129 [-0.0154, -0.0105], global MPJPE +0.8
-[-15.0, +16.7] mm, root-relative MPJPE -2.0 [-3.4, -0.5] mm.
+[-15.0, +16.7] mm, root-relative MPJPE -2.0 [-3.4, -0.5] mm. To return 0.88 on one GPU: +0.78 [0.05, 1.51] min, root-relative
+MPJPE there -3.7 [-5.0, -2.4] mm; on three GPUs: +0.15 [-0.20, 0.51] min, -4.5 [-5.6, -3.5] mm.
 
 ```bash
 CLIP="--motions interhuman --paired --motion_dir data/interhuman/interhuman_1566.npz"   # tools/convert_interhuman.py, under Getting started
 # $RECIPE and $SYSTEMS as under Training speed
-ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --pi_batch 4096 --goal_table --pi_encode_once $SYSTEMS $CLIP \
+ndm-train --algo supertrack --st_fail_w 5 --st_balance_w 4 --st_com $RECIPE --goal_table --pi_encode_once $SYSTEMS $CLIP --st_wm_fused \
           --iterations 9396 --ckpt_every 1000 --log_dir logs/box_st                                       # --config two-g1-supertrack
-ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_lr_mult 2 --contact_reward 0.25 \
-          --ref_contact_fix --sm_residual --wm_structured --goal_table --pi_encode_once $SYSTEMS $CLIP --iterations 9396 --ckpt_every 1000 \
-          --log_dir logs/box_sm                                                                           # --config two-g1-supermimic
+ndm-train --algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.3 $RECIPE --pi_batch 1024 --pi_lr_mult 2 \
+          --contact_reward 0.25 --ref_contact_fix --sm_residual --wm_structured --goal_table --pi_encode_once $SYSTEMS $CLIP \
+          --critic_compile --compile_norms --critic_fused --iterations 9396 --ckpt_every 1000 --log_dir logs/box_sm   # --config two-g1-supermimic
 # three GPUs: the same with --layout AWL (CUDA_VISIBLE_DEVICES of three GPUs), --config two-g1-supertrack-3gpu or two-g1-supermimic-3gpu
 # SuperTrack-RF and SuperMimic-RF: the named configurations (their options: ndm_gym/configs.py)
 ndm-train --config two-g1-supertrack-rf --motion_dir data/interhuman/interhuman_1566.npz --log_dir logs/box_st_rf
@@ -1027,71 +1039,84 @@ ellipse, lemniscate and seven-gate race track, each flown by its controller (the
 
 | goal | configuration (`train_quadrotor`, add `--flight`) | result: ellipse / lemniscate / race track |
 |---|---|---|
-| most accurate | `--config quadrotor-supertrack-accurate` | position 3.38 / 2.02 / 2.19 mm on the autonomous flights, 1.34 / 1.20 / 3.08 mm on the piloted ones, at a success of 100 % (seeds 0-2, H200); `quadrotor-supermimic-accurate` 6.55 / 4.96 / 5.08 mm and 5.51 / 4.71 / 8.13 mm |
-| time to the target, not engineered | `--config quadrotor-supertrack-fast` | 0.79 / 0.68 / 0.75 min to a success of 0.99 within 20 mm, every run (seeds 0-2, H200); `quadrotor-supermimic-fast` 0.93 / 0.78 / 0.89 min |
+| most accurate | `--config quadrotor-supertrack-accurate` | position 3.06 / 1.89 / 1.98 mm on the autonomous flights, 1.11 / 0.99 / 2.75 mm on the piloted ones and 2.31 mm with one policy on all 18 autonomous flights, at a success of 100 % (seeds 0-2, A100 40GB SXM4); `quadrotor-supermimic-accurate` 5.71 / 3.95 / 4.08 mm, 4.48 / 4.00 / 6.63 mm and 4.94 mm |
+| time to the target, not engineered | `--config quadrotor-supertrack-fast` | 0.38 / 0.32 / 0.36 min to a success of 0.99 within 20 mm, held for 500 iterations, every run (seeds 0-2, A100 40GB SXM4); `quadrotor-supermimic-fast` 0.71 / 0.69 / 0.67 min |
 
-Position: the error at the last of 6,000 iterations (5.6 to 7.3 min), over 256 perturbed starts of the whole flight.
-SuperTrack's two configurations have HOI's optimizer options (Muon, a policy average, twice the policy's learning rate
-with its ramp); SuperMimic's two do not.
+Position: the error at the last of 6,000 iterations (13.1 to 18.1 min), over 256 perturbed starts of the whole flight.
+Time: the trainer's own clock at the first checkpoint (every 50 iterations, 64 perturbed starts) from which the target holds
+for 500 iterations, with warm compile caches.
 
-**In short:** SuperTrack's configurations have the lower position error, autonomous and piloted, and the shorter mean
-time to the target on all three flights (SuperMimic's: 6.55 / 4.96 / 5.08 mm, 5.51 / 4.71 / 8.13 mm piloted, 0.93 / 0.78 /
-0.89 min).
+**In short:** SuperTrack's configurations have the lower position error on all seven tasks and the shorter time to the
+target on all three flights; SuperMimic's have the lower rotation error on all seven (1.31 to 3.17 against 1.37 to 3.33 deg).
 
 <p align="center"><img src="docs/media/quadrotor/grid.webp" alt="SuperTrack and SuperMimic on the ellipse, the lemniscate and the race track, flown by the dataset's controller and by its human pilots" width="100%"/></p>
 <p align="center"><i>The three flights, autonomous and piloted (on the race track a professional pilot's, at 9 g), with SuperTrack and SuperMimic; seed 0, real time.<br>The flown reference in blue, the gates where the motion capture placed them, the drone's trail in orange (<a href="docs/tasks/quadrotor.md">single animations</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking flights of Race Against the Machine (TII Racing; CC BY 4.0), with a model of its drone written from the paper's specification (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
-- **Why 64 imagined steps:** a body rate moves the position only through the attitude and then the acceleration, so a
-  position error pays off only some time after its correction. Within the hand task's 16 steps (0.16 s here) correcting
-  it costs more rotation and velocity error than it gains. SuperTrack has no critic to count what follows its window, so
-  it does not learn the task (no rollout succeeds); with 64 steps (0.64 s) it tracks to 2.0 to 3.4 mm. SuperMimic's critic
-  counts what follows, so it learns with 16 steps (12.6 to 16.9 mm), and 64 make it 2.4 to 3.3 times more accurate.
-- **Runs:** 6,000 iterations in 2,048 worlds on one H200; the last checkpoint plays 256 rollouts of the whole flight from
+- **Why the imagined window matters:** a body rate moves the position only through the attitude and then the
+  acceleration, so a correction pays off only some time later. Within the hand task's 16 steps (0.16 s here) it costs more
+  rotation and velocity error than it gains: SuperTrack, which has no critic to count what follows its window, does not
+  learn the task (no rollout succeeds), while SuperMimic's critic counts it and it learns (14.5 to 16.1 mm). The fast
+  configurations imagine 64 steps (0.64 s), the most accurate ones 100 (1 s): at the end of 6,000 iterations 100 steps
+  lower SuperTrack's error from 2.57 to 2.51 mm and SuperMimic's from 5.66 to 5.05 mm (nine runs each), at about 1.4 times
+  the training time.
+- **Why no policy average when time counts:** `--pi_ema 0.995` evaluates an average of the policy's weights that trails
+  the trained policy by about 200 updates, so the target is met that much later: SuperTrack holds it from iteration 650-800
+  with the average and from 450-500 without (0.93 against 0.48 min, nine runs each); SuperMimic with it first meets it 200
+  to 250 iterations later (seed 0). At the end of 6,000 iterations it costs nothing (the two policies within 0.01 mm on
+  average), and the most accurate configurations keep it.
+- **Muon:** for SuperMimic it keeps the target once met: 0 of 9 runs lose it, against 5 of 9 with Adam (held from 0.86
+  against 1.55 min). SuperTrack's time changes little with Adam in Muon's place (0.87 against 0.91 min, seed 0). Muon also
+  lowers both algorithms' error at the end of 6,000 iterations (seed 0).
+- **Why smaller batches when time counts:** an iteration is mostly the policy update through the imagined window, whose
+  cost grows with the policy's batch. With batches of 1,024 SuperTrack runs 19.4 instead of 10.4 iterations/s, and
+  SuperMimic with a policy batch of 2,048 10.9 instead of 7.8, each needing about as many iterations to the target
+  ([each option](benchmarks/quadrotor_racing_tracking/results.md#what-each-option-does)).
+- **Selection:** both algorithms were tried with the same changes (for accuracy also two options of each algorithm's own)
+  and chosen by the same rule: first on seed 0, then on seeds 0-2 of the three autonomous flights. The reported runs are
+  those seeds' runs. The piloted flights and all 18 flights run the chosen configurations as they are.
+- **Runs:** 2,048 worlds on one A100 40GB SXM4 per run; the last checkpoint plays 256 rollouts of the whole flight from
   perturbed starts, a rollout succeeding if the position stays within 1 m of the reference. Every rollout of every run
   succeeds; the reference's feedforward command alone, open loop, leaves the reference by 1 m after 1.3 to 1.6 s
-  ([results](benchmarks/quadrotor_racing_tracking/results.md), [task](docs/tasks/quadrotor.md)).
-- **Selection:** each algorithm starts from the hand task's selected options and is selected on the ellipse with seed 0,
-  one of the three reported seeds, by one rule; the piloted flights run the selected configurations as they are.
-- **The optimizer options:** on the ellipse (seed 0, H200) SuperTrack with 64 steps read 3.4 mm with HOI's optimizer
-  options and 3.8 mm without, and the selection took them. SuperMimic's one run with them had 32 steps and two more
-  changes (`--action_noise 0.3 --bptt_decay 0.95`: 14.7 mm), so SuperMimic has no run with them at its selected 64
-  steps ([the arms](benchmarks/quadrotor_racing_tracking/results.md#selection)).
-- **All flights, and the pilots':** one policy on all 18 autonomous flights tracks them to 2.54 ± 0.02 mm (SuperTrack)
-  and 6.22 ± 0.34 mm (SuperMimic). The pilots' flights, 8 to 14 laps with a line of their own on every one (the race
+  ([results](benchmarks/quadrotor_racing_tracking/results.md#the-named-configurations-on-an-a100-40gb-sxm4),
+  [task](docs/tasks/quadrotor.md)).
+- **All flights, and the pilots':** one policy on all 18 autonomous flights tracks them to 2.31 ± 0.00 mm (SuperTrack)
+  and 4.94 ± 0.12 mm (SuperMimic). The pilots' flights, 8 to 14 laps with a line of their own on every one (the race
   track a professional's at up to 19.3 m/s and 9 g), are tracked with the same configurations; the policy of the 18
-  autonomous flights flies them without a termination, zero-shot, at 5.9 / 5.5 / 22.3 mm (SuperTrack) and 12.4 / 13.2 /
-  38.1 mm (SuperMimic) ([the piloted flights](benchmarks/quadrotor_racing_tracking/results.md#the-piloted-flights)).
+  autonomous flights flies them without a termination, zero-shot, at 4.7 / 4.1 / 18.1 mm (SuperTrack) and 11.0 / 10.9 /
+  35.7 mm (SuperMimic) ([the tables](benchmarks/quadrotor_racing_tracking/results.md#the-most-accurate-configurations)).
 - **The world model as the simulator:** at 4,096 worlds on one A100 40GB SXM4, the fused step in fp32 with the network as
   one kernel runs SuperTrack's acceleration model at 74.3 M world-steps/s, 22.8x MuJoCo Warp, and SuperMimic's increment model
   at 73.7 M, 22.6x; 34.2x / 34.1x at 1,024 worlds and 11.5x at 65,536. The kernel keeps each layer's activations on the chip;
   run layer by layer, at 65,536 worlds they outgrow the GPU's 40 MB L2 cache (6.8x)
   ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)).
-- **On an A100:** every run again on A100 40GB SXM4 GPUs gives the same success and position errors within 5 % of the
-  H200's, for both algorithms; training takes 1.6 to 1.8 times as long ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-runs-again-on-an-a100)).
 
 | | ellipse | lemniscate | race track |
 |---|---|---|---|
 | seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
 | top speed, length | 21.7 m/s, 17.3 s | 10.0 m/s, 26.3 s | 21.2 m/s, 41.5 s |
 | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
-| reference's command, open loop | in the air for 1.5 s | 1.4 s | 1.4 s |
-| position ↓, SuperTrack with the hand task's options | none succeeds | none succeeds | none succeeds |
-| position ↓, SuperTrack | 3.38 ± 0.03 mm | 2.02 ± 0.02 mm | 2.19 ± 0.02 mm |
-| position ↓, SuperMimic with the hand task's options | 15.90 ± 1.22 mm | 12.62 ± 1.25 mm | 16.92 ± 3.73 mm |
-| position ↓, SuperMimic | 6.55 ± 0.39 mm | 4.96 ± 0.03 mm | 5.08 ± 0.16 mm |
-| training to a success of 0.99 within 20 mm ↓, SuperTrack / SuperMimic | 0.79 / 0.93 min | 0.68 / 0.78 min | 0.75 / 0.89 min |
+| reference's command, open loop | in the air for 1.5 s | 1.5 s | 1.5 s |
+| position ↓, SuperTrack | 3.06 ± 0.01 mm | 1.89 ± 0.01 mm | 1.98 ± 0.01 mm |
+| position ↓, SuperMimic | 5.71 ± 0.15 mm | 3.95 ± 0.09 mm | 4.08 ± 0.05 mm |
+| rotation ↓, SuperTrack / SuperMimic | 2.10 / 1.94 deg | 3.25 / 3.17 deg | 1.37 / 1.31 deg |
+| time to a success of 0.99 within 20 mm, held ↓, SuperTrack / SuperMimic | 0.38 / 0.71 min | 0.32 / 0.69 min | 0.36 / 0.67 min |
 | **piloted flight**: top speed, length | 8.3 m/s, 102.1 s | 8.3 m/s, 103.6 s | 19.3 m/s, 42.0 s |
 | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
-| position ↓, SuperTrack | 1.34 ± 0.01 mm | 1.20 ± 0.00 mm | 3.08 ± 0.03 mm |
-| position ↓, SuperMimic | 5.51 ± 0.26 mm | 4.71 ± 0.11 mm | 8.13 ± 0.27 mm |
-| position ↓, the autonomous flights' policy, zero-shot, SuperTrack / SuperMimic | 5.90 / 12.40 mm | 5.46 / 13.24 mm | 22.33 / 38.14 mm |
+| position ↓, SuperTrack | 1.11 ± 0.01 mm | 0.99 ± 0.00 mm | 2.75 ± 0.03 mm |
+| position ↓, SuperMimic | 4.48 ± 0.04 mm | 4.00 ± 0.05 mm | 6.63 ± 0.06 mm |
+| rotation ↓, SuperTrack / SuperMimic | 2.77 / 2.62 deg | 2.40 / 2.28 deg | 3.33 / 3.00 deg |
+| position ↓, the autonomous flights' policy, zero-shot, SuperTrack / SuperMimic | 4.74 / 11.05 mm | 4.08 / 10.85 mm | 18.09 / 35.73 mm |
 
-Reference's command, open loop: the same rollouts with the reference's feedforward thrust and body rates and no policy.
+Position and rotation: the most accurate configurations; time: the fast ones. Reference's command, open loop: the same
+rollouts with the reference's feedforward thrust and body rates and no policy.
 
 ```bash
 python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supertrack-accurate --seed 0 --log_dir logs/quad/ellipse_st_s0  # seeds 0-2
 python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supermimic-accurate --seed 0 --log_dir logs/quad/ellipse_sm_s0  # seeds 0-2
+# the time to the target: a fast configuration, then its checkpoints in order, the target held for 500 iterations
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supertrack-fast --seed 0 --log_dir logs/quad/ellipse_st_fast_s0
+benchmarks/quadrotor_racing_tracking/time_to.sh logs/quad/ellipse_st_fast_s0 1500 500
 ```
 
 ### Adroit Door tracking
@@ -1508,7 +1533,8 @@ Each task's results are in its section; these are the factors behind them.
    ([details](benchmarks/musclevae/results.md#the-systems-options)).
 9. **The imagined window on the quadrotor:** a body rate moves the position only through the attitude and the acceleration,
    so SuperTrack, without a critic, needs a window of 0.64 s (64 steps at 100 Hz): with the hand task's 0.16 s no rollout
-   succeeds, while SuperMimic's critic carries it (12.6 to 16.9 mm) and 64 steps make it 2.4 to 3.3 times more accurate.
+   succeeds, while SuperMimic's critic carries it (12.6 to 16.9 mm on an H200) and 64 steps make it 2.4 to 3.3 times more
+   accurate. A window of 1 s (100 steps) lowers both algorithms' error further; the most accurate configurations take it.
    The updates' time is in the number of small operations of an imagined step: the goal's frames in one batch of
    operations, computed once per step, take SuperMimic's policy update from 45 to 32 ms
    ([details](benchmarks/quadrotor_racing_tracking/results.md)).

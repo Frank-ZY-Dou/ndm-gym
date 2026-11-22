@@ -22,6 +22,10 @@ python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor
 python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supermimic-accurate --log_dir logs/ellipse_sm
 python -m ndm_gym.evaluate_quadrotor --ckpt logs/ellipse_st/last.pt --out logs/ellipse_st/evaluation
 MUJOCO_GL=egl python tools/render_quadrotor.py --rollout logs/ellipse_st/evaluation/rollout_flight-01a-ellipse.npz --out ellipse_st.mp4
+
+# the time to the target: a fast configuration, then its checkpoints in order, the target held for 500 iterations
+python -m ndm_gym.train_quadrotor --flight flight-01a-ellipse --config quadrotor-supertrack-fast --log_dir logs/ellipse_st_fast
+benchmarks/quadrotor_racing_tracking/time_to.sh logs/ellipse_st_fast 1500 500
 ```
 
 `--flight` takes several flights for one policy on all of them. The benchmark's tasks are the first autonomous flight of
@@ -87,7 +91,8 @@ frame; the policy maximizes the imagined tracking return with a soft survival we
 **The imagined window.** A body rate changes the position only through the attitude and the acceleration: over a window of
 length t its effect on the position grows as t cubed. SuperTrack, which has no critic, needs a window long enough for a
 position error to be worth correcting (`--horizon 64`, 0.64 s); with the hand task's 16 steps its position error does not
-fall. With the calibrated weights the body rates' term, whose first error is small, weighs much and holds the policy at the
+fall. The most accurate configurations of both algorithms imagine 100 steps (1 s, [why](#configurations)). With the
+calibrated weights the body rates' term, whose first error is small, weighs much and holds the policy at the
 feedforward command; the task's weights do not ([results](../../benchmarks/quadrotor_racing_tracking/results.md)).
 
 ## Systems options
@@ -98,8 +103,34 @@ no forward kinematics to compile. `QUAD_PROFILE=1` prints, with every log row, t
 world-model updates and the policy update.
 
 The same module's optimizer options change what is trained and which policy is evaluated: `--pi_opt muon`, `--wm_opt
-muon`, `--pi_ema`, `--pi_lr_mult` with its ramp. Both algorithms take them; of the quadrotor's named configurations
-SuperTrack's have them (HOI's set) and SuperMimic's do not.
+muon`, `--pi_ema`, `--pi_lr_mult` with its ramp. Both algorithms take them. The most accurate configurations of both have
+HOI's set; the fast ones have Muon for both networks without the policy average, SuperTrack's also with the policy's
+doubled learning rate and its ramp ([why](#configurations)).
+
+## Configurations
+
+The named configurations (`train_quadrotor --config NAME`, add `--flight`), seeds 0-2 on one A100 40GB SXM4 per run
+([results](../../benchmarks/quadrotor_racing_tracking/results.md#the-named-configurations-on-an-a100-40gb-sxm4)):
+
+| goal | configuration | result: ellipse / lemniscate / race track |
+|---|---|---|
+| most accurate | `quadrotor-supertrack-accurate` | position 3.06 / 1.89 / 1.98 mm, 1.11 / 0.99 / 2.75 mm on the piloted flights and 2.31 mm with one policy on all 18 autonomous flights, at a success of 100 %; `quadrotor-supermimic-accurate` 5.71 / 3.95 / 4.08 mm, 4.48 / 4.00 / 6.63 mm and 4.94 mm |
+| time to the target, not engineered | `quadrotor-supertrack-fast` | 0.38 / 0.32 / 0.36 min to a success of 0.99 within 20 mm, held for 500 iterations, every run; `quadrotor-supermimic-fast` 0.71 / 0.69 / 0.67 min |
+
+What the options change, both algorithms tried with the same ones (nine runs: seeds 0-2 on the three autonomous flights):
+
+- **A window of 100 steps (1 s)** for accuracy: a correction's effect on the position keeps growing after it, and the
+  longer window counts more of it. Both errors fall at the end of 6,000 iterations, SuperTrack's from 2.57 to 2.51 mm and
+  SuperMimic's from 5.66 to 5.05 mm (nine runs each), at about 1.4 times the training time.
+- **No policy average** when time counts: `--pi_ema 0.995` evaluates an average that trails the trained policy by about
+  200 updates, so the target is met that much later (SuperTrack 0.93 min with it, 0.48 without; nine runs each). At the
+  end of 6,000 iterations it changes the error by 0.01 mm or less on average, and the most accurate configurations keep
+  it.
+- **Muon** keeps the target once met: 0 of 9 SuperMimic runs lose it, against 5 of 9 with Adam (held from 0.86 against
+  1.55 min). SuperTrack's time changes little with Adam in Muon's place (seed 0).
+- **Smaller batches** when time counts: an iteration is mostly the policy update, whose cost grows with its batch. With
+  batches of 1,024 SuperTrack runs 19.4 instead of 10.4 iterations/s, SuperMimic with a policy batch of 2,048 10.9 instead
+  of 7.8, each needing about as many iterations to the target.
 
 ## Evaluation and videos
 
@@ -121,8 +152,8 @@ drone's speed, its distance from the reference and a map of the path from above.
 same start under the reference's command, open loop. No mesh of the dataset's drone is published: the renderer builds one
 after it from the paper's specification, a carbon H-frame with the battery, the camera and the antenna, and 5.1-inch
 tri-blade propellers of its own making (the shape of the T-Motor T5147 it flies, in size) that turn as it flies. The drones
-are drawn 1.5 times their size; a dark disc on the floor stands for the drone's shadow. The README's grid (`tools/make_grid.py`, the command in its docstring) joins twelve
-such renders of 9 s, one lap of each flight from a second after it reaches 3 m/s (the piloted flights' with
+are drawn 1.5 times their size; a dark disc on the floor stands for the drone's shadow. The README's grid (`tools/make_grid.py`, the command in its docstring) joins the 30-fps
+previews of twelve such renders of 9 s, one lap of each flight from a second after it reaches 3 m/s (the piloted flights' with
 `--path_seconds 2`: a pilot's dozen laps drawn whole are a tangle); the animations below are the `--preview` of the same 9 s of
 each task's autonomous flight (960 pixels wide, 30 fps).
 
@@ -131,7 +162,8 @@ each task's autonomous flight (960 pixels wide, 30 fps).
 | ![SuperTrack on the ellipse](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/ellipse.webp) | ![SuperTrack on the lemniscate](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/lemniscate.webp) |
 | ![SuperTrack on the race track](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/quadrotor/race_track.webp) | |
 
-SuperTrack's selected configuration, the last checkpoint of seed 0 from the unperturbed start, in real time, on the ellipse
+SuperTrack's most accurate configuration (`quadrotor-supertrack-accurate`), the last checkpoint of seed 0 from the unperturbed
+start, in real time, on the ellipse
 (up to 21.7 m/s), the lemniscate and the race track; the flown reference in blue, the gates, the drone's trail in orange.
 
 Tasks and results: [`benchmarks/quadrotor_racing_tracking`](../../benchmarks/quadrotor_racing_tracking/results.md).
