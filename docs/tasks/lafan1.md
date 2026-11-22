@@ -12,4 +12,5 @@ ndm-eval --run_dir logs/st --watch
 ```
 
 Selected configurations and results: [README](../../README.md#lafan1-motion-tracking), [`results.md`](../../benchmarks/g1_lafan1_tracking/results.md),
-[ablations](../../benchmarks/g1_lafan1_tracking/ablations.md).
+[ablations](../../benchmarks/g1_lafan1_tracking/ablations.md). The world models as the simulator, timed against Steel and
+MuJoCo Warp: [results](../../benchmarks/steel/results.md).

@@ -43,7 +43,7 @@ this repository yet.
 | MuJoCo | [google-deepmind/mujoco](https://github.com/google-deepmind/mujoco) | models, CPU simulation; MJX in the differentiable-simulator comparison |
 | MuJoCo Warp | [google-deepmind/mujoco_warp](https://github.com/google-deepmind/mujoco_warp) | GPU simulation; the baseline of the speed comparisons |
 | Newton | [newton-physics/newton](https://github.com/newton-physics/newton) | MuscleVAE's simulation; MimicKit's *(ongoing)* |
-| Steel (Skild AI) | [skild-ai/steel](https://github.com/skild-ai/steel), [skild-ai/newton](https://github.com/skild-ai/newton) | Newton's `SolverSteel`: timed beside world models, and a simulation backend *(ongoing)* |
+| Steel (Skild AI) | [skild-ai/steel](https://github.com/skild-ai/steel), [skild-ai/newton](https://github.com/skild-ai/newton) | Newton's `SolverSteel`: timed beside the G1's world models ([results](../benchmarks/steel/results.md)); a simulation backend *(ongoing)* |
 | NablaEngine | [sailab-ai/NablaEngine](https://github.com/sailab-ai/NablaEngine) | differentiable simulator in the speed comparison |
 | Genesis | [Genesis-Embodied-AI/genesis-world](https://github.com/Genesis-Embodied-AI/genesis-world) | timed beside the differentiable simulators; Eden's simulator *(ongoing)* |
 | SPlisHSPlasH | [InteractiveComputerGraphics/SPlisHSPlasH](https://github.com/InteractiveComputerGraphics/SPlisHSPlasH) | fluid ground truth for CFC *(ongoing)* |

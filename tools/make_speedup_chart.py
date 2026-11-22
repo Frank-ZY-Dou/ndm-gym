@@ -9,7 +9,9 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
-# (label, second line, speedup, baseline): 4,096 parallel worlds in every row (benchmarks/ndm_speed/results.md, benchmarks/g1_boxing/results.md)
+# (label, second line, speedup, baseline): 4,096 parallel worlds in every row (benchmarks/ndm_speed/results.md, benchmarks/g1_boxing/results.md;
+# the G1 on LAFAN1's replay windows: SuperTrack's acceleration MLP and SuperMimic's semi-implicit MLP as bf16 copies with the fused step
+# against Steel's fastest setting that passes the accuracy criteria, medians of three runs, benchmarks/steel/results.md)
 # but the Adroit door's, at 16,384 worlds, SuperTrack's model as a bf16 copy against MuJoCo Warp (benchmarks/adroit_door/results_a100.md),
 # the racing quadrotor's: the fused step in fp32 with the network as one kernel, on the acceleration and on the increment model, against MuJoCo Warp
 # (benchmarks/quadrotor_racing_tracking/results_a100.md),
@@ -24,6 +26,8 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 ROWS = [
     ("NDM simulation", "HDMI's scenes", 45.3, "vs Isaac Lab + MuJoCo-Warp"),
     ("NDM simulation", "two G1s", 27.0, "vs Isaac Lab + MuJoCo-Warp"),
+    ("NDM simulation", "G1, LAFAN1 windows\nacceleration model", 16.9, "vs Steel, fastest passing setting"),
+    ("NDM simulation", "G1, LAFAN1 windows\nsemi-implicit model", 16.1, "vs Steel, fastest passing setting"),
     ("NDM simulation", "Adroit door", 69.7, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nacceleration model", 22.8, "vs MuJoCo Warp"),
     ("NDM simulation", "racing quadrotor\nincrement model", 22.6, "vs MuJoCo Warp"),

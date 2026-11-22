@@ -8,7 +8,8 @@ motion tracking, two G1s on a two-person clip, HDMI's human-object interaction (
 and the Inspire hand, a racing quadrotor tracking flown trajectories, a Unitree Go2 tracking a dog's motion capture and two
 Wuji hands playing the piano (all four MuJoCo-Warp), and the Adroit hand tracking DAPG's door, pen, hammer and relocate
 demonstrations (MuJoCo on the CPU). The neural dynamics models (NDMs) also serve as simulators, for instance in RoboKit's MPC
-planner and mbrl-lib's CEM planner.
+planner and mbrl-lib's CEM planner. On the G1 they step 16-17x faster than Steel's fastest passing setting and 40-42x faster
+than MuJoCo Warp at 4,096 worlds on an A100 ([results](../benchmarks/steel/results.md)).
 
 - [Leaderboard](leaderboard.md): each task's fastest and most accurate configuration, and the named configurations.
 - [Algorithms](algorithms.md): SuperTrack, SuperMimic and BlinkMimic's recipe (`--algo blinkmimic`);

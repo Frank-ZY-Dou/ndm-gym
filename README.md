@@ -62,12 +62,25 @@ MuJoCo model.
 <p align="center"><img src="docs/media/speedups.webp" alt="Speedups of the neural dynamics models against physics simulators, and of RoboKit's and mbrl-lib's planning on them" width="760"/></p>
 <p align="center"><sub>Bars: time per step on the same task, the baseline's at full width, at 4,096 parallel worlds (the Adroit door's: 16,384); the planners' rows: planning time. Made by <code>tools/make_speedup_chart.py</code>.</sub></p>
 
+**Why a world model steps faster than a rigid-body solver** (the G1 at 4,096 worlds on one A100 40GB SXM4,
+[results](benchmarks/steel/results.md)):
+
+- A world model's step is one network pass over the batch. The network is 80 % of its kernel time, and the step takes
+  0.28 and 0.29 ms (SuperTrack's and SuperMimic's MLP world models).
+- A solver's step is the robot's dynamics and contacts. [Steel](https://www.skild.ai/blogs/steel) (Skild AI), at its
+  fastest setting that passes the accuracy criteria, spends 47.5 % of its kernel time on articulation dynamics, 25.9 % on
+  collision and 20.3 % on contact rows: 4.68 ms a step.
+- So the world models step 16.9x and 16.1x faster than Steel there, and 42.4x and 40.2x faster than MuJoCo Warp in Isaac
+  Lab. After 32 steps their body errors are 19.6 and 22.8 mm, Steel's 30.2 mm, against the task's simulator, which the world
+  models learned from.
+
 <details>
 <summary>The chart's rows</summary>
 
 | rows | measure | GPU |
 |---|---|---|
 | NDM simulation: HDMI's scenes ([details](benchmarks/ndm_speed/results.md)), two G1s ([details](benchmarks/g1_boxing/results.md#speed)); the RigidFormer on HDMI's scenes | time per step at 4,096 worlds (two G1s: 4,096 pairs), the MLP world model's bf16 copy and the RigidFormer with fused Triton blocks; HDMI's scenes: the median of three tasks | HDMI's scenes: one H100; two G1s: one A100 80GB |
+| NDM simulation: the G1 on LAFAN1's replay windows, against Steel ([details](benchmarks/steel/results.md)) | control steps per second at 4,096 worlds: SuperTrack's acceleration MLP (`lafan1-supertrack-accurate`) and SuperMimic's semi-implicit MLP (`lafan1-supermimic-accurate`) as bf16 copies with the fused step, 14.80 M and 14.06 M, against Steel's fastest setting that passes the accuracy criteria, 0.875 M (16.9x, 16.1x); MuJoCo Warp in Isaac Lab 0.349 M (42.4x, 40.2x). On four GPUs 89.2 M and 87.1 M, Steel's 4.13 M. The network is 80 % of the world model's kernel time; articulation dynamics and collision are 73 % of Steel's | one A100 40GB SXM4 (four for the four-GPU numbers) |
 | NDM simulation: the Adroit door ([details](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 16,384 worlds: SuperTrack's acceleration model as a bf16 copy, 27.62 M against MuJoCo Warp's 0.396 M (69.7x); SuperMimic's increment model 27.14 M against 0.422 M (64.3x); 1,629x / 1,600x the contributed native MuJoCo collector on eight CPU cores (16,962 world-steps/s). The bf16 step is 64 % / 66 % matrix products, the rest compiled elementwise kernels | one A100 40GB SXM4 |
 | NDM simulation: the racing quadrotor ([details](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds, the fused step in fp32 (TF32 products) with the network as one kernel: SuperTrack's acceleration model 74.3 M against MuJoCo Warp's 3.26 M (22.8x); SuperMimic's increment model 73.7 M against 3.27 M (22.6x); with the network compiled layer by layer 19.6x / 19.0x. The network is 85 % of the step | one A100 40GB SXM4 |
 | NDM simulation: the Wuji piano ([details](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) | world-steps per second at 4,096 worlds: the horizon-3 SuperTrack run's `PianoDynamics` with its networks in bf16 (compiled, one CUDA graph), 46.24 M against MuJoCo Warp's 30,213 for a control step of the full scene (1,530x; the four seed-0 models, both algorithms at both horizons, 1,523-1,530x). The model steps the policy's 192-number observed state; its due-key error is 0.15 / 0.19 / 0.26 of a key's travel at 1 / 3 / 10 steps, the horizon-3 SuperMimic model's 0.16 / 0.19 / 0.32 | one A100 40GB SXM4 |
@@ -124,6 +137,7 @@ re-verified on an A100. Commands: [Recommended settings](#-recommended-settings)
 | **[NDM as the simulator](#adroit-door-tracking)**, the Adroit door, 16,384 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | **27.62 M** and **27.14 M world-steps/s**, 69.7x and 64.3x MuJoCo Warp, which was timed beside each model on that model's states (0.396 M and 0.422 M), 1,629x and 1,600x the contributed collector on eight CPU cores; at 4,096 worlds 20.85 M and 21.55 M ([results](benchmarks/adroit_door/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#quadrotor-trajectory-tracking)**, the racing quadrotor, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs, the fused step in fp32, the network as one kernel | **74.3 M** and **73.7 M world-steps/s**, 22.8x and 22.6x MuJoCo Warp's 3.26 M / 3.27 M; 34.2x / 34.1x at 1,024 worlds, 11.5x at 65,536 ([results](benchmarks/quadrotor_racing_tracking/results_a100.md#the-world-model-as-the-simulator)) |
 | **[NDM as the simulator](#wuji-hand-piano-playing)**, the Wuji piano, 4,096 worlds on an A100 40GB SXM4 | ⏱ throughput, not engineered | the task's `PianoDynamics`, its networks in bf16 (both algorithms' models within 1 %) | **46.2 M world-steps/s**, 1,530x MuJoCo Warp's 30,213 for a control step of the full scene; the model steps only the policy's 192-number observed state, a due key's depth off by 0.15 / 0.19 / 0.26 of its travel at 1 / 3 / 10 steps (SuperTrack's horizon-3 model; SuperMimic's 0.16 / 0.19 / 0.32; the lowest of the four seed-0 models, SuperMimic's horizon-8 one, 0.09 / 0.10 / 0.13) ([results](benchmarks/wuji_piano/results_a100.md#the-world-model-as-the-simulator)) |
+| **[NDM as the simulator](#ndms-against-steel-the-g1)**, the G1 on LAFAN1's replay windows, 4,096 worlds on an A100 40GB SXM4 | 🚀 fastest | SuperTrack's acceleration model and SuperMimic's semi-implicit model (`lafan1-supertrack-accurate`, `lafan1-supermimic-accurate`), MLPs as bf16 copies with the fused step | **14.80 M** and **14.06 M control steps/s**, 16.9x and 16.1x Steel's fastest setting that passes the accuracy criteria (0.875 M), 42.4x and 40.2x MuJoCo Warp in Isaac Lab (0.349 M); body error after 32 steps 19.6 and 22.8 mm, Steel's 30.2 mm; on four GPUs 89.2 M and 87.1 M, Steel's 4.13 M ([results](benchmarks/steel/results.md)) |
 | **[NDM as the simulator](#ndms-as-simulators-hdmis-scenes)**, HDMI's move_suitcase, 4096 worlds on an H100 | ⏱ throughput, not engineered | the MLP world model (acceleration parameterization) as a bf16 copy | **16.28 M env-steps/s**, 45.9x the physics engine's 0.35 M; RigidFormer 2.30 M, 6.5x; the increment parameterization was not timed ([results](benchmarks/ndm_speed/results.md)) |
 
 [NablaMimic](docs/algorithms/nablamimic.md) (∇Mimic) trains through a differentiable simulator, without a world model.
@@ -197,7 +211,9 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   generalized coordinates (`ndm_gym/worldmodels/mjcf.py`).
 - **[2026-11] NDMs as simulators:** [throughput against physics](benchmarks/ndm_speed/results.md); SuperTrack's MLP world
   model of the G1 [against differentiable simulators](benchmarks/ndm_speed/results.md#differentiable-simulators-and-the-g1-world-models),
-  its forward step 3.5-116x and its rollout gradient 2.4-183x faster (1,024-16,384 worlds, A100 40GB).
+  its forward step 3.5-116x and its rollout gradient 2.4-183x faster (1,024-16,384 worlds, A100 40GB); the G1's world
+  models [against Steel](#ndms-against-steel-the-g1), 16.9x and 16.1x its fastest passing setting at 4,096 worlds on an
+  A100 40GB (SuperTrack's and SuperMimic's MLPs).
 - **[2026-11] NDMs in planners:** a world model scores the planner's candidates in place of the physics steps. On an
   A100, three of [RoboKit's](#ndms-in-robokits-planner) examples (G1 box carrying, G1 climbing, Go2 jumping) plan
   1.8-3.0x faster than on MuJoCo Warp, every plan passing, and [mbrl-lib's](#ndms-in-mbrl-libs-planner) cart-pole and
@@ -243,6 +259,7 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   pusher, planned on world models.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics on HDMI's scenes, with fused Triton inference
   kernels; the G1's step and rollout gradient against differentiable simulators ([results](benchmarks/ndm_speed/results.md));
+  the G1's world models against Steel and MuJoCo Warp, on one and four GPUs ([results](benchmarks/steel/results.md));
   world models inside RoboKit's and mbrl-lib's planners ([RoboKit](benchmarks/robokit_ndm/results.md),
   [mbrl-lib](benchmarks/mbrl_lib/results.md)).
 - **Evaluation:** tracking errors on every clip, push robustness, held-out clips (`--clips`), side-by-side videos and an
@@ -516,6 +533,9 @@ the difference, bold where they exclude 0.
 | failed clips under root pushes of 1 m/s every 2 s | 2.0 ± 0.0 | 2.3 ± 0.6 | -0.3 [-1.8, 1.1] |
 | failed clips under root pushes of 2 m/s every 2 s | 15.7 ± 3.5 | 11.7 ± 0.6 | +4.0 [-4.4, 12.4] |
 | iterations in 3 h | 63,200-63,393 | 66,837-67,208 | |
+
+Checkpoints of these runs: [Hugging Face](https://huggingface.co/frankzydou/ndm-gym) (`g1_lafan1_tracking/supertrack-mlp-accurate/`,
+`supermimic-mlp-accurate/`; non-commercial use, as LAFAN1).
 
 The table below: the configurations selected by the tuning rounds (SuperMimic's with action noise 0.3), seeds 1-3, 3 h
 on one A100 without the speed options; mean ± std over seeds, each seed the average of three standard evaluations (push
@@ -1331,6 +1351,33 @@ One H100 80GB, 4096 environments, million env-steps per second, the ratio to phy
 | open_door-feet | 0.44 | 16.47 (37.1x) | 2.31 (5.2x) |
 | truman | 0.36 | 16.21 (45.3x) | 2.30 (6.4x) |
 
+### NDMs against Steel (the G1)
+
+A world model steps the G1 in place of a rigid-body solver: [Steel](https://www.skild.ai/blogs/steel) (Skild AI's GPU solver
+in Newton) and MuJoCo Warp, on replay windows of LAFAN1 tracking (32 control steps of 20 ms from recorded states).
+Steel's fastest passing setting is the cheapest that passes accuracy criteria set by Steel's own most exact setting and the
+recording ([criteria](benchmarks/steel/results.md#setup)).
+
+| goal | configuration | result |
+|---|---|---|
+| fastest | SuperTrack's acceleration model and SuperMimic's semi-implicit model (`lafan1-supertrack-accurate`, `lafan1-supermimic-accurate`), MLPs as bf16 copies with the fused step | 14.80 M and 14.06 M control steps/s at 4,096 worlds, 16.9x and 16.1x Steel's fastest passing setting, 42.4x and 40.2x MuJoCo Warp in Isaac Lab; peaks 28.16 M and 27.95 M at 524,288 worlds; 89.2 M and 87.1 M on four GPUs (A100 40GB SXM4, medians of three runs) |
+
+**In short:** at 4,096 worlds on one A100, the MLP world models step the G1 16-17x faster than Steel's fastest passing
+setting and 40-42x faster than MuJoCo Warp. Their step is one network pass; Steel's is mostly articulation dynamics and
+collision.
+
+One A100 40GB SXM4, 4,096 worlds, control steps per second (median of three runs), and the body position error after 32
+steps against the task's simulator, which the world models learned from ([details](benchmarks/steel/results.md)):
+
+| row | control steps/s | body error |
+|---|---|---|
+| `lafan1-supertrack-accurate`'s world model, bf16 copy with the fused step | 14.80 M | 19.6 mm |
+| `lafan1-supermimic-accurate`'s world model, bf16 copy with the fused step | 14.06 M | 22.8 mm |
+| Steel, fastest passing setting (4 substeps, 1 iteration, its speed options) | 0.875 M | 30.2 mm |
+| Steel at the task's physics (4 substeps, 12 iterations) | 0.191 M | 24.9 mm |
+| MuJoCo Warp 3.17 in Newton, on Steel's model | 0.357 M | 0.20 mm |
+| MuJoCo Warp 3.15 in Isaac Lab 3, the task's simulator | 0.349 M | the reference |
+
 ### NDMs in RoboKit's planner
 
 [RoboKit](https://github.com/openrobokit/robokit)'s sampling MPC plans on the world model of the example's MuJoCo model,
@@ -1514,6 +1561,7 @@ The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.gi
 | [`benchmarks/g1_boxing/`](benchmarks/g1_boxing/) | two G1s tracking a two-person clip: tracking and speed |
 | [`benchmarks/musclevae/results.md`](benchmarks/musclevae/results.md) | the muscle-actuated character: setup, tuning and results |
 | [`benchmarks/ndm_speed/`](benchmarks/ndm_speed/) | NDMs as simulators: throughput and accuracy against physics on HDMI's scenes; the G1 against differentiable simulators |
+| [`benchmarks/steel/results.md`](benchmarks/steel/results.md) | the G1's world models against Steel and MuJoCo Warp: throughput on one and four GPUs, per-phase time, errors |
 | [`benchmarks/xhand_tracking/`](benchmarks/xhand_tracking/) | hand-object tracking on the XHand, the Allegro hand and the Inspire hand: tasks and results |
 | [`benchmarks/quadrotor_racing_tracking/`](benchmarks/quadrotor_racing_tracking/) | a racing quadrotor on Race Against the Machine's flights: tasks and results |
 | [`benchmarks/robokit_ndm/`](benchmarks/robokit_ndm/results.md) | RoboKit's planner on a world model: setup, step and planning times, commands |
@@ -1688,6 +1736,9 @@ Simulation and planning:
   the differentiable-simulator comparison
 - **Newton:** The Newton Contributors. *Newton: GPU-accelerated physics simulation for robotics and simulation research.*
   2025. [code](https://github.com/newton-physics/newton)
+- **Steel** (timed beside the G1's world models): Skild AI. *Steel: Scaling Simulation Across Robots, Tasks, and Worlds.*
+  2026. [post](https://www.skild.ai/blogs/steel) · [code](https://github.com/skild-ai/newton) (Skild AI's Newton fork,
+  run at `baffc2a`) · [documentation](https://github.com/skild-ai/steel)
 - **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison; ∇Mimic's own code timed on
   LAFAN1): W. Lu, Y. Chen. *∇Mimic: Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
   [arXiv:2610.41654](https://arxiv.org/abs/2610.41654) · [code](https://github.com/sailab-ai/NablaMimic) ·
@@ -1734,7 +1785,8 @@ MIT ([`LICENSE`](LICENSE)).
   options are ported from [BlinkMimic](https://github.com/fuyichen0725/blinkmimic) (MIT, Fuyi Chen), derived from
   [InstantTrack](https://github.com/Huy-Quang-Dao/instantTrack) (MIT, Huy-Quang-Dao); their notices are in the ported
   files and [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
-- **Simulators:** Isaac Lab (BSD-3-Clause), Newton and MuJoCo Warp (Apache-2.0) are used unmodified.
+- **Simulators:** Isaac Lab (BSD-3-Clause), Newton, Steel (Skild AI's Newton fork) and MuJoCo Warp (Apache-2.0) are used
+  unmodified.
 - **LAFAN1:** the motions (Ubisoft La Forge, CC BY-NC-ND 4.0) and their G1 retargets (Hugging Face
   [lvhaidong/LAFAN1_Retargeting_Dataset](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)), which
   stay under that license, are downloaded by `tools/download_data.sh` and not redistributed.
