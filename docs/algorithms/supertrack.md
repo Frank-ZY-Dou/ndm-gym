@@ -36,6 +36,7 @@ a RigidFormer backbone ([World models](../world_models.md)).
 | `--st_no_task_regs` | off | drops the task's action-rate and joint-limit penalties |
 | `--st_substeps` | 1 | world-model integration substeps (1 = paper, 4 = simulator) |
 | `--st_wm_loss` | `l1` | world-model window loss (`l1`, `l2`) |
+| `--st_wm_fused` | off | the world-model window loss as two Triton kernels with a hand-written backward pass: the kinematics of the predicted and the target states and each body's errors in registers, no body's state in memory (the same values up to float rounding) |
 
 Options of both algorithms: [Algorithms](../algorithms.md#options). HOI, hand and muscle training add their own:
 `python -m ndm_gym.train_hoi --help`, `python -m ndm_gym.train_hand --help`, `python -m ndm_gym.train_muscles --help`.
