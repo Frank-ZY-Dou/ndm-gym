@@ -29,6 +29,9 @@ Transport) track robomimic's first proficient-human demonstration of Lift, Squar
   last frame, read from the simulator as robosuite reads it. Errors are means over the frames of the rollouts that do not
   terminate. MuJoCo-Warp's contact order is not deterministic, so two evaluations of one checkpoint on the same starts
   differ: on Transport by about 4 points of success either way. Each number here is one evaluation.
+- **Success test:** robosuite's own. Checked against robosuite 1.5.0's `_check_success` on 13,957 states of the three
+  datasets and 22,320 states of 36 of our evaluation rollouts: the same verdict on every state. The contributed version
+  counted an object inside its bin's box as placed; robosuite requires contact with the bin's base (Transport).
 - **Time to the target:** a success of at least 0.99 with the objects within 10 mm (the hand task's target); the training
   clock (from the first iteration, checkpoint writes included) of the first kept checkpoint from which every later one up
   to the stop meets it on the evaluation's starts. Not engineered: the hand task's systems options, no per-phase table.
