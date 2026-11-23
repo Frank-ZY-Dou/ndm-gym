@@ -5,6 +5,7 @@ Contributed by [Dechen Gao](https://github.com/gaodechen): the task with SuperMi
 
 SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift clips with a floating right XHand
 ([the task](../../docs/tasks/hand.md)); both also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
+The README's XHand rows train with smooth position targets ([the target-rate penalty](#the-xhand-with-the-target-rate-penalty)).
 
 ## Setup
 
@@ -62,6 +63,99 @@ benchmarks/xhand_tracking/run.sh <task> <seed> data/spider logs/xhand_sm $SYSTEM
 | SuperTrack, object terms at half weight | the same with `--st_obj_w 0.5` |
 | SuperMimic, HDMI's settings at γ 0.99 | `--lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95` |
 | SuperMimic, defaults | none |
+
+## The XHand with the target-rate penalty
+
+A policy's action is an offset about the next reference pose. Nothing in SuperTrack's loss, and only a weak term in
+SuperMimic's reward (0.05 times the actions' mean squared change), tied one control step's offset to the next, so the
+fingers' position targets could jump back and forth at every step. The target-rate penalty (`--target_rate_w`) is a cost per
+step on the change of the policy's offsets, each joint's over its tracking kernel's width (the palm's translation over 40 mm,
+its rotation and the fingers over 0.4 rad), squared, averaged over the joints: in SuperMimic's reward with a minus sign, in
+SuperTrack's loss as it is. A jump costs; following the reference does not. SuperTrack's loss sums its tracking terms over
+the imagined window with weights divided by the window's length (`--st_task_weights`, in its presets); with `--st_cost_mean`
+it takes the cost's mean over the window too, so that the cost weighs against those terms as in the reward.
+
+**Configurations** (each with `--target_rate_w 4`; the systems options of the presets):
+
+| goal | SuperTrack | SuperMimic |
+|---|---|---|
+| most accurate | `hand-supertrack-fast --st_cost_mean --iterations 20000` | `hand-supermimic-fast --action_noise 0.2 --iterations 20000` |
+| time | `hand-supertrack-fast --st_cost_mean`, the speed options with `--st_no_imag_r` | `hand-supermimic-fast --wm_batches 2`, the speed options with `--sm_reuse_input` |
+
+The speed options: `--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk --compile_collect --autotune_gemm`.
+
+**Motion against the reference** (the most accurate configurations; nine runs a row on A100 40GB, training seeds 0-2 by the
+three clips; the unperturbed rollout at each run's stop checkpoint; in brackets, the same configuration without the penalty:
+its motion from training seed 0, its error and success from its nine runs; `tools/hand_motion_check.py`, finger joints, the
+share above 5 Hz per joint then the mean over the joints):
+
+| | share of joint-velocity power above 5 Hz | jerk (rad/s³) | target change per step (rad) | times the kinematic reference (share / jerk / change) | object error | success |
+|---|---|---|---|---|---|---|
+| SuperTrack | 0.032 (0.350) | 183 (1,687) | 0.0242 (0.184) | 1.336 / 0.426 / 1.817 | 2.27 mm (2.01) | 100.0 % (100.0) |
+| SuperMimic | 0.014 (0.373) | 119 (1,282) | 0.0201 (0.128) | 0.589 / 0.277 / 1.505 | 3.20 mm (3.21) | 100.0 % (100.0) |
+
+A row passes the motion check if its finger joints' share of velocity power above 5 Hz, their jerk and the targets' change
+per step are at most 2, 1.5 and 2 times its clips' kinematic references' (the mean over its runs against the mean over their
+references). Every row of this section passes.
+
+**What the penalty leaves.**
+
+- *Slower swings, for both algorithms.* Every run's fingers reverse direction (by more than 0.02 rad) more often than the
+  reference's: 8-24 more reversals over the 12 finger joints for SuperTrack, 9-36 for SuperMimic, on 5-10 of the joints. A
+  swing of 0.1 rad at 2 Hz moves the target by at most 0.025 rad a step, about the reference's own step (0.012-0.016 rad), so
+  the penalty charges it little. The chatter it removed moved the target by 0.13-0.18 rad a step.
+- *The palm on `apple`'s lift.* The reference lifts the apple at up to 0.75 m/s. The palm's position actuators follow a moving
+  target about 0.1 s behind, and the policy's offset of the palm is at most 30 mm. So the palm ends the lift 45 mm below the
+  reference with both algorithms, every seed, with the penalty and without; the fingers keep the apple within 18.4 mm of its
+  path. The slower lifts of `oakink_a01002` and `can` (up to 0.32 and 0.34 m/s) leave 13-17 mm.
+
+**Most accurate** (mean ± SD over training seeds 0-2). Each run stops once converged: at the first checkpoint from 6,000
+iterations on (every 1,000) with a success of at least 0.99 and an object error less than 3 % better than 2,000 iterations
+earlier, both read on 64 perturbed starts of another evaluation seed (6); at most 20,000 iterations. That checkpoint is the
+run's result, evaluated as in [Setup](#setup).
+
+| task | | stop (seeds 0 / 1 / 2) | success | object position | object position, last frame | fingertips | object lift |
+|---|---|---|---|---|---|---|---|
+| `apple` | SuperTrack | 6,000 / 6,000 / 7,000 | 100.0 ± 0.0 % | 2.9 ± 0.0 mm | 0.4 ± 0.0 mm | 5.2 ± 0.4 mm | 26.2 ± 0.0 cm |
+| | SuperMimic | 7,000 / 8,000 / 6,000 | 100.0 ± 0.0 % | 3.6 ± 0.2 mm | 1.3 ± 0.3 mm | 6.3 ± 0.6 mm | 26.3 ± 0.0 cm |
+| `oakink_a01002` | SuperTrack | 6,000 / 6,000 / 6,000 | 100.0 ± 0.0 % | 1.6 ± 0.0 mm | 0.8 ± 0.0 mm | 6.0 ± 0.1 mm | 24.3 ± 0.0 cm |
+| | SuperMimic | 6,000 / 9,000 / 11,000 | 100.0 ± 0.0 % | 2.2 ± 0.1 mm | 1.8 ± 0.3 mm | 5.8 ± 0.1 mm | 24.3 ± 0.0 cm |
+| `can` | SuperTrack | 6,000 / 6,000 / 6,000 | 100.0 ± 0.0 % | 2.3 ± 0.1 mm | 0.8 ± 0.2 mm | 7.7 ± 1.0 mm | 32.7 ± 0.0 cm |
+| | SuperMimic | 6,000 / 9,000 / 7,000 | 100.0 ± 0.0 % | 3.8 ± 0.2 mm | 1.8 ± 0.2 mm | 7.2 ± 0.4 mm | 32.7 ± 0.1 cm |
+
+**Time to the target.** Minutes: the training wall clock at the first checkpoint (every 200 iterations) from which every
+later one has a success of 0.99 or more with the object within 10 mm; the iteration there in brackets. 6,000 iterations a
+run, after an untimed warm-up of each configuration on each clip, so every compiled kernel was in the cache. One GPU: one
+run per A100 40GB, four at a time on four GPUs of a node, its other GPUs idle. Three GPUs: one run at a time on three A100
+40GB of a node, its other GPUs idle. Object: position error at 6,000 iterations.
+
+| GPUs | | `apple`, seeds 0 / 1 / 2 | `oakink_a01002` | `can` | mean of nine | it/s | object |
+|---|---|---|---|---|---|---|---|
+| one | SuperTrack | 0.68 (600), 0.68 (600), 0.68 (600) | 0.85 (800), 0.85 (800), 0.67 (600) | 1.39 (1,400), 1.22 (1,200), 1.39 (1,400) | 0.93 min | 18.4 | 2.51 mm |
+| | SuperMimic | 0.81 (800), 0.63 (600), 0.81 (800) | 0.78 (800), 0.94 (1,000), 0.77 (800) | 0.94 (1,000), 1.11 (1,200), 0.94 (1,000) | 0.86 min | 19.5 | 3.46 mm |
+| three | SuperTrack | 0.51 (600), 0.51 (600), 0.51 (600) | 0.51 (600), 0.60 (800), 0.60 (800) | 0.77 (1,200), 0.77 (1,200), 0.77 (1,200) | 0.62 min | 39.4 | 2.23 mm |
+| | SuperMimic | 0.61 (800), 0.50 (600), 0.73 (1,000) | 0.72 (1,000), 0.61 (800), 0.72 (1,000) | 0.72 (1,000), 0.72 (1,000), 0.84 (1,200) | 0.69 min | 30.4 | 3.37 mm |
+
+- One A100: SuperMimic's mean time is lower by 0.07 min (0.86 against 0.93); SuperTrack has the lower object error (2.51
+  against 3.46 mm).
+- Three A100s (`--layout AWL`): SuperTrack's mean time is lower by 0.07 min (0.62 against 0.69), and so is its object error
+  (2.23 against 3.37 mm).
+- Every timed configuration passes the motion check at 6,000 iterations (share / jerk / change, times the references'): one
+  A100, SuperTrack 1.241 / 0.430 / 1.836 and SuperMimic 0.516 / 0.300 / 1.589; three A100s, 1.285 / 0.440 / 1.861 and 0.549
+  / 0.305 / 1.605.
+- On three A100s each algorithm also timed another configuration with the penalty: SuperTrack with `--action_noise 0.2`
+  2.15 min (4 of 9 runs at the target; none on `oakink_a01002`), SuperMimic without `--wm_batches 2` 0.71 min (9 of 9).
+
+**Per phase** of the timed paths (ms per iteration over iterations 1,001-3,000 of a 3,000-iteration run, `apple`, training
+seed 0, on the timed runs' node; every device synchronized at each phase's boundary, so on three GPUs, where the phases
+otherwise run at once, the total is not the layout's running speed):
+
+| GPUs | | collection | world model | policy | exchange | total | iterations/s |
+|---|---|---|---|---|---|---|---|
+| one | SuperTrack | 5.63 | 24.89 | 24.35 | | 55.79 | 17.9 |
+| | SuperMimic | 7.57 | 12.71 | 32.64 | | 53.76 | 18.6 |
+| three | SuperTrack | 7.26 | 25.03 | 24.06 | 1.52 | 58.73 | 17.0 |
+| | SuperMimic | 9.24 | 15.92 | 32.51 | 1.43 | 60.18 | 16.6 |
 
 ## More hands
 
@@ -203,14 +297,24 @@ configuration: Allegro, SuperTrack 4.21 min (preset) and 3.90 min, SuperMimic 5.
 
 ### The README's animations
 
-Per hand, algorithm and clip the README's grid shows the run with the lowest object error over the perturbed starts at
-its last checkpoint among that algorithm's configurations of record on the hand (for the XHand its accurate preset: the
-fast presets' timed runs kept no rollout), from the unperturbed start. Configuration and training seed:
+Per hand, algorithm and clip the README's grid shows one run, from the unperturbed start.
+
+- *The XHand's `oakink_a01002` and `can`* (smooth targets, [above](#the-xhand-with-the-target-rate-penalty)): of the three
+  seeds of each algorithm's most accurate configuration on the clip, the run at a success of 0.99 or more whose fingers
+  reverse direction least often against the reference (a tie broken by the lower power of the joints' velocity between 1 and
+  5 Hz). Each is
+  within the motion check's bounds on its own rollout (share / jerk / change, times the reference's): SuperTrack 1.68 / 0.38
+  / 1.74 and 1.25 / 0.38 / 1.63, SuperMimic 0.44 / 0.18 / 1.25 and 0.82 / 0.34 / 1.61.
+- *The others:* the run with the lowest object error over the perturbed starts at its last checkpoint among that algorithm's
+  configurations of record on the hand (for the XHand's `apple` its accurate preset: the fast presets' timed runs kept no
+  rollout).
+
+Configuration and training seed:
 
 | hand | | `apple` | `oakink_a01002` | `can` |
 |---|---|---|---|---|
-| XHand | SuperTrack | `hand-supertrack-accurate`, 1 | the same, 1 | the same, 2 |
-| | SuperMimic | `hand-supermimic-accurate`, 2 | the same, 1 | the same, 2 |
+| XHand | SuperTrack | `hand-supertrack-accurate`, 1 | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000`, 1 | the same, 2 |
+| | SuperMimic | `hand-supermimic-accurate`, 2 | `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`, 1 | the same, 2 |
 | Allegro | SuperTrack | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`, 2 | the same, 1 | the same, 0 |
 | | SuperMimic | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`, 0 | `hand-supermimic-fast`, 2 | as on `apple`, 2 |
 | Inspire | SuperTrack | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`, 1 | the same, 1 | the same, 2 |

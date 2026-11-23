@@ -50,7 +50,7 @@ ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_
 | action | one offset per joint in [-1, 1] about the next reference frame's pose (3 cm palm translation, 0.3 rad palm rotation, 0.4 rad fingers), as position targets |
 | observation | the joints, the fingertips and the object in the palm's frame, the previous action |
 | goal | the next 5 reference frames about the state: joint offsets, the object's offset and relative rotation |
-| reward | tracking kernels on the keypoints (palm and fingertips), the finger joints, the palm's rotation and the object's position and rotation; an action-rate penalty |
+| reward | tracking kernels on the keypoints (palm and fingertips), the finger joints, the palm's rotation and the object's position and rotation; an action-rate penalty; with `--target_rate_w`, a target-rate penalty ([smooth targets](#smooth-targets)) |
 | termination | the object or the palm more than 15 cm from its reference |
 | episode | from the reference's first frame (joints and the object's position perturbed) to its last |
 
@@ -86,6 +86,34 @@ trade the hand's pose against the object as the reward does.
 policy maximizes the imagined tracking return with a soft survival weight and a critic beyond the horizon.
 `--bptt_decay` scales the gradient through the imagined state at every step.
 
+## Smooth targets
+
+A policy's action is an offset about the next reference pose. Nothing in SuperTrack's loss, and only a weak term in
+SuperMimic's reward (`w_action_rate`, 0.05 times the actions' mean squared change), ties one step's offset to the next, so
+the fingers' position targets can jump back and forth at every control step.
+
+`--target_rate_w w` (both algorithms; 0, the default, is off) adds a cost per step (`HandTask.smooth_cost`): `w` times the
+mean over the joints of the change of the policy's part of the position targets since the previous step, each joint's over
+its tracking kernel's width (`keypoint_std` for the palm's translation, `palm_ori_std` for its rotation, `finger_std` for
+the fingers), squared. A jump costs; following the reference does not. SuperMimic's reward subtracts it. SuperTrack's loss
+adds it, summed over the imagined window, or with `--st_cost_mean` (with `--st_task_weights`) as its mean over the window,
+the scale of the task-weighted tracking terms, so that it weighs against them as in the reward. The XHand's rows in the
+README use `--target_rate_w 4`, SuperTrack's with `--st_cost_mean`
+([results](../../benchmarks/xhand_tracking/results.md#the-xhand-with-the-target-rate-penalty)).
+
+`tools/hand_motion_check.py` measures an evaluation's unperturbed rollout against its clip's references, on the finger
+joints: the acceleration and jerk of their positions, the share of their velocity's spectral power above 5 Hz, the change of
+their position targets per step, limit hits, and the slips of the fingertips and of the object. It reads what
+`ndm_gym.evaluate_hand --save_targets` writes; several evaluations under one label give their mean:
+
+```bash
+python -m ndm_gym.evaluate_hand --ckpt logs/apple_st/last.pt --out logs/apple_st/evaluation --save_targets
+python tools/hand_motion_check.py st=logs/apple_st/evaluation --json motion.jsonl
+```
+
+The README's motion check: over a configuration's runs, the share above 5 Hz, the jerk and the targets' change per step
+at most 2, 1.5 and 2 times its clips' kinematic references'.
+
 ## Systems options
 
 Off by default (`ndm_gym/algos/hand_fast.py`); with all of them off the loop and the agents compute what they compute
@@ -107,12 +135,14 @@ without them. Each applies to both algorithms.
 | `--autotune_gemm` | each compiled matrix product from the faster of cuBLAS and compiled Triton templates, timed per shape at compilation (longer compilations) | rounding |
 | `--wm_palm_fk` | the world model's fit computes the palm's kinematics alone, the only part of them it reads | none |
 | `--sm_reuse_input` | SuperMimic: an imagined step's policy input is the critic's input computed the step before | rounding |
+| `--st_no_imag_r` | SuperTrack: the imagined steps without the task's reward, which its loss does not read (the log's `imag_r` is then NaN) | rounding |
 | `--layout AL`, `--layout AWL` | the iteration's steps at the same time on the first two or three GPUs the trainer sees, each on the others' results of the previous iteration: AL the actor (simulator, collection, replay, world model) and the policy's learner; AWL also the world model's learner, on a copy of the replay; `--layout_devices` places them otherwise (needs `--no_sync --update_graphs`) | the training: each step reads the others' results of the previous iteration |
 | `--pi_lr_mult m` | the policy's learning rate is `--lr` times `m`, ramped to 1 over `--lr_decay_len` iterations from the log row where `sim_r` reaches `--lr_decay_ret`, at the latest from `--lr_decay_by` | the policy's schedule |
 
 The speed options of the fastest configurations are `--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk
---compile_collect --autotune_gemm`, with SuperMimic also `--sm_reuse_input`
-([why they are fast](../../README.md#hand-object-tracking)); a configuration's first run compiles for about 3 minutes.
+--compile_collect --autotune_gemm`, with SuperMimic also `--sm_reuse_input` and, on the XHand with smooth targets,
+SuperTrack also `--st_no_imag_r` ([why they are fast](../../README.md#hand-object-tracking)); a configuration's first run
+compiles for about 3 minutes.
 The three-GPU times add `--layout AWL`.
 `--phase_times` writes each iteration's phases (collection, world-model updates, policy update, critic update, log rows,
 checkpoints, the host's rest), the device synchronized at every boundary, to `phase_times.csv`.
@@ -124,7 +154,8 @@ time of the collection step, the world-model updates and the policy update, the 
 `ndm_gym.evaluate_hand` rolls the policy out from the first frame to the last without resets: once from the
 unperturbed start (saved for rendering), and from `--num_envs` perturbed starts, each also with the reference pose as
 the position targets in the policy's place, for comparison. A rollout succeeds if it never terminates and the object ends
-within 5 cm of its last reference position.
+within 5 cm of its last reference position. `--save_targets` also saves the unperturbed rollouts' position targets and the
+policy's actions at every control step, for `tools/hand_motion_check.py`; the evaluation is the same.
 
 `tools/render_hand.py` renders a saved rollout in the look of `tools/render.py`, at 1920x1080, 60 fps and half speed:
 the simulated hand and object solid, the kinematic reference a translucent ghost, a camera that follows them, the NDM
@@ -138,8 +169,9 @@ the README's grid as one synchronized loop, and the single animations are
 `docs/media/hand/<hand>_<algorithm>_<clip>.webp`. On the dark stage a hand darker than mid grey (the Allegro's, the
 Inspire's) is lifted to graphite.
 
-The README's animations one by one (per hand, algorithm and clip the policy with the lowest object error among that
-algorithm's configurations of record; which runs: [results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
+The README's animations one by one (per hand, algorithm and clip one policy: on the XHand's spray bottle and can a run
+with smooth targets, elsewhere the lowest object error among that algorithm's configurations of record; which runs and
+why: [results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
 
 | | apple | spray bottle | can |
 |---|---|---|---|
