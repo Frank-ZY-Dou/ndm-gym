@@ -117,3 +117,21 @@ def test_the_quadrotor_configurations_are_their_runs(name):
     assert absent.items() <= NOT_HERE.items(), absent
     assert rec.pop("iterations") == (3000 if name.endswith("-fast") else got["iterations"])
     assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
+
+
+@pytest.mark.parametrize("name", list(configs.CONFIGS["train_robomimic"]))
+def test_the_manipulation_configurations_are_their_runs(name):
+    """Each manipulation configuration parses to the arguments a run of its results recorded (seed 0's on Lift,
+    tests/data/configs/<name>.args.json, kept without the configuration's name and the run's directories): every recorded
+    argument but the seed, none of them unknown to the trainer. robomimic-supertrack's imagination noise is the 0 it writes
+    out; the trainer's default, which a command line without --st_imag_noise gets, is 0.1."""
+    import json
+    import os
+
+    rec = json.load(open(os.path.join(os.path.dirname(__file__), "data", "configs", f"{name}.args.json")))
+    got = vars(parse("train_robomimic", ["--config", name, "--task", rec["task"]]))
+    assert got["config"] == name and set(rec) <= set(got)
+    assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
+    if name == "robomimic-supertrack":
+        plain = vars(parse("train_robomimic", ["--algo", "supertrack", "--task", "lift"]))
+        assert (got["st_imag_noise"], plain["st_imag_noise"]) == (0.0, 0.1)
