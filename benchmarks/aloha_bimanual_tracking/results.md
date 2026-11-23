@@ -105,10 +105,13 @@ SuperMimic's do with the objects within 10.36 ± 3.05 mm. Per case:
   a success within 0.05 of the stop's.
 - **Transfer Cube, SuperMimic:** seeds 0 and 1 settled at 16,600 and 18,400 iterations, at a success of 98.8 and 100.0 %
   with the cube within 9.25 and 4.48 mm; the state test at the last frame gives 60.5 and 99.6 %. Seed 2 had not settled
-  at the cap: 3.1 % of its rollouts succeed there and 96.9 % end early. The two settled runs do not stay at their stop:
-  27 of 157 and 7 of 148 later checkpoints have a success within 0.05 of it, and over the 181 checkpoints from 12,000
-  iterations on the success averages 51.6 / 60.2 / 4.4 % (seeds 0 / 1 / 2). Of the 181 windows of five checkpoints that
-  end there, 6 / 1 / 0 pass the settled test (SuperTrack's: 159 / 181 / 181).
+  at the cap: 3.1 % of its rollouts succeed there and 96.9 % end early. From 12,000 iterations on its success averages
+  4.4 %, and at 132 of its 181 checkpoints every rollout ends early; such a checkpoint has no objects' error, which
+  fails the settled test (`time_to.py`), so none of the run's windows passes it (with those checkpoints left out of a
+  window 10 would, the first at 36,400 iterations, at a success of 0.4 %). The two settled runs do not stay at their
+  stop: 27 of 157 and 7 of 148 later checkpoints have a success within 0.05 of it, and over the 181 checkpoints from
+  12,000 iterations on the success averages 51.6 / 60.2 / 4.4 % (seeds 0 / 1 / 2). Of the 181 windows of five
+  checkpoints that end there, 6 / 1 / 0 pass the settled test (SuperTrack's: 159 / 181 / 181).
 - **Insertion, SuperTrack:** no rollout ends early in any seed and every one reaches the reward of 3 (the peg touches
   the socket, both off the table); at the stop the peg touches the pin in none. The peg and the socket are within 4.96 /
   4.11 / 7.19 mm of the demonstration's over the rollout and 13.0 / 9.0 / 18.7 mm at its last frame. The runs settled at
@@ -129,6 +132,12 @@ Insertion SuperTrack's stop at 12,000 and 13,600 with 100.0 and 0.0 % (the objec
 SuperMimic's at 14,600 and 12,000 with 0.0 and 0.0 %. SuperTrack's empty-cache run on Insertion settled at five
 checkpoints whose rollouts all touch the pin; 33 of its 180 later checkpoints have a success within 0.05 of that. So on
 Insertion a settled run can have all of its rollouts on either side of the last contact.
+
+The earlier runs show the same on Transfer Cube. Up to their 12,000th iteration these runs' commands are those of the
+[runs at 12,000 iterations](#second-round-the-runs-at-12000-iterations), on the same demonstration. There SuperMimic's
+three have a success of 75.8 / 74.2 / 0.0 %, where the earlier three had 97.3 / 99.2 / 82.0 % (SuperTrack's: 100 % in
+both sets). The evaluation is not what differs: the earlier seeds 0 and 2's checkpoints, evaluated again beside these
+runs, give 98.0 and 82.8 % (`a100_runs/second_round_12000/evaluated_again/same_seed_beside_the_later_runs/`).
 
 ## Stops, checkpoints and time to the target
 

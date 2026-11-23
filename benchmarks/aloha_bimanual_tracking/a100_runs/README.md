@@ -38,6 +38,9 @@ Notes:
   configuration's empty-cache run on its cache). The runs in `cold_cache_seed0/` and the tuning rounds' started on an
   empty cache, and their minutes include the compilation.
 - **Clock:** the training log's wall time from the first training iteration; evaluations are not in it.
+- **A cross-check of the evaluation:** `second_round_12000/evaluated_again/same_seed_beside_the_later_runs/` has two of
+  the 12,000-iteration runs' last checkpoints (SuperMimic on Transfer Cube, seeds 0 and 2) evaluated once more with the
+  12 runs' code, beside them.
 - **Checkpoints:** kept every 200 iterations: 240 per run (to the cap), 60 in the 12,000-iteration runs and the third
   tuning round's, 30 in the first round's runs, 60 or 120 in the second tuning round's. The first tuning round's were
   kept every 500 (12 per run); its evaluations precede the state test at the last frame (`final_state_rate`), which
