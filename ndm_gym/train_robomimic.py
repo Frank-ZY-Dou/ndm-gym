@@ -60,6 +60,11 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each tracked quantity weighs, per unit of error, the task's reward weight over its "
                         "kernel's width")  # fmt: skip
+    parser.add_argument("--target_rate_w", type=float, default=0.0,
+                        help="both algorithms: a cost per step on the policy's part of the targets' change, each actuator's over its "
+                        "tracking kernel's width (the arms' joints 0.4 rad, the fingers 0.04 m), squared and averaged over the actuators, "
+                        "times this weight: in SuperMimic's reward with a minus sign, in SuperTrack's loss as its mean over the imagined "
+                        "steps (with --st_task_weights); 0: off")  # fmt: skip
     parser.add_argument("--ckpt_keep", action="store_true", help="also keep ckpt_<iteration>.pt at every --ckpt_every (the policy and its arguments)")
     for action in parser._actions:
         if action.dest == "algo":
@@ -93,6 +98,10 @@ def parse_args(argv: list[str] | None = None):
             parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that robomimic training does not implement")
     if args.episode < 2:
         parser.error("--episode >= 2")
+    if args.target_rate_w < 0:
+        parser.error("--target_rate_w >= 0")
+    if args.target_rate_w and args.algo == "supertrack" and not args.st_task_weights:
+        parser.error("--target_rate_w enters SuperTrack's loss at the scale of its task-weighted terms: give --st_task_weights too")
     if args.solver_iterations < 0 or args.solver_ls_iterations < 0 or (args.solver_ls_iterations and not args.solver_iterations):
         parser.error("--solver_iterations >= 0, --solver_ls_iterations >= 0 and only with --solver_iterations")
     try:
@@ -103,11 +112,11 @@ def parse_args(argv: list[str] | None = None):
 
 
 def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: float = 1.0, solver_iterations: int = 0,
-          solver_ls_iterations: int = 0):  # fmt: skip
+          solver_ls_iterations: int = 0, target_rate_w: float = 0.0):  # fmt: skip
     """The scene with its servos, its layout for the task and the task of demonstrations (``demo``: an index or a list of them,
     whose recorded scenes must be the same: robosuite draws Lift's cube and Transport's hammer per demonstration), and
     MuJoCo-Warp's per-world contact and constraint capacities for them. ``solver_iterations``, ``solver_ls_iterations``: the
-    constraint solver's caps (0: the scene's)."""
+    constraint solver's caps (0: the scene's); ``target_rate_w``: the task's smoothness weight (--target_rate_w; 0: off)."""
     from ndm_gym.motion.sources.robomimic import demo_path, load_demo, split_states
     from ndm_gym.robots.robomimic_scenes import RobomimicScene, contact_capacity, load_scene
     from ndm_gym.tasks.robomimic_tracking import RewardCfg, RobomimicTask, SceneKinematics, build_reference
@@ -125,7 +134,7 @@ def build(task_name: str, demo, data_dir: str, device: str, reward_std_scale: fl
     states = [split_states(x["states"], model.nq, model.nv) for x in demos]
     kin = SceneKinematics(MjcfLayout.from_model(model), scene.keypoint_bodies).to(device)
     ref = build_reference([q for q, _ in states], [v for _, v in states], scene, kin, device)
-    task = RobomimicTask(scene, kin, ref, RewardCfg().scaled(reward_std_scale))
+    task = RobomimicTask(scene, kin, ref, RewardCfg(w_target_rate=float(target_rate_w)).scaled(reward_std_scale))
     caps = [contact_capacity(model, q, v) for q, v in states]
     return model, task, (max(c[0] for c in caps), max(c[1] for c in caps))
 
@@ -178,7 +187,7 @@ def main():
         json.dump(vars(args), f, indent=2)
 
     model, task, (nconmax, njmax) = build(args.task, args.demo, args.data_dir, dev, args.reward_std_scale, args.solver_iterations,
-                                          args.solver_ls_iterations)  # fmt: skip
+                                          args.solver_ls_iterations, args.target_rate_w)  # fmt: skip
     sim = RobomimicSim(model, task, args.num_envs, dev, nconmax=nconmax, njmax=njmax, episode=args.episode, stagger=True)
     algo = ROBOMIMIC_ALGOS[args.algo](args, model, task, dev, substeps=sim.substeps)
     average = hand_fast.PolicyAverage(algo.pi, args.pi_ema) if args.pi_ema > 0 else None  # --pi_ema

@@ -11,8 +11,9 @@ the demonstration's last frame. The errors are means over the frames of the roll
 the means over the demonstrations; robosuite's success test is read from the simulator after the control step that reaches
 the last frame (RobomimicSim.success). One rollout from each demonstration's unperturbed first frame is saved as
 ``rollout_<demo>.npz`` (the state at every control step, beside the same start under the reference's targets; the step of its
-termination, -1 without one, and whether it succeeds: tools/render_robomimic.py renders it). ``--demo``:
-other demonstrations of the task than the checkpoint's (held-out ones, of its scene).
+termination, -1 without one, and whether it succeeds: tools/render_robomimic.py renders it). ``--save_targets``: that
+rollout's position targets at every control step and the reference's of the same steps beside them (``targets``,
+``reference_targets``). ``--demo``: other demonstrations of the task than the checkpoint's (held-out ones, of its scene).
 """
 
 from __future__ import annotations
@@ -23,13 +24,14 @@ import math
 import os
 
 
-def rollout(sim, algo, task, starts, policy: bool = True):
+def rollout(sim, algo, task, starts, policy: bool = True, targets: list | None = None):
     """Every world from its frame of ``starts`` (N,) (perturbed as the simulator's noise says) to its demonstration's last,
     under the policy or, without it, under the reference's targets; the worlds whose demonstration ends earlier hold its last
     frame until the longest ends. Returns the states (T, N, D), each world's number of steps, whether it terminated within
     them, the step of its termination (its number of steps without one) and whether it succeeds at its last frame
     (robosuite's test after the control step that reaches it, RobomimicSim.success). A step that fills the simulator's
-    contact list is an error (a contact the test reads could be missing)."""
+    contact list is an error (a contact the test reads could be missing). ``targets``: a list that receives each step's
+    position targets (N, nu)."""
     import torch
 
     from ndm_gym.tasks.robomimic_tracking import unflatten_state
@@ -44,7 +46,10 @@ def rollout(sim, algo, task, starts, policy: bool = True):
     for t in range(int(lens.max())):
         f = sim.f.clone()
         a = algo.act(unflatten_state(states[-1], task.nq), a_prev, f) if policy else a_prev
-        s1, term, _ = sim.step(task.setpoint(a, f), reset=False)
+        u = task.setpoint(a, f)
+        if targets is not None:
+            targets.append(u.clone())
+        s1, term, _ = sim.step(u, reset=False)
         if sim.contact_overflow():
             raise RuntimeError(f"step {t}: the simulator's contact list is full ({sim.contact_geom.shape[0]} contacts); raise its capacity")
         successes.append(sim.success())
@@ -88,6 +93,8 @@ def main():
     parser.add_argument("--data_dir", type=str, default=None, help="the demonstrations' directory (default: the checkpoint's)")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--no_reference", action="store_true", help="skip the rollouts under the reference's targets")
+    parser.add_argument("--save_targets", action="store_true",
+                        help="the saved rollout's position targets at every control step and the reference's beside them")
     parser.add_argument("--solver_iterations", type=int, default=-1,
                         help="the simulated scene's solver iterations: -1 the checkpoint's training physics, 0 the scene's own (robosuite's), "
                         "else a cap (its line search: --solver_ls_iterations)")  # fmt: skip
@@ -141,7 +148,8 @@ def main():
     metrics = {"task": targs.task, "demos": demos, "iteration": ck["iteration"], "wall_time_s": ck.get("wall_time"), "control_dt": CONTROL_DT,
                "num_envs": args.num_envs, "solver_iterations": [int(model.opt.iterations), int(model.opt.ls_iterations)], "per_demo": {}}  # fmt: skip
     group = torch.arange(args.num_envs * D, device=dev) // args.num_envs  # each world's demonstration
-    runs = {"nominal": rollout(nominal, algo, task, firsts), "policy": rollout(sim, algo, task, firsts[group])}
+    saved = [] if args.save_targets else None  # --save_targets: the nominal rollouts' targets, step by step
+    runs = {"nominal": rollout(nominal, algo, task, firsts, targets=saved), "policy": rollout(sim, algo, task, firsts[group])}
     open_loop = rollout(nominal, algo, task, firsts, policy=False)[0]
     if not args.no_reference:
         runs["reference_targets"] = rollout(sim, algo, task, firsts[group], policy=False)
@@ -153,10 +161,15 @@ def main():
                 m[key] = summarize(task, runs[key], torch.nonzero(group == d).squeeze(-1), start)
         n = end - start
         _, _, failed, until, success = runs["nominal"]
+        extra = {}
+        if saved is not None:  # the targets of the rollout's n steps, and the reference's (the setpoints of a zero action)
+            frames = torch.arange(start, end, device=dev)
+            extra = {"targets": torch.stack(saved)[:n, d].cpu().numpy(),
+                     "reference_targets": task.setpoint(torch.zeros(n, task.nu, device=dev), frames).cpu().numpy()}
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
                  reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
                  control_dt=CONTROL_DT, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,
-                 success=bool(success[d]))  # fmt: skip
+                 success=bool(success[d]), **extra)  # fmt: skip
         metrics["per_demo"][str(name)] = m
     for key in ("policy", "reference_targets"):  # the means over the demonstrations
         rows = [m[key] for m in metrics["per_demo"].values() if key in m]

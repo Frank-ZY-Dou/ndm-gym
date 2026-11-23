@@ -225,6 +225,8 @@ class RobomimicSuperTrack(RobomimicSuperMimic):
             self.bal.scale.copy_(torch.tensor([c.keypoint_std, c.joint_std, 0.01, c.object_pos_std, c.object_ori_std]))
             self.bal.ready.fill_(True)
             self.step_worth = c.w_keypoint + c.w_joint + c.w_object_pos + c.w_object_ori  # every error at its kernel's width
+        elif task.cfg.w_target_rate:  # the cost's mean over the steps is the scale of the task-weighted terms only
+            raise ValueError("--target_rate_w enters SuperTrack's loss at the scale of its task-weighted terms: give --st_task_weights too")
         self.st_step = torch.compile(self._st_step)
 
     @property
@@ -250,12 +252,14 @@ class RobomimicSuperTrack(RobomimicSuperMimic):
 
     def _st_step(self, S, fk, f: torch.Tensor, a_prev: torch.Tensor, noise: torch.Tensor):
         """One imagined step: the policy's action (with ``noise`` on it in the rollout), the world model's next state and its
-        forward kinematics, the errors against the frame it ends at, the termination probability, the reward."""
+        forward kinematics, the errors against the frame it ends at, the termination probability, the reward, and the task's
+        smoothness cost of the action after the one before (None when --target_rate_w is off)."""
         task = self.task
         a = self.pi(task.obs(S, fk, a_prev), task.goal(S, fk, f, self.goal_frames))
+        cost = task.smooth_cost(a, a_prev)
         S = self.wm.step(*S, task.setpoint(a + noise, f))
         fk, f = task.fk(S[0]), task.ref.next_frame(f)
-        return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), task.reward(S, fk, f, a, a_prev)
+        return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), task.reward(S, fk, f, a, a_prev), cost
 
     def policy_update(self, buffer: ReplayBuffer) -> tuple:
         """One policy step on imagined rollouts from replayed states. Returns (policy loss, NaN, imagined reward as a share
@@ -264,11 +268,11 @@ class RobomimicSuperTrack(RobomimicSuperMimic):
         S, f, a_prev = self._starts(buffer)
         set_requires_grad(self.wm, False)
         fk = self.task.fk(S[0])
-        errs, dones, acts, rews = [], [], [], []
+        errs, dones, acts, rews, costs = [], [], [], [], []
         for _ in range(horizon):
             noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)
-            S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
-            errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
+            S, fk, f, a_prev, e, d, r, c = self.st_step(S, fk, f, a_prev, noise)
+            errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r), costs.append(c)
         E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)
         terms = E.sum(0).mean(0)
         if not self.bal.calibrated:
@@ -277,6 +281,8 @@ class RobomimicSuperTrack(RobomimicSuperMimic):
         alive = survive(d, self.no_sync)  # cumprod(1 - d, 0)
         if self.fail_w:  # every imagined step after a failure costs st_fail_w steps' worth of loss
             loss = loss + self.fail_w * (self.step_worth / horizon) * (1 - alive).sum(0).mean()
+        if costs[0] is not None:  # --target_rate_w: the smoothness cost's mean over the imagined steps and the batch
+            loss = loss + torch.stack(costs).mean()
         A = torch.stack(acts)
         loss = loss + self.reg * ((A**2).mean() + A.abs().mean())
         self.opt_pi.zero_grad(set_to_none=True)

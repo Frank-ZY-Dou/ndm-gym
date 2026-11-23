@@ -131,6 +131,10 @@ class RewardCfg:
     w_object_pos: float = 2.0
     w_object_ori: float = 1.0
     w_action_rate: float = -0.05
+    # train_robomimic --target_rate_w (0: off): a cost per step on the policy's part of the targets' change, each actuator's over its
+    # tracking kernel's width, squared, mean over the actuators (RobomimicTask.smooth_cost): in the reward with a minus sign, in
+    # SuperTrack's loss as it is
+    w_target_rate: float = 0.0
     term_object: float = 0.15  # m, a tracked object's distance from its reference
     term_keypoint: float = 0.2  # m, a keypoint's
 
@@ -165,6 +169,10 @@ class RobomimicTask:
         self.obs_dim = acts + acts + 3 * kps + objs * (3 * arms + 6 + 3 + 3) + acts
         self.goal_frame_dim = acts + objs * (3 + 6) + 3 * kps
         self.max_step_reward = (cfg.w_keypoint + cfg.w_joint + cfg.w_object_pos + cfg.w_object_ori) * CONTROL_DT
+        # smooth_cost's constant: each actuator's target change per unit of action over its tracking kernel's width (an arm joint's
+        # over joint_std; a finger's, which the keypoints track, over keypoint_std)
+        width = f32([cfg.joint_std if a else cfg.keypoint_std for a in scene.arm])
+        self.rate_k = self.scale / width
 
     def fk(self, qpos: torch.Tensor) -> torch.Tensor:
         return self.kin(qpos)
@@ -227,7 +235,19 @@ class RobomimicTask:
             + c.w_object_ori * torch.exp(-e["object_ori_sq"] / c.object_ori_std**2).mean(-1)
             + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
         )
+        cost = self.smooth_cost(a, a_prev)
+        if cost is not None:
+            r = r - cost
         return r * CONTROL_DT
+
+    def smooth_cost(self, a: torch.Tensor, a_prev: torch.Tensor) -> torch.Tensor | None:
+        """The smoothness cost of action ``a`` after ``a_prev`` (per step, before CONTROL_DT), or None when it is off
+        (``w_target_rate`` 0): the weight times the mean over the actuators of the policy's part of the target's change,
+        scale (a - a_prev), over the actuator's kernel width, squared. A change of the width on every actuator costs the weight,
+        and following the reference costs nothing."""
+        if not self.cfg.w_target_rate:
+            return None
+        return self.cfg.w_target_rate * (self.rate_k * (a - a_prev)).pow(2).mean(-1)
 
     def termination(self, S, fk: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
         e = self.errors(S, fk, f)

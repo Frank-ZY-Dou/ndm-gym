@@ -16,7 +16,10 @@ the order given). Per rollout and for the demonstration:
 - slip: over successive steps at which both fingers of one gripper touch a tracked object (MuJoCo's contacts at each
   recorded qpos; a finger is its body with the bodies below it, its pad), that object's displacement in the gripper's
   end-effector frame between the two steps; the mean over those pairs of steps (mm per step). A held object's wobble counts
-  as much as its sliding.
+  as much as its sliding;
+- target change, for a rollout saved with ``evaluate_robomimic --save_targets``: the RMS over the steps of each arm joint's
+  step-to-step change of its position target, then the mean over the arms' joints (rad per step); the demonstration's is its
+  own targets' (the next frame's joint positions).
 
 A rollout of fewer than 8 frames has no measures. Prints a table: per task and name each rollout's values, then the
 demonstration's over all its frames.
@@ -72,7 +75,7 @@ class Scene:
         sc = RobomimicScene.from_model(model, task)
         arm = np.array(sc.arm)
         q, lo, hi = np.array(sc.act_q), np.array(sc.act_lo), np.array(sc.act_hi)
-        self.arm_q, self.arm_lo, self.arm_hi = q[arm], lo[arm], hi[arm]
+        self.act_q, self.arm, self.arm_q, self.arm_lo, self.arm_hi = q, arm, q[arm], lo[arm], hi[arm]
         self.fin_q, self.fin_lo, self.fin_hi = q[~arm], lo[~arm], hi[~arm]
         bodies = np.array(sc.keypoint_bodies).reshape(-1, 3)  # per gripper: its end effector and its two fingers
         self.eef = [int(b) for b in bodies[:, 0]]
@@ -118,10 +121,16 @@ def slip(hold: np.ndarray, rel: np.ndarray) -> tuple[float | None, int]:
     return (float(step[both].mean() * 1000) if n else None), n
 
 
-def measures(sc: Scene, qpos: np.ndarray, dt: float, grasps: tuple) -> dict:
+def target_change(targets: np.ndarray) -> float | None:
+    """The RMS over the steps of each column's step-to-step change, then the mean over the columns (None: fewer than two steps)."""
+    return float(np.sqrt((np.diff(targets, axis=0) ** 2).mean(0)).mean()) if len(targets) > 1 else None
+
+
+def measures(sc: Scene, qpos: np.ndarray, dt: float, grasps: tuple, targets: np.ndarray | None = None) -> dict:
     out = joint_measures(qpos[:, sc.arm_q], dt, sc.arm_lo, sc.arm_hi)
     out["finger_limit_hits"] = joint_measures(qpos[:, sc.fin_q], dt, sc.fin_lo, sc.fin_hi)["limit_hits"]
     out["slip_mm"], out["held_pairs"] = slip(*grasps)
+    out["target_change"] = None if targets is None else target_change(targets[:, sc.arm])
     return out
 
 
@@ -140,6 +149,7 @@ def measure(name: str, path: str, data_dir: str, scenes: dict) -> dict:
     with np.load(path) as r:
         nq, dt, task, demo, term = int(r["nq"]), float(r["control_dt"]), str(r["task"]), int(r["demo"]), int(r["terminated_at"])
         state, ref, success = r["state"][:, :nq], r["reference_qpos"], bool(r["success"])
+        tg, ref_tg = (r["targets"], r["reference_targets"]) if "targets" in r else (None, None)  # --save_targets
     if state.shape != ref.shape:
         raise SystemExit(f"{path}: the rollout's states {state.shape}, the demonstration's {ref.shape}")
     if (task, demo) not in scenes:
@@ -149,13 +159,14 @@ def measure(name: str, path: str, data_dir: str, scenes: dict) -> dict:
         raise SystemExit(f"{path}: {nq} coordinates, the scene of {task} demonstration {demo} has {sc.model.nq}")
     if sc.cache is None:
         sc.cache = sc.grasps(ref)
-        sc.whole = measures(sc, ref, dt, sc.cache)
+        sc.whole = measures(sc, ref, dt, sc.cache, ref[1:][:, sc.act_q])  # (the reference's targets: the next frame's joint positions)
     T = len(state) if term < 0 else term + 1
     out = {"name": name, "path": path, "task": task, "demo": demo, "frames": T, "of": len(state), "terminated_at": term, "success": success,
            "policy": None, "demonstration": None, "demonstration_whole": sc.whole}  # fmt: skip
-    if T >= MIN_FRAMES:
-        out["policy"] = measures(sc, state[:T], dt, sc.grasps(state[:T]))
-        out["demonstration"] = measures(sc, ref[:T], dt, tuple(x[:T] for x in sc.cache))
+    if T >= MIN_FRAMES:  # (the T frames' T - 1 steps and their targets)
+        out["policy"] = measures(sc, state[:T], dt, sc.grasps(state[:T]), None if tg is None else tg[: T - 1])
+        ref_tg = ref[1:T][:, sc.act_q] if ref_tg is None else ref_tg[: T - 1]
+        out["demonstration"] = measures(sc, ref[:T], dt, tuple(x[:T] for x in sc.cache), ref_tg)
     return out
 
 
@@ -163,7 +174,10 @@ def table(rows: list) -> str:
     """Per task and name each rollout's values in the order given, then the demonstration's over all its frames."""
     cols = (("acc", "acceleration (rad/s²)", "{:.2f}", 1), ("jerk", "jerk (rad/s³)", "{:.1f}", 1), ("hf_share", "high-frequency share", "{:.3f}", 1),
             ("slip_mm", "slip (mm per step)", "{:.2f}", 1), ("limit_hits", "arms' limit hits (%)", "{:.2f}", 100),
-            ("finger_limit_hits", "fingers' limit hits (%)", "{:.1f}", 100))  # fmt: skip
+            ("finger_limit_hits", "fingers' limit hits (%)", "{:.1f}", 100),
+            ("target_change", "target change (rad per step)", "{:.4f}", 1))  # fmt: skip
+    if not any(r["policy"] and r["policy"]["target_change"] is not None for r in rows):  # no rollout with saved targets
+        cols = cols[:-1]
     show = lambda v, f, s: "-" if v is None else f.format(s * v)  # noqa: E731
     lines = ["| task | | frames | " + " | ".join(c[1] for c in cols) + " |", "|" + "---|" * (3 + len(cols))]
     for task in dict.fromkeys(r["task"] for r in rows):

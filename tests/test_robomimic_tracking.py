@@ -485,6 +485,202 @@ def test_updates(setup, monkeypatch, argv):
         assert torch.equal(algo2.bal.w, algo.bal.w)
 
 
+def cost_by_hand(a, a_prev, w: float, scale, width) -> np.ndarray:
+    """--target_rate_w's cost written out: w times the mean over the actuators of (scale (a - a_prev) / width)^2."""
+    return w * ((np.asarray(scale) * (np.asarray(a) - np.asarray(a_prev)) / np.asarray(width)) ** 2).mean(-1)
+
+
+SCALE, WIDTH = [0.25] * 7 + [0.02] * 2, [0.4] * 7 + [0.04] * 2  # an arm joint's offset scale and joint_std, a finger's and keypoint_std
+
+
+def test_target_rate_cost(setup):
+    """--target_rate_w's cost in the task: off by default (None, the reward as it was); on, an action after another worked out
+    by hand, its gradient, the reward less it, a change of the kernel's width on every actuator costing the weight, and the
+    widths following --reward_std_scale."""
+    _, scene, _, _, kin, task0 = setup
+    w = 4.0
+    task = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=w))
+    assert RewardCfg().w_target_rate == 0.0 and task0.smooth_cost(torch.ones(2, 9), torch.zeros(2, 9)) is None
+    assert task.rate_k.tolist() == pytest.approx([0.625] * 7 + [0.5] * 2)  # 0.25 / 0.4 and 0.02 / 0.04
+    a_prev, a = torch.zeros(1, 9), torch.zeros(1, 9)
+    a[0, 0], a[0, 7] = 0.4, -0.2  # an arm joint's target 0.1 rad on, a finger's 4 mm back
+    a.requires_grad_()
+    cost = task.smooth_cost(a, a_prev)
+    assert float(cost.detach()) == pytest.approx(4 * ((0.625 * 0.4) ** 2 + (0.5 * 0.2) ** 2) / 9, rel=1e-6)  # 4 * 0.0725 / 9
+    assert float(cost.detach()) == pytest.approx(float(cost_by_hand(a.detach(), a_prev, w, SCALE, WIDTH)[0]), rel=1e-6)
+    (grad,) = torch.autograd.grad(cost.sum(), a)
+    by_hand = torch.zeros(9)
+    by_hand[0], by_hand[7] = 2 * w * 0.625**2 * 0.4 / 9, 2 * w * 0.5**2 * -0.2 / 9  # 2 w k^2 (a - a_prev) / actuators
+    assert torch.allclose(grad[0], by_hand, atol=1e-7)
+    f = torch.tensor([3])
+    S = (task.ref.qpos[f], task.ref.qvel[f])
+    fk = task.fk(S[0])
+    with torch.no_grad():
+        assert torch.allclose(task.reward(S, fk, f, a, a_prev), task0.reward(S, fk, f, a, a_prev) - cost * CONTROL_DT, atol=1e-7)
+        assert torch.equal(task0.reward(S, fk, f, a, a), task.reward(S, fk, f, a, a))  # no change of the target, no cost
+        one_width = torch.tensor(WIDTH) / torch.tensor(SCALE)  # every actuator's target changed by its kernel's width
+        assert float(task.smooth_cost(one_width[None], a_prev)) == pytest.approx(w, rel=1e-6)
+        wide = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=w).scaled(2.0))
+        assert float(wide.smooth_cost(a, a_prev)) == pytest.approx(float(cost) / 4, rel=1e-6)
+
+
+def test_target_rate_on_both_algorithms(setup, monkeypatch):
+    """--target_rate_w on both algorithms' own paths, each against the same update with the option off (the same networks, starts
+    and noise). The per-step quantity is the same for both, the cost written out by hand from the actions each recorded:
+    SuperTrack's loss rises by its mean over the imagined steps and the batch, SuperMimic's policy loss by its discounted,
+    survival-weighted sum times the control step (the reward's place). In each algorithm's own step the cost's gradient on the
+    action is the one worked out by hand."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    model, scene, _, _, kin, task0 = setup
+    w = 4.0
+    task_on = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=w))
+    per_step = {}
+    for argv in (["--algo", "supertrack", "--st_task_weights", "--st_fail_w", "2"], ["--algo", "supermimic", "--critic_minibatches", "2"]):
+        st = argv[1] == "supertrack"
+        runs = {}
+        for name, task in (("off", task0), ("on", task_on)):
+            torch.manual_seed(0)  # the same networks in both
+            args, algo, buffer = agent_and_replay(model, task, argv + (["--target_rate_w", str(w)] if name == "on" else []))
+            assert args.target_rate_w == (w if name == "on" else 0.0)
+            with torch.no_grad():  # the output layer at its plain initialization (the policy starts it 100 times smaller): actions
+                algo.pi.net[-1].weight.mul_(100.0)  # that change from step to step
+            seen = []
+            step = algo.st_step if st else algo.imag_step
+
+            def recorded(*x, _step=step, _seen=seen):
+                out = _step(*x)
+                _seen.append((x[3], out[3], out[5], out[6] if st else out[4], out[7] if st else None))  # a_prev, a, d, reward, cost
+                return out
+
+            setattr(algo, "st_step" if st else "imag_step", recorded)
+            torch.manual_seed(1)  # the same starts and imagination noise in both
+            loss = algo.policy_update(buffer)[0]
+            runs[name] = (float(loss), seen, args, algo, buffer)
+        (loss0, seen0, args, _, _), (loss1, seen1, _, _, _) = runs["off"], runs["on"]
+        assert len(seen0) == len(seen1) == args.horizon and all(torch.equal(x[1], y[1]) for x, y in zip(seen0, seen1, strict=True))
+        costs = np.stack([cost_by_hand(a.detach(), a_prev.detach(), w, SCALE, WIDTH) for a_prev, a, _, _, _ in seen0])  # (H, B)
+        assert costs.shape == (args.horizon, args.pi_batch) and costs.mean() > 1e-4
+        for (_, _, _, r0, c0), (_, _, _, r1, c1), by_hand in zip(seen0, seen1, costs, strict=True):
+            assert c0 is None and np.allclose((r0 - r1).detach().numpy() / CONTROL_DT, by_hand, atol=1e-6)  # the reward less the cost
+            if st:
+                assert np.allclose(c1.detach().numpy(), by_hand, atol=1e-7)
+        per_step[argv[1]] = costs
+        if st:  # the loss: plus the cost's mean over the steps and the batch
+            assert loss1 - loss0 == pytest.approx(costs.mean(), rel=1e-4, abs=1e-6)
+        else:  # the policy loss, -J: plus sum_t gamma^t c_t cost_t dt, c_t the survival before step t
+            d = torch.stack([x[2] for x in seen0]).detach().numpy()
+            c_t = np.concatenate((np.ones((1, d.shape[1])), np.cumprod(1 - d, 0)[:-1]), 0)
+            disc = args.gamma ** np.arange(args.horizon)[:, None]
+            assert loss1 - loss0 == pytest.approx((disc * c_t * costs * CONTROL_DT).sum(0).mean(), rel=1e-4, abs=1e-7)
+        # the gradient on the action, in the algorithm's own step
+        _, _, _, algo0, buffer = runs["off"]
+        algo1 = runs["on"][3]
+        algo1.load_state_dict(algo0.state_dict())  # (both updated above: the same networks again)
+        torch.manual_seed(2)
+        S, f, _ = algo0._starts(buffer)
+        a_prev = 0.3 * torch.randn(args.pi_batch, task0.nu)
+        grads = {}
+        for name, algo in (("off", algo0), ("on", algo1)):
+            if st:
+                out = algo._st_step(S, algo.task.fk(S[0]), f, a_prev, torch.zeros_like(a_prev))
+            else:
+                fk, x = algo._start_features(S, f, a_prev)
+                out = algo._imag_step(S, fk, f, a_prev, x)
+            a, reward = out[3], out[6] if st else out[4]
+            grads[name] = (a.detach(), torch.autograd.grad(reward.sum(), a, retain_graph=True)[0])
+            if st and name == "on":
+                grads["cost"] = torch.autograd.grad(out[7].sum(), a)[0]
+        (a, g0), (a1, g1) = grads["off"], grads["on"]
+        assert torch.equal(a, a1)
+        by_hand = 2 * w * (torch.tensor(SCALE) / torch.tensor(WIDTH)) ** 2 * (a - a_prev) / task0.nu  # d cost / d a
+        assert by_hand.abs().max() > 1e-3 and torch.allclose(g0 - g1, by_hand * CONTROL_DT, atol=1e-6)  # the reward's gradient less it
+        if st:
+            assert torch.allclose(grads["cost"], by_hand, atol=1e-6)
+    # the same per-step formula on both paths (each on its own actions), in SuperTrack's loss and in SuperMimic's reward
+    assert set(per_step) == {"supertrack", "supermimic"}
+
+
+def test_target_rate_wiring(setup, tmp_path, monkeypatch):
+    """--target_rate_w from the command line to the task: the parser (off by default, refused below 0 and for SuperTrack without
+    --st_task_weights), main's call of build, build's task (on a demonstration file written here), and the agent's refusal."""
+    h5py = pytest.importorskip("h5py")
+    from ndm_gym import train_robomimic
+
+    assert parse_args(["--task", "lift"]).target_rate_w == 0.0
+    assert parse_args(["--task", "lift", "--algo", "supermimic", "--target_rate_w", "4"]).target_rate_w == 4.0
+    assert parse_args(["--task", "lift", "--algo", "supertrack", "--st_task_weights", "--target_rate_w", "2"]).target_rate_w == 2.0
+    for refused in (["--target_rate_w", "-1"], ["--algo", "supertrack", "--target_rate_w", "4"]):
+        with pytest.raises(SystemExit):
+            parse_args(["--task", "lift"] + refused)
+    model, scene, _, _, kin, task0 = setup
+    task_on = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=4.0))
+    plain = argparse.Namespace(**{**vars(parse_args(["--task", "lift", "--algo", "supertrack"])), "wm_hidden": [64, 64]})
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    with pytest.raises(ValueError, match="st_task_weights"):  # an agent built without the parser
+        ROBOMIMIC_ALGOS["supertrack"](plain, model, task_on, "cpu", SUBSTEPS)
+    # build: a demonstration file in robomimic's layout, the scene of these tests
+    qpos, qvel = demonstration(model, 6, 1)
+    (tmp_path / "lift").mkdir()
+    with h5py.File(tmp_path / "lift" / "demo_v15.hdf5", "w") as f:
+        g = f.create_group("data")
+        g.attrs["env_args"] = json.dumps({"env_name": "Lift", "env_kwargs": {"control_freq": 20}})
+        g.create_group("demo_0").create_dataset("states", data=np.concatenate((np.arange(6)[:, None] * CONTROL_DT, qpos, qvel), -1))
+        g["demo_0"].attrs["model_file"] = scene_xml()
+    a, a_prev = torch.full((1, 9), 0.2), torch.zeros(1, 9)
+    _, built, _ = train_robomimic.build("lift", 0, str(tmp_path), "cpu", target_rate_w=4.0)
+    assert built.cfg.w_target_rate == 4.0
+    assert float(built.smooth_cost(a, a_prev)) == pytest.approx(float(cost_by_hand(a, a_prev, 4.0, SCALE, WIDTH)[0]), rel=1e-6)
+    assert train_robomimic.build("lift", 0, str(tmp_path), "cpu")[1].smooth_cost(a, a_prev) is None
+    # main: the option reaches build
+    pytest.importorskip("mujoco_warp")  # main imports the simulator
+    calls = []
+
+    class Stop(Exception):
+        pass
+
+    def fake_build(*args, **kw):
+        calls.append((args, kw))
+        raise Stop
+
+    monkeypatch.setattr(train_robomimic, "build", fake_build)
+    monkeypatch.setattr(sys, "argv", ["train_robomimic", "--task", "lift", "--algo", "supermimic", "--target_rate_w", "4", "--log_dir",
+                                      str(tmp_path / "run"), "--data_dir", str(tmp_path)])  # fmt: skip
+    with pytest.raises(Stop):
+        train_robomimic.main()
+    (args, kw), = calls
+    assert args[:3] == ("lift", [0], str(tmp_path)) and args[-1] == 4.0 and len(args) == 8 and not kw
+    assert json.load(open(tmp_path / "run" / "args.json"))["target_rate_w"] == 4.0
+
+
+def test_evaluation_saves_targets(setup):
+    """evaluate_robomimic's rollout hands out each step's position targets (--save_targets): the task's setpoints of the
+    actions at the frames; without the list it runs as before."""
+    from ndm_gym.evaluate_robomimic import rollout
+
+    _, _, _, _, _, task = setup
+    starts = torch.zeros(2, dtype=torch.long)
+
+    class Offsets:  # the policy's place: an action that grows with the step
+        def __init__(self):
+            self.k = 0
+
+        def act(self, S, a_prev, f):
+            self.k += 1
+            return torch.full((len(f), task.nu), 0.01 * self.k)
+
+    targets = []
+    states, lens, _, _, _ = rollout(StubSim(task, 2), Offsets(), task, starts, targets=targets)
+    n = int(lens[0])
+    assert len(targets) == n == states.shape[0] - 1 and all(u.shape == (2, task.nu) for u in targets)
+    for k, u in enumerate(targets):
+        f = torch.full((2,), k, dtype=torch.long)
+        assert torch.equal(u, task.setpoint(torch.full((2, task.nu), 0.01 * (k + 1)), f))
+    zero = task.setpoint(torch.zeros(n, task.nu), torch.arange(n))  # the reference's targets, as --save_targets writes them
+    assert torch.equal(zero, task.ref.ctrl[1 : n + 1].clamp(task.u_lo, task.u_hi))
+    again = rollout(StubSim(task, 2), Offsets(), task, starts)
+    assert torch.equal(again[0], states)
+
+
 def test_training_arguments():
     """Every argument of ndm_gym.train is implemented or refused; the defaults are ROBOMIMIC_DEFAULTS over LAFAN1's."""
     parser = argparse.ArgumentParser()
@@ -769,6 +965,19 @@ def test_motion_measures(tmp_path, monkeypatch):
     text = motion.table(rows).splitlines()
     assert len(text) == 6 and text[2].startswith("| lift | whole | 40 |") and text[3].startswith("| lift | ended | 20 of 40 |")
     assert text[4].startswith("| lift | short | 6 of 40 | - | - |") and text[5].startswith("| lift | the demonstration | 40 |")
+    assert "target change" not in text[0] and p["target_change"] is None  # no saved targets: no such column
+    # a rollout saved with --save_targets: the targets' change per step, the reference's beside it
+    ref_tg = ref[1:][:, sc.act_q]
+    tg = ref_tg.copy()
+    tg[:, 0] += 0.01 * (-1.0) ** np.arange(T - 1)  # the first arm joint's target 0.02 rad up and down, step by step
+    np.savez(tmp_path / "targets.npz", state=state, reference_qpos=ref, reference_targets_state=state, nq=model.nq, control_dt=dt, task="lift",
+             demo=0, terminated_at=-1, success=True, targets=tg, reference_targets=ref_tg)  # fmt: skip
+    row = motion.measure("saved", str(tmp_path / "targets.npz"), "unused", scenes)
+    own = np.sqrt((np.diff(ref_tg[:, sc.arm], axis=0) ** 2).mean(0))  # the reference's own change, per arm joint
+    assert row["demonstration"]["target_change"] == pytest.approx(own.mean()) == row["demonstration_whole"]["target_change"]
+    assert own[1:].max() == 0 and row["policy"]["target_change"] == pytest.approx((np.hypot(0.02, own[0]) + 0) / 7, rel=0.02)
+    text = motion.table([row]).splitlines()
+    assert text[0].endswith("| target change (rad per step) |") and text[2].split("|")[-2].strip() == f"{row['policy']['target_change']:.4f}"
 
 
 CUDA = "cuda:0"
