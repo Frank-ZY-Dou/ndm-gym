@@ -4,7 +4,8 @@
 
 One rollout from the unperturbed first frame to the last, without resets, is saved as ``rollout.npz`` (the scene's
 qpos at every control step, for tools/render_hand.py) with its errors in ``metrics.json``, beside the same rollout
-with the reference pose as the position targets in the policy's place (``reference_targets_qpos``). ``--num_envs``
+with the reference pose as the position targets in the policy's place (``reference_targets_qpos``); with
+``--save_targets`` also both rollouts' position targets and the policy's actions (for tools/hand_motion_check.py). ``--num_envs``
 rollouts from perturbed starts (training's reset noise) give the success rate and the errors, and as many with the
 reference pose as the targets those to compare with. A rollout succeeds if it never terminates (the object and the
 palm stay within the task's distances of the reference) and the object ends within ``--success_pos`` of its last
@@ -18,10 +19,11 @@ import json
 import os
 
 
-def rollout(sim, algo, task, policy: bool = True):
+def rollout(sim, algo, task, policy: bool = True, record: dict | None = None):
     """Every world from its current start to the reference's last frame, under the policy or, without it, under the
     reference pose as the position targets. Returns the states (T, N, state_dim), the scene's qpos (T, N, nq) and
-    whether each world terminated."""
+    whether each world terminated. ``record`` (a dict): its lists ``actions`` and ``targets`` get each step's action and
+    position targets (N, num_joints); the rollout is the same with it or without it."""
     import torch
 
     from ndm_gym.tasks.hand_tracking import unflatten_state
@@ -32,7 +34,11 @@ def rollout(sim, algo, task, policy: bool = True):
     for _ in range(task.ref.frames - 1):
         f = sim.f.clone()
         a = algo.act(unflatten_state(states[-1]), a_prev, f) if policy else a_prev
-        s1, term, _ = sim.step(task.setpoint(a, f), reset=False)
+        target = task.setpoint(a, f)
+        if record is not None:
+            record.setdefault("actions", []).append(a.clone())
+            record.setdefault("targets", []).append(target.clone())
+        s1, term, _ = sim.step(target, reset=False)
         failed |= term
         a_prev = a
         states.append(s1), qpos.append(sim.qpos.clone())
@@ -46,6 +52,9 @@ def main() -> None:
     parser.add_argument("--num_envs", type=int, default=256, help="rollouts from perturbed starts")
     parser.add_argument("--success_pos", type=float, default=0.05, help="the object's largest final distance from its reference (m)")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--save_targets", action="store_true",
+                        help="rollout.npz also holds the unperturbed rollouts' actions and position targets at every control step "
+                        "(actions, targets; reference_targets), for tools/hand_motion_check.py; the evaluation is the same")  # fmt: skip
     args = parser.parse_args()
 
     import numpy as np
@@ -79,14 +88,20 @@ def main() -> None:
                 "object_lift_m": float((S[2][-1, :, 2] - S[2][0, :, 2]).mean())}  # fmt: skip
 
     sim = HandSim(model, task, 1, dev, joint_noise=0.0, object_noise=0.0)
-    states, qpos, failed = rollout(sim, algo, task)
+    rec, rec_ref = ({}, {}) if args.save_targets else (None, None)
+    states, qpos, failed = rollout(sim, algo, task, record=rec)
     metrics = {"clip": targs.clip, "iteration": ck["iteration"], "frames": ref.frames, "control_dt": CONTROL_DT,
                "reference_lift_m": float(ref.p[-1, 2] - ref.p[0, 2]), "nominal": summarize(states, failed)}  # fmt: skip
     sim.reset(torch.ones(1, dtype=torch.bool, device=dev))
-    reference_targets_qpos = rollout(sim, algo, task, policy=False)[1]
+    reference_targets_qpos = rollout(sim, algo, task, policy=False, record=rec_ref)[1]
     os.makedirs(args.out, exist_ok=True)
+    first = lambda xs: torch.stack(xs)[:, 0].cpu().numpy()  # noqa: E731
+    extra = {}
+    if rec is not None:
+        extra = {"actions": first(rec["actions"]), "targets": first(rec["targets"]), "reference_targets": first(rec_ref["targets"])}
     np.savez(os.path.join(args.out, "rollout.npz"), qpos=qpos[:, 0].cpu().numpy(), reference_targets_qpos=reference_targets_qpos[:, 0].cpu().numpy(),
-             reference_q=ref.q.cpu().numpy(), reference_p=ref.p.cpu().numpy(), reference_R=ref.R.cpu().numpy(), control_dt=CONTROL_DT)  # fmt: skip
+             reference_q=ref.q.cpu().numpy(), reference_p=ref.p.cpu().numpy(), reference_R=ref.R.cpu().numpy(), control_dt=CONTROL_DT,
+             **extra)  # fmt: skip
     sim = HandSim(model, task, args.num_envs, dev)
     states, _, failed = rollout(sim, algo, task)
     metrics["perturbed"] = {"num_envs": args.num_envs, **summarize(states, failed)}

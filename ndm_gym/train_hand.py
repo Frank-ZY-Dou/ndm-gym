@@ -24,6 +24,7 @@ Run: ``python -m ndm_gym.train_hand --clip data/spider/processed/<dataset>/xhand
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
 import json
 import os
@@ -58,6 +59,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     add_hand_fast_args(parser)  # the systems options
     add_hand_layout_args(parser)  # --layout
     parser.add_argument("--clip", type=str, required=True, help="a SPIDER trial directory (.../<task>/<trial>)")
+    parser.add_argument("--target_rate_w", type=float, default=0.0,
+                        help="both algorithms: a cost per step of this weight times the mean over the joints of the policy's part of the "
+                        "targets' change over the joint's kernel width, squared (0: off)")  # fmt: skip
     parser.add_argument("--st_vel_terms", action="store_true",
                         help="supertrack: also the L1 errors of the joints' velocities and of the object's linear and angular velocity")  # fmt: skip
     parser.add_argument("--st_obj_w", type=float, default=1.0,
@@ -68,6 +72,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each of the task's five tracked quantities weighs, per unit of error, the task's reward "
                         "weight over its kernel's width (not with --st_vel_terms or --st_unit_scales)")  # fmt: skip
+    parser.add_argument("--st_cost_mean", action="store_true",
+                        help="supertrack, with --st_task_weights: the target-rate costs (--target_rate_w) enter the loss as their mean over the "
+                        "imagined window, as the tracking terms do, so that a cost weighs against them as in the task's reward (default: "
+                        "their sum over the window, 16 times that at the default horizon)")  # fmt: skip
     for action in parser._actions:
         if action.dest == "algo":
             action.required = False
@@ -82,8 +90,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.algo not in ("supertrack", "supermimic"):
         parser.error("hand training implements --algo supertrack and --algo supermimic")
-    st_only = {"st_vel_terms": False, "st_obj_w": 1.0, "st_unit_scales": False, "st_task_weights": False,
-               **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w")}}  # fmt: skip
+    st_only = {"st_vel_terms": False, "st_obj_w": 1.0, "st_unit_scales": False, "st_task_weights": False, "st_cost_mean": False,
+               **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w", "st_no_imag_r")}}  # fmt: skip
     sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches",  # its critic and return
                                                   "sm_reuse_input")}  # fmt: skip
     if args.algo == "supermimic":
@@ -96,6 +104,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                 parser.error(f"--{name} is SuperMimic's option here")
     if args.algo == "supertrack" and args.st_task_weights and (args.st_vel_terms or args.st_unit_scales):
         parser.error("--st_task_weights weighs the task's five tracked quantities: not with --st_vel_terms or --st_unit_scales")
+    if args.st_cost_mean and not args.st_task_weights:  # the mean is the tracking terms' scale under the task's weights only
+        parser.error("--st_cost_mean takes the tracking terms' scale from --st_task_weights: give both")
     for name in UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that hand training does not implement")
@@ -107,8 +117,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return args
 
 
-def build(clip: str, device: str, reward_std_scale: float = 1.0):
-    """The scene, kinematics and task of a clip."""
+def smoothing(args: argparse.Namespace) -> dict:
+    """The task's target-rate weight from --target_rate_w (tasks.hand_tracking.RewardCfg; {}: off)."""
+    if getattr(args, "target_rate_w", 0.0) < 0:
+        raise ValueError(f"--target_rate_w >= 0, got {args.target_rate_w}")
+    return {"w_target_rate": float(args.target_rate_w)} if getattr(args, "target_rate_w", 0.0) else {}
+
+
+def build(clip: str, device: str, reward_std_scale: float = 1.0, smooth: dict | None = None):
+    """The scene, kinematics and task of a clip; ``smooth``: the task's target-rate weight (``smoothing``)."""
     from ndm_gym.motion.sources.spider import load_reference, load_scene
     from ndm_gym.robots.hands import HandKinematics
     from ndm_gym.state import CONTROL_DT
@@ -117,7 +134,10 @@ def build(clip: str, device: str, reward_std_scale: float = 1.0):
     model = load_scene(clip)
     kin = HandKinematics(model, device)
     ref = build_reference(load_reference(clip, model, CONTROL_DT), kin, device)
-    return model, kin, HandTask(kin, ref, RewardCfg().scaled(reward_std_scale))
+    cfg = RewardCfg().scaled(reward_std_scale)
+    if smooth:
+        cfg = dataclasses.replace(cfg, **smooth)
+    return model, kin, HandTask(kin, ref, cfg)
 
 
 def main() -> None:
@@ -166,7 +186,9 @@ def main() -> None:
     with open(os.path.join(args.log_dir, "args.json"), "w") as f:
         json.dump(vars(args), f, indent=2)
 
-    model, kin, task = build(args.clip, dev, args.reward_std_scale)
+    smooth = smoothing(args)
+    more = {"smooth": smooth} if smooth else {}  # passed only when on (the default call is build(clip, device, reward_std_scale))
+    model, kin, task = build(args.clip, dev, args.reward_std_scale, **more)
     sim = HandSim(model, task, args.num_envs, dev, stagger=True)
     algo = HAND_ALGOS[args.algo](args, kin, task, dev)
     average = hand_fast.PolicyAverage(algo.pi, args.pi_ema) if args.pi_ema > 0 else None  # --pi_ema
@@ -222,7 +244,7 @@ def main() -> None:
     if args.layout != "1GPU":  # --layout: the iteration's steps on two or three GPUs at once, each on the others' previous results
         from ndm_gym.algos import hand_layout
 
-        split, average = hand_layout.build(args, algo, buffer, lambda d: build(args.clip, d, args.reward_std_scale)[1:])
+        split, average = hand_layout.build(args, algo, buffer, lambda d: build(args.clip, d, args.reward_std_scale, **more)[1:])
         print(split.describe(), flush=True)
         algo = split.algo  # what the loop reads from here on, each from its owner (the collection step keeps the actor's agent);
         # the one-GPU updates above are not called

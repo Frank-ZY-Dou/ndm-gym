@@ -78,6 +78,10 @@ class RewardCfg:
     w_object_pos: float = 2.0
     w_object_ori: float = 1.0
     w_action_rate: float = -0.05
+    # the target-rate penalty (train_hand --target_rate_w; 0: off), a cost per step on the policy's part of the targets' change, each
+    # joint over its kernel's width, squared, mean over the joints: in the reward with a minus sign, in SuperTrack's loss as it is
+    # (``HandTask.smooth_cost``)
+    w_target_rate: float = 0.0
     term_object: float = 0.15  # m, the object's distance from its reference
     term_palm: float = 0.15  # m, the palm's
 
@@ -96,6 +100,10 @@ class HandTask:
         self.obs_dim = joints + joints + 3 * fingertips + 6 + 3 + 6 + 3 + 3 + joints
         self.goal_frame_dim = joints + 3 + 6
         self.max_step_reward = (cfg.w_keypoint + cfg.w_finger + cfg.w_palm_ori + cfg.w_object_pos + cfg.w_object_ori) * CONTROL_DT
+        # smooth_cost's constant: each joint's target change per unit of action over its kernel's width (the palm's translation over
+        # keypoint_std, its rotation over palm_ori_std, the fingers over finger_std)
+        width = torch.cat((torch.full((3,), cfg.keypoint_std), torch.full((3,), cfg.palm_ori_std), torch.full((joints - NUM_PALM,), cfg.finger_std)))
+        self.rate_k = self.scale / width.to(self.scale.device)
 
     def setpoint(self, a: torch.Tensor, f: torch.Tensor) -> torch.Tensor:
         """Position targets for policy output ``a`` in [-1, 1] at frame ``f``: offsets about the next frame's pose."""
@@ -145,7 +153,22 @@ class HandTask:
             + c.w_object_ori * torch.exp(-e["object_ori_sq"] / c.object_ori_std**2)
             + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
         )
+        cost = self.smooth_cost(S, a, a_prev)
+        if cost is not None:
+            r = r - cost
         return r * CONTROL_DT
+
+    def smooth_cost(self, S, a: torch.Tensor, a_prev: torch.Tensor) -> torch.Tensor | None:
+        """The target-rate penalty of reaching ``S`` with action ``a`` after ``a_prev`` (per step, before CONTROL_DT), or None when it
+        is off: ``w_target_rate`` times the mean over the joints of the policy's part of the targets' change over the joint's kernel
+        width, squared (a change of the width costs the weight). A target that jumps back and forth from one step to the next costs
+        its jumps; one that follows the reference costs nothing, since the reference's own motion is not the policy's part."""
+        c = self.cfg
+        if not c.w_target_rate:
+            return None
+        da = a - a_prev
+        cost = torch.zeros_like(da[..., 0])
+        return cost + c.w_target_rate * (self.rate_k * da).pow(2).mean(-1)
 
     def termination(self, S, fk, f: torch.Tensor) -> torch.Tensor:
         e = self.errors(S, fk, f)

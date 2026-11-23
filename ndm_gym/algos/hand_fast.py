@@ -45,6 +45,9 @@ is off by default; with all of them off the loop and the agents compute what the
 --sm_reuse_input  SuperMimic: an imagined step's policy input is the critic's input the step before computed (the same
                  observation and goal of the same state; the start's from start_features), not computed again (equal up
                  to rounding).
+--st_no_imag_r   SuperTrack: the imagined steps without the task's reward, which SuperTrack's loss does not read (only the
+                 log's imag_r did, then NaN): neither the reward nor, in the compiled imagined step, its backward on zero
+                 gradients is computed (the same updates; equal up to rounding).
 --compile_collect  with --no_sync: the collection step's torch work before the physics (the state, the policy's action,
                  the position targets written) and after it (the frame, the terminations, the masked resets, the
                  normalizers, the episode lengths, the log's sums) as two compiled functions, which --collect_graph
@@ -85,9 +88,9 @@ from .blinkmimic import Graphed, policy_average
 from .common import adam_kwargs, ema_step, gated_step, survival, zero_nonfinite_grads
 
 # the options a resumed run must share with its checkpoint (the algorithm and SuperTrack's terms, the optimizers' layouts and
-# states, the policy average); the defaults are those of a checkpoint written before the option existed
+# states, the policy average, the task's target-rate cost); the defaults are those of a checkpoint written before the option existed
 RESUME_MATCH = {"algo": "supermimic", "st_vel_terms": False, "st_unit_scales": False, "st_task_weights": False, "fused_adam": False,
-                "update_graphs": False, "pi_opt": "adam", "wm_opt": "adam", "pi_ema": 0.0}  # fmt: skip
+                "update_graphs": False, "pi_opt": "adam", "wm_opt": "adam", "pi_ema": 0.0, "target_rate_w": 0.0}  # fmt: skip
 ACC_KEYS = ("r", "steps", "done", "term", "ep_len", "object_err")  # the log's sums over a row's collection steps (train_hand)
 PHASES = ("collect", "wm", "policy", "critic", "log", "ckpt", "host")  # --phase_times: an iteration's phases (PhaseTimes)
 LAYOUT_PHASES = (*PHASES[:4], "exchange", *PHASES[4:])  # with --layout: the exchange between the devices too (algos.hand_layout)
@@ -143,6 +146,9 @@ def add_hand_fast_args(parser: argparse.ArgumentParser):
     g.add_argument("--sm_reuse_input", action="store_true",
                    help="supermimic: an imagined step's policy input is the critic's input of the step before (the same observation and goal "
                    "of the same state), not computed again (changes results by rounding)")  # fmt: skip
+    g.add_argument("--st_no_imag_r", action="store_true",
+                   help="supertrack: the imagined steps without the task's reward, which its loss does not read (the log's imag_r is "
+                   "then NaN); the same updates (may change results by rounding)")  # fmt: skip
     g.add_argument("--compile_collect", action="store_true",
                    help="with --no_sync: the collection step's torch work before and after the physics as two compiled functions, the "
                    "random draws made before them in the default's order (changes results by rounding)")  # fmt: skip

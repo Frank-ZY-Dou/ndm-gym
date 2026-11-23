@@ -295,10 +295,14 @@ class HandSuperTrack(HandSuperMimic):
     the loss trades the hand's pose against the object as the task does; the fingertips about the palm, which the task
     does not track, weigh nothing. Plus the failure penalty on the task's soft termination (``--st_fail_w``, as LAFAN1's
     and HOI's: every imagined step after a failure costs that many steps' worth of loss) and the regularizer on the
-    actions (``--st_reg``), which are offsets about the reference pose. ``--st_imag_noise`` adds Gaussian noise to the imagined actions. No reward, no
-    critic: ``policy_update`` returns NaN for the value loss and the imagined reward of the same rollouts for the log."""
+    actions (``--st_reg``), which are offsets about the reference pose. ``--st_imag_noise`` adds Gaussian noise to the imagined actions. With the
+    task's target-rate penalty (``--target_rate_w``) its cost at every imagined step, summed over the window (``--st_cost_mean``: its mean). No
+    reward, no critic: ``policy_update`` returns NaN for the value loss and the imagined reward of the same rollouts for the log
+    (``--st_no_imag_r``: not computed, NaN)."""
 
     kind = "accel"
+    imag_r = True  # the log's imagined reward computed; __init__ sets it from --st_no_imag_r (agents built without it: the piano's)
+    cost_mean = False  # the smoothness costs summed over the window; __init__ sets it from --st_cost_mean
     TERMS = ("keypoint_pos", "keypoint_pos_local", "palm_ori", "finger_pos", "object_pos", "object_ori")
     VEL_TERMS = ("joint_vel", "object_lin_vel", "object_ang_vel")
     OBJECT_TERMS = ("object_pos", "object_ori")
@@ -314,6 +318,10 @@ class HandSuperTrack(HandSuperMimic):
         self.bal = LossBalancer(len(self.terms)).to(dev)
         self.obj_w, self.fail_w, self.reg = float(getattr(args, "st_obj_w", 1.0)), float(args.st_fail_w), float(args.st_reg)
         self.imag_noise = float(args.st_imag_noise)
+        self.imag_r = not getattr(args, "st_no_imag_r", False)  # train_hand --st_no_imag_r: the imagined steps without the reward (the log's alone)
+        # train_hand --st_cost_mean: the target-rate costs as the window's mean, the tracking terms' scale (--st_task_weights divides
+        # their per-step weights by the horizon); off: their sum
+        self.cost_mean = bool(getattr(args, "st_cost_mean", False))
         if self.obj_w <= 0 or self.fail_w < 0 or self.reg < 0 or self.imag_noise < 0:
             raise ValueError(f"--st_obj_w > 0, --st_fail_w >= 0, --st_reg >= 0, --st_imag_noise >= 0, got {self.obj_w}, {self.fail_w}, "
                              f"{self.reg}, {self.imag_noise}")  # fmt: skip
@@ -368,34 +376,42 @@ class HandSuperTrack(HandSuperMimic):
 
     def _st_step(self, S, fk, f: torch.Tensor, a_prev: torch.Tensor, noise: torch.Tensor):
         """One imagined step: the policy's action (with ``noise`` on it in the rollout), the world model's next state and
-        its forward kinematics, the errors against the frame it ends at, the termination probability, the reward."""
+        its forward kinematics, the errors against the frame it ends at, the termination probability, the reward for the
+        log (--st_no_imag_r: None) and the task's target-rate cost (None when off)."""
         task = self.task
         a = self.pi(task.obs(S, fk, a_prev), task.goal(S, f, self.goal_frames))
         S = self.wm.step(S, fk, task.setpoint(a + noise, f))
         fk, f = self.kin.forward(S[0]), task.ref.next_frame(f)
-        return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), task.reward(S, fk, f, a, a_prev)
+        r = task.reward(S, fk, f, a, a_prev) if self.imag_r else None
+        return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), r, task.smooth_cost(S, a, a_prev)
 
     def _rollout(self, S, f: torch.Tensor, a_prev: torch.Tensor, noises: list):
         """--compile_rollout: ``policy_update``'s imagined rollout from the start ``S`` at frame ``f`` after ``a_prev`` as one
         function, the start's kinematics and a step per noise of ``noises`` (drawn before, in the steps' order). Returns the
-        errors (horizon, B, terms), the termination probabilities (horizon, B), the actions and the rewards."""
+        errors (horizon, B, terms), the termination probabilities (horizon, B), the actions, the rewards (None with
+        --st_no_imag_r) and the target-rate costs (None when off)."""
         fk = self.kin.forward(S[0])
-        errs, dones, acts, rews = [], [], [], []
+        errs, dones, acts, rews, costs = [], [], [], [], []
         for noise in noises:
-            S, fk, f, a_prev, e, d, r = self._st_step(S, fk, f, a_prev, noise)
-            errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
-        return torch.stack(errs), torch.stack(dones), acts, rews
+            S, fk, f, a_prev, e, d, r, c = self._st_step(S, fk, f, a_prev, noise)
+            errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r), costs.append(c)
+        return torch.stack(errs), torch.stack(dones), acts, rews, costs
 
-    def _st_objective(self, terms: torch.Tensor, d: torch.Tensor, acts: list):
+    def _st_objective(self, terms: torch.Tensor, d: torch.Tensor, acts: list, costs: list | None = None):
         """The policy's loss from the window's summed errors per term ``terms``, the termination probabilities ``d``
         (horizon, B) and the actions (``horizon`` of (B, J)): the weighted terms, the failure penalty on the survival and
-        the actions' regularizer. Also returns the survival."""
+        the actions' regularizer; with the task's target-rate costs (``costs``: ``horizon`` of (B,), None when off) their sum over
+        the imagined steps (``--st_cost_mean``: their mean, the scale of the task-weighted terms, whose per-step weights are
+        divided by the horizon), mean over the batch. Also returns the survival."""
         horizon = self.horizon
         loss = (self.bal.w * self.term_scale * terms).sum()
         alive = survive(d, self.no_sync)  # cumprod(1 - d, 0)
         if self.fail_w:  # every imagined step after a failure costs st_fail_w steps' worth of loss
             loss = loss + self.fail_w * (self.step_worth / horizon) * (1 - alive).sum(0).mean()
         A = torch.stack(acts)
+        if costs and costs[0] is not None:
+            c = torch.stack(costs)  # (horizon, B)
+            loss = loss + (c.mean(0) if self.cost_mean else c.sum(0)).mean()
         return loss + self.reg * ((A**2).mean() + A.abs().mean()), alive
 
     def policy_update(self, buffer: ReplayBuffer) -> tuple:
@@ -407,25 +423,29 @@ class HandSuperTrack(HandSuperMimic):
         set_requires_grad(self.wm, False)
         if self.rollout is not None:  # --compile_rollout: the rollout below as one compiled function, the noises drawn first
             noises = [self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev) for _ in range(horizon)]
-            E, d, acts, rews = self.rollout(S, f, a_prev, noises)
+            E, d, acts, rews, costs = self.rollout(S, f, a_prev, noises)
         else:
             fk = self.start_fk(S[0]) if self.start_fk is not None else None  # --compile_updates: compiled for hand-object tracking
-            errs, dones, acts, rews = [], [], [], []
+            errs, dones, acts, rews, costs = [], [], [], [], []
             for _ in range(horizon):
                 noise = self.imag_noise * torch.randn_like(a_prev) if self.imag_noise else torch.zeros_like(a_prev)
-                S, fk, f, a_prev, e, d, r = self.st_step(S, fk, f, a_prev, noise)
-                errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r)
+                # an agent's own st_step may return no target-rate cost (the Wuji piano's returns seven values): off for it
+                S, fk, f, a_prev, e, d, r, *c = self.st_step(S, fk, f, a_prev, noise)
+                errs.append(e), dones.append(d), acts.append(a_prev), rews.append(r), costs.append(c[0] if c else None)
             E, d = torch.stack(errs), torch.stack(dones)  # (H, B, terms), (H, B)
         terms = E.sum(0).mean(0)
         if not self.bal.calibrated:
             self.bal.calibrate(terms.detach().clamp(min=1e-6)[self.cal_idx], torch.ones_like(terms))
-        loss, alive = self.st_objective(terms, d, acts)  # --compile_updates: compiled
+        loss, alive = self.st_objective(terms, d, acts, costs)  # --compile_updates: compiled
         self.opt_pi.zero_grad(set_to_none=True)
         loss.backward()
         grad_norm = nn.utils.clip_grad_norm_(self.pi.parameters(), 1.0)
         nn.utils.clip_grad_value_(self.pi.parameters(), 0.1)
         finite_step(self.opt_pi, self.pi.parameters(), grad_norm, self.no_sync)  # the step, unless the gradient is non-finite
         set_requires_grad(self.wm, True)
+        if not self.imag_r:  # --st_no_imag_r: no imagined reward for the log
+            nan = torch.full((), float("nan"), device=self.dev)
+            return loss.detach(), nan, nan.clone(), grad_norm.detach(), alive[-1].mean().detach()
         with torch.no_grad():
             c_t = torch.cat((torch.ones(1, B, device=self.dev), alive[:-1]), 0)
             imag_r = (c_t * torch.stack(rews)).sum(0).mean() / (horizon * self.task.max_step_reward)

@@ -378,6 +378,11 @@ def test_resume_requires_the_checkpoints_algorithm_and_terms():
     check_resume({}, parse_args(["--clip", "clip"]))
     with pytest.raises(ValueError, match="--algo"):
         check_resume({}, st)
+    # the task's objective too: a run resumed with another target-rate weight is refused
+    run = parse_args(["--clip", "clip", "--target_rate_w", "4"])
+    check_resume(vars(run), run)
+    with pytest.raises(ValueError, match="--resume: --target_rate_w must match"):
+        check_resume(vars(parse_args(["--clip", "clip"])), run)
 
 
 def test_systems_arguments():
@@ -399,6 +404,8 @@ def test_systems_arguments():
     hand_fast.check_resume(vars(on), on)
     for k in hand_fast.RESUME_MATCH:  # each option's other value in the checkpoint
         other = (not getattr(on, k)) if isinstance(getattr(on, k), bool) else getattr(args, k)
+        if other == getattr(on, k):  # a number ``on`` leaves at its default (the target-rate weight): another value
+            other = getattr(on, k) + 1.0
         with pytest.raises(ValueError, match=k):
             hand_fast.check_resume({**vars(on), k: other}, on)
 
@@ -1196,3 +1203,308 @@ def test_engineering_options_with_the_systems_options(gpu_setup, monkeypatch, tm
     log = np.loadtxt(run / "train_log.csv", delimiter=",", skiprows=1)
     cols = [train_hand.LOG_COLUMNS.index(k) for k in ("wm_loss", "pi_loss", "imag_r", "pi_gradnorm", "imag_survival", "sim_r", "ep_len")]
     assert log[:, 0].tolist() == [4, 8, 12] and np.isfinite(log[1:, cols]).all()
+
+
+# ---------------------------------------------- the target-rate penalty (--target_rate_w; off by default, the same for both algorithms)
+ST_TASK = ["--algo", "supertrack", "--st_fail_w", "2", "--st_imag_noise", "0.2", "--st_task_weights"]  # the task's weights
+
+
+def test_target_rate_flag_and_cost(setup):
+    """--target_rate_w sets the task's target-rate weight (none by default); ``smooth_cost`` is None when it is off, else the rate
+    term (each joint's target change over its kernel width, squared, mean), as written out here; the reward is the same less that
+    cost times the control step."""
+    import dataclasses
+
+    from ndm_gym.robots.hands import NUM_PALM
+    from ndm_gym.state import CONTROL_DT
+    from ndm_gym.tasks.hand_tracking import RewardCfg
+    from ndm_gym.train_hand import smoothing
+
+    _, kin, task = setup
+    assert smoothing(parse_args(small([]))) == {} and task.smooth_cost(None, torch.zeros(2, NUM_J), torch.zeros(2, NUM_J)) is None
+    assert smoothing(parse_args(small(["--target_rate_w", "0.5"]))) == {"w_target_rate": 0.5}
+    with pytest.raises(ValueError):
+        smoothing(parse_args(small(["--target_rate_w", "-1"])))
+    torch.manual_seed(0)
+    f = torch.arange(3)
+    S = task.ref.state(f)
+    a, a_prev = 0.3 * torch.randn(3, NUM_J), 0.3 * torch.randn(3, NUM_J)
+    fk = kin.forward(S[0])
+    r0 = task.reward(S, fk, f, a, a_prev)
+    rate = HandTask(kin, task.ref, dataclasses.replace(RewardCfg(), w_target_rate=0.5))
+    da = a - a_prev
+    width = torch.tensor([0.04] * 3 + [0.4] * 3 + [0.4] * (NUM_J - NUM_PALM))
+    want_rate = 0.5 * (kin.action_scale * da / width).pow(2).mean(-1)
+    assert torch.allclose(rate.smooth_cost(S, a, a_prev), want_rate)
+    assert torch.allclose(rate.reward(S, fk, f, a, a_prev), r0 - want_rate * CONTROL_DT)
+
+
+def test_st_objective_adds_the_costs(setup, monkeypatch):
+    """SuperTrack's objective: with the task's smoothness costs, the loss is the same plus their sum over the imagined steps,
+    mean over the batch; without them it is unchanged."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    _, algo, _ = agent_and_replay(kin, task, ST_ARM)
+    H, B = algo.horizon, 5
+    terms, d = torch.rand(len(algo.terms)), 0.1 * torch.rand(H, B)
+    acts, costs = [torch.randn(B, NUM_J) for _ in range(H)], [torch.rand(B) for _ in range(H)]
+    base, alive = algo._st_objective(terms, d, acts)
+    same, _ = algo._st_objective(terms, d, acts, [None] * H)
+    more, _ = algo._st_objective(terms, d, acts, costs)
+    assert torch.equal(base, same) and torch.allclose(more, base + torch.stack(costs).sum(0).mean())
+
+
+@pytest.mark.parametrize("algo_flags", [[], ST_ARM], ids=["supermimic", "supertrack"])
+def test_target_rate_updates(setup, monkeypatch, algo_flags):
+    """The target-rate penalty in both algorithms' updates: finite losses and gradients, and a policy update that differs from the
+    one without it (the same state and draws)."""
+    flags = ["--target_rate_w", "1.0"]
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    import dataclasses
+
+    from ndm_gym.train_hand import smoothing
+
+    outs = []
+    for extra in ([], flags):
+        args = parse_args(small(algo_flags + extra))
+        t = HandTask(kin, task.ref, dataclasses.replace(task.cfg, **smoothing(args)))
+        _, algo, buffer = agent_and_replay(kin, t, algo_flags + extra)
+        torch.manual_seed(1)
+        algo.wm_update(buffer)
+        out = torch.stack(list(algo.policy_update(buffer)))
+        outs.append((out, [p.detach().clone() for p in algo.pi.parameters()]))
+    (o0, p0), (o1, p1) = outs
+    assert torch.isfinite(o1[[0, 3, 4]]).all()  # pi_loss, gradient norm, survival
+    assert any(not torch.equal(a, b) for a, b in zip(p0, p1, strict=True))
+
+
+def test_st_cost_mean_flag(setup, monkeypatch):
+    """--st_cost_mean: SuperTrack's objective adds the costs' mean over the imagined steps (the sum over the horizon) and is otherwise
+    unchanged; refused for SuperMimic and without --st_task_weights."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    _, algo, _ = agent_and_replay(kin, task, ST_TASK + ["--st_cost_mean"])
+    assert algo.cost_mean
+    H, B = algo.horizon, 5
+    terms, d = torch.rand(len(algo.terms)), 0.1 * torch.rand(H, B)
+    acts, costs = [torch.randn(B, NUM_J) for _ in range(H)], [torch.rand(B) for _ in range(H)]
+    base, _ = algo._st_objective(terms, d, acts)
+    more, _ = algo._st_objective(terms, d, acts, costs)
+    assert torch.allclose(more, base + torch.stack(costs).mean(0).mean())
+    algo.cost_mean = False  # the default path: the sum
+    summed, _ = algo._st_objective(terms, d, acts, costs)
+    assert torch.allclose(summed - base, H * (more - base))
+    for argv in (["--st_cost_mean"], ST_ARM + ["--st_cost_mean"]):
+        with pytest.raises(SystemExit):
+            parse_args(small(argv))
+
+
+def test_st_cost_mean_relative_weight(setup, monkeypatch):
+    """The penalty's scale: a target change of one kernel width at one imagined step costs the target-rate weight, as a
+    tracking error of one width costs the term's weight. In SuperMimic's reward both enter per step at the control step's scale. In
+    SuperTrack's loss with --st_task_weights the tracking error costs its weight over the horizon; with --st_cost_mean the change costs
+    its weight over the horizon too, so the ratio is the reward's; without it the change costs the horizon times more."""
+    import dataclasses
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    w = 1.0
+    t = HandTask(kin, task.ref, dataclasses.replace(task.cfg, w_target_rate=w))
+    a_prev = torch.zeros(1, NUM_J)
+    a = a_prev + 1.0 / t.rate_k  # every joint's target moved by one kernel width
+    S = t.ref.state(torch.zeros(1, dtype=torch.long))
+    one_width = t.smooth_cost(S, a, a_prev)
+    assert torch.allclose(one_width, torch.tensor([w]))  # SuperMimic's reward per step: -w (times the control step, as its terms)
+    k = "finger_pos"
+    for flag, factor in (([], None), (["--st_cost_mean"], 1.0)):
+        _, algo, _ = agent_and_replay(kin, t, ST_TASK + flag)
+        H, i = algo.horizon, algo.terms.index(k)
+        d, acts = torch.zeros(H, 1), [torch.zeros(1, NUM_J) for _ in range(H)]
+        algo.reg = 0.0
+        zero = torch.zeros(len(algo.terms))
+        base, _ = algo._st_objective(zero, d, acts)
+        err = zero.clone()
+        err[i] = float(algo.bal.scale[i])  # one width of the term's error at one imagined step (summed over the window)
+        track = algo._st_objective(err, d, acts)[0] - base
+        costs = [one_width] + [torch.zeros(1)] * (H - 1)
+        cost = algo._st_objective(zero, d, acts, costs)[0] - base
+        ratio = float(cost / track) / (w / t.cfg.w_finger)  # against the reward's ratio
+        assert abs(ratio - (H if factor is None else factor)) < 1e-4
+
+
+@pytest.mark.parametrize("extra", [[], ["--compile_rollout"]], ids=["steps", "compile_rollout"])
+def test_st_no_imag_r(setup, monkeypatch, extra):
+    """--st_no_imag_r (SuperTrack's; off by default, refused for SuperMimic): the imagined steps compute no reward, which
+    SuperTrack's loss does not read. From the same state and random draws the updates return the same values but the
+    imagined reward (NaN) and move the parameters, normalizers and optimizer states as without it (eagerly on the CPU, bit
+    for bit), per imagined step or with the rollout as one function."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    assert not parse_args(small(ST_ARM)).st_no_imag_r and parse_args(small(ST_ARM) + ["--st_no_imag_r"]).st_no_imag_r
+    with pytest.raises(SystemExit):
+        parse_args(small([]) + ["--st_no_imag_r"])  # SuperMimic's agent computes its reward for its objective
+    calls, reward = [], task.reward
+    monkeypatch.setattr(task, "reward", lambda *a: calls.append(1) or reward(*a))
+    runs = []
+    for flags in ([], ["--st_no_imag_r"]):
+        args, algo, buffer = agent_and_replay(kin, task, ST_ARM + SYSTEMS + ["--compile_updates"] + extra + flags)
+        assert algo.imag_r != bool(flags)
+        calls.clear()
+        torch.manual_seed(1)
+        out = torch.stack([algo.wm_update(buffer), *algo.policy_update(buffer), algo.wm_update(buffer), *algo.policy_update(buffer)])
+        assert len(calls) == (0 if flags else 2 * args.horizon)  # the task's reward at every imagined step without the option
+        state = [v for o in algo.optimizers for st in o.state.values() for v in st.values()]
+        runs.append((out, trained(algo), state))
+    (out0, t0, s0), (out1, t1, s1) = runs
+    imag_r, same = [3, 9], [0, 1, 4, 5, 6, 7, 10, 11]  # (wm_loss, pi_loss, v_loss, imag_r, pi_gradnorm, imag_survival) twice; v_loss NaN
+    assert torch.isfinite(out0[imag_r]).all() and torch.isnan(out1[imag_r]).all()
+    assert torch.isnan(out0[[2, 8]]).all() and torch.isnan(out1[[2, 8]]).all()
+    assert torch.equal(out0[same], out1[same]) and torch.isfinite(out0[same]).all()
+    assert all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
+    assert len(s0) == len(s1) > 0 and all(torch.equal(a, b) for a, b in zip(s0, s1, strict=True))
+
+
+def test_speed_options_keep_target_rate(setup, monkeypatch):
+    """Each algorithm's own speed option on a task with the target-rate penalty (the timed configurations at the adopted setting):
+    from the same state and random draws the policy update returns the same values and moves the parameters as without the option,
+    bit for bit; and the penalty is in: against the unpenalized task SuperTrack's loss is higher by the imagined costs (--st_cost_mean:
+    their mean over the window) and SuperMimic's imagined reward is lower."""
+    import dataclasses
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    pen = HandTask(kin, task.ref, dataclasses.replace(task.cfg, w_target_rate=4.0))
+    st, sm = ST_TASK + ["--st_cost_mean"] + SYSTEMS + ["--compile_updates"], SYSTEMS + ["--compile_updates"]
+    for base, flag, same in ((st, "--st_no_imag_r", [0, 3, 4]), (sm, "--sm_reuse_input", [0, 1, 2, 3, 4])):
+        runs, costs = {}, []
+        for name, t, flags in (("plain", task, []), ("pen", pen, []), ("option", pen, [flag])):
+            _, algo, buffer = agent_and_replay(kin, t, base + flags)
+            if name == "pen" and flag == "--st_no_imag_r":  # the imagined steps' costs of the first update, as the loss takes them
+                step = algo.st_step
+                monkeypatch.setattr(algo, "st_step", lambda *a, _s=step: (lambda o: costs.append(o[7].detach()) or o)(_s(*a)))
+            torch.manual_seed(1)
+            first = torch.stack([*algo.policy_update(buffer)])
+            n_first = len(costs)
+            second = torch.stack([*algo.policy_update(buffer)])
+            runs[name] = (first, second, trained(algo), n_first)
+        (p0, _, _, _), (q0, q1, tq, n), (o0, o1, to, _) = runs["plain"], runs["pen"], runs["option"]
+        assert torch.equal(q0[same], o0[same]) and torch.equal(q1[same], o1[same]) and torch.isfinite(q0[same]).all()
+        assert all(torch.equal(a, b) for a, b in zip(tq, to, strict=True))
+        if flag == "--st_no_imag_r":
+            assert torch.isnan(o0[2]) and n == 4  # no imagined reward for the log; one cost per imagined step (horizon 4)
+            mean_cost = torch.stack(costs[:n]).mean(0).mean()  # --st_cost_mean: the window's mean, then the batch's
+            assert float(mean_cost) > 0 and torch.allclose(q0[0] - p0[0], mean_cost, rtol=1e-4, atol=1e-6)
+        else:
+            assert float(q0[2]) < float(p0[2]) and not torch.equal(q0[0], p0[0])  # the imagined reward lower with the penalty
+
+
+class _Fixed(torch.nn.Module):
+    """A policy that returns a given action (the worked tests below)."""
+
+    def __init__(self, a: torch.Tensor):
+        super().__init__()
+        self.a = a
+
+    def forward(self, obs, goal):
+        return self.a
+
+
+def test_target_rate_worked_by_hand(setup, monkeypatch):
+    """--target_rate_w 4 and --st_cost_mean on one pair of consecutive targets worked out by hand, through the task's function and
+    through each algorithm's imagined step. The pair: the second target is 12 mm further than the first on a palm slide and 0.2 rad
+    further on a finger joint, beyond the reference's own step (the policy's offsets differ by 0.4 of 30 mm and by 0.5 of 0.4
+    rad). Over the kernels' widths, 40 mm and 0.4 rad, that is 0.3 and 0.5; squared, 0.09 and 0.25; the mean over the 18 joints,
+    0.34 / 18; times the weight 4: 0.0755556. Its gradient on the second offset is 4 x 2 x 0.75^2 x 0.4 / 18 = 0.1 on the slide and
+    4 x 2 x 1^2 x 0.5 / 18 = 0.2222 on the finger, zero on the other joints, and the opposite on the first offset. SuperMimic: the
+    imagined step's reward is lower by the cost times the control step, 0.02 s, and so is its gradient. SuperTrack: the imagined
+    step returns the cost; with --st_cost_mean the loss is higher by the costs' mean over the horizon (one such step of four:
+    0.0755556 / 4), without it by their sum. At the default weight 0 the cost is None and the loss is the same bit for bit."""
+    import dataclasses
+
+    from ndm_gym.robots.hands import NUM_PALM
+    from ndm_gym.state import CONTROL_DT
+    from ndm_gym.tasks.hand_tracking import RewardCfg
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    assert (NUM_J, CONTROL_DT, task.cfg.w_target_rate) == (18, 0.02, 0.0)
+    scales = (float(kin.action_scale[0]), float(kin.action_scale[NUM_PALM]), task.cfg.keypoint_std, task.cfg.finger_std)
+    assert scales == pytest.approx((0.03, 0.4, 0.04, 0.4))  # the largest offsets (m, rad) and the kernels' widths
+    pen = HandTask(kin, task.ref, dataclasses.replace(RewardCfg(), w_target_rate=4.0))
+    f = torch.tensor([3])
+    a_prev = torch.zeros(1, NUM_J, requires_grad=True)
+    a = torch.zeros(1, NUM_J)
+    a[0, 0], a[0, NUM_PALM] = 0.4, 0.5
+    a.requires_grad_(True)
+    worked, grad = 0.0755556, torch.zeros(1, NUM_J)  # 4 x (0.3^2 + 0.5^2) / 18
+    grad[0, 0], grad[0, NUM_PALM] = 0.1, 0.2222222  # 4 x 2 x 0.75^2 x 0.4 / 18 and 4 x 2 x 1 x 0.5 / 18
+
+    step = (pen.setpoint(a, f) - pen.setpoint(a_prev, f)).detach()  # the pair of targets: 12 mm and 0.2 rad apart
+    assert abs(float(step[0, 0]) - 0.012) < 1e-7 and abs(float(step[0, NUM_PALM]) - 0.2) < 1e-6 and int((step != 0).sum()) == 2
+    S = task.ref.state(f)
+    cost = pen.smooth_cost(S, a, a_prev)
+    ga, gp = torch.autograd.grad(cost.sum(), (a, a_prev))
+    assert abs(float(cost.detach()) - worked) < 1e-7 and torch.allclose(ga, grad, atol=1e-7) and torch.allclose(gp, -grad, atol=1e-7)
+    assert task.smooth_cost(S, a, a_prev) is None  # the default weight
+
+    fk = kin.forward(S[0])
+    _, sm, _ = agent_and_replay(kin, task, [])  # SuperMimic: the cost in the imagined step's reward
+    sm.pi = _Fixed(a)
+    rewards = {}
+    for name, t in (("plain", task), ("penalized", pen)):
+        sm.task = t
+        out = sm._imag_step(S, fk, f, a_prev)
+        assert out[3] is a
+        rewards[name] = out[4]
+    diff = rewards["penalized"] - rewards["plain"]
+    ga, gp = torch.autograd.grad(diff.sum(), (a, a_prev))
+    assert abs(float(diff.detach()) + worked * 0.02) < 2e-7
+    assert torch.allclose(ga, -0.02 * grad, atol=1e-7) and torch.allclose(gp, 0.02 * grad, atol=1e-7)
+
+    _, st, _ = agent_and_replay(kin, pen, ST_TASK + ["--st_cost_mean"])  # SuperTrack: the cost in the loss
+    st.pi = _Fixed(a)
+    H = st.horizon
+    assert H == 4 and st.cost_mean
+    out = st._st_step(S, fk, f, a_prev, torch.zeros(1, NUM_J))
+    assert out[3] is a and abs(float(out[-1].detach()) - worked) < 1e-7
+    terms, d = torch.zeros(len(st.terms)), torch.zeros(H, 1)
+    acts, costs = [a] + [torch.zeros(1, NUM_J)] * (H - 1), [out[-1]] + [torch.zeros(1)] * (H - 1)
+    base, _ = st._st_objective(terms, d, acts)
+    more, _ = st._st_objective(terms, d, acts, costs)
+    ga, gp = torch.autograd.grad(more - base, (a, a_prev), retain_graph=True)
+    assert abs(float((more - base).detach()) - worked / 4) < 1e-7
+    assert torch.allclose(ga, grad / 4, atol=1e-7) and torch.allclose(gp, -grad / 4, atol=1e-7)
+    st.cost_mean = False  # without --st_cost_mean: the sum over the horizon
+    summed, _ = st._st_objective(terms, d, acts, costs)
+    assert abs(float((summed - base).detach()) - worked) < 1e-7
+    st.task = task  # the default weight: no cost, the same loss bit for bit
+    assert st._st_step(S, fk, f, a_prev, torch.zeros(1, NUM_J))[-1] is None
+    assert torch.equal(st._st_objective(terms, d, acts, [None] * H)[0], base)
+
+
+@GPU
+@pytest.mark.parametrize("extra", [[], ["--compile_rollout"]], ids=["steps", "compile_rollout"])
+def test_st_no_imag_r_with_the_systems_options(gpu_setup, monkeypatch, tmp_path, capsys, extra):
+    """--st_no_imag_r in train_hand's loop with every systems option on the small scene (compilation left out): the
+    collection step and the updates are captured as CUDA graphs and replayed, the log's imag_r is NaN and its other
+    columns finite."""
+    import ndm_gym.train_hand as train_hand
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", False)  # main() sets it; restored after the test
+    monkeypatch.setattr(train_hand, "build", lambda clip, device, reward_std_scale=1.0: gpu_setup)
+    run = tmp_path / "run"
+    argv = [*small(ST_ARM), *SYSTEMS, "--collect_graph", "--compile_eager", "--update_graphs", "--pi_opt", "muon", "--wm_opt", "muon", "--pi_ema",
+            "0.9", "--compile_updates", "--wm_palm_fk", "--st_no_imag_r", *extra, "--num_envs", "32", "--buffer_steps", "16", "--warmup_steps", "8",
+            "--wm_only_iters", "2", "--log_every", "4", "--iterations", "12", "--log_dir", str(run)]  # fmt: skip
+    monkeypatch.setattr(sys, "argv", ["train_hand", *argv])
+    train_hand.main()
+    out = capsys.readouterr().out
+    assert "captured one collection step" in out and "captured the world-model updates" in out and "captured the policy update" in out
+    log = np.loadtxt(run / "train_log.csv", delimiter=",", skiprows=1)
+    cols = [train_hand.LOG_COLUMNS.index(k) for k in ("wm_loss", "pi_loss", "pi_gradnorm", "imag_survival", "sim_r", "ep_len")]
+    assert log[:, 0].tolist() == [4, 8, 12] and np.isfinite(log[1:, cols]).all() and np.isnan(log[:, train_hand.LOG_COLUMNS.index("imag_r")]).all()
