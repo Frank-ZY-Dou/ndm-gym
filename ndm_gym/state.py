@@ -3,6 +3,9 @@
 State tuple ``S = (p, R, v, w, q, qd)``: pelvis position, rotation matrix, world linear/angular
 velocity of the pelvis link frame, joint positions and velocities. Sim context
 ``xi = [friction, joint calibration offsets (NUM_J), torso center-of-mass offset (3)]``.
+
+The dimensions are the G1's (``NUM_J`` joints); a robot with another number of joints (the G1 with dexterous hands) uses
+the same layout, and the functions below read its joint count from the tensors they are given.
 """
 
 from __future__ import annotations
@@ -24,9 +27,13 @@ def flatten_state(S) -> torch.Tensor:
     return torch.cat((p, mat_to_quat(R), v, w, q, qd), -1)
 
 
+def state_dim(num_joints: int = NUM_J) -> int:
+    return 3 + 4 + 3 + 3 + 2 * num_joints
+
+
 def unflatten_state(x: torch.Tensor):
-    return (x[..., 0:3], quat_to_mat(x[..., 3:7]), x[..., 7:10], x[..., 10:13], x[..., 13 : 13 + NUM_J],
-            x[..., 13 + NUM_J : 13 + 2 * NUM_J])  # fmt: skip
+    n = (x.shape[-1] - 13) // 2
+    return x[..., 0:3], quat_to_mat(x[..., 3:7]), x[..., 7:10], x[..., 10:13], x[..., 13 : 13 + n], x[..., 13 + n : 13 + 2 * n]
 
 
 def flatten_object(So) -> torch.Tensor:
@@ -58,4 +65,5 @@ def invariant_features(S) -> torch.Tensor:
 
 
 def normalize_xi(xi: torch.Tensor) -> torch.Tensor:
-    return torch.cat(((xi[..., :1] - 0.75) / 0.45, xi[..., 1 : 1 + NUM_J] / 0.01, xi[..., 1 + NUM_J : XI_DIM] / 0.05), -1)
+    n = xi.shape[-1] - 4  # friction, the joints' offsets, the torso's center-of-mass offset
+    return torch.cat(((xi[..., :1] - 0.75) / 0.45, xi[..., 1 : 1 + n] / 0.01, xi[..., 1 + n :] / 0.05), -1)

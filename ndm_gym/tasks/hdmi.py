@@ -30,31 +30,19 @@ import torch
 
 from ..core.rotations import yaw_mat
 from ..state import CONTROL_DT
-from .hdmi_tasks import HDMITaskCfg, Term, Termination
+from .hdmi_tasks import G1_BODY, HDMITaskCfg, Term, Termination
 
-JOINT_NAMES = (
-    "left_hip_pitch_joint", "right_hip_pitch_joint", "waist_yaw_joint", "left_hip_roll_joint", "right_hip_roll_joint", "waist_roll_joint",
-    "left_hip_yaw_joint", "right_hip_yaw_joint", "waist_pitch_joint", "left_knee_joint", "right_knee_joint", "left_shoulder_pitch_joint",
-    "right_shoulder_pitch_joint", "left_ankle_pitch_joint", "right_ankle_pitch_joint", "left_shoulder_roll_joint", "right_shoulder_roll_joint",
-    "left_ankle_roll_joint", "right_ankle_roll_joint", "left_shoulder_yaw_joint", "right_shoulder_yaw_joint", "left_elbow_joint",
-    "right_elbow_joint", "left_wrist_roll_joint", "right_wrist_roll_joint", "left_wrist_pitch_joint", "right_wrist_pitch_joint",
-    "left_wrist_yaw_joint", "right_wrist_yaw_joint",
-)  # Isaac's order of HDMI's G1 (REC:3-31)  # fmt: skip
-NUM_ACTIONS = 23  # every joint but the six wrist joints, i.e. the first 23; also the tracking joints (Y:27-43, 63-70)
-TRACKING_JOINT_NAMES = JOINT_NAMES[:NUM_ACTIONS]
-KEYPOINT_NAMES = (
-    "pelvis", "left_hip_pitch_link", "right_hip_pitch_link", "left_hip_yaw_link", "right_hip_yaw_link", "torso_link", "left_knee_link",
-    "right_knee_link", "left_shoulder_pitch_link", "right_shoulder_pitch_link", "left_ankle_roll_link", "right_ankle_roll_link",
-    "left_elbow_link", "right_elbow_link", "left_wrist_yaw_link", "right_wrist_yaw_link",
-)  # HDMI's tracking keypoints in simulator order (Y:52-61, CMD:61-63)  # fmt: skip
-FEET = (10, 11)  # left/right ankle_roll_link: the feet of the feet terms and body_pos_b / body_vel_b (Y:151-152, 228-230)
-FEET_SLICE = slice(FEET[0], FEET[-1] + 1)  # the same, as a slice: indexing with a tuple copies it to the device every call
-assert FEET == tuple(range(FEET[0], FEET[-1] + 1))
-HEIGHT_BODIES = (0, 5, 10, 11)  # body_height's pelvis, torso and ankles, in simulator order (Y:153)
+JOINT_NAMES = G1_BODY.joint_names  # HDMI's G1: the task's other modules and HDMI's tasks read these; a task's own are cfg.body's
+NUM_ACTIONS = G1_BODY.num_actions
+TRACKING_JOINT_NAMES = G1_BODY.tracking_joint_names
+KEYPOINT_NAMES = G1_BODY.keypoint_names
+FEET = G1_BODY.feet
+FEET_SLICE = G1_BODY.feet_slice
+HEIGHT_BODIES = G1_BODY.height_bodies
 FUTURE_STEPS = (1, 2, 8, 16, 32)  # Y:93
 PHYSICS_DT = 0.005  # Y:18
 DECIMATION = 4  # physics substeps per control step (ENV:139)
-EFFORT_LIMITS = (88, 88, 88, 139, 139, 50, 88, 88, 50, 139, 139, 25, 25, 50, 50, 25, 25, 50, 50, 25, 25, 25, 25, 25, 25, 5, 5, 5, 5)  # §3.3
+EFFORT_LIMITS = G1_BODY.effort_limits
 CONTACT_FORCE_THRESHOLD = 1.0  # N, a body is in contact when its net contact force exceeds it [IL] (§3.4)
 GRAVITY = 9.81  # impact_force_l2 normalizes by the robot's weight (RF:87-88)
 GROUPS = ("tracking", "object_tracking", "loco", "feet")

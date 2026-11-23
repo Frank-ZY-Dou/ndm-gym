@@ -161,6 +161,57 @@ class ObjectRandomization:
 
 
 @dataclass(frozen=True)
+class HDMIBody:
+    """The robot as the task sees it: its joints in the simulator's order, the first ``num_actions`` of them actuated by the
+    policy and tracked (the rest held), the keypoints in the simulator's order, which of them are the feet and which give
+    body_height, and the joints' effort limits. HDMI's G1 is ``G1_BODY``; a robot with more joints (the G1 with dexterous
+    hands) has its own."""
+
+    joint_names: tuple[str, ...]
+    num_actions: int
+    keypoint_names: tuple[str, ...]
+    feet: tuple[int, ...]
+    height_bodies: tuple[int, ...]
+    effort_limits: tuple[float, ...]
+
+    def __post_init__(self):
+        if len(self.effort_limits) != len(self.joint_names) or not 0 < self.num_actions <= len(self.joint_names):
+            raise ValueError("one effort limit per joint, and between one and all joints actuated")
+        if self.feet != tuple(range(self.feet[0], self.feet[-1] + 1)):
+            raise ValueError("the feet must be consecutive keypoints")
+
+    @property
+    def tracking_joint_names(self) -> tuple[str, ...]:
+        return self.joint_names[: self.num_actions]
+
+    @property
+    def feet_slice(self) -> slice:
+        """The feet as a slice: indexing with a tuple copies it to the device every call."""
+        return slice(self.feet[0], self.feet[-1] + 1)
+
+
+G1_BODY = HDMIBody(
+    joint_names=(
+        "left_hip_pitch_joint", "right_hip_pitch_joint", "waist_yaw_joint", "left_hip_roll_joint", "right_hip_roll_joint", "waist_roll_joint",
+        "left_hip_yaw_joint", "right_hip_yaw_joint", "waist_pitch_joint", "left_knee_joint", "right_knee_joint", "left_shoulder_pitch_joint",
+        "right_shoulder_pitch_joint", "left_ankle_pitch_joint", "right_ankle_pitch_joint", "left_shoulder_roll_joint", "right_shoulder_roll_joint",
+        "left_ankle_roll_joint", "right_ankle_roll_joint", "left_shoulder_yaw_joint", "right_shoulder_yaw_joint", "left_elbow_joint",
+        "right_elbow_joint", "left_wrist_roll_joint", "right_wrist_roll_joint", "left_wrist_pitch_joint", "right_wrist_pitch_joint",
+        "left_wrist_yaw_joint", "right_wrist_yaw_joint",
+    ),  # Isaac's order of HDMI's G1 (REC:3-31)
+    num_actions=23,  # every joint but the six wrist joints, i.e. the first 23; also the tracking joints (Y:27-43, 63-70)
+    keypoint_names=(
+        "pelvis", "left_hip_pitch_link", "right_hip_pitch_link", "left_hip_yaw_link", "right_hip_yaw_link", "torso_link", "left_knee_link",
+        "right_knee_link", "left_shoulder_pitch_link", "right_shoulder_pitch_link", "left_ankle_roll_link", "right_ankle_roll_link",
+        "left_elbow_link", "right_elbow_link", "left_wrist_yaw_link", "right_wrist_yaw_link",
+    ),  # HDMI's tracking keypoints in simulator order (Y:52-61, CMD:61-63)
+    feet=(10, 11),  # left/right ankle_roll_link: the feet of the feet terms and body_pos_b / body_vel_b (Y:151-152, 228-230)
+    height_bodies=(0, 5, 10, 11),  # body_height's pelvis, torso and ankles, in simulator order (Y:153)
+    effort_limits=(88, 88, 88, 139, 139, 50, 88, 88, 50, 139, 139, 25, 25, 50, 50, 25, 25, 50, 50, 25, 25, 25, 25, 25, 25, 5, 5, 5, 5),  # §3.3
+)  # fmt: skip
+
+
+@dataclass(frozen=True)
 class HDMITaskCfg:
     name: str  # HDMI's cfg/task/G1/hdmi/<name>.yaml
     hdmi_name: str  # HDMI's task name
@@ -182,6 +233,7 @@ class HDMITaskCfg:
     rewards: dict = field(default_factory=reward_table)
     terminations: dict = field(default_factory=termination_table)
     reset: ResetCfg = field(default_factory=ResetCfg)
+    body: HDMIBody = G1_BODY
 
     def __post_init__(self):
         E, nt, ne = len(self.contact_eef_bodies), len(self.contact_target_offsets), len(self.contact_eef_offsets)
