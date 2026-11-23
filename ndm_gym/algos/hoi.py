@@ -2,8 +2,8 @@
 from a neural dynamics model's prediction, so that ``ndm_gym.tasks.hdmi``'s own rewards, observations and terminations
 run on imagined rollouts.
 
-From the predicted robot state (G1 order), object state, contact forces and the per-env context: the 16 keypoints by our
-forward kinematics, their linear velocities as centre-of-mass velocities (HDMI's), joints in HDMI's order, a hinged
+From the predicted robot state (the state's joint order), object state, contact forces and the per-env context: the
+keypoints by our forward kinematics, their linear velocities as centre-of-mass velocities (HDMI's), joints in the task's order, a hinged
 object's contact body through its joint frames, the end-effector points and contact targets. Approximations, as stated
 in the design: the joints after the third physics substep are interpolated at 3/4 of the step; the actuators' torque
 is the PD law at that interpolated state with the last substep's target, and the hinge torque HDMI's friction and
@@ -16,10 +16,9 @@ import torch
 
 from ..core.kinematics import mat_mat, mat_vec
 from ..core.rotations import axis_angle_to_mat
+from ..core.kinematics import ArticulationKinematics
 from ..robots import g1
-from ..robots.g1 import G1_JOINT_NAMES, NUM_J, motor_of
-from ..tasks.hdmi import (DECIMATION, FUTURE_STEPS, JOINT_NAMES, KEYPOINT_NAMES, NUM_ACTIONS, HDMIClip, HDMIInput, HDMIState, contact_points,
-                          reference_window)  # fmt: skip
+from ..tasks.hdmi import DECIMATION, FUTURE_STEPS, HDMIClip, HDMIInput, HDMIState, contact_points, reference_window
 from ..tasks.hdmi_tasks import HDMITaskCfg
 from ..worldmodels.hoi import ContextLayout
 
@@ -37,24 +36,25 @@ class HOIImagination:
             raise ValueError(f"{cfg.name}: hinge frames are needed exactly for a hinged object")
         self.cfg, self.clip, self.layout, self.device = cfg, clip, layout, device
         self.hinged = hinge is not None
+        body = self.body = cfg.body
         t = lambda x: torch.as_tensor(x, dtype=torch.float32, device=device)  # noqa: E731
-        self.kin = g1.kinematics(device, tracked=list(KEYPOINT_NAMES))
+        self.kin = ArticulationKinematics(body.mjcf, list(body.state_joint_names), list(body.keypoint_names), device)
         self.future_steps = torch.tensor(FUTURE_STEPS, device=device)
-        self.j_hdmi = torch.tensor([G1_JOINT_NAMES.index(n) for n in JOINT_NAMES], device=device)  # HDMI order -> G1 index
-        self.eef_kp = [KEYPOINT_NAMES.index(b) for b in cfg.contact_eef_bodies]
+        self.j_hdmi = torch.tensor([body.state_joint_names.index(n) for n in body.joint_names], device=device)  # task order -> state index
+        self.eef_kp = [body.keypoint_names.index(b) for b in cfg.contact_eef_bodies]
         self.eef_offsets, self.target_offsets = t(cfg.contact_eef_offsets), t(cfg.contact_target_offsets)
-        self.q0 = t(constants["q0"])[self.j_hdmi]  # HDMI order
-        self.scale = t(constants["act_scale"])  # (23,) HDMI's action order = its first 23 joints
-        motors = [motor_of(n) for n in JOINT_NAMES]
-        self.kp = t([cfg.wrist_kp if (cfg.wrist_kp is not None and n in WRISTS) else g1.kp(m[2]) for n, m in zip(JOINT_NAMES, motors)])
+        self.q0 = t(constants["q0"])[self.j_hdmi]  # task order
+        self.scale = t(constants["act_scale"])  # (A,) the action order = the task order's first A joints
+        motors = [body.motor(n) for n in body.joint_names]
+        self.kp = t([cfg.wrist_kp if (cfg.wrist_kp is not None and n in WRISTS) else g1.kp(m[2]) for n, m in zip(body.joint_names, motors)])
         self.kd, self.effort = t([g1.kd(m[2]) for m in motors]), t([m[0] for m in motors])
         if self.hinged:
             self.p_p, self.R_p, self.axis = t(hinge["p_p"]), t(hinge["R_p"]), t(hinge["axis"])
             self.p_c, self.R_c = t(hinge["p_c"]), t(hinge["R_c"])
 
     def _ctx(self, ctx, i: int) -> torch.Tensor:
-        """The reset scalar ``i`` after the 29 joint offsets: 0 delay, 1 filter constant, 2 hinge friction, 3 damping."""
-        k = self.layout.startup + NUM_J + i
+        """The reset scalar ``i`` after the joint offsets: 0 delay, 1 filter constant, 2 hinge friction, 3 damping."""
+        k = self.layout.startup + self.body.num_joints + i
         return ctx[..., k]
 
     def contact_body(self, So, ctx):
@@ -68,8 +68,9 @@ class HOIImagination:
         return bp + mat_vec(bR, p_rel), mat_mat(bR, mat_mat(Rq, Rc_t))
 
     def state(self, S, So, f_eef, ctx, kp_com_b, obj_scale) -> HDMIState:
-        """HDMIState of a robot state S (G1 order), object state So, end-effector forces (N, E, 3) in the contact body's
-        frame, contexts (N, C), keypoint centres of mass (N, 16, 3) in their link frames and object scales (N, 3)."""
+        """HDMIState of a robot state S (the state's joint order), object state So, end-effector forces (N, E, 3) in the
+        contact body's frame, contexts (N, C), keypoint centres of mass (N, K, 3) in their link frames and object scales
+        (N, 3)."""
         P, R, V, W = self.kin.forward(*S)
         vcom = V + torch.cross(W, mat_vec(R, kp_com_b), dim=-1)
         q, qd = S[4][..., self.j_hdmi], S[5][..., self.j_hdmi]
@@ -84,13 +85,14 @@ class HOIImagination:
 
     def step_input(self, now: HDMIState, prev: HDMIState, t_prev, u_sub, action_buf, ctx, f_feet) -> HDMIInput:
         """HDMIInput of an imagined control step from the state ``prev`` to ``now`` (HDMIState), with the frame counter
-        before the step ``t_prev`` (N,), the substeps' filtered actions ``u_sub`` (N, 4, 23), the raw-action buffer after
-        the step (N, 23, 3) and the feet's forces (N, 4, 2, 3)."""
-        off = ctx[..., self.layout.startup : self.layout.startup + NUM_J][..., self.j_hdmi]  # HDMI order
+        before the step ``t_prev`` (N,), the substeps' filtered actions ``u_sub`` (N, 4, A), the raw-action buffer after
+        the step (N, A, 3) and the feet's forces (N, 4, F, 3)."""
+        off = ctx[..., self.layout.startup : self.layout.startup + self.body.num_joints][..., self.j_hdmi]  # task order
         q3 = prev.joint_pos + SUB_FRACTION * (now.joint_pos - prev.joint_pos)
         qd3 = prev.joint_vel + SUB_FRACTION * (now.joint_vel - prev.joint_vel)
         target = self.q0 + off
-        target = torch.cat((target[..., :NUM_ACTIONS] + self.scale * u_sub[:, -1], target[..., NUM_ACTIONS:]), -1)
+        A = self.body.num_actions
+        target = torch.cat((target[..., :A] + self.scale * u_sub[:, -1], target[..., A:]), -1)
         tau = torch.minimum(torch.maximum(self.kp * (target - q3) - self.kd * qd3, -self.effort), self.effort)
         hinge_tau = None
         if self.hinged:

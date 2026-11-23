@@ -11,8 +11,8 @@ are those of ``accel.py`` and ``increment.py`` with the 3 x 3 products written e
 matmuls are allowed.
 
 Shapes (N rollouts): S robot state (ndm_gym.state), So object state (p, R, v, w) or (angle (N, 1), rate (N, 1)),
-u (N, 4, 23) filtered actions, ctx (N, C); forces F = (end effectors (N, E, 3) in the contact body's frame, feet
-(N, 4, 2, 3) world frame after each substep). The inputs are invariant to a yaw of the scene, so the network predicts the
+u (N, 4, A) filtered actions, ctx (N, C); forces F = (end effectors (N, E, 3) in the contact body's frame, feet
+(N, 4, F, 3) world frame after each substep). The inputs are invariant to a yaw of the scene, so the network predicts the
 feet's forces in the heading frame of the step's start state (``feet_heading``) and ``step`` turns them to the world
 frame; the contact body's frame turns with the scene.
 """
@@ -30,12 +30,11 @@ from ..core.kinematics import mat_mat, mat_vec
 from ..core.nets import ACTIVATIONS, mlp, run_mlp
 from ..core.normalizer import RunningNorm
 from ..core.rotations import mat_to_6d, so3_exp, so3_log, yaw_mat
-from ..robots.g1 import NUM_J
-from ..state import CONTROL_DT, INV_DIM
-from ..tasks.hdmi import DECIMATION, NUM_ACTIONS
+from ..state import CONTROL_DT, invariant_dim
+from ..tasks.hdmi import DECIMATION
+from ..tasks.hdmi_tasks import G1_BODY, HDMIBody
 
 KINDS = ("accel", "increment")
-FEET_FORCE_DIM = DECIMATION * 2 * 3
 # floors of the loss's normalizer: SuperMimic's per-component floors for the robot and a free object's root, a hinge's
 # like a joint's, 1 N for the forces
 ROOT_FLOOR = (3e-3,) * 3 + (5e-3,) * 3 + (2e-2,) * 3 + (5e-2,) * 3
@@ -47,24 +46,28 @@ FORMAT_VERSION = 2
 
 
 class ContextLayout(NamedTuple):
-    """Layout of ``HDMISim.context``: the startup part, the reset part (29 joint offsets, delay, filter constant, hinge
-    friction and damping), then 12 numbers (position, rotation matrix) per pose: a fixed base's, then each prop's."""
+    """Layout of ``HDMISim.context``: the startup part, the reset part (``joints`` joint offsets, delay, filter constant,
+    hinge friction and damping), then 12 numbers (position, rotation matrix) per pose: a fixed base's, then each prop's.
+    ``joints``, ``actions`` and ``feet``: the robot's joints, actuated joints and feet (HDMI's G1's by default)."""
 
     startup: int
     base: bool
     props: int
+    joints: int = G1_BODY.num_joints
+    actions: int = G1_BODY.num_actions
+    feet: int = len(G1_BODY.feet)
 
     @property
     def scalars(self) -> int:
         """Length of the leading part without poses."""
-        return self.startup + NUM_J + 4
+        return self.startup + self.joints + 4
 
     @property
     def dim(self) -> int:
         return self.scalars + 12 * (int(self.base) + self.props)
 
     def poses(self, ctx: torch.Tensor) -> list[tuple[torch.Tensor, torch.Tensor]]:
-        i, out = self.startup + NUM_J + 4, []
+        i, out = self.scalars, []
         for _ in range(int(self.base) + self.props):
             out.append((ctx[..., i : i + 3], ctx[..., i + 3 : i + 12].unflatten(-1, (3, 3))))
             i += 12
@@ -94,7 +97,7 @@ def robot_accel(S, S1) -> torch.Tensor:
 
 
 def feet_heading(R, F) -> torch.Tensor:
-    """The feet's forces F (..., 4, 2, 3) in the heading frame of the root's rotation R (..., 3, 3): H^T F, H = yaw_mat(R)."""
+    """The feet's forces F (..., 4, F, 3) in the heading frame of the root's rotation R (..., 3, 3): H^T F, H = yaw_mat(R)."""
     return mat_vec(yaw_mat(R).transpose(-1, -2)[..., None, None, :, :], F)
 
 
@@ -107,10 +110,11 @@ def invariant_features(S) -> torch.Tensor:
     return torch.cat((p[..., 2:3], mat_to_6d(mat_mat(yaw_mat(R).transpose(-1, -2), R)), mat_vec(Rt, v), mat_vec(Rt, w), q, qd), -1)
 
 
-def rigidformer_args(constants: dict, dim: int = 128, layers: int = 3, heads: int = 4, registers: int = 2) -> dict:
-    """HOIRigidFormerNet's keyword arguments from a task's ``ndm_gym.sim.rigid.hdmi_sim.ndm_constants`` and a size."""
+def rigidformer_args(constants: dict, dim: int = 128, layers: int = 3, heads: int = 4, registers: int = 2, body: HDMIBody = G1_BODY) -> dict:
+    """HOIRigidFormerNet's keyword arguments from a task's ``ndm_gym.sim.rigid.hdmi_sim.ndm_constants``, a size and the
+    task's body."""
     return dict(eef_bodies=list(constants["eef_bodies"]), q0=torch.tensor(constants["q0"]), act_scale=torch.tensor(constants["act_scale"]),
-                act_of_joint=torch.tensor(constants["act_of_joint"]), dim=dim, layers=layers, heads=heads, registers=registers)  # fmt: skip
+                act_of_joint=torch.tensor(constants["act_of_joint"]), dim=dim, layers=layers, heads=heads, registers=registers, body=body)  # fmt: skip
 
 
 class HOIWorldModel(nn.Module):
@@ -122,12 +126,13 @@ class HOIWorldModel(nn.Module):
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
         self.kind, self.hinged, self.E, self.layout = kind, hinged, num_eefs, layout
-        self.robot_out = (6 + NUM_J) if kind == "accel" else (12 + 2 * NUM_J)
+        J = layout.joints
+        self.robot_out = (6 + J) if kind == "accel" else (12 + 2 * J)
         self.obj_out = (1 if hinged else 6) if kind == "accel" else (2 if hinged else 12)
-        self.force_out = 3 * num_eefs + FEET_FORCE_DIM
+        self.force_out = 3 * num_eefs + DECIMATION * layout.feet * 3
         out = self.robot_out + self.obj_out + self.force_out
         if rigidformer is None:
-            self.in_dim = INV_DIM + (2 if hinged else 15) + 9 * (int(layout.base) + layout.props) + DECIMATION * NUM_ACTIONS + layout.scalars
+            self.in_dim = invariant_dim(J) + (2 if hinged else 15) + 9 * (int(layout.base) + layout.props) + DECIMATION * layout.actions + layout.scalars
             self.net = mlp(self.in_dim, list(hidden), out, act=ACTIVATIONS[act], layer_norm=layer_norm)
             nn.init.zeros_(self.net[-1].weight)
             nn.init.zeros_(self.net[-1].bias)
@@ -140,7 +145,7 @@ class HOIWorldModel(nn.Module):
         self.out_norm = RunningNorm(out, eps=1e-4 / CONTROL_DT if kind == "accel" else 1e-4)
         # scale of one true step's frame-local increments (robot, object) and of the forces: the loss's normalizer
         obj_floor = JOINT_FLOOR if hinged else ROOT_FLOOR
-        floor = ROOT_FLOOR + (JOINT_FLOOR[0],) * NUM_J + (JOINT_FLOOR[1],) * NUM_J + obj_floor + (FORCE_FLOOR,) * self.force_out
+        floor = ROOT_FLOOR + (JOINT_FLOOR[0],) * J + (JOINT_FLOOR[1],) * J + obj_floor + (FORCE_FLOOR,) * self.force_out
         self.err_norm = RunningNorm(len(floor), eps=1e-4)
         self.register_buffer("err_floor", torch.tensor(floor), persistent=False)
         self.register_buffer("format_version", torch.tensor(FORMAT_VERSION))
@@ -278,7 +283,7 @@ class HOIWorldModel(nn.Module):
                                         d, d + 3 * (net.n_body + 1 + net.n_props)).t()  # fmt: skip
             x = torch.cat(((torch.cat((raw[:, :d], ctx[:, : lay.scalars]), -1) - n_in.mean) * self.in_scale, raw[:, d:]), -1)
         else:
-            f = hoi_fused.mlp_features(S[0], S[1], S[2], S[3], list(So), ctx, lay.startup, poses, self.hinged).t()
+            f = hoi_fused.mlp_features(S[0], S[1], S[2], S[3], list(So), ctx, lay.startup, poses, self.hinged, lay.joints).t()
             obj = torch.cat(So, -1) if self.hinged else f[:, 13:28]
             x = torch.cat((f[:, :13], S[4], S[5], obj, f[:, 13 + (0 if self.hinged else 15) :], u.flatten(-2), ctx[..., : lay.scalars]), -1)
             x = (x - n_in.mean) * self.in_scale
@@ -288,11 +293,11 @@ class HOIWorldModel(nn.Module):
             y = self.net(x if rf else x.to(self.net_dtype)).float()
         y = y * self.out_std + self.out_norm.mean
         i = self.robot_out + self.obj_out
-        out = hoi_fused.integrate(y, *S, list(So), self.kind == "accel", self.robot_out, i + 3 * self.E)
+        out = hoi_fused.integrate(y, *S, list(So), self.kind == "accel", self.robot_out, i + 3 * self.E, lay.feet)
         return tuple(out[:6]), tuple(out[6:-1]), (y[:, i : i + 3 * self.E].unflatten(-1, (self.E, 3)), out[-1])
 
     def rollout(self, S, So, u, ctx, input_noise: float = 0.0) -> list[tuple]:
-        """Open-loop k-step prediction from (S, So) with u (N, k, 4, 23) and ctx (N, k, C): k tuples (S, So, F);
+        """Open-loop k-step prediction from (S, So) with u (N, k, 4, A) and ctx (N, k, C): k tuples (S, So, F);
         ``input_noise`` as ``step``'s."""
         out = []
         for j in range(u.shape[1]):
@@ -316,7 +321,8 @@ class HOIWorldModel(nn.Module):
             av, aw, aq = mat_vec(R, y[..., :3]), mat_vec(R, y[..., 3:6]), y[..., 6:]
             v1, w1, qd1 = v + dt * av, w + dt * aw, qd + dt * aq
             return (p + dt * v1, mat_mat(so3_exp(dt * w1, elementwise=True), R), v1, w1, q + dt * qd1, qd1)
-        dp, dth, dv, dw, dq, dqd = y.split((3, 3, 3, 3, NUM_J, NUM_J), -1)  # IncrementWorldModel.step
+        J = self.layout.joints
+        dp, dth, dv, dw, dq, dqd = y.split((3, 3, 3, 3, J, J), -1)  # IncrementWorldModel.step
         return (p + mat_vec(yaw_mat(R), dp), mat_mat(R, so3_exp(dth, elementwise=True)), v + mat_vec(R, dv), w + mat_vec(R, dw), q + dq, qd + dqd)
 
     def _object_next(self, So, y):
@@ -337,12 +343,12 @@ class HOIWorldModel(nn.Module):
     def _forces(self, S, yf):
         """The forces from their outputs: the end effectors' as predicted, the feet's turned from the heading frame of S
         to the world frame."""
-        feet = yf[..., 3 * self.E :].unflatten(-1, (DECIMATION, 2, 3))
+        feet = yf[..., 3 * self.E :].unflatten(-1, (DECIMATION, self.layout.feet, 3))
         return yf[..., : 3 * self.E].unflatten(-1, (self.E, 3)), mat_vec(yaw_mat(S[1])[..., None, None, :, :], feet)
 
 
 class HOIRigidFormerNet(nn.Module):
-    """RigidFormer for HDMI's scenes: one token per robot body (G1 kinematic-tree order, as ``RigidFormerNet``), one for
+    """RigidFormer for HDMI's scenes: one token per robot body (the body's kinematic-tree order, as ``RigidFormerNet``), one for
     the object, one per static prop, and register tokens; 3-D rotary attention on the tokens' positions, a learned
     per-head bias by relation (the kinematic-tree hop count between two bodies; one class each for body-object,
     body-prop, object/prop pairs and register pairs), FiLM on the context's scalars, and read-out heads on the pelvis
@@ -363,28 +369,28 @@ class HOIRigidFormerNet(nn.Module):
 
     def __init__(self, kind: str, hinged: bool, layout: ContextLayout, eef_bodies: list[str], q0: torch.Tensor, act_scale: torch.Tensor,
                  act_of_joint: torch.Tensor, dim: int = 128, layers: int = 3, heads: int = 4, ffn_mult: float = 2.5, registers: int = 2,
-                 rope_max_freq: float = 10.0, checkpoint: str = "frozen"):  # fmt: skip
+                 rope_max_freq: float = 10.0, checkpoint: str = "frozen", body: HDMIBody = G1_BODY):  # fmt: skip
         super().__init__()
-        from ..robots.g1 import kinematics
+        from ..core.kinematics import ArticulationKinematics
         from .rigidformer import Block, Rope3d, TokenInputNorm, TreeKinematics, tree_hops
 
         if checkpoint not in ("never", "always", "frozen"):
             raise ValueError(f"checkpoint must be 'never', 'always' or 'frozen', got {checkpoint!r}")
-        kin = kinematics("cpu")
+        kin = ArticulationKinematics(body.mjcf, list(body.state_joint_names), list(body.keypoint_names), "cpu")
         B, P = kin.num_bodies, layout.props
         self.kind, self.hinged, self.layout, self.n_body, self.n_props, self.n_reg = kind, hinged, layout, B, P, registers
         self.checkpoint = checkpoint
         self.kin = TreeKinematics(kin)
         self.register_buffer("joint_of_body", torch.tensor(kin.joint_idx[1:]), persistent=False)
         self.register_buffer("body_of_joint", torch.argsort(self.joint_of_body), persistent=False)
-        self.register_buffer("q0", q0.detach().float().cpu().clone(), persistent=False)  # (29,) G1 order
-        self.register_buffer("act_scale", act_scale.detach().float().cpu().clone(), persistent=False)  # (23,) HDMI's action order
-        self.register_buffer("act_of_joint", act_of_joint.detach().long().cpu().clone(), persistent=False)  # (29,) action index or -1
+        self.register_buffer("q0", q0.detach().float().cpu().clone(), persistent=False)  # (J,) the state's order
+        self.register_buffer("act_scale", act_scale.detach().float().cpu().clone(), persistent=False)  # (A,) the action order
+        self.register_buffer("act_of_joint", act_of_joint.detach().long().cpu().clone(), persistent=False)  # (J,) action index or -1
         # each joint's action index (0 on the wrists) and action gain (0 on the wrists), built once
         self.register_buffer("act_idx", self.act_of_joint.clamp(min=0), persistent=False)
         self.register_buffer("act_gain", self.act_scale[self.act_idx] * (self.act_of_joint >= 0).float(), persistent=False)
         self.eef_tok = [kin.body_names.index(b) for b in eef_bodies]
-        self.feet_tok = [kin.body_names.index(b) for b in ("left_ankle_roll_link", "right_ankle_roll_link")]
+        self.feet_tok = [kin.body_names.index(body.keypoint_names[k]) for k in body.feet]
         self.body_dim, self.obj_dim, self.prop_dim = 15 + 11, (13 if hinged else 15), 9
         self.in_dim = B * self.body_dim + self.obj_dim + P * self.prop_dim + layout.scalars
         pos = [b * self.body_dim + torch.arange(3) for b in range(B)] + [B * self.body_dim + torch.arange(3)]
@@ -438,7 +444,7 @@ class HOIRigidFormerNet(nn.Module):
             self.head_all.bias.copy_(torch.cat([h.bias for h in heads]))
             self.bias_table = self.rel_bias[:, self.rel].unsqueeze(0).detach()
         idx = [off[0] + r for r in range(heads[0].out_features)]  # flat (token, column) of every output in forward's layout
-        idx += [(1 + int(self.body_of_joint[j])) * C + off[1] + k for k in range(heads[1].out_features) for j in range(NUM_J)]
+        idx += [(1 + int(self.body_of_joint[j])) * C + off[1] + k for k in range(heads[1].out_features) for j in range(self.layout.joints)]
         idx += [B * C + off[2] + r for r in range(heads[2].out_features)]
         idx += [t * C + off[3] + r for t in self.eef_tok for r in range(3)]
         idx += [t * C + off[4] + 3 * s + r for s in range(DECIMATION) for t in self.feet_tok for r in range(3)]
@@ -453,8 +459,9 @@ class HOIRigidFormerNet(nn.Module):
         Ht = yaw_mat(R).transpose(-1, -2).unsqueeze(-3)
         origin = torch.cat((p[..., :2], torch.zeros_like(p[..., 2:])), -1)
         rel = lambda x: mat_vec(Ht.squeeze(-3), x - origin)  # noqa: E731  (N, 3) points
-        off = ctx[..., self.layout.startup : self.layout.startup + NUM_J]
-        d = u[..., self.act_idx] * self.act_gain  # (N, 4, 29): each substep's PD-target offset from q0 + offset, 0 on wrists
+        J = self.layout.joints
+        off = ctx[..., self.layout.startup : self.layout.startup + J]
+        d = u[..., self.act_idx] * self.act_gain  # (N, 4, J): each substep's PD-target offset from q0 + offset, 0 on held joints
         tgt = self.q0 + off.unsqueeze(-2) + d
         joint = torch.cat((torch.stack((q, qd, off), -1), d.transpose(-1, -2), (tgt - q.unsqueeze(-2)).transpose(-1, -2)), -1)
         joint = joint.index_select(-2, self.joint_of_body)
@@ -462,7 +469,7 @@ class HOIRigidFormerNet(nn.Module):
         body = torch.cat((mat_vec(Ht, P_ - origin.unsqueeze(-2)), mat_to_6d(mat_mat(Ht, Rb)), mat_vec(Ht, V), mat_vec(Ht, W), joint), -1)
         Ht2 = Ht.squeeze(-3)
         if self.hinged:
-            (bp, bR), f, c = self.layout.poses(ctx)[0], ctx[..., self.layout.startup + NUM_J + 2 :][..., :1], ctx[..., self.layout.startup + NUM_J + 3 :][..., :1]
+            (bp, bR), f, c = self.layout.poses(ctx)[0], ctx[..., self.layout.startup + J + 2 :][..., :1], ctx[..., self.layout.startup + J + 3 :][..., :1]
             obj = torch.cat((rel(bp), mat_to_6d(mat_mat(Ht2, bR)), So[0], So[1], f, c), -1)
         else:
             po, Ro, vo, wo = So
@@ -505,7 +512,7 @@ class HOIRigidFormerNet(nn.Module):
         z = self.head_w3(a * torch.nn.functional.silu(gate))
         if self.head_index is not None:  # freeze_tables: one product, then the outputs gathered
             return self.head_all(z).flatten(1)[:, self.head_index]
-        y_joint = self.joint_head(z[:, 1:B]).index_select(1, self.body_of_joint)  # (N, 29, joint_out), G1 order
+        y_joint = self.joint_head(z[:, 1:B]).index_select(1, self.body_of_joint)  # (N, J, joint_out), the state's order
         eef = self.eef_head(z[:, self.eef_tok]).flatten(1)
         feet = self.feet_head(z[:, self.feet_tok]).unflatten(-1, (DECIMATION, 3)).transpose(1, 2).flatten(1)  # (N, 4, 2, 3)
         return torch.cat((self.root_head(z[:, 0]), y_joint.transpose(1, 2).flatten(1), self.obj_head(z[:, B]), eef, feet), -1)

@@ -9,7 +9,10 @@ evaluates the rewards, terminations and observations; the reset ranges and the r
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
+
+from ..robots.g1 import DEFAULT_JOINT_POS, G1_JOINT_NAMES, JOINT_MOTORS, MJCF_PATH
 
 # HDMI's body and joint selections: regular expressions, matched in full against keypoint or joint names
 UPPER_BODY = (".*_shoulder_pitch_link", ".*_elbow_link", ".*_wrist_yaw_link")  # Y:173
@@ -160,11 +163,25 @@ class ObjectRandomization:
     hinge_damping_range: tuple[float, float] | None = None
 
 
+def _lookup(table: tuple[tuple[str, object], ...], name: str):
+    """The value of the first regular expression in ``table`` that matches ``name`` in full."""
+    for pattern, value in table:
+        if re.fullmatch(pattern, name):
+            return value
+    raise KeyError(f"{name} matches none of {[p for p, _ in table]}")
+
+
 @dataclass(frozen=True)
 class HDMIBody:
-    """The robot as the task sees it: its joints in the simulator's order, the first ``num_actions`` of them actuated by the
-    policy and tracked (the rest held), the keypoints in the simulator's order, which of them are the feet and which give
-    body_height, and the joints' effort limits. HDMI's G1 is ``G1_BODY``; a robot with more joints (the G1 with dexterous
+    """The robot as the task and the simulator see it.
+
+    ``joint_names``: its joints in the simulator's order, the first ``num_actions`` of them actuated by the policy and
+    tracked (the rest held at their default). ``keypoint_names``: the tracked bodies in the simulator's order, keypoint 0
+    the root; ``feet`` and ``height_bodies`` index them. ``state_joint_names``: the joint order of states and clips.
+    ``mjcf``: its MuJoCo model, for forward kinematics. ``motors``, ``action_scales`` and ``default_joint_pos`` map
+    regular expressions over joint names (the first full match wins) to a joint's (effort limit, velocity limit,
+    armature), its action scale and its default angle (0 when none matches). ``feet_prims``: the regular expression of
+    the feet's prims for the contact sensor. HDMI's G1 is ``G1_BODY``; a robot with more joints (the G1 with dexterous
     hands) has its own."""
 
     joint_names: tuple[str, ...]
@@ -172,13 +189,28 @@ class HDMIBody:
     keypoint_names: tuple[str, ...]
     feet: tuple[int, ...]
     height_bodies: tuple[int, ...]
-    effort_limits: tuple[float, ...]
+    state_joint_names: tuple[str, ...]
+    mjcf: str
+    motors: tuple[tuple[str, tuple[float, float, float]], ...]
+    action_scales: tuple[tuple[str, float], ...]
+    default_joint_pos: tuple[tuple[str, float], ...]
+    feet_prims: str
 
     def __post_init__(self):
-        if len(self.effort_limits) != len(self.joint_names) or not 0 < self.num_actions <= len(self.joint_names):
-            raise ValueError("one effort limit per joint, and between one and all joints actuated")
+        if not 0 < self.num_actions <= len(self.joint_names):
+            raise ValueError("between one and all joints actuated")
+        if sorted(self.state_joint_names) != sorted(self.joint_names):
+            raise ValueError("the state's joints must be the simulator's joints")
         if self.feet != tuple(range(self.feet[0], self.feet[-1] + 1)):
             raise ValueError("the feet must be consecutive keypoints")
+        for name in self.joint_names:
+            self.motor(name)
+        for name in self.tracking_joint_names:
+            self.action_scale(name)
+
+    @property
+    def num_joints(self) -> int:
+        return len(self.joint_names)
 
     @property
     def tracking_joint_names(self) -> tuple[str, ...]:
@@ -189,7 +221,24 @@ class HDMIBody:
         """The feet as a slice: indexing with a tuple copies it to the device every call."""
         return slice(self.feet[0], self.feet[-1] + 1)
 
+    @property
+    def effort_limits(self) -> tuple[float, ...]:
+        """Each joint's effort limit in the simulator's order."""
+        return tuple(self.motor(n)[0] for n in self.joint_names)
 
+    def motor(self, joint: str) -> tuple[float, float, float]:
+        """The joint's (effort limit, velocity limit, armature)."""
+        return _lookup(self.motors, joint)
+
+    def action_scale(self, joint: str) -> float:
+        return _lookup(self.action_scales, joint)
+
+    def default_pose(self) -> list[float]:
+        """The default joint angles in the state's order."""
+        return [next((v for p, v in self.default_joint_pos if re.fullmatch(p, n)), 0.0) for n in self.state_joint_names]
+
+
+_SIDE = "(left_|right_)?"
 G1_BODY = HDMIBody(
     joint_names=(
         "left_hip_pitch_joint", "right_hip_pitch_joint", "waist_yaw_joint", "left_hip_roll_joint", "right_hip_roll_joint", "waist_roll_joint",
@@ -207,7 +256,15 @@ G1_BODY = HDMIBody(
     ),  # HDMI's tracking keypoints in simulator order (Y:52-61, CMD:61-63)
     feet=(10, 11),  # left/right ankle_roll_link: the feet of the feet terms and body_pos_b / body_vel_b (Y:151-152, 228-230)
     height_bodies=(0, 5, 10, 11),  # body_height's pelvis, torso and ankles, in simulator order (Y:153)
-    effort_limits=(88, 88, 88, 139, 139, 50, 88, 88, 50, 139, 139, 25, 25, 50, 50, 25, 25, 50, 50, 25, 25, 25, 25, 25, 25, 5, 5, 5, 5),  # §3.3
+    state_joint_names=tuple(G1_JOINT_NAMES),  # Unitree's order
+    mjcf=MJCF_PATH,
+    motors=tuple((f"{_SIDE}{k}_joint", v) for k, v in JOINT_MOTORS.items()),  # §3.3
+    action_scales=tuple((f"{_SIDE}{k}_joint", v) for k, v in {
+        "hip_yaw": 0.55, "hip_roll": 0.35, "hip_pitch": 0.55, "knee": 0.35, "ankle_pitch": 0.44, "ankle_roll": 0.44, "waist_roll": 0.44,
+        "waist_pitch": 0.44, "waist_yaw": 0.55, "shoulder_pitch": 0.44, "shoulder_roll": 0.44, "shoulder_yaw": 0.44, "elbow": 0.44,
+    }.items()),  # Y:27-43
+    default_joint_pos=tuple(DEFAULT_JOINT_POS.items()),
+    feet_prims=".*_ankle_roll_link",
 )  # fmt: skip
 
 

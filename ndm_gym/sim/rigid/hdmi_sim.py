@@ -55,11 +55,10 @@ from isaaclab_newton.physics import MJWarpSolverCfg, NewtonBuilderCfg, NewtonCfg
 from newton import BodyFlags, ModelFlags, ShapeFlags, eval_fk
 
 from ...core.rotations import mat_to_quat, quat_to_mat
-from ...robots.g1 import DEFAULT_JOINT_POS, G1_JOINT_NAMES, kd, kp, motor_of
-from ...state import OBJ_DIM, STATE_DIM, flatten_object
-from ...tasks.hdmi import (DECIMATION, FUTURE_STEPS, JOINT_NAMES, KEYPOINT_NAMES, NUM_ACTIONS, PHYSICS_DT, HDMIClip, HDMIInput,
-                           HDMIState, action_pipeline, reference_window)  # fmt: skip
-from ...tasks.hdmi_tasks import HDMITaskCfg
+from ...robots.g1 import kd, kp
+from ...state import OBJ_DIM, flatten_object, state_dim
+from ...tasks.hdmi import DECIMATION, FUTURE_STEPS, PHYSICS_DT, HDMIClip, HDMIInput, HDMIState, action_pipeline, reference_window
+from ...tasks.hdmi_tasks import HDMIBody, HDMITaskCfg
 from .isaaclab_mjwarp import after_replay, before_replay, capture_step, flatten_states, on_capture_stream
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -67,9 +66,6 @@ HDMI_DIR = os.path.join(REPO, "data", "hdmi")
 GROUND_FRICTION = 0.3  # the lowest friction of the robot's feet and hands (§7) and of every task's object
 WRISTS = ("left_wrist_roll_joint", "right_wrist_roll_joint", "left_wrist_pitch_joint", "right_wrist_pitch_joint", "left_wrist_yaw_joint",
           "right_wrist_yaw_joint")  # fmt: skip
-ACTION_SCALE = {"hip_yaw": 0.55, "hip_roll": 0.35, "hip_pitch": 0.55, "knee": 0.35, "ankle_pitch": 0.44, "ankle_roll": 0.44,
-                "waist_roll": 0.44, "waist_pitch": 0.44, "waist_yaw": 0.55, "shoulder_pitch": 0.44, "shoulder_roll": 0.44,
-                "shoulder_yaw": 0.44, "elbow": 0.44}  # Y:27-43  # fmt: skip
 
 
 def make_hdmi_sim(device: str, substeps: int = 1) -> sim_utils.SimulationCfg:
@@ -81,29 +77,34 @@ def make_hdmi_sim(device: str, substeps: int = 1) -> sim_utils.SimulationCfg:
     return sim_utils.SimulationCfg(dt=PHYSICS_DT * substeps, device=device, physics=physics)
 
 
-def default_pose(cfg: HDMITaskCfg) -> list[float]:
-    """The task's default joint pose in G1 order: the G1's, with the task's wrist-yaw override (scene_cfg)."""
-    from ...robots.g1 import default_joint_pos_list
+WRIST_YAWS = ("left_wrist_yaw_joint", "right_wrist_yaw_joint")
 
-    q0 = default_joint_pos_list()
+
+def default_joint_pos(cfg: HDMITaskCfg) -> dict[str, float]:
+    """The task's default joint pose as Isaac Lab's initial state takes it: the body's, with the task's wrist-yaw
+    override."""
+    q0 = dict(cfg.body.default_joint_pos)
     if cfg.wrist_yaw_default is not None:
-        for name, v in zip(("left_wrist_yaw_joint", "right_wrist_yaw_joint"), cfg.wrist_yaw_default):
-            q0[G1_JOINT_NAMES.index(name)] = v
+        q0.update(zip(WRIST_YAWS, cfg.wrist_yaw_default))
+    return q0
+
+
+def default_pose(cfg: HDMITaskCfg) -> list[float]:
+    """The task's default joint pose in the state's joint order: the body's, with the task's wrist-yaw override."""
+    q0 = cfg.body.default_pose()
+    if cfg.wrist_yaw_default is not None:
+        for name, v in zip(WRIST_YAWS, cfg.wrist_yaw_default):
+            q0[cfg.body.state_joint_names.index(name)] = v
     return q0
 
 
 def ndm_constants(cfg: HDMITaskCfg) -> dict:
     """The task's constants the token world model needs (worldmodels/hoi.HOIRigidFormerNet): the end effectors' bodies,
-    the default pose in G1 order, the action scales in HDMI's action order and each G1 joint's action index (-1: a
-    wrist, held at its default)."""
-    acts = list(JOINT_NAMES[:NUM_ACTIONS])
-    return {"eef_bodies": list(cfg.contact_eef_bodies), "q0": default_pose(cfg), "act_scale": [action_scale(n) for n in acts],
-            "act_of_joint": [acts.index(n) if n in acts else -1 for n in G1_JOINT_NAMES]}  # fmt: skip
-
-
-def action_scale(joint: str) -> float:
-    key = joint.removeprefix("left_").removeprefix("right_").removesuffix("_joint")
-    return ACTION_SCALE[key]
+    the default pose in the state's joint order, the action scales in the action order and each state joint's action
+    index (-1: a held joint, such as the G1's wrists)."""
+    acts = list(cfg.body.tracking_joint_names)
+    return {"eef_bodies": list(cfg.contact_eef_bodies), "q0": default_pose(cfg), "act_scale": [cfg.body.action_scale(n) for n in acts],
+            "act_of_joint": [acts.index(n) if n in acts else -1 for n in cfg.body.state_joint_names]}  # fmt: skip
 
 
 def load_clip(task: str) -> tuple[dict, dict]:
@@ -118,12 +119,12 @@ def load_clip(task: str) -> tuple[dict, dict]:
     return arrays, side
 
 
-def hdmi_clip(arrays: dict, side: dict, device) -> HDMIClip:
-    """The clip in HDMI's orders: its stored keypoints and velocities (HDMI's, not finite differences), the tracking
-    joints, the object's root pose, the contact flags unshifted (reference_window applies the lead)."""
+def hdmi_clip(arrays: dict, side: dict, device, body: HDMIBody) -> HDMIClip:
+    """The clip in the simulator's orders: its stored keypoints and velocities (HDMI's, not finite differences), the
+    tracking joints, the object's root pose, the contact flags unshifted (reference_window applies the lead)."""
     t = lambda k: torch.as_tensor(arrays[k], dtype=torch.float32, device=device)  # noqa: E731
-    kp_idx = [side["keypoint_names"].index(n) for n in KEYPOINT_NAMES]
-    j_idx = [G1_JOINT_NAMES.index(n) for n in JOINT_NAMES[:NUM_ACTIONS]]
+    kp_idx = [side["keypoint_names"].index(n) for n in body.keypoint_names]
+    j_idx = [body.state_joint_names.index(n) for n in body.tracking_joint_names]
     wxyz = lambda q: quat_to_mat(q)  # noqa: E731
     return HDMIClip(t("keypoint_pos")[:, kp_idx], wxyz(t("keypoint_quat_wxyz")[:, kp_idx]), t("keypoint_lin_vel")[:, kp_idx],
                     t("keypoint_ang_vel")[:, kp_idx], t("joint_pos")[:, j_idx], t("joint_vel")[:, j_idx], t("object_pos"),
@@ -133,8 +134,8 @@ def hdmi_clip(arrays: dict, side: dict, device) -> HDMIClip:
 
 def _actuators(cfg: HDMITaskCfg) -> dict[str, ImplicitActuatorCfg]:
     acts = {}
-    for name in G1_JOINT_NAMES:
-        effort, vel, arm = motor_of(name)
+    for name in cfg.body.state_joint_names:
+        effort, vel, arm = cfg.body.motor(name)
         stiff = cfg.wrist_kp if (cfg.wrist_kp is not None and name in WRISTS) else kp(arm)  # §3.3: kd and armature unchanged
         acts[name.replace("_joint", "")] = ImplicitActuatorCfg(joint_names_expr=[name], effort_limit_sim=effort, velocity_limit_sim=vel,
                                                                stiffness=stiff, damping=kd(arm), armature=arm)  # fmt: skip
@@ -143,9 +144,7 @@ def _actuators(cfg: HDMITaskCfg) -> dict[str, ImplicitActuatorCfg]:
 
 def scene_cfg(cfg: HDMITaskCfg, side: dict, num_envs: int):
     usd = lambda rel: os.path.join(HDMI_DIR, rel)  # noqa: E731
-    q0 = dict(DEFAULT_JOINT_POS)
-    if cfg.wrist_yaw_default is not None:
-        q0["left_wrist_yaw_joint"], q0["right_wrist_yaw_joint"] = cfg.wrist_yaw_default
+    q0 = default_joint_pos(cfg)
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
         spawn=sim_utils.UsdFileCfg(usd_path=usd(side["robot_usd"]), activate_contact_sensors=True,
@@ -171,7 +170,7 @@ def scene_cfg(cfg: HDMITaskCfg, side: dict, num_envs: int):
     for e, body in enumerate(cfg.contact_eef_bodies):  # the end effectors' forces from the object's contact body (LOC:89-100)
         attrs[f"eef{e}"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{body}",
                                             filter_prim_paths_expr=[f"{{ENV_REGEX_NS}}/{cfg.object_asset}/{cfg.object_body}"])  # fmt: skip
-    attrs["feet"] = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*_ankle_roll_link")
+    attrs["feet"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.feet_prims}")
     cls = configclass(type("HDMISceneCfg", (InteractiveSceneCfg,), {"__annotations__": {k: type(v) for k, v in attrs.items()}, **attrs}))
     return cls(num_envs=num_envs, env_spacing=0.0, replicate_physics=True)
 
@@ -258,7 +257,7 @@ def place_scene(scene, cfg: HDMITaskCfg, frame: int = 0):
     angle, the props' poses; every velocity zero."""
     arrays, side = load_clip(cfg.name)
     dev, n = scene.device, scene.num_envs
-    c = hdmi_clip(arrays, side, dev)
+    c = hdmi_clip(arrays, side, dev, cfg.body)
     ids, org, zero6 = torch.arange(n, device=dev), scene.env_origins, torch.zeros(n, 6, device=dev)
     every = lambda x: x.expand(n, *x.shape).clone()  # noqa: E731  the frame's value in every env
     t = lambda k: torch.as_tensor(arrays[k][frame], dtype=torch.float32, device=dev)  # noqa: E731
@@ -268,7 +267,7 @@ def place_scene(scene, cfg: HDMITaskCfg, frame: int = 0):
     robot, obj = scene["robot"], scene["obj"]
     lim = robot.data.joint_pos_limits.torch[0]
     mid, half = lim.mean(-1), 0.5 * (lim[:, 1] - lim[:, 0])
-    jq = t("joint_pos")[[G1_JOINT_NAMES.index(j) for j in robot.joint_names]]
+    jq = t("joint_pos")[[cfg.body.state_joint_names.index(j) for j in robot.joint_names]]
     jq = torch.minimum(torch.maximum(jq, mid - 0.9 * half), mid + 0.9 * half)
     robot.write_root_link_pose_to_sim_index(root_pose=robot_pose, env_ids=ids)
     robot.write_root_com_velocity_to_sim_index(root_velocity=zero6, env_ids=ids)
@@ -357,16 +356,17 @@ class HDMISim:
         if abs(sim_cfg.dt - PHYSICS_DT) > 1e-9:
             raise ValueError(f"HDMISim steps {PHYSICS_DT} s substeps itself; got a simulation step of {sim_cfg.dt} s")
         self.cfg, self.N, self.eval_mode, self.device = cfg, num_envs, eval_mode, sim_cfg.device
+        self.body = body = cfg.body
         arrays, self.side = load_clip(cfg.name)
         if self.side["task"] != cfg.name:
             raise ValueError(f"clip {self.side['task']} for task {cfg.name}")
-        self.clip = hdmi_clip(arrays, self.side, self.device)
+        self.clip = hdmi_clip(arrays, self.side, self.device, body)
         self.L = self.clip.body_pos.shape[0]
         dev = self.device
         t = lambda k: torch.as_tensor(arrays[k], dtype=torch.float32, device=dev)  # noqa: E731
         self.ref_extra_p = t("extra_pos") if cfg.extra_objects else None  # (T, n, 3)
         self.ref_extra_R = quat_to_mat(t("extra_quat_wxyz")) if cfg.extra_objects else None
-        self.ref_joint_vel_all = t("joint_vel")  # (T, 29) Unitree order: the reset's joint velocities (§2)
+        self.ref_joint_vel_all = t("joint_vel")  # (T, J) the state's order: the reset's joint velocities (§2)
         self.ref_joint_pos_all = t("joint_pos")
         self.ref_obj_joint_vel = t("object_joint_vel")[:, 0] if "object_joint_vel" in arrays else None
 
@@ -380,14 +380,15 @@ class HDMISim:
         self.eef_sensors = [self.scene[f"eef{e}"] for e in range(cfg.num_eefs)]
         self.feet_sensor = self.scene["feet"]
         names = list(self.robot.joint_names)
-        if sorted(names) != sorted(JOINT_NAMES):
-            raise ValueError(f"the robot's joints {names} are not HDMI's")
-        self.j_hdmi = torch.tensor([names.index(n) for n in JOINT_NAMES], device=dev)  # HDMI order -> robot index
-        self.j_act = self.j_hdmi[:NUM_ACTIONS]
+        if sorted(names) != sorted(body.joint_names):
+            raise ValueError(f"the robot's joints {names} are not the body's")
+        self.j_hdmi = torch.tensor([names.index(n) for n in body.joint_names], device=dev)  # task order -> robot index
+        self.j_act = self.j_hdmi[: body.num_actions]
         bodies = list(self.robot.body_names)
-        self.kp_ids = torch.tensor([bodies.index(n) for n in KEYPOINT_NAMES], device=dev)
+        self.kp_ids = torch.tensor([bodies.index(n) for n in body.keypoint_names], device=dev)
         self.eef_ids = torch.tensor([bodies.index(b) for b in cfg.contact_eef_bodies], device=dev)
-        self.feet_order = torch.tensor([self.feet_sensor.body_names.index(n) for n in ("left_ankle_roll_link", "right_ankle_roll_link")], device=dev)
+        feet = [body.keypoint_names[k] for k in body.feet]
+        self.feet_order = torch.tensor([self.feet_sensor.body_names.index(n) for n in feet], device=dev)
         self.future_steps = torch.tensor(FUTURE_STEPS, device=dev)  # made once: reference_window would copy it every call
         obj_bodies = list(self.obj.body_names)
         if cfg.object_body not in obj_bodies:
@@ -397,20 +398,20 @@ class HDMISim:
         if self.hinged and list(self.obj.joint_names) != [cfg.object_joint]:  # the hinge is the object's joint 0 everywhere below
             raise ValueError(f"{cfg.object_asset} must have exactly the joint {cfg.object_joint}, has {list(self.obj.joint_names)}")
         self.q0 = self.robot.data.default_joint_pos.torch[0].clone()  # robot order
-        self.scale = torch.tensor([action_scale(n) for n in JOINT_NAMES[:NUM_ACTIONS]], device=dev)
-        lim = self.robot.data.joint_pos_limits.torch[0]  # (29, 2) robot order
+        self.scale = torch.tensor([body.action_scale(n) for n in body.tracking_joint_names], device=dev)
+        lim = self.robot.data.joint_pos_limits.torch[0]  # (J, 2) robot order
         self.joint_limits = lim[self.j_hdmi].clone()  # HDMI order, for HDMITask
         mid, half = lim.mean(-1), 0.5 * (lim[:, 1] - lim[:, 0])
         self.soft_lo, self.soft_hi = mid - 0.9 * half, mid + 0.9 * half  # §2
         self.vel_limit = self.robot.data.joint_vel_limits.torch[0].clone()
-        if not torch.equal(self.vel_limit.cpu(), torch.tensor([motor_of(n)[1] for n in names])):  # HDMI's (module docstring), in rad/s
+        if not torch.equal(self.vel_limit.cpu(), torch.tensor([body.motor(n)[1] for n in names])):  # HDMI's (module docstring), in rad/s
             raise RuntimeError(f"the robot's joint velocity limits {self.vel_limit.tolist()} are not HDMI's")
         self._vel_lo = -self.vel_limit
         qd, state_qd = self.robot.data.joint_vel.torch, wp.to_torch(self.sim.backend_manager.get_state_0().joint_qd)
         if not state_qd.data_ptr() <= qd.data_ptr() < state_qd.data_ptr() + state_qd.numel() * state_qd.element_size():
             raise RuntimeError("Isaac Lab's joint velocities are not a view of the simulation state, which the velocity limits write")
-        self.j_g1 = torch.tensor([names.index(n) for n in G1_JOINT_NAMES], device=dev)  # G1 (Unitree) order -> robot index
-        self.g1_of_robot = torch.tensor([G1_JOINT_NAMES.index(n) for n in names], device=dev)  # robot order -> G1 index
+        self.j_state = torch.tensor([names.index(n) for n in body.state_joint_names], device=dev)  # state order -> robot index
+        self.state_of_robot = torch.tensor([body.state_joint_names.index(n) for n in names], device=dev)  # robot order -> state index
         r = cfg.reset
         rpy = ("roll", "pitch", "yaw")
         self._bounds = {"p": _bounds(r.pose_range, "xyz", dev), "r": _bounds(r.pose_range, rpy, dev), "v": _bounds(r.velocity_range, "xyz", dev),
@@ -422,7 +423,7 @@ class HDMISim:
         self._com0 = self.robot.data.body_com_pos_b.torch[:, self.com_ids].clone()
         if randomize:
             self._randomize_startup()
-        self.kp_com_b = self.robot.data.body_com_pos_b.torch[:, self.kp_ids].clone()  # (N, 16, 3) keypoint centres of mass
+        self.kp_com_b = self.robot.data.body_com_pos_b.torch[:, self.kp_ids].clone()  # (N, K, 3) keypoint centres of mass
         self.robot_mass = float(self.robot.data.body_mass.torch[0].sum())  # env 0's, after the startup randomization (§5.5)
         self.eef_offsets = torch.tensor(cfg.contact_eef_offsets, device=dev)
         self.target_offsets = torch.tensor(cfg.contact_target_offsets, device=dev)
@@ -432,16 +433,16 @@ class HDMISim:
         N = self.N
         self.t = torch.zeros(N, dtype=torch.long, device=dev)  # HDMI's frame counter
         self.ep_step = torch.zeros(N, dtype=torch.long, device=dev)
-        self.offset = torch.zeros(N, 29, device=dev)  # joint offsets, robot order
+        self.offset = torch.zeros(N, body.num_joints, device=dev)  # joint offsets, robot order
         self.delay = torch.full((N,), 2, dtype=torch.long, device=dev)
         self.alpha = torch.ones(N, 1, device=dev)
-        self.action_buf = torch.zeros(N, NUM_ACTIONS, 3, device=dev)
-        self.a_filt = torch.zeros(N, NUM_ACTIONS, device=dev)
+        self.action_buf = torch.zeros(N, body.num_actions, 3, device=dev)
+        self.a_filt = torch.zeros(N, body.num_actions, device=dev)
         self.hinge_f = torch.zeros(N, device=dev)
         self.hinge_c = torch.zeros(N, device=dev)
         self.hinge_tau = torch.zeros(N, device=dev)
         self.graph, self._graph, self._graph_steps = graph, None, 0
-        self._graph_action = torch.zeros(N, NUM_ACTIONS, device=dev) if graph else None
+        self._graph_action = torch.zeros(N, body.num_actions, device=dev) if graph else None
         self.reset(torch.arange(N, device=dev))
 
     def _randomize_startup(self):
@@ -513,16 +514,18 @@ class HDMISim:
         return ([self.obj.data.root_link_pose_w.torch] if self.hinged else []) + [e.data.root_link_pose_w.torch for e in self.extras]
 
     def _context(self, poses: list[torch.Tensor], rots: list[torch.Tensor]) -> torch.Tensor:
-        org, parts = self.scene.env_origins, [self.startup_context, self.offset[:, self.j_g1], self.delay.unsqueeze(-1).float(), self.alpha,
+        org, parts = self.scene.env_origins, [self.startup_context, self.offset[:, self.j_state], self.delay.unsqueeze(-1).float(), self.alpha,
                                               self.hinge_f.unsqueeze(-1), self.hinge_c.unsqueeze(-1)]  # fmt: skip
         for pose, R in zip(poses, rots):
             parts += [pose[:, :3] - org, R.flatten(1)]
         return torch.cat(parts, -1)
 
     @property
-    def context_layout(self) -> tuple[int, bool, int]:
-        """(length of the startup part, whether a fixed base's pose follows, number of props) of ``context``."""
-        return self.startup_context.shape[-1], self.hinged, len(self.extras)
+    def context_layout(self) -> tuple[int, bool, int, int, int, int]:
+        """(length of the startup part, whether a fixed base's pose follows, number of props) of ``context``, then the
+        robot's joints, actuated joints and feet (``worldmodels.hoi.ContextLayout``)."""
+        b = self.body
+        return self.startup_context.shape[-1], self.hinged, len(self.extras), b.num_joints, b.num_actions, len(b.feet)
 
     def robot_state(self, R: torch.Tensor | None = None):
         """The robot's state ``S = (p, R, v, w, q, qd)`` as the LAFAN1 tracking keeps it (ndm_gym.state): root link pose
@@ -530,7 +533,7 @@ class HDMISim:
         matrix if already converted (_states)."""
         d = self.robot.data
         pose, vel = d.root_link_pose_w.torch, d.root_link_vel_w.torch
-        q, qd = d.joint_pos.torch[:, self.j_g1], d.joint_vel.torch[:, self.j_g1]  # gathers: fresh tensors
+        q, qd = d.joint_pos.torch[:, self.j_state], d.joint_vel.torch[:, self.j_state]  # gathers: fresh tensors
         return (pose[:, :3] - self.scene.env_origins, _rot(pose) if R is None else R, vel[:, :3].clone(), vel[:, 3:6].clone(), q, qd)
 
     def object_state(self, R: torch.Tensor | None = None):
@@ -561,16 +564,17 @@ class HDMISim:
         HDMI's observation histories push), the frame counter and episode step before the step, the flags."""
         f32 = torch.float32
         o = 2 if self.hinged else OBJ_DIM
-        return {"s": (STATE_DIM, f32), "s1": (STATE_DIM, f32), "o": (o, f32), "o1": (o, f32), "u": ((DECIMATION, NUM_ACTIONS), f32),
-                "a": (NUM_ACTIONS, f32), "ctx": (self.context().shape[-1], f32), "f_eef": ((self.cfg.num_eefs, 3), f32),
-                "f_feet": ((DECIMATION, 2, 3), f32), "q_obs": (len(JOINT_NAMES), f32), "t": ((), torch.long), "ep_step": ((), torch.int32),
+        b, S = self.body, state_dim(self.body.num_joints)
+        return {"s": (S, f32), "s1": (S, f32), "o": (o, f32), "o1": (o, f32), "u": ((DECIMATION, b.num_actions), f32),
+                "a": (b.num_actions, f32), "ctx": (self.context().shape[-1], f32), "f_eef": ((self.cfg.num_eefs, 3), f32),
+                "f_feet": ((DECIMATION, len(b.feet), 3), f32), "q_obs": (b.num_joints, f32), "t": ((), torch.long), "ep_step": ((), torch.int32),
                 "done": ((), torch.bool),
                 "term": ((), torch.bool)}  # fmt: skip
 
     def ndm_constants(self) -> dict:
         """``ndm_constants(cfg)``, checked against the simulator's default pose."""
         c = ndm_constants(self.cfg)
-        if not torch.allclose(torch.tensor(c["q0"], device=self.device), self.q0[self.j_g1]):
+        if not torch.allclose(torch.tensor(c["q0"], device=self.device), self.q0[self.j_state]):
             raise RuntimeError("the task's default pose differs from the simulator's")
         return c
 
@@ -598,7 +602,7 @@ class HDMISim:
         q, qd = state.joint_pos, state.joint_vel
         return HDMIInput(state, state, reference_window(self.clip, self.t - 1, self.future_steps), reference_window(self.clip, self.t, self.future_steps),
                          torch.stack((q, q), 1),
-                         torch.stack((qd, qd), 1), self.offset[:, self.j_hdmi], z(NUM_ACTIONS), z(len(JOINT_NAMES)), z(NUM_ACTIONS, 3),
+                         torch.stack((qd, qd), 1), self.offset[:, self.j_hdmi], z(self.body.num_actions), z(self.body.num_joints), z(self.body.num_actions, 3),
                          z(DECIMATION, 2, 3), z() if self.hinged else None)  # fmt: skip
 
     def flat_object(self, obj_state) -> torch.Tensor:
@@ -626,7 +630,7 @@ class HDMISim:
         """The state now, positions relative to the env origins, joints in HDMI's order."""
         d, o = self.robot.data, self.obj.data
         org = self.scene.env_origins
-        bpose = d.body_link_pose_w.torch[:, self.kp_ids]  # (N, 16, 7)
+        bpose = d.body_link_pose_w.torch[:, self.kp_ids]  # (N, K, 7)
         epose = d.body_link_pose_w.torch[:, self.eef_ids]
         opose = o.body_link_pose_w.torch[:, 0]  # the root link
         cpose = o.body_link_pose_w.torch[:, self.obj_body_id]  # the contact body
@@ -662,8 +666,8 @@ class HDMISim:
         p = c.body_pos[s, 0] + dp
         R = c.body_rot[s, 0] @ _euler_xyz(dr)  # q_ref (x) quat_from_euler_xyz(delta)
         v, w = c.body_lin_vel[s, 0] + dv, c.body_ang_vel[s, 0] + dw  # the pelvis's reference COM velocity (§2)
-        jq = self.ref_joint_pos_all[s][:, self.g1_of_robot]
-        jqd = self.ref_joint_vel_all[s][:, self.g1_of_robot]
+        jq = self.ref_joint_pos_all[s][:, self.state_of_robot]
+        jqd = self.ref_joint_vel_all[s][:, self.state_of_robot]
         jq = jq + r.joint_pos_noise * (2 * torch.rand_like(jq) - 1)
         jqd = jqd + r.joint_vel_noise * (2 * torch.rand_like(jqd) - 1)
         jq = torch.minimum(torch.maximum(jq, self.soft_lo), self.soft_hi)
@@ -692,7 +696,7 @@ class HDMISim:
             ex.write_root_link_pose_to_sim_index(root_pose=pose, env_ids=env_ids)
             ex.write_root_com_velocity_to_sim_index(root_velocity=zero6, env_ids=env_ids)
         # action pipeline and offsets (§3.1, §7)
-        self.offset[env_ids] = torch.empty(n, 29, device=dev).uniform_(-0.01, 0.01)
+        self.offset[env_ids] = torch.empty(n, self.body.num_joints, device=dev).uniform_(-0.01, 0.01)
         self.delay[env_ids] = torch.randint(2, 7, (n,), device=dev)
         self.alpha[env_ids] = torch.empty(n, 1, device=dev).uniform_(0.8, 1.0)
         self.action_buf.index_fill_(0, env_ids, 0.0)  # index_fill_: a scalar assignment by index copies it to the device and syncs
@@ -731,7 +735,7 @@ class HDMISim:
         N = self.N
         t_prev = self.t.clone()
         a_sub, buf, filt = action_pipeline(action, self.action_buf, self.a_filt, self.delay, self.alpha)
-        # the four substeps' PD targets at once (DECIMATION, N, 29): element by element the additions of one at a time
+        # the four substeps' PD targets at once (DECIMATION, N, J): element by element the additions of one at a time
         base = self.q0.expand(N, -1) + self.offset
         targets = base.expand(DECIMATION, N, -1).index_add(2, self.j_act, (self.scale * a_sub).transpose(0, 1))
         feet, q_sub, qd_sub = [], [], []

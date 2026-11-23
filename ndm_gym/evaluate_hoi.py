@@ -68,8 +68,7 @@ import time
 import torch
 
 from ndm_gym.algos.ppo_hoi import OBS_GROUPS, residual_base
-from ndm_gym.tasks.hdmi import (DECIMATION, GROUPS, JOINT_NAMES, KEYPOINT_NAMES, NUM_ACTIONS, PHYSICS_DT, TRACKING_JOINT_NAMES, FeetContact,
-                                HDMIInput, HDMITask, feet_air_time, heading_pos, heading_rot, joint_pos_limits, object_ori_error, object_pos_error,
+from ndm_gym.tasks.hdmi import (DECIMATION, GROUPS, PHYSICS_DT, FeetContact, HDMIInput, HDMITask, feet_air_time, heading_pos, heading_rot, joint_pos_limits, object_ori_error, object_pos_error,
                                 relative_rot, rot_angle)  # fmt: skip
 from ndm_gym.tasks.hdmi_tasks import LOWER_BODY, TRACKED_JOINTS, UPPER_BODY
 
@@ -109,9 +108,10 @@ class EvalTerms:
     def __init__(self, task: HDMITask):
         dev, lim = task.device, task.joint_limits
         ix = lambda pats, names: torch.tensor(_indices(pats, names), device=dev)  # noqa: E731
-        self.bodies = ix(LOWER_BODY + UPPER_BODY, KEYPOINT_NAMES)  # body_*_error_local's 12 bodies (Y:239-240)
-        self.joints = ix(TRACKED_JOINTS, TRACKING_JOINT_NAMES)  # joint_pos_error's 19 joints (Y:241)
-        self.all_joints = torch.arange(len(JOINT_NAMES), device=dev)
+        body = task.body
+        self.bodies = ix(LOWER_BODY + UPPER_BODY, body.keypoint_names)  # body_*_error_local's bodies, the G1's 12 (Y:239-240)
+        self.joints = ix(TRACKED_JOINTS, body.tracking_joint_names)  # joint_pos_error's joints, the G1's 19 (Y:241)
+        self.all_joints = torch.arange(body.num_joints, device=dev)
         mid, span = (lim[:, 0] + lim[:, 1]) / 2, lim[:, 1] - lim[:, 0]
         self.soft_lo, self.soft_hi = mid - 0.5 * span * 0.9, mid + 0.5 * span * 0.9  # joint_pos_limits' soft_factor 0.9 (Y:235, RC:69-74)
         self.contact_pos_thres = DEBUG_CONTACT_POS_THRES_TASK.get(task.cfg.name, DEBUG_CONTACT_POS_THRES)
@@ -291,7 +291,8 @@ class HOIActor:
         nets.AMP_DTYPE = torch.bfloat16 if a["amp"] == "bf16" else None
         d = task.obs_dims
         self.groups, self.N = policy_groups(a.get("priv_obs", False)), env.N - 1
-        self.pi = HOIPolicy(d["command"], d["policy"], d["object"], priv_dim=d["priv"] if "priv" in self.groups else 0).to(dev).eval()
+        self.pi = HOIPolicy(d["command"], d["policy"], d["object"], priv_dim=d["priv"] if "priv" in self.groups else 0,
+                            num_actions=task.body.num_actions).to(dev).eval()  # fmt: skip
         self.base = (env.clip.joint_pos, env.q0[env.j_act].clone(), env.scale.clone())
 
     def load(self, ck: dict):
@@ -323,7 +324,7 @@ class PPOActor:
         from ndm_gym.algos.ppo_hoi import PPOROA, PPOConfig
 
         self.agent = PPOROA(PPOConfig(phase=a["phase"], train_every=a["train_every"]), task.obs_dims, dev, compile=compile_)
-        self.N, self.dev = env.N - 1, dev
+        self.N, self.dev, self.num_actions = env.N - 1, dev, env.cfg.body.num_actions
         self.base = (env.clip.joint_pos, env.q0[env.j_act].clone(), env.scale.clone())
 
     def load(self, ck: dict):
@@ -331,7 +332,7 @@ class PPOActor:
         self.zero = self.agent.vecnorm.normalize(torch.zeros(1, self.agent.obs_dim, device=self.dev))
 
     def begin(self, fresh) -> tuple:
-        return self.zero.expand(self.N, -1), torch.zeros(self.N, NUM_ACTIONS, device=self.dev)
+        return self.zero.expand(self.N, -1), torch.zeros(self.N, self.num_actions, device=self.dev)
 
     def act(self, carry: tuple, t: torch.Tensor) -> torch.Tensor:
         return self.agent.act(*carry, deterministic=True)[0]
@@ -410,7 +411,7 @@ class Evaluator:
         noise = task.draw_noise(push=False)
         carry = actor.begin(self.reset_obs_fn(env.reset_input(prev), noise) if actor.needs_reset_obs else None)
         st = new_stats(Ns, len(self.names), len(task.term_names), dev)
-        a_sim = torch.zeros(Ns, NUM_ACTIONS, device=dev)
+        a_sim = torch.zeros(Ns, task.body.num_actions, device=dev)
         done_sim = torch.ones(Ns, dtype=torch.bool, device=dev)
         for _ in range(steps):  # HLP:227-235
             a_sim[:N].copy_(actor.act(carry, env.t))

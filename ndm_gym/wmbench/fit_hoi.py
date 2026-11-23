@@ -61,11 +61,12 @@ def load_buffer(paths: list[str], dev: str):
     """The datasets' fields that the fit reads (KEYS) in one ReplayBuffer, environments concatenated: each field copied
     from the memory-mapped file into its slice of the buffer, without a concatenated copy on the host or the GPU."""
     from ndm_gym.buffer import ReplayBuffer
+    from ndm_gym.worldmodels.hoi import ContextLayout
 
     parts = [torch.load(p, map_location="cpu", mmap=True) for p in paths]
     metas = [p["meta"] for p in parts]
     for m in metas[1:]:
-        if (m["task"], m["context_layout"]) != (metas[0]["task"], metas[0]["context_layout"]):
+        if (m["task"], ContextLayout(*m["context_layout"])) != (metas[0]["task"], ContextLayout(*metas[0]["context_layout"])):
             raise ValueError(f"datasets of different tasks or context layouts: {[(m['task'], m['context_layout']) for m in metas]}")
     T = parts[0]["data"]["s"].shape[0]
     if any(p["data"]["s"].shape[0] != T for p in parts):
@@ -122,7 +123,7 @@ def world_model(a: dict, layout, recorded_constants: dict | None = None):
         consts = ndm_constants(cfg)
         if recorded_constants is not None and recorded_constants != consts:
             raise ValueError("the datasets' task constants differ from ndm_constants(cfg)")
-        rf = rigidformer_args(consts, dim=a["rf_dim"], layers=a["rf_layers"], heads=a["rf_heads"], registers=a["rf_registers"])
+        rf = rigidformer_args(consts, dim=a["rf_dim"], layers=a["rf_layers"], heads=a["rf_heads"], registers=a["rf_registers"], body=cfg.body)
     return HOIWorldModel(a["kind"], cfg.object_joint is not None, cfg.num_eefs, layout, hidden=a["hidden"], act=a["act"],
                          layer_norm=not a["no_ln"], rigidformer=rf)  # fmt: skip
 
@@ -201,7 +202,7 @@ def main():
     for spec in args.test:
         name, path = spec.split("=", 1)
         tb, tm = load_buffer([path], dev)
-        if (tm[0]["task"], tm[0]["context_layout"]) != (args.task, train_meta[0]["context_layout"]):
+        if (tm[0]["task"], ContextLayout(*tm[0]["context_layout"])) != (args.task, layout):
             raise ValueError(f"test set {path} is of another task or context layout")
         tests[name] = {k: fixed_windows(tb, args.eval_windows, k, seed=k) for k in args.eval_k}
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)

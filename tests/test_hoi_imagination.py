@@ -117,7 +117,7 @@ def fake_env(n: int, T: int = 400, task: str = "move_suitcase", seed: int = 0):
 
     from ndm_gym.core.rotations import so3_exp
     from ndm_gym.robots.g1 import G1_JOINT_NAMES
-    from ndm_gym.sim.rigid.hdmi_sim import action_scale, default_pose
+    from ndm_gym.sim.rigid.hdmi_sim import default_pose
     from ndm_gym.tasks.hdmi import JOINT_NAMES
 
     g = torch.Generator().manual_seed(seed)
@@ -128,12 +128,12 @@ def fake_env(n: int, T: int = 400, task: str = "move_suitcase", seed: int = 0):
     j_hdmi = torch.tensor([G1_JOINT_NAMES.index(n) for n in JOINT_NAMES])
     # the reset's tables (--st_ref_replay): every joint's reference in G1 order (some beyond the soft limits), the limits
     wave = torch.sin(0.1 * torch.arange(T)[:, None] + torch.arange(NUM_J)[None])
-    return SimpleNamespace(cfg=cfg, clip=clip, L=T, hinged=False, context_layout=(5, False, len(cfg.extra_objects)), joint_limits=LIMITS.float(),
+    return SimpleNamespace(cfg=cfg, body=cfg.body, clip=clip, L=T, hinged=False, context_layout=(5, False, len(cfg.extra_objects)), joint_limits=LIMITS.float(),
                            robot_mass=33.341, q0=torch.tensor(default_pose(cfg)), j_act=j_hdmi[:NUM_ACTIONS], j_hdmi=j_hdmi,
-                           scale=torch.tensor([action_scale(n) for n in JOINT_NAMES[:NUM_ACTIONS]]), kp_com_b=0.05 * r(n, 16, 3),
+                           scale=torch.tensor([cfg.body.action_scale(n) for n in JOINT_NAMES[:NUM_ACTIONS]]), kp_com_b=0.05 * r(n, 16, 3),
                            obj_scale=torch.ones(n, 3), N=n, device="cpu", future_steps=torch.tensor((1, 2, 8, 16, 32)),
                            ref_joint_pos_all=3.0 * wave, ref_joint_vel_all=40.0 * wave.roll(1, 0), soft_lo=torch.full((NUM_J,), -2.5),
-                           soft_hi=torch.full((NUM_J,), 2.0), vel_limit=torch.full((NUM_J,), 30.0), j_g1=torch.arange(NUM_J), hinge_lim=None,
+                           soft_hi=torch.full((NUM_J,), 2.0), vel_limit=torch.full((NUM_J,), 30.0), j_state=torch.arange(NUM_J), hinge_lim=None,
                            ref_obj_joint_vel=None)  # fmt: skip
 
 

@@ -236,7 +236,7 @@ class StateRecorder:
         s = self.sim
         root, obj = self._pose(s.robot.data.root_link_pose_w.torch), self._pose(s.obj.data.root_link_pose_w.torch)
         props = [self._pose(e.data.root_link_pose_w.torch) for e in s.extras]
-        row = {"root": root, "q": s.robot.data.joint_pos.torch[self.env, s.j_g1].double().cpu().numpy(), "obj": obj, "props": props,
+        row = {"root": root, "q": s.robot.data.joint_pos.torch[self.env, s.j_state].double().cpu().numpy(), "obj": obj, "props": props,
                "frame": int(s.t[self.env])}  # fmt: skip
         if s.hinged:
             row["hinge"] = float(s.obj.data.joint_pos.torch[self.env, 0])

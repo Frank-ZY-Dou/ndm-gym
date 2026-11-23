@@ -19,13 +19,14 @@ PRIV_FEATURES = 256  # HDMI's teacher encoder's output (ndm_gym.algos.ppo_hoi.PP
 
 
 class HOIPolicy(nn.Module):
-    """a = dec(tanh enc(command), policy, object[, penc(priv, object)]): deterministic, latent z in R^32."""
+    """a = dec(tanh enc(command), policy, object[, penc(priv, object)]): deterministic, latent z in R^32, one output per
+    actuated joint (``num_actions``, the task body's; HDMI's G1 by default)."""
 
-    def __init__(self, command_dim: int, policy_dim: int, object_dim: int, z_dim: int = 32, priv_dim: int = 0):
+    def __init__(self, command_dim: int, policy_dim: int, object_dim: int, z_dim: int = 32, priv_dim: int = 0, num_actions: int = NUM_ACTIONS):
         super().__init__()
         self.priv_dim, self.policy_dim = priv_dim, policy_dim
         self.enc = mlp(command_dim, [2048, 1024, 512, 256], z_dim)
-        self.dec = mlp(z_dim + policy_dim + object_dim + (PRIV_FEATURES if priv_dim else 0), [2048, 1024, 512, 256], NUM_ACTIONS)
+        self.dec = mlp(z_dim + policy_dim + object_dim + (PRIV_FEATURES if priv_dim else 0), [2048, 1024, 512, 256], num_actions)
         with torch.no_grad():
             self.dec[-1].weight.mul_(0.01)
             self.dec[-1].bias.zero_()

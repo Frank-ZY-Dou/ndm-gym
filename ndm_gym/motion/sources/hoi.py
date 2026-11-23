@@ -1,7 +1,8 @@
-"""Human-object interaction clips for the G1 in one converted format, whatever their source (HDMI's
+"""Human-object interaction clips for a humanoid in one converted format, whatever their source (HDMI's
 clips, OmniRetarget's retargeting of OMOMO): one ``<name>.npz`` per clip with
 
-``root_pos`` (T, 3), ``root_quat_wxyz`` (T, 4), ``joint_pos`` (T, 29) in the G1's (Unitree SDK) joint order,
+``root_pos`` (T, 3), ``root_quat_wxyz`` (T, 4), ``joint_pos`` (T, J) in the robot's state joint order (the G1's
+Unitree SDK order, J = 29, unless the sidecar's ``joint_names`` lists another robot's),
 ``object_pos`` (T, 3), ``object_quat_wxyz`` (T, 4), ``fps``, and optionally ``object_joint_pos`` (T, k) for an
 articulated object, ``contact`` (T, c) reference contact flags, and ``extra_pos`` (T, n, 3) and ``extra_quat_wxyz``
 (T, n, 4) for the scene's other objects;
@@ -11,7 +12,7 @@ and a ``<name>.json`` beside it that names the object (``object_name``), the oth
 
 A source may also store its own reference: ``keypoint_pos`` (T, b, 3), ``keypoint_quat_wxyz`` (T, b, 4),
 ``keypoint_lin_vel`` and ``keypoint_ang_vel`` (T, b, 3) of the bodies named by the sidecar's ``keypoint_names``,
-``joint_vel`` (T, 29) and ``object_joint_vel`` (T, k). The poses are checked but not loaded (forward kinematics
+``joint_vel`` (T, J) and ``object_joint_vel`` (T, k). The poses are checked but not loaded (forward kinematics
 reproduces them); the velocities, which a source may not derive from its poses (HDMI's are not finite differences),
 become the clip's ``src_vel``.
 """
@@ -48,8 +49,9 @@ def load_clip(path: str) -> Clip:
         meta = json.load(f)
     T = arr["root_pos"].shape[0]
     extras = tuple(meta.get("extra_objects", ()))
-    shapes = {"root_pos": (T, 3), "root_quat_wxyz": (T, 4), "joint_pos": (T, NUM_J), "object_pos": (T, 3), "object_quat_wxyz": (T, 4),
-              "joint_vel": (T, NUM_J), "extra_pos": (T, len(extras), 3), "extra_quat_wxyz": (T, len(extras), 4)}  # fmt: skip
+    J = len(meta["joint_names"]) if "joint_names" in meta else NUM_J
+    shapes = {"root_pos": (T, 3), "root_quat_wxyz": (T, 4), "joint_pos": (T, J), "object_pos": (T, 3), "object_quat_wxyz": (T, 4),
+              "joint_vel": (T, J), "extra_pos": (T, len(extras), 3), "extra_quat_wxyz": (T, len(extras), 4)}  # fmt: skip
     if any(k.startswith("keypoint_") for k in arr):
         if "keypoint_names" not in meta:
             raise ValueError(f"{path}: keypoint arrays without keypoint_names")

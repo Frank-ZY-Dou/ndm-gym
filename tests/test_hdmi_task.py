@@ -652,3 +652,25 @@ def test_action_pipeline():
         torch.testing.assert_close(sub1[:, i], ref_buf[envs, :, lag])  # x + (y - x) rounds, so up to float precision
     sub.sum().backward()
     assert a.grad is not None and a.grad.abs().sum() > 0
+
+
+def test_g1_body():
+    """HDMI's G1 as a body: Unitree's state order, the robot module's motors and default pose, HDMI's effort limits
+    (§3.3) and action scales (Y:27-43), and checks on a body's consistency."""
+    from ndm_gym.robots import g1
+
+    body = hdmi_tasks.G1_BODY
+    assert body.state_joint_names == tuple(g1.G1_JOINT_NAMES) and body.num_joints == g1.NUM_J and body.mjcf == g1.MJCF_PATH
+    assert all(body.motor(n) == g1.motor_of(n) for n in body.joint_names)
+    assert body.default_pose() == g1.default_joint_pos_list()
+    assert body.effort_limits == (88, 88, 88, 139, 139, 50, 88, 88, 50, 139, 139, 25, 25, 50, 50, 25, 25, 50, 50, 25, 25, 25, 25, 25, 25, 5, 5, 5, 5)
+    scales = {"hip_yaw": 0.55, "hip_roll": 0.35, "hip_pitch": 0.55, "knee": 0.35, "waist_yaw": 0.55}
+    for n in body.tracking_joint_names:
+        key = n.removeprefix("left_").removeprefix("right_").removesuffix("_joint")
+        assert body.action_scale(n) == scales.get(key, 0.44)
+    with pytest.raises(KeyError):
+        body.action_scale("left_wrist_yaw_joint")  # held, not actuated
+    with pytest.raises(ValueError):
+        dataclasses.replace(body, state_joint_names=body.state_joint_names[:-1])
+    with pytest.raises(ValueError):
+        dataclasses.replace(body, feet=(10, 12))

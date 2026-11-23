@@ -31,6 +31,10 @@ def state_dim(num_joints: int = NUM_J) -> int:
     return 3 + 4 + 3 + 3 + 2 * num_joints
 
 
+def invariant_dim(num_joints: int = NUM_J) -> int:
+    return 1 + 6 + 3 + 3 + 2 * num_joints
+
+
 def unflatten_state(x: torch.Tensor):
     n = (x.shape[-1] - 13) // 2
     return x[..., 0:3], quat_to_mat(x[..., 3:7]), x[..., 7:10], x[..., 10:13], x[..., 13 : 13 + n], x[..., 13 + n : 13 + 2 * n]

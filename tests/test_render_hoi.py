@@ -101,11 +101,11 @@ def test_recorder(tmp_path):
     unit = lambda *s: torch.nn.functional.normalize(torch.randn(*s, 4, generator=g, dtype=torch.float64), dim=-1)  # noqa: E731
     pose = lambda: torch.cat((torch.randn(N, 3, generator=g, dtype=torch.float64), unit(N)), -1)  # noqa: E731
     perm = torch.randperm(NUM_J, generator=g)  # robot joint i is G1 joint perm[i]
-    j_g1 = torch.argsort(perm)  # G1 joint k sits at robot index j_g1[k]
+    j_state = torch.argsort(perm)  # G1 joint k sits at robot index j_state[k]
     sim = type("Sim", (), {})()
     sim.cfg = rh.hdmi_tasks.get("carry_and_place_bread_box")
     sim.scene = type("Scene", (), {"env_origins": torch.randn(N, 3, generator=g, dtype=torch.float64)})()
-    sim.j_g1, sim.hinged, sim.t = j_g1, False, torch.tensor([4, 9, 2])
+    sim.j_state, sim.hinged, sim.t = j_state, False, torch.tensor([4, 9, 2])
     rec = rh.StateRecorder(sim, env)
     rows = []
     for step in range(3):
@@ -120,7 +120,7 @@ def test_recorder(tmp_path):
     for t, (robot, obj, extras, frame) in enumerate(rows):
         np.testing.assert_allclose(m.root_pos[t], robot.data.root_link_pose_w.torch[env, :3].numpy() - org)
         np.testing.assert_allclose(m.root_quat[t], wxyz(robot.data.root_link_pose_w.torch))
-        np.testing.assert_allclose(m.joint_pos[t], robot.data.joint_pos.torch[env, j_g1].numpy())
+        np.testing.assert_allclose(m.joint_pos[t], robot.data.joint_pos.torch[env, j_state].numpy())
         np.testing.assert_allclose(m.object_pos[t], obj.data.root_link_pose_w.torch[env, :3].numpy() - org)
         np.testing.assert_allclose(m.object_quat[t], wxyz(obj.data.root_link_pose_w.torch))
         for k, e in enumerate(extras):

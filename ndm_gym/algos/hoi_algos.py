@@ -26,10 +26,9 @@ import torch.nn as nn
 from ..core.kinematics import mat_vec
 from ..policies.critic import Critic
 from ..policies.hoi_policy import HOIPolicy
-from ..robots.g1 import NUM_J
 from ..sim.rigid.hdmi_sim import ndm_constants
 from ..state import unflatten_object, unflatten_state
-from ..tasks.hdmi import (EPISODIC_CONTACT_NOISE, NOISE_ANG_VEL, NOISE_GRAVITY, NOISE_JOINT_POS, NUM_ACTIONS, PRIV_HISTORY, HDMITask,
+from ..tasks.hdmi import (EPISODIC_CONTACT_NOISE, NOISE_ANG_VEL, NOISE_GRAVITY, NOISE_JOINT_POS, PRIV_HISTORY, HDMITask,
                           action_pipeline, contact_error, contact_reward, full_tracking_score, heading_pos, penalty_terms, relative_rot,
                           reward_selection, rot_angle)  # fmt: skip
 from ..worldmodels.hoi import ContextLayout, HOIWorldModel, rigidformer_args
@@ -124,19 +123,20 @@ class HOIAgent:
     replay: float = 0.0  # SuperTrack's --st_ref_replay threshold (m; 0: off)
 
     def __init__(self, args, env, dev: str):
-        self.args, self.dev, self.cfg = args, dev, env.cfg
+        self.args, self.dev, self.cfg, self.body = args, dev, env.cfg, env.cfg.body
         self.layout = ContextLayout(*env.context_layout)
         consts = ndm_constants(env.cfg)
         rf = None
         if args.wm_backbone == "rigidformer":
-            rf = rigidformer_args(consts, dim=args.rf_dim, layers=args.rf_layers, heads=args.rf_heads, registers=args.rf_registers)
+            rf = rigidformer_args(consts, dim=args.rf_dim, layers=args.rf_layers, heads=args.rf_heads, registers=args.rf_registers, body=self.body)
         self.wm = HOIWorldModel(self.kind, env.hinged, env.cfg.num_eefs, self.layout, hidden=args.wm_hidden, act=args.wm_act,
                                 layer_norm=not args.wm_no_ln, rigidformer=rf).to(dev)  # fmt: skip
         self.B = args.pi_batch
         self.task = HDMITask(env.cfg, self.B, env.joint_limits, env.robot_mass, noise=True, device=dev)  # the imagination batch
         dims = self.task.obs_dims
         self.groups = policy_groups(getattr(args, "priv_obs", False))
-        self.pi = HOIPolicy(dims["command"], dims["policy"], dims["object"], priv_dim=dims["priv"] if "priv" in self.groups else 0).to(dev)
+        self.pi = HOIPolicy(dims["command"], dims["policy"], dims["object"], priv_dim=dims["priv"] if "priv" in self.groups else 0,
+                           num_actions=self.body.num_actions).to(dev)  # fmt: skip
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=args.lr)
         self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=args.lr, betas=(0.9, 0.95))
         self.imag = HOIImagination(env.cfg, env.clip, consts, env.hinge_frames() if env.hinged else None, self.layout, dev)
@@ -275,7 +275,7 @@ class HOIAgent:
         g = lambda key, r: D[key][r, env]  # noqa: E731
         backs = [back(k) for k in range(1, PRIV_HISTORY + 1)]  # each once: the action buffer reads 1-3, the histories 1-9
         S, So, ctx, t = unflatten_state(g("s", row)), self.obj(g("o", row)), g("ctx", row), g("t", row)
-        abuf = torch.zeros(B, NUM_ACTIONS, 3, device=dev)
+        abuf = torch.zeros(B, self.body.num_actions, 3, device=dev)
         for k in range(1, 4):
             r, v = backs[k - 1]
             abuf[..., k - 1] = g("a", r) * v.unsqueeze(-1)
@@ -313,7 +313,8 @@ class HOIAgent:
             T.ang_vel_policy, T.gravity_policy, T.joint_pos_policy = ang[:, :1], grav[:, :1], q
             T.contact_noise = torch.zeros(B, self.cfg.num_eefs, 3, device=dev)
         T.term_count, T.air_count, T.contact_count, T.last_air_time = g("term_count", row), g("feet_air", row), g("feet_cnt", row), g("feet_last", row)
-        delay, alpha = ctx[:, self.layout.startup + NUM_J].round().long(), ctx[:, self.layout.startup + NUM_J + 1 : self.layout.startup + NUM_J + 2]
+        reset_start = self.layout.startup + self.body.num_joints
+        delay, alpha = ctx[:, reset_start].round().long(), ctx[:, reset_start + 1 : reset_start + 2]
         return {"S": S, "So": So, "ctx": ctx, "t": t, "env": env, "row": row, "v1": v1, "abuf": abuf, "afilt": afilt, "S_prev": S_prev,
                 "So_prev": So_prev, "f_eef_prev": f_eef_prev, "f_feet_prev": f_feet_prev, "u_prev": u_prev, "delay": delay, "alpha": alpha,
                 "count0": T.term_count.float()}  # fmt: skip
@@ -344,7 +345,7 @@ class HOIAgent:
         obs, abuf, afilt, count = {k: obs0[k] for k in self.groups}, st["abuf"], st["afilt"], st["count0"]
         delay, alpha, out = st["delay"], st["alpha"], []
         for _ in range(self.args.horizon):
-            tap = None if taps is None else torch.zeros(self.B, NUM_ACTIONS, device=self.dev, requires_grad=True)
+            tap = None if taps is None else torch.zeros(self.B, self.body.num_actions, device=self.dev, requires_grad=True)
             if tap is not None:
                 taps.append((obs, tap))
             S, So, abuf, afilt, prev, obs, count, rec = self.imag_step(S, So, obs, t, abuf, afilt, prev, count, ctx, kp, sc, delay, alpha, tap)
@@ -423,8 +424,8 @@ class HOIAgent:
     def reference_state(self, t: torch.Tensor, kp: torch.Tensor) -> tuple:
         """--st_ref_replay's state of the reference frame ``t`` (B,) (the frame a step from counter t is measured against),
         as HDMI's reset sets it (§2, HDMISim.reset) without its noise: the pelvis's pose and angular velocity, its reference
-        centre-of-mass velocity turned into the root link's with the env's centre of mass ``kp`` (B, 16, 3), every joint's
-        reference clamped as the reset clamps it (G1 order), the object's reference pose at rest, or the hinge's reference
+        centre-of-mass velocity turned into the root link's with the env's centre of mass ``kp`` (B, K, 3), every joint's
+        reference clamped as the reset clamps it (the state's order), the object's reference pose at rest, or the hinge's reference
         angle (clamped to its limits) and rate."""
         c, f = self.clip, t.clamp(max=self.L - 1)
         R0, w0 = c.body_rot[f, 0], c.body_ang_vel[f, 0]
@@ -573,13 +574,13 @@ class HOISuperTrack(HOIAgent):
         # --st_late_w (LAFAN1's): later imagined steps weigh more, 1 at the first step to 1 + w at the last
         late_w = getattr(args, "st_late_w", 0.0)
         self.late = 1 + late_w * torch.arange(args.horizon, device=dev) / max(args.horizon - 1, 1) if late_w != 0 else None
-        # --st_ref_replay: DiffMimic's demonstration replay in the imagined window (_replay), from the reference's tables in G1
-        # order and the limits HDMI's reset clamps to (HDMISim)
+        # --st_ref_replay: DiffMimic's demonstration replay in the imagined window (_replay), from the reference's tables in the
+        # state's order and the limits HDMI's reset clamps to (HDMISim)
         self.replay = getattr(args, "st_ref_replay", 0.0)
         if self.replay < 0:
             raise ValueError(f"--st_ref_replay must be >= 0 (0: off), got {self.replay}")
         if self.replay:
-            j = env.j_g1  # G1 order -> the simulator's joint index
+            j = env.j_state  # the state's order -> the simulator's joint index
             self.ref_tables = {"q": env.ref_joint_pos_all, "qd": env.ref_joint_vel_all, "q_lo": env.soft_lo[j], "q_hi": env.soft_hi[j],
                                "qd_max": env.vel_limit[j], "hinge_lim": env.hinge_lim, "hinge_rate": env.ref_obj_joint_vel}  # fmt: skip
         self.calibrated = False  # whether bal is known to be calibrated (its flag is read once, not at every update)
@@ -600,7 +601,7 @@ class HOISuperTrack(HOIAgent):
         e_loc = (heading_pos(now.body_pos, now.root_pos, now.root_rot) - heading_pos(ref.body_pos[:, 0], ref.body_pos[:, 0, 0], ref.body_rot[:, 0, 0]))
         e_loc = e_loc.abs().sum(-1).mean(-1)
         e_ori = rot_angle(relative_rot(ref.body_rot[:, 0], now.body_rot)).mean(-1)
-        e_q = (now.joint_pos[:, :NUM_ACTIONS] - ref.joint_pos[:, 0]).abs().mean(-1)
+        e_q = (now.joint_pos[:, : self.body.num_actions] - ref.joint_pos[:, 0]).abs().mean(-1)
         if self.hinged:
             e_op = (now.obj_joint_pos - ref.obj_joint_pos[:, 0]).abs()
             e_oo = torch.zeros_like(e_op)
@@ -649,7 +650,7 @@ class HOISuperTrack(HOIAgent):
         n = len(self.terms)
         if a.st_fail_w != 0:  # the failure penalty: each imagined step after a failure costs st_fail_w steps' worth of loss
             loss = loss + a.st_fail_w * (n / a.horizon) * (1 - alive).sum(0).mean()
-        A = torch.stack([s[2] for s in steps])  # (H, B, 23): the actions' residuals over the reference
+        A = torch.stack([s[2] for s in steps])  # (H, B, A): the actions' residuals over the reference
         loss = loss + a.st_reg * ((A**2).mean() + A.abs().mean())
         if self.penalties:  # --st_task_penalties: the mean penalty per imagined step and rollout times n / full score
             loss = loss + self.w_pen * torch.stack([s[3] for s in steps]).mean()

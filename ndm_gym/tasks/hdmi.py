@@ -30,7 +30,7 @@ import torch
 
 from ..core.rotations import yaw_mat
 from ..state import CONTROL_DT
-from .hdmi_tasks import G1_BODY, HDMITaskCfg, Term, Termination
+from .hdmi_tasks import G1_BODY, HDMIBody, HDMITaskCfg, Term, Termination
 
 JOINT_NAMES = G1_BODY.joint_names  # HDMI's G1: the task's other modules and HDMI's tasks read these; a task's own are cfg.body's
 NUM_ACTIONS = G1_BODY.num_actions
@@ -375,9 +375,9 @@ def impact_force_l2(x: HDMIInput, feet: FeetContact, robot_weight: float) -> tor
     return -(F.square() * feet.first_contact).clamp_max(10.0).sum(-1)
 
 
-def feet_slip(x: HDMIInput, feet: FeetContact, tolerance: float) -> torch.Tensor:
+def feet_slip(x: HDMIInput, feet: FeetContact, tolerance: float, body: HDMIBody = G1_BODY) -> torch.Tensor:
     """-sum_f 1[contact time > 0.02 s] clamp(|v_f,xy| - tol, 0, 1), centre-of-mass velocities (RF:25-32)."""
-    v = (x.now.body_lin_vel[:, FEET_SLICE, :2].norm(dim=-1) - tolerance).clamp(0.0, 1.0)
+    v = (x.now.body_lin_vel[:, body.feet_slice, :2].norm(dim=-1) - tolerance).clamp(0.0, 1.0)
     return -((feet.contact_time > 0.02) * v).sum(-1)
 
 
@@ -410,9 +410,9 @@ def reward_selection(cfg, kind: str) -> list[int]:
     if len(found) != 1:
         raise ValueError(f"{cfg.name}: {len(found)} enabled {kind} rewards, expected 1")
     if kind in _KEYPOINT_REWARDS:
-        return _match(found[0].params["body_names"], KEYPOINT_NAMES)
+        return _match(found[0].params["body_names"], cfg.body.keypoint_names)
     if kind in _JOINT_REWARDS:
-        return _match(found[0].params["joint_names"], TRACKING_JOINT_NAMES)
+        return _match(found[0].params["joint_names"], cfg.body.tracking_joint_names)
     raise ValueError(f"{kind!r} selects neither keypoints nor joints")
 
 
@@ -532,7 +532,7 @@ def object_obs(x: HDMIInput, xy_noise=None, heading_noise=None, contact_noise=No
 
 
 def priv_obs(x: HDMIInput, ang_vel_hist: torch.Tensor, gravity_hist: torch.Tensor, joint_pos_hist: torch.Tensor, hinged: bool,
-             height_idx: torch.Tensor | None = None) -> torch.Tensor:  # fmt: skip
+             height_idx: torch.Tensor | None = None, body: HDMIBody = G1_BODY) -> torch.Tensor:  # fmt: skip
     """The critic's and teacher's group in HDMI's order (Y:137-164, plus the hinge terms of doors and the chair),
     (N, 1703 + 5C + 3E (+3))."""
     now, prev, ref = x.now, x.prev, x.ref
@@ -550,9 +550,9 @@ def priv_obs(x: HDMIInput, ang_vel_hist: torch.Tensor, gravity_hist: torch.Tenso
         relative_rot(Rs.unsqueeze(1), ref.body_rot[:, :, 0])[..., :2, :].flatten(1),  # ref_root_ori_future_b: rows 0-1
         (ref_local - rob_local).flatten(1), diff_rot[..., :2, :].flatten(1), diff_lin.flatten(1), diff_ang.flatten(1),
         _inv(now.root_rot, now.body_lin_vel[:, 0]),  # root_linvel_b: the last substep's root velocity (EMA with gamma 0)
-        heading_pos(now.body_pos[:, FEET_SLICE], now.root_pos, now.root_rot).flatten(1),  # body_pos_b
-        _inv(now.root_rot.unsqueeze(1), now.body_lin_vel[:, FEET_SLICE]).flatten(1),  # body_vel_b: full root rotation
-        now.body_pos[:, list(HEIGHT_BODIES) if height_idx is None else height_idx, 2],  # body_height above the ground plane z = 0
+        heading_pos(now.body_pos[:, body.feet_slice], now.root_pos, now.root_rot).flatten(1),  # body_pos_b
+        _inv(now.root_rot.unsqueeze(1), now.body_lin_vel[:, body.feet_slice]).flatten(1),  # body_vel_b: full root rotation
+        now.body_pos[:, list(body.height_bodies) if height_idx is None else height_idx, 2],  # body_height above the ground plane z = 0
         x.applied_action, x.applied_torque,
         _inv(Rs, now.obj_pos - ps), relative_rot(Rs, now.obj_rot).flatten(1),  # object_pos_b, object_ori_b (row-major)
         _inv(now.obj_rot.unsqueeze(1), ref.obj_pos - now.obj_pos.unsqueeze(1)).flatten(1),  # diff_object_pos_future
@@ -600,12 +600,13 @@ class HDMITask:
     def __init__(self, cfg: HDMITaskCfg, num_envs: int, joint_limits: torch.Tensor, robot_mass: float, noise: bool = True,
                  device: str | torch.device = "cpu", dtype: torch.dtype = torch.float32):  # fmt: skip
         self.cfg, self.num_envs, self.noise, self.device, self.dtype = cfg, num_envs, noise, torch.device(device), dtype
+        self.body = body = cfg.body
         self.num_eefs, self.num_contact_cols, self.hinged = cfg.num_eefs, cfg.contact_cols, cfg.object_joint is not None
         self.joint_limits = torch.as_tensor(joint_limits, dtype=dtype, device=self.device)
-        if self.joint_limits.shape != (len(JOINT_NAMES), 2):
-            raise ValueError(f"joint_limits must be ({len(JOINT_NAMES)}, 2), got {tuple(self.joint_limits.shape)}")
+        if self.joint_limits.shape != (len(body.joint_names), 2):
+            raise ValueError(f"joint_limits must be ({len(body.joint_names)}, 2), got {tuple(self.joint_limits.shape)}")
         self.robot_weight = robot_mass * GRAVITY
-        self.eef_keypoints = [KEYPOINT_NAMES.index(b) for b in cfg.contact_eef_bodies]  # every end effector of the 13 tasks is a keypoint
+        self.eef_keypoints = [body.keypoint_names.index(b) for b in cfg.contact_eef_bodies]  # every end effector of the 13 tasks is a keypoint
         self.eef_offsets = torch.tensor(cfg.contact_eef_offsets, dtype=dtype, device=self.device)
         self.target_offsets = torch.tensor(cfg.contact_target_offsets, dtype=dtype, device=self.device)
         if tuple(cfg.rewards) != GROUPS:
@@ -617,18 +618,19 @@ class HDMITask:
         self.term_min_steps = torch.tensor([t.min_steps for t in cfg.terminations.values()], device=self.device)
         # index constants on the device, made once: indexing with a Python list or tuple copies it there every call
         self._hist_idx = torch.tensor(POLICY_JOINT_HISTORY, device=self.device)
-        self._height_idx = torch.tensor(HEIGHT_BODIES, device=self.device)
+        self._height_idx = torch.tensor(body.height_bodies, device=self.device)
         self.future_steps = torch.tensor(FUTURE_STEPS, device=self.device)
         self._clear()
 
     @property
     def obs_dims(self) -> dict[str, int]:
-        K, J, A, F, E, C = len(KEYPOINT_NAMES), len(JOINT_NAMES), NUM_ACTIONS, len(FUTURE_STEPS), self.num_eefs, self.num_contact_cols
+        b = self.body
+        K, J, A, F, E, C = len(b.keypoint_names), len(b.joint_names), b.num_actions, len(FUTURE_STEPS), self.num_eefs, self.num_contact_cols
         return {
             "command": F * K * 3 + F * A + 1,
             "policy": 3 + 3 + len(POLICY_JOINT_HISTORY) * J + 3 * A,
             "object": 2 + 2 + 3 * E,
-            "priv": PRIV_HISTORY * (3 + 3 + J) + F * (3 + 6) + F * K * (3 + 6 + 3 + 3) + 3 + 3 * len(FEET) + 3 * len(FEET) + len(HEIGHT_BODIES)
+            "priv": PRIV_HISTORY * (3 + 3 + J) + F * (3 + 6) + F * K * (3 + 6 + 3 + 3) + 3 + 3 * len(b.feet) + 3 * len(b.feet) + len(b.height_bodies)
                     + A + J + 3 + 9 + F * (3 + 9) + F * C + 3 * E + (3 if self.hinged else 0),
         }  # fmt: skip
 
@@ -640,10 +642,10 @@ class HDMITask:
     def _reward_fn(self, t: Term) -> Callable[[HDMIInput, FeetContact], torch.Tensor]:
         p, k = dict(t.params), t.kind
         if k in _KEYPOINT_REWARDS:
-            f, idx, sigma = _KEYPOINT_REWARDS[k], self._ix(_match(p.pop("body_names"), KEYPOINT_NAMES)), p.pop("sigma")
+            f, idx, sigma = _KEYPOINT_REWARDS[k], self._ix(_match(p.pop("body_names"), self.body.keypoint_names)), p.pop("sigma")
             fn = lambda x, feet: f(x, idx, sigma)  # noqa: E731
         elif k in _JOINT_REWARDS:  # the reference holds the tracking joints, which are the first 23 joints
-            f, idx, sigma = _JOINT_REWARDS[k], self._ix(_match(p.pop("joint_names"), TRACKING_JOINT_NAMES)), p.pop("sigma")
+            f, idx, sigma = _JOINT_REWARDS[k], self._ix(_match(p.pop("joint_names"), self.body.tracking_joint_names)), p.pop("sigma")
             fn = lambda x, feet: f(x, idx, sigma)  # noqa: E731
         elif k in _OBJECT_REWARDS:
             if k == "object_joint_pos_tracking" and not self.hinged:
@@ -659,23 +661,23 @@ class HDMITask:
         elif k == "action_rate_l2":
             fn = lambda x, feet: action_rate_l2(x)  # noqa: E731
         elif k == "joint_vel_l2":
-            idx = self._ix(_match(p.pop("joint_names"), JOINT_NAMES))
+            idx = self._ix(_match(p.pop("joint_names"), self.body.joint_names))
             fn = lambda x, feet: joint_vel_l2(x, idx)  # noqa: E731
         elif k == "joint_pos_limits":  # soft limits from the hard ones as RC:69-74
-            idx, factor = self._ix(_match(p.pop("joint_names"), JOINT_NAMES)), p.pop("soft_factor")
+            idx, factor = self._ix(_match(p.pop("joint_names"), self.body.joint_names)), p.pop("soft_factor")
             lim = self.joint_limits[idx]
             mid, span = (lim[:, 0] + lim[:, 1]) / 2, lim[:, 1] - lim[:, 0]
             lo, hi = mid - 0.5 * span * factor, mid + 0.5 * span * factor
             fn = lambda x, feet: joint_pos_limits(x, idx, lo, hi)  # noqa: E731
         elif k == "joint_torque_limits":
-            ids = _match(p.pop("joint_names"), JOINT_NAMES)
+            ids = _match(p.pop("joint_names"), self.body.joint_names)
             idx = self._ix(ids)
-            soft = torch.tensor([EFFORT_LIMITS[i] for i in ids], dtype=self.dtype, device=self.device) * p.pop("soft_factor")
+            soft = torch.tensor([self.body.effort_limits[i] for i in ids], dtype=self.dtype, device=self.device) * p.pop("soft_factor")
             fn = lambda x, feet: joint_torque_limits(x, idx, soft)  # noqa: E731
         elif k == "survival":
             fn = lambda x, feet: survival(x)  # noqa: E731
         elif k in ("feet_stumble", "impact_force_l2", "feet_slip", "feet_air_time"):
-            if _match(p.pop("body_names"), KEYPOINT_NAMES) != list(FEET):
+            if _match(p.pop("body_names"), self.body.keypoint_names) != list(self.body.feet):
                 raise ValueError(f"{k}: the feet terms act on the two ankle_roll links, whose forces HDMIInput carries")
             if k == "feet_stumble":
                 fn = lambda x, feet: feet_stumble(x)  # noqa: E731
@@ -683,7 +685,7 @@ class HDMITask:
                 fn = lambda x, feet: impact_force_l2(x, feet, self.robot_weight)  # noqa: E731
             elif k == "feet_slip":
                 tol = p.pop("tolerance")
-                fn = lambda x, feet: feet_slip(x, feet, tol)  # noqa: E731
+                fn = lambda x, feet: feet_slip(x, feet, tol, self.body)  # noqa: E731
             else:
                 thres = p.pop("thres")
                 if p.pop("soft_discount") != 1.0:
@@ -698,7 +700,7 @@ class HDMITask:
     def _termination_fn(self, name: str, t: Termination) -> Callable[[HDMIInput], torch.Tensor]:
         p = dict(t.params)
         if name in _BODY_ERRORS:
-            f, idx = _BODY_ERRORS[name], self._ix(_match(p.pop("body_names"), KEYPOINT_NAMES))
+            f, idx = _BODY_ERRORS[name], self._ix(_match(p.pop("body_names"), self.body.keypoint_names))
             fn = lambda x: f(x, idx)  # noqa: E731
         elif name == "cum_object_pos_error":
             fn = object_pos_error
@@ -714,7 +716,7 @@ class HDMITask:
         return fn
 
     def _clear(self):
-        N, J, E, dev, dt = self.num_envs, len(JOINT_NAMES), self.num_eefs, self.device, self.dtype
+        N, J, E, dev, dt = self.num_envs, len(self.body.joint_names), self.num_eefs, self.device, self.dtype
         z = lambda *s: torch.zeros(*s, dtype=dt, device=dev)  # noqa: E731
         # one instance per observation term, as in HDMI: the policy's histories carry noise, the critic's do not
         self.ang_vel_policy, self.gravity_policy, self.joint_pos_policy = z(N, 1, 3), z(N, 1, 3), z(N, PRIV_HISTORY, J)
@@ -731,7 +733,7 @@ class HDMITask:
         """Episode start for ``env_ids`` with ``state`` the post-reset state of all envs (§0 reset): the histories are
         filled with it (OC:24-29, 51-57, 104-108), the contact-target noise is redrawn, the counters and timers cleared."""
         ids = torch.as_tensor(env_ids, dtype=torch.long, device=self.device)
-        n, J = len(ids), len(JOINT_NAMES)
+        n, J = len(ids), len(self.body.joint_names)
         R0 = state.root_rot[ids]
         ang, grav, q = _inv(R0, state.body_ang_vel[ids, 0]), -R0[:, 2, :], state.joint_pos[ids]
         ang_p = ang.unsqueeze(1)
@@ -789,7 +791,7 @@ class HDMITask:
         they give the same values as drawing inside, which a compiled caller needs to keep eager's random stream."""
         if not self.noise:
             return None
-        N, E, J, kw = self.num_envs, self.num_eefs, len(JOINT_NAMES), {"dtype": self.dtype, "device": self.device}
+        N, E, J, kw = self.num_envs, self.num_eefs, len(self.body.joint_names), {"dtype": self.dtype, "device": self.device}
         hist = {"ang": (N, 3), "q": (N, J), "grav": (N, 3)} if push else {}
         shapes = hist | {"xy": (N, 2), "heading": (N,), "contact": (N, E, 3), "contact2": (N, E, 3)}
         return {k: torch.randn(*s, **kw) for k, s in shapes.items()}
@@ -849,7 +851,7 @@ class HDMITask:
             "command": command_obs(x),
             "policy": policy_obs(x, self.ang_vel_policy, self.gravity_policy, self.joint_pos_policy, self._hist_idx),
             "object": object_obs(x, xy_noise, heading_noise, contact_noise),
-            "priv": priv_obs(x, self.ang_vel_priv, self.gravity_priv, self.joint_pos_priv, self.hinged, self._height_idx),
+            "priv": priv_obs(x, self.ang_vel_priv, self.gravity_priv, self.joint_pos_priv, self.hinged, self._height_idx, self.body),
         }
 
     def step(self, x: HDMIInput, noise: dict[str, torch.Tensor] | None = None) -> HDMIOutput:
@@ -869,9 +871,9 @@ class HDMITask:
 
     def _check(self, x: HDMIInput):
         N, E, C = self.num_envs, self.num_eefs, self.num_contact_cols
-        shapes = {"now.body_pos": (x.now.body_pos, (N, len(KEYPOINT_NAMES), 3)), "prev.eef_pos": (x.prev.eef_pos, (N, E, 3)),
+        shapes = {"now.body_pos": (x.now.body_pos, (N, len(self.body.keypoint_names), 3)), "prev.eef_pos": (x.prev.eef_pos, (N, E, 3)),
                   "ref.contact": (x.ref.contact, (N, len(FUTURE_STEPS), C)), "ref_next.contact": (x.ref_next.contact, (N, len(FUTURE_STEPS), C)),
-                  "joint_pos_sub": (x.joint_pos_sub, (N, 2, len(JOINT_NAMES))), "action_buf": (x.action_buf, (N, NUM_ACTIONS, 3)),
+                  "joint_pos_sub": (x.joint_pos_sub, (N, 2, len(self.body.joint_names))), "action_buf": (x.action_buf, (N, self.body.num_actions, 3)),
                   "feet_force": (x.feet_force, (N, DECIMATION, 2, 3))}  # fmt: skip
         for name, (t, shape) in shapes.items():
             if tuple(t.shape) != shape:

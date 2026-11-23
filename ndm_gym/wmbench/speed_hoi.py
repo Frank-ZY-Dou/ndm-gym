@@ -163,7 +163,7 @@ def main():
         else:
             from ndm_gym.worldmodels.hoi import ContextLayout, HOIWorldModel, rigidformer_args
 
-            rf = None if args.backbone == "mlp" else rigidformer_args(env.ndm_constants(), args.rf_dim, args.rf_layers, args.rf_heads, args.rf_registers)
+            rf = None if args.backbone == "mlp" else rigidformer_args(env.ndm_constants(), args.rf_dim, args.rf_layers, args.rf_heads, args.rf_registers, body=cfg.body)
             wm = HOIWorldModel(args.kind, env.hinged, cfg.num_eefs, ContextLayout(*env.context_layout), hidden=args.hidden, rigidformer=rf).to(dev)
             n_par = sum(t.numel() for t in wm.net.parameters())
             wm, step, path = inference_model(wm, args)

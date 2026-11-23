@@ -87,7 +87,7 @@ def main():
     from ndm_gym.algos.hoi_guard import NonfiniteMonitor, check, guard_terms, nonfinite, record_layout
     from ndm_gym.buffer import ReplayBuffer
     from ndm_gym.sim.rigid.hdmi_sim import HDMISim, make_hdmi_sim
-    from ndm_gym.tasks.hdmi import NUM_ACTIONS, HDMITask
+    from ndm_gym.tasks.hdmi import HDMITask
     from ndm_gym.tasks.hdmi_tasks import TASKS
     from ndm_gym.wmbench.collect_hoi import merge_states
 
@@ -153,7 +153,7 @@ def main():
         task.reset(all_ids, prev)
         x0 = env.reset_input(prev)
         obs = task_obs(x0, task.draw_noise(push=False))
-        a0 = torch.zeros(args.num_envs, NUM_ACTIONS, device=dev)
+        a0 = torch.zeros(args.num_envs, task.body.num_actions, device=dev)
         monitor = NonfiniteMonitor(args.log_dir, record_layout(x0, obs, a0), [n for n, _, _ in guard_terms(x0, obs)], args.num_envs, dev)
         state = {"obs": obs, "prev": prev, "steps": 0}  # steps: collection steps since the last log row
         stats = {k: [] for k in ("r", "ep_len", "term", "done")}

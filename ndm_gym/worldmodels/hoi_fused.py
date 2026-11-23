@@ -19,9 +19,8 @@ import torch
 import triton
 import triton.language as tl
 
-from ..robots.g1 import NUM_J
 from ..state import CONTROL_DT
-from ..tasks.hdmi import DECIMATION, NUM_ACTIONS
+from ..tasks.hdmi import DECIMATION
 from .rigidformer import POS_SCALE
 
 BLOCK, WARPS = 64, 2  # samples per program (one per lane) and warps: many small programs hide the memory latency
@@ -311,7 +310,7 @@ def _body_next(Y, row, m, k0: tl.constexpr, P, R, V, W, n, sp, sr, sv, sw, NP, N
 @triton.jit
 def _integrate_kernel(Y, P, R, V, W, Q, QD, OP, OR, OV, OW, NP, NR, NV, NW, NQ, NQD, NOP, NOR, NOV, NOW, NF, N, sy, sp, sr, sv, sw, sq, sqd,
                       sop, sor, sov, sow, dt, ACCEL: tl.constexpr, HINGED: tl.constexpr, NJ: tl.constexpr, ROBOT: tl.constexpr,
-                      FEET: tl.constexpr, SUB: tl.constexpr, BLOCK: tl.constexpr):  # fmt: skip
+                      FEET: tl.constexpr, NFEET: tl.constexpr, SUB: tl.constexpr, BLOCK: tl.constexpr):  # fmt: skip
     n = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
     m = n < N
     row = n * sy
@@ -347,11 +346,11 @@ def _integrate_kernel(Y, P, R, V, W, Q, QD, OP, OR, OV, OW, NP, NR, NV, NW, NQ, 
         _body_next(Y, row, m, ROBOT, OP, OR, OV, OW, n, sop, sor, sov, sow, NOP, NOR, NOV, NOW, dt, ACCEL)
     # the feet's forces (substep, foot, axis), predicted in the heading frame of the robot's root, in the world frame: H f
     c, s = _yaw(_ld(R, n * sr, m, 0), _ld(R, n * sr, m, 3))
-    for k in tl.static_range(2 * SUB):
+    for k in tl.static_range(NFEET * SUB):
         fx, fy = _ld(Y, row, m, FEET + 3 * k), _ld(Y, row, m, FEET + 3 * k + 1)
-        tl.store(NF + n * (6 * SUB) + 3 * k, c * fx - s * fy, mask=m)
-        tl.store(NF + n * (6 * SUB) + 3 * k + 1, s * fx + c * fy, mask=m)
-        tl.store(NF + n * (6 * SUB) + 3 * k + 2, _ld(Y, row, m, FEET + 3 * k + 2), mask=m)
+        tl.store(NF + n * (3 * NFEET * SUB) + 3 * k, c * fx - s * fy, mask=m)
+        tl.store(NF + n * (3 * NFEET * SUB) + 3 * k + 1, s * fx + c * fy, mask=m)
+        tl.store(NF + n * (3 * NFEET * SUB) + 3 * k + 2, _ld(Y, row, m, FEET + 3 * k + 2), mask=m)
 
 
 def _rows(t: torch.Tensor, width: int) -> int:
@@ -385,16 +384,16 @@ def rf_features(p: torch.Tensor, R: torch.Tensor, v: torch.Tensor, w: torch.Tens
                 hinged: bool, d_in: int, d_out: int) -> torch.Tensor:  # fmt: skip
     """HOIRigidFormerNet.inputs' raw features without the context's scalars (d_in of them), then the tokens' positions
     / POS_SCALE, feature-major: (d_out, N). tree: a key of ``kinematic_tree``; q0, gain, aidx: each joint's default
-    pose, action gain and action index."""
-    N = p.shape[0]
+    pose, action gain and action index. The joints and actions are q's and u's last dimensions."""
+    N, J, A = p.shape[0], q.shape[-1], u.shape[-1]
     out = torch.empty(d_out, N, device=p.device, dtype=torch.float32)
     so4, sos = _object_strides(so, hinged)
-    st = [_rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3), _rows(q, NUM_J), _rows(qd, NUM_J)] + sos
-    st += [_rows(u, DECIMATION * NUM_ACTIONS), _rows(ctx, ctx.shape[1])]
+    st = [_rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3), _rows(q, J), _rows(qd, J)] + sos
+    st += [_rows(u, DECIMATION * A), _rows(ctx, ctx.shape[1])]
     parent, joint, offp, offr, axis = _TREES[tree]
     _rf_features_kernel[(triton.cdiv(N, BLOCK),)](p, R, v, w, q, qd, *so4, u, ctx, out, N, *st, PARENT=parent, JOINT=joint, OFFP=offp, OFFR=offr,
                                                   AXIS=axis, Q0=tuple(q0), GAIN=tuple(gain), AIDX=tuple(aidx), NB=len(parent), STARTUP=startup,
-                                                  POSES=poses, HINGED=int(hinged), D_IN=d_in, NA=NUM_ACTIONS, SUB=DECIMATION, NJ=NUM_J, POS=POS_SCALE,
+                                                  POSES=poses, HINGED=int(hinged), D_IN=d_in, NA=A, SUB=DECIMATION, NJ=J, POS=POS_SCALE,
                                                   BLOCK=BLOCK, num_warps=WARPS)  # fmt: skip
     return out
 
@@ -406,43 +405,44 @@ def _(p, R, v, w, q, qd, so, u, ctx, tree, q0, gain, aidx, startup, poses, hinge
 
 @torch.library.custom_op("ndm_gym::hoi_mlp_features", mutates_args=())
 def mlp_features(p: torch.Tensor, R: torch.Tensor, v: torch.Tensor, w: torch.Tensor, so: list[torch.Tensor], ctx: torch.Tensor, startup: int,
-                 poses: int, hinged: bool) -> torch.Tensor:  # fmt: skip
-    """The computed part of HOIWorldModel.inputs for the MLP, feature-major: (13 + (0 if hinged else 15) + 9 poses, N)."""
+                 poses: int, hinged: bool, joints: int) -> torch.Tensor:  # fmt: skip
+    """The computed part of HOIWorldModel.inputs for the MLP, feature-major: (13 + (0 if hinged else 15) + 9 poses, N);
+    ``joints``: the robot's, whose offsets precede the context's poses."""
     N = p.shape[0]
     out = torch.empty(13 + (0 if hinged else 15) + 9 * poses, N, device=p.device, dtype=torch.float32)
     so4, sos = _object_strides(so, hinged)
     st = [_rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3)] + sos + [_rows(ctx, ctx.shape[1])]
-    _mlp_features_kernel[(triton.cdiv(N, BLOCK),)](p, R, v, w, *so4, ctx, out, N, *st, STARTUP=startup, POSES=poses, HINGED=int(hinged), NJ=NUM_J,
+    _mlp_features_kernel[(triton.cdiv(N, BLOCK),)](p, R, v, w, *so4, ctx, out, N, *st, STARTUP=startup, POSES=poses, HINGED=int(hinged), NJ=joints,
                                                    BLOCK=BLOCK, num_warps=WARPS)  # fmt: skip
     return out
 
 
 @mlp_features.register_fake
-def _(p, R, v, w, so, ctx, startup, poses, hinged):
+def _(p, R, v, w, so, ctx, startup, poses, hinged, joints):
     return p.new_empty(13 + (0 if hinged else 15) + 9 * poses, p.shape[0])
 
 
 @torch.library.custom_op("ndm_gym::hoi_integrate", mutates_args=())
 def integrate(y: torch.Tensor, p: torch.Tensor, R: torch.Tensor, v: torch.Tensor, w: torch.Tensor, q: torch.Tensor, qd: torch.Tensor,
-              so: list[torch.Tensor], accel: bool, robot: int, feet: int) -> list[torch.Tensor]:  # fmt: skip
-    """y (N, >= feet + 24) the de-normalized fp32 outputs -> the robot's next [p, R, v, w, q, qd], then the object's next
-    state ([angle, rate] of a hinge), then the feet's forces (N, 4, 2, 3) in the world frame from their heading-frame
-    outputs y[:, feet : feet + 24]."""
-    N, hinged = p.shape[0], len(so) == 2
+              so: list[torch.Tensor], accel: bool, robot: int, feet: int, num_feet: int) -> list[torch.Tensor]:  # fmt: skip
+    """y (N, >= feet + 12 F) the de-normalized fp32 outputs -> the robot's next [p, R, v, w, q, qd], then the object's next
+    state ([angle, rate] of a hinge), then the F = ``num_feet`` feet's forces (N, 4, F, 3) in the world frame from their
+    heading-frame outputs y[:, feet : feet + 12 F]."""
+    N, J, hinged, width = p.shape[0], q.shape[-1], len(so) == 2, 3 * num_feet * DECIMATION
     nxt = [torch.empty(t.shape, device=t.device, dtype=t.dtype) for t in (p, R, v, w, q, qd)]
     nso = [torch.empty(t.shape, device=t.device, dtype=t.dtype) for t in so]
-    nf = torch.empty(N, DECIMATION, 2, 3, device=p.device, dtype=torch.float32)
+    nf = torch.empty(N, DECIMATION, num_feet, 3, device=p.device, dtype=torch.float32)
     so4, sos = _object_strides(so, hinged)
     nso4 = nso + nso if hinged else nso
-    if y.stride(-1) != 1 or y.dtype != torch.float32 or y.shape[-1] < feet + 6 * DECIMATION:
-        raise ValueError(f"hoi_fused.integrate: y needs fp32, a unit last stride and {feet + 6 * DECIMATION} columns, got {y.dtype} {tuple(y.shape)}")
-    st = [y.stride(0), _rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3), _rows(q, NUM_J), _rows(qd, NUM_J)] + sos
+    if y.stride(-1) != 1 or y.dtype != torch.float32 or y.shape[-1] < feet + width:
+        raise ValueError(f"hoi_fused.integrate: y needs fp32, a unit last stride and {feet + width} columns, got {y.dtype} {tuple(y.shape)}")
+    st = [y.stride(0), _rows(p, 3), _rows(R, 9), _rows(v, 3), _rows(w, 3), _rows(q, J), _rows(qd, J)] + sos
     _integrate_kernel[(triton.cdiv(N, BLOCK),)](y, p, R, v, w, q, qd, *so4, *nxt, *nso4, nf, N, *st, CONTROL_DT, ACCEL=int(accel),
-                                                HINGED=int(hinged), NJ=NUM_J, ROBOT=robot, FEET=feet, SUB=DECIMATION, BLOCK=BLOCK,
+                                                HINGED=int(hinged), NJ=J, ROBOT=robot, FEET=feet, NFEET=num_feet, SUB=DECIMATION, BLOCK=BLOCK,
                                                 num_warps=WARPS)  # fmt: skip
     return nxt + nso + [nf]
 
 
 @integrate.register_fake
-def _(y, p, R, v, w, q, qd, so, accel, robot, feet):
-    return [t.new_empty(t.shape) for t in (p, R, v, w, q, qd)] + [t.new_empty(t.shape) for t in so] + [p.new_empty(p.shape[0], DECIMATION, 2, 3)]
+def _(y, p, R, v, w, q, qd, so, accel, robot, feet, num_feet):
+    return [t.new_empty(t.shape) for t in (p, R, v, w, q, qd)] + [t.new_empty(t.shape) for t in so] + [p.new_empty(p.shape[0], DECIMATION, num_feet, 3)]

@@ -75,7 +75,7 @@ def main():
     for spec in args.test:
         name, data = spec.split("=", 1)
         tb, tm = load_buffer([data], dev)
-        if (tm[0]["task"], tuple(tm[0]["context_layout"])) != (fit["task"], tuple(layout)):
+        if (tm[0]["task"], ContextLayout(*tm[0]["context_layout"])) != (fit["task"], layout):
             raise ValueError(f"test set {data} is of another task or context layout than the model")
         for k in args.eval_k:
             s = window_scores(run, fixed_windows(tb, args.eval_windows, k, seed=k), kin, hinged)
