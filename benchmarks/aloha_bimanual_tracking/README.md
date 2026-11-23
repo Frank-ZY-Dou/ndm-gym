@@ -113,12 +113,27 @@ Fixed before the runs they apply to.
   the rollouts that do not terminate); then the fewest changes (the order above). The round is reported with every run.
   The reported runs then train until the settled test holds (also asked for in review); their budgets and stopping rule
   are fixed here after this round and before those runs.
-- **Budget and stopping:** one rule for both algorithms. Every reported run trains for the second round's iterations
-  (the cap) and its last checkpoint is the one evaluated. A run has settled if its last five kept checkpoints (the last
-  1,000 iterations) agree: their successes within 0.05 of one another and their objects' errors within 1 mm or a
-  quarter of their mean, whichever is larger. The results say per run whether it settled; where runs of a case did
-  not, its numbers are named the cap's and no comparison is drawn from them. The runs at the first round's 6,000
-  iterations stay in the results beside them, as they were.
+
+  Its outcome: variant 1 for both algorithms, so the configurations stay as they are. Averaged over the two tasks its
+  success at the last checkpoint is 49.4 % for SuperTrack (against 1.4, 0.2 and 0.0 % for variants 2 to 4) and 40.0 %
+  for SuperMimic (against 0.0 % for each of variants 2 to 4); no other variant is within 0.02 of it.
+- **Budget and stopping:** one rule for both algorithms, fixed after the third round and before the reported runs (the
+  pull request's review: train until the settled test holds).
+  - A run has settled at a checkpoint if that checkpoint and the four kept before it (1,000 iterations) agree: their
+    successes within 0.05 of one another and their objects' errors within 1 mm or a quarter of their mean, whichever is
+    larger. A run's checkpoints are evaluated from the same perturbed starts.
+  - A reported run trains the configuration's 12,000 iterations (the second round's choice, the learning rate's cosine
+    over them) and goes on at the learning rate the cosine ends on (0.03 of the first). It stops at the first
+    checkpoint, from 12,000 iterations on, at which it has settled; the cap is 48,000 iterations. The checkpoint it
+    stops at is its last: the one evaluated, and its wall time the run's training time.
+  - A run that has not settled at the cap is reported so, with the cap's checkpoint; no comparison is drawn from a case
+    with such a run.
+  - The runs are trained to the cap with every checkpoint kept, and the stop is found from the checkpoints' evaluations
+    afterwards (`time_to.py`): the checkpoint is the one that stopping the run there leaves. The checkpoints after the
+    stop are evaluated too and counted beside it (how many have a success within 0.05 of the stop's); they are not the
+    run's numbers.
+  - The runs of the first two rounds' budgets (6,000 and 12,000 iterations, demonstration 0 of both tasks, the last
+    checkpoint evaluated) stay in the results beside them, as they were.
 - **Seeds:** training seeds 0, 1, 2 per configuration, every seed reported; mean and sample SD; the GPU and settings
   stated.
 - **Evaluation:** 256 rollouts of the whole demonstration from perturbed starts, without exploration noise. Beside them
@@ -135,11 +150,12 @@ Fixed before the runs they apply to.
   closed on it; the peg inside the socket's opening with its end within 2 mm of the pin's.
 - **Measures:** the success, the stages and the final state, the objects' position and rotation error, the joints'
   error and the share of the rollouts that end early (a tracked object 15 cm or a gripper keypoint 20 cm from the
-  reference); SuperTrack first, both numbers side by side.
+  reference); SuperTrack first, both numbers side by side. Insertion's main rows have the share of the rollouts that
+  reach stage 3 (the peg touches the socket) and the objects' error beside the success (the pull request's review).
 - **Time:** each run alone on one A100 (80 GB). The clock starts at the first training iteration. A checkpoint is kept
-  every 200 iterations; the time to the target is that of the first checkpoint from which every later one has a success
-  of at least 0.99 with the objects within 10 mm (the manipulation task's target). Without a per-phase time table of the
-  path: time to the target, not engineered.
+  every 200 iterations; the time to the target is that of the first checkpoint from which every later one, up to the
+  run's stop, has a success of at least 0.99 with the objects within 10 mm (the manipulation task's target). Without a
+  per-phase time table of the path: time to the target, not engineered.
 
 Not measured: ALOHA's real recordings; the public simulated recordings (no object poses); image observations; ACT or
 another imitation policy trained here.
