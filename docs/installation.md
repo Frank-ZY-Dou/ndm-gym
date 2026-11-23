@@ -43,11 +43,11 @@ Optional dependencies:
 
 | extra | installs | for |
 |---|---|---|
-| `ndm_gym[hand]` | MuJoCo-Warp, Warp and MuJoCo at the tested versions | the hand-object task's simulator (`train_hand`) |
+| `ndm_gym[hand]` | MuJoCo-Warp, Warp and MuJoCo at the tested versions, h5py | the hand-object task's simulator (`train_hand`); the manipulation task's simulator and its demonstration files (`train_robomimic`) |
 | `ndm_gym[render]` | Pillow, matplotlib | the rendering and plotting scripts in `tools/` (they also call ffmpeg) |
 | `ndm_gym[sim]` | MuJoCo-Warp, Warp, Newton and MuJoCo at the versions of Isaac Lab's lock | the simulator's packages that pip can install; Isaac Lab 3 itself comes from `scripts/setup.sh` |
 | `ndm_gym[contacts]` | SciPy | the MuJoCo world models' contact inputs (`fit_mjcf --contacts`) |
-| `ndm_gym[test]` | pytest, Pillow, PyYAML, SciPy | `tests/` |
+| `ndm_gym[test]` | pytest, Pillow, PyYAML, SciPy, h5py | `tests/` |
 | `ndm_gym[docs]` | MkDocs Material, mkdocstrings | this site: `mkdocs serve` |
 | `ndm_gym[dev]` | test, docs, ruff, pre-commit | development |
 
