@@ -82,11 +82,15 @@ two arms handing an object over.
 - **Time to the target:** a success of at least 0.99 with the objects within 10 mm (the hand task's target): the training
   clock of the first kept checkpoint from which every later one up to the stop meets it on the evaluation's starts.
 - **Reference:** the same rollouts with the demonstration's joint positions as the servos' targets, without a policy.
+- **Motion:** each run's rollout from the unperturbed start beside the demonstration's same frames (`motion.py`): the
+  arms' joint acceleration and jerk, the share of their velocity above 5 Hz, limit hits, and a held object's
+  displacement in its gripper's frame per control step.
 
 ```bash
 python tools/download_robomimic.py                                                          # the data and assets, pinned and checked
 benchmarks/robomimic_manipulation_tracking/run_formal.sh                                    # 18 runs, each evaluated at its stop
 python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s?     # the time to the target
+python benchmarks/robomimic_manipulation_tracking/motion.py SuperTrack=<run>/eval/rollout_0.npz   # its motion beside the demonstration's
 ```
 
 ## Data audit

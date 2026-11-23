@@ -696,6 +696,81 @@ def test_stop_rule(tmp_path):
     assert json.loads((run / "stop.json").read_text())["stop_iteration"] == 4500
 
 
+def test_motion_measures(tmp_path, monkeypatch):
+    """motion.py: the joints' acceleration, jerk, high-frequency share and limit hits of sampled sines against their closed forms;
+    the slip over the pairs of held steps; in a scene, a grasp is both fingers of a gripper touching a tracked object, and the
+    slip is the object's displacement in the end effector's frame; a rollout is read up to its termination, beside the
+    demonstration's same frames."""
+    path = os.path.join(REPO, "benchmarks", "robomimic_manipulation_tracking", "motion.py")
+    spec = importlib.util.spec_from_file_location("robomimic_motion", path)
+    motion = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(motion)
+    dt, n = 0.05, 201  # 200 velocity samples over 10 s: 1 Hz and 8 Hz fall on the spectrum's bins
+    t = dt * np.arange(n)
+    q = np.stack((np.sin(2 * np.pi * t), np.sin(2 * np.pi * t) + 0.05 * np.sin(2 * np.pi * 8 * t)), 1)
+    lo, hi = np.array([-2.0, -1.0]), np.array([2.0, 3.0])
+    m = motion.joint_measures(q, dt, lo, hi)
+    gain = lambda f: 2 * np.sin(np.pi * f * dt) / dt  # noqa: E731: a difference's gain on a sine of f Hz
+    share = (0.05 * gain(8)) ** 2 / (gain(1) ** 2 + (0.05 * gain(8)) ** 2)  # the velocity's power above 5 Hz, second joint
+    assert m["hf_share"] == pytest.approx(share / 2, abs=1e-9) and 0.08 < share < 0.09
+    assert m["jerk"] == pytest.approx((gain(1) ** 3 + np.hypot(gain(1) ** 3, 0.05 * gain(8) ** 3)) / 2 / np.sqrt(2), rel=0.02)
+    assert m["acc"] == pytest.approx((gain(1) ** 2 + np.hypot(gain(1) ** 2, 0.05 * gain(8) ** 2)) / 2 / np.sqrt(2), rel=0.02)
+    assert m["limit_hits"] == pytest.approx((q[:, 1] < -0.96).mean() / 2) and m["limit_hits"] > 0  # within 1 % of the second joint's range
+    assert motion.joint_measures(np.zeros((20, 2)), dt, lo, hi)["hf_share"] == 0.0  # a joint at rest has no share
+
+    hold = np.array([0, 1, 1, 1, 0, 1, 1], bool).reshape(-1, 1, 1)
+    rel = np.zeros((7, 1, 1, 3))
+    rel[:, 0, 0, 0] = 0.001 * np.arange(7) ** 2  # 1, 3, 5, ... mm a step
+    assert motion.slip(hold, rel) == (pytest.approx((3 + 5 + 11) / 3), 3)  # the pairs (1, 2), (2, 3) and (5, 6)
+    assert motion.slip(np.zeros_like(hold), rel) == (None, 0)
+
+    model = scene_spec().compile()
+    sc = motion.Scene(model, "lift")
+    assert len(sc.arm_q) == 7 and len(sc.fin_q) == 2 and len(sc.eef) == 1 and len(sc.objects) == 1
+    d = mujoco.MjData(model)
+    mujoco.mj_forward(model, d)
+    left, right = (mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, f"gripper0_right_{k}finger") for k in ("left", "right"))
+    assert sc.finger[left] == 0 and sc.finger[right] == 1 and sc.object[sc.objects[0]] == 0 and (sc.finger >= 0).sum() == 2
+    grip = 0.5 * (d.xpos[left] + d.xpos[right])  # between the fingers' boxes, whose inner faces are 1 cm from it at rest
+    cube = model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "cube_joint0")]
+    closed, opened = d.qpos.copy(), d.qpos.copy()
+    closed[cube : cube + 3], opened[cube : cube + 3] = grip, grip
+    closed[sc.fin_q], opened[sc.fin_q] = (0.009, -0.009), (0.04, -0.04)  # on the 4 cm cube with 1 mm to spare; open
+    one = closed.copy()
+    one[sc.fin_q[1]] = -0.04  # one finger alone
+    lifted = closed.copy()
+    lifted[cube + 2] += 0.002
+    hold, rel = sc.grasps(np.stack((closed, lifted, opened, one, closed)))
+    assert hold[:, 0, 0].tolist() == [True, True, False, False, True]
+    assert rel[0, 0, 0] == pytest.approx(d.xmat[sc.eef[0]].reshape(3, 3).T @ (grip - d.xpos[sc.eef[0]]), abs=1e-9)
+    assert motion.slip(hold, rel) == (pytest.approx(2.0), 1)  # the cube 2 mm up in the gripper between the two held steps
+
+    # a rollout file: read up to its termination, the demonstration over the same frames and over all of them
+    monkeypatch.setattr(motion, "scene_of", lambda data_dir, task, demo: motion.Scene(model, task))
+    T = 40
+    ref = np.repeat(closed[None], T, 0)
+    ref[:, sc.arm_q[0]] = 0.3 * np.sin(2 * np.pi * 0.5 * dt * np.arange(T))
+    state = np.concatenate((ref, np.zeros((T, model.nv))), 1)
+    state[:, sc.arm_q[0]] += 0.01 * (-1.0) ** np.arange(T)  # a 10 Hz tremor on the first joint (the gripper spins about the cube)
+    state[:, cube + 2] += 0.001 * (-1.0) ** np.arange(T)  # and the held cube 1 mm up and down
+    for name, term in (("whole", -1), ("ended", 19), ("short", 5)):
+        np.savez(tmp_path / f"{name}.npz", state=state, reference_qpos=ref, reference_targets_state=state, nq=model.nq, control_dt=dt,
+                 task="lift", demo=0, terminated_at=term, success=term < 0)  # fmt: skip
+    scenes = {}
+    rows = [motion.measure(name, str(tmp_path / f"{name}.npz"), "unused", scenes) for name in ("whole", "ended", "short")]
+    assert [r["frames"] for r in rows] == [40, 20, 6] and len(scenes) == 1
+    whole, ended, short = rows
+    p, d = whole["policy"], whole["demonstration"]
+    assert 0.03 < p["hf_share"] < 0.05 and d["hf_share"] < 0.002 and p["jerk"] > 50 * d["jerk"]  # one of the seven joints trembles
+    assert d == whole["demonstration_whole"] == ended["demonstration_whole"] and ended["demonstration"] != ended["demonstration_whole"]
+    assert p["held_pairs"] == 39 and ended["policy"]["held_pairs"] == 19
+    assert p["slip_mm"] == pytest.approx(2.0) and d["slip_mm"] == pytest.approx(0.0, abs=1e-9)
+    assert short["policy"] is None and short["demonstration"] is None  # fewer than 8 frames
+    text = motion.table(rows).splitlines()
+    assert len(text) == 6 and text[2].startswith("| lift | whole | 40 |") and text[3].startswith("| lift | ended | 20 of 40 |")
+    assert text[4].startswith("| lift | short | 6 of 40 | - | - |") and text[5].startswith("| lift | the demonstration | 40 |")
+
+
 CUDA = "cuda:0"
 HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("mujoco_warp") is not None
 GPU = pytest.mark.skipif(not HAVE_SIM, reason="needs a GPU and MuJoCo-Warp")
