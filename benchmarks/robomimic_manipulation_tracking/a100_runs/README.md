@@ -2,7 +2,7 @@
 
 Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
 
-The benchmark's 18 runs (`benchmarks/robomimic_manipulation_tracking/run_formal.sh`, unchanged, at bf7b1d4) and their
+The benchmark's 18 runs (`benchmarks/robomimic_manipulation_tracking/run_formal.sh`, unchanged, at 8f04e1b) and their
 time to the target (`python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s?`).
 
 Per run, JSON records: `eval/metrics.json`, `time_to.json` (every kept checkpoint's evaluation, one every 100 iterations)
