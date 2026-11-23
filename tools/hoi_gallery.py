@@ -22,7 +22,7 @@ import numpy as np
 from PIL import Image
 
 import render_hoi as rh
-from ndm_gym.tasks.hdmi_tasks import TASKS
+from ndm_gym.tasks.hdmi_tasks import HDMI_TASKS, TASKS
 
 HDMI_URL = "https://github.com/LeCAR-Lab/HDMI"
 CAPTION = ("The reference motions of HDMI's 13 tasks with their objects: per task the 10 s (or the whole clip) with the most object "
@@ -57,7 +57,7 @@ def webp(mp4: str, out: str, width: int, height: int, fps: float, quality: int):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True, help="directory for the MP4s and the WebP previews")
-    p.add_argument("--tasks", nargs="*", default=list(TASKS), help="default: all 13, in ndm_gym.tasks.hdmi_tasks' order")
+    p.add_argument("--tasks", nargs="*", default=list(HDMI_TASKS), help="default: HDMI's 13, in ndm_gym.tasks.hdmi_tasks' order")
     p.add_argument("--seconds", type=float, default=10.0)
     p.add_argument("--fps", type=float, default=30.0, help="video and preview frame rate (poses interpolated from 50 Hz)")
     p.add_argument("--width", type=int, default=1920)

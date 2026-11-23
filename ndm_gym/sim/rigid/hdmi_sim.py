@@ -144,17 +144,18 @@ def _actuators(cfg: HDMITaskCfg) -> dict[str, ImplicitActuatorCfg]:
 
 def scene_cfg(cfg: HDMITaskCfg, side: dict, num_envs: int):
     usd = lambda rel: os.path.join(HDMI_DIR, rel)  # noqa: E731
+    variants = side.get("usd_variants")  # the variant to load of USDs that keep their physics in variants (the MJCF importer's)
     q0 = default_joint_pos(cfg)
     robot = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
-        spawn=sim_utils.UsdFileCfg(usd_path=usd(side["robot_usd"]), activate_contact_sensors=True,
+        spawn=sim_utils.UsdFileCfg(usd_path=usd(side["robot_usd"]), activate_contact_sensors=True, variants=variants,
                                    rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=False, linear_damping=0.0, angular_damping=0.0),
                                    articulation_props=sim_utils.ArticulationRootPropertiesCfg(enabled_self_collisions=False)),  # fmt: skip
         init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, 0.8), joint_pos=q0, joint_vel={".*": 0.0}),
         soft_joint_pos_limit_factor=0.9,
         actuators=_actuators(cfg),
     )
-    obj_spawn = sim_utils.UsdFileCfg(usd_path=usd(side["object_usd"]), activate_contact_sensors=True)
+    obj_spawn = sim_utils.UsdFileCfg(usd_path=usd(side["object_usd"]), activate_contact_sensors=True, variants=variants)
     if cfg.object_joint is None:
         obj = RigidObjectCfg(prim_path=f"{{ENV_REGEX_NS}}/{cfg.object_asset}", spawn=obj_spawn)
     else:  # door / folding chair: fixed base, the USD's drive replaced by the hinge torque of step() (§9)
@@ -166,11 +167,11 @@ def scene_cfg(cfg: HDMITaskCfg, side: dict, num_envs: int):
              "robot": robot, "obj": obj}  # fmt: skip
     for name in cfg.extra_objects:  # static props: kinematic bodies (§9)
         attrs[f"extra_{name}"] = RigidObjectCfg(prim_path=f"{{ENV_REGEX_NS}}/{name}", spawn=sim_utils.UsdFileCfg(
-            usd_path=usd(side["extra_object_usd"][name]), rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True)))  # fmt: skip
+            usd_path=usd(side["extra_object_usd"][name]), variants=variants, rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True)))  # fmt: skip
     for e, body in enumerate(cfg.contact_eef_bodies):  # the end effectors' forces from the object's contact body (LOC:89-100)
-        attrs[f"eef{e}"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{body}",
-                                            filter_prim_paths_expr=[f"{{ENV_REGEX_NS}}/{cfg.object_asset}/{cfg.object_body}"])  # fmt: skip
-    attrs["feet"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.feet_prims}")
+        attrs[f"eef{e}"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.link_prim(body)}",
+                                            filter_prim_paths_expr=[f"{{ENV_REGEX_NS}}/{cfg.object_asset}/{cfg.object_body_prim or cfg.object_body}"])  # fmt: skip
+    attrs["feet"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.feet_prim_pattern}")
     cls = configclass(type("HDMISceneCfg", (InteractiveSceneCfg,), {"__annotations__": {k: type(v) for k, v in attrs.items()}, **attrs}))
     return cls(num_envs=num_envs, env_spacing=0.0, replicate_physics=True)
 

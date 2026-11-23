@@ -9,6 +9,8 @@ evaluates the rewards, terminations and observations; the reset ranges and the r
 from __future__ import annotations
 
 import dataclasses
+import functools
+import os
 import re
 from dataclasses import dataclass, field
 
@@ -181,8 +183,10 @@ class HDMIBody:
     ``mjcf``: its MuJoCo model, for forward kinematics. ``motors``, ``action_scales`` and ``default_joint_pos`` map
     regular expressions over joint names (the first full match wins) to a joint's (effort limit, velocity limit,
     armature), its action scale and its default angle (0 when none matches). ``feet_prims``: the regular expression of
-    the feet's prims for the contact sensor. HDMI's G1 is ``G1_BODY``; a robot with more joints (the G1 with dexterous
-    hands) has its own."""
+    the feet's prims for the contact sensor, relative to the robot's prim (None: from ``link_root``). ``link_root``: where a
+    USD that nests its links along the kinematic tree (the MJCF importer's) keeps the root link, relative to the robot's
+    prim; None for a USD with every link directly under the robot (HDMI's). HDMI's G1 is ``G1_BODY``; a robot with more
+    joints (the G1 with dexterous hands) has its own."""
 
     joint_names: tuple[str, ...]
     num_actions: int
@@ -194,7 +198,8 @@ class HDMIBody:
     motors: tuple[tuple[str, tuple[float, float, float]], ...]
     action_scales: tuple[tuple[str, float], ...]
     default_joint_pos: tuple[tuple[str, float], ...]
-    feet_prims: str
+    feet_prims: str | None
+    link_root: str | None = None
 
     def __post_init__(self):
         if not 0 < self.num_actions <= len(self.joint_names):
@@ -233,9 +238,40 @@ class HDMIBody:
     def action_scale(self, joint: str) -> float:
         return _lookup(self.action_scales, joint)
 
+    def link_prim(self, link: str) -> str:
+        """The link's prim relative to the robot's prim."""
+        if self.link_root is None:
+            return link
+        return "/".join((self.link_root, *_link_chain(self.mjcf, link)))
+
+    def links_prim_pattern(self, links: tuple[str, ...]) -> str:
+        """One prim-path pattern relative to the robot's prim that matches exactly ``links``, level by level (a contact
+        sensor takes one pattern): the links must lie at the same depth."""
+        paths = [self.link_prim(n).split("/") for n in links]
+        if len({len(p) for p in paths}) != 1:
+            raise ValueError(f"{links} lie at different depths: {['/'.join(p) for p in paths]}")
+        return "/".join(level[0] if len(set(level)) == 1 else f"({'|'.join(sorted(set(level)))})" for level in zip(*paths))
+
+    @property
+    def feet_prim_pattern(self) -> str:
+        return self.feet_prims if self.feet_prims is not None else self.links_prim_pattern(tuple(self.keypoint_names[k] for k in self.feet))
+
     def default_pose(self) -> list[float]:
         """The default joint angles in the state's order."""
         return [next((v for p, v in self.default_joint_pos if re.fullmatch(p, n)), 0.0) for n in self.state_joint_names]
+
+
+@functools.lru_cache
+def _link_chain(mjcf: str, link: str) -> tuple[str, ...]:
+    """The link's ancestors below the world, root first, and the link, in the MuJoCo model ``mjcf``."""
+    import mujoco
+
+    model = mujoco.MjModel.from_xml_path(mjcf)
+    b, chain = model.body(link).id, []
+    while b > 0:
+        chain.append(model.body(b).name)
+        b = model.body_parentid[b]
+    return tuple(reversed(chain))
 
 
 _SIDE = "(left_|right_)?"
@@ -291,6 +327,7 @@ class HDMITaskCfg:
     terminations: dict = field(default_factory=termination_table)
     reset: ResetCfg = field(default_factory=ResetCfg)
     body: HDMIBody = G1_BODY
+    object_body_prim: str | None = None  # the object body's prim relative to the object's, when not its name (a nested USD)
 
     def __post_init__(self):
         E, nt, ne = len(self.contact_eef_bodies), len(self.contact_target_offsets), len(self.contact_eef_offsets)
@@ -438,7 +475,44 @@ _TASKS = (
         randomization=ObjectRandomization(mass_range=(20.0, 40.0), dynamic_friction_range=(0.8, 1.2), scale_range=(0.98, 1.02)),
     ),
 )
-TASKS: dict[str, HDMITaskCfg] = {c.name: c for c in _TASKS}
+
+# The G1 with two Inspire hands (data/hdmi/g1_inspire, built from SPIDER's Inspire hand mounted on the G1's wrists):
+# HDMI's G1 with every joint actuated, the wrists and the twelve finger joints of each hand included.
+INSPIRE_FINGERS = tuple(f"{side}_{joint}_joint" for side in ("left", "right") for joint in (
+    "thumb_proximal_yaw", "thumb_proximal_pitch", "thumb_intermediate", "thumb_distal", "index_proximal", "index_intermediate",
+    "middle_proximal", "middle_intermediate", "ring_proximal", "ring_intermediate", "pinky_proximal", "pinky_intermediate"))  # fmt: skip
+INSPIRE_KEYPOINTS = tuple(f"{side}_{body}" for side in ("left", "right") for body in (
+    "hand_base", "thumb_distal", "index_intermediate", "middle_intermediate", "ring_intermediate", "pinky_intermediate"))  # fmt: skip
+INSPIRE_FINGER_MOTOR = (5.0, 10.0, 0.01)  # effort (N m), velocity (rad/s), armature (kg m^2): kp 39 N m/rad at the G1's 10 Hz
+G1_INSPIRE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "hdmi", "g1_inspire")
+G1_INSPIRE_BODY = dataclasses.replace(
+    G1_BODY,
+    joint_names=G1_BODY.joint_names + INSPIRE_FINGERS,
+    num_actions=len(G1_BODY.joint_names) + len(INSPIRE_FINGERS),
+    keypoint_names=G1_BODY.keypoint_names + INSPIRE_KEYPOINTS,
+    state_joint_names=tuple(G1_JOINT_NAMES[:22]) + INSPIRE_FINGERS[:12] + tuple(G1_JOINT_NAMES[22:]) + INSPIRE_FINGERS[12:],  # the model's order
+    mjcf=os.path.join(G1_INSPIRE_DIR, "robot.xml"),
+    feet_prims=None,
+    link_root="Geometry",
+    motors=G1_BODY.motors + ((".*_(thumb|index|middle|ring|pinky)_.*_joint", INSPIRE_FINGER_MOTOR),),
+    action_scales=G1_BODY.action_scales + ((f"{_SIDE}wrist_(roll|pitch|yaw)_joint", 0.44), (".*_(thumb|index|middle|ring|pinky)_.*_joint", 0.5)),
+)
+HAND_TRACKING = {
+    "tracking_hand_pos": term("keypoint_pos_tracking_local_product", 0.5, body_names=(".*_hand_base", ".*_distal", ".*_intermediate"), sigma=0.1),
+    "hand_joint_pos_tracking": term("joint_pos_tracking_product", 0.5, joint_names=(".*_wrist_.*_joint",) + INSPIRE_FINGERS, sigma=0.25),
+}
+WHOLE_BODY_TASKS = (
+    HDMITaskCfg(
+        name="g1_inspire_walk_tea", hdmi_name="", data_path="g1_hands/sequence.py: LAFAN1 walk1_subject1, then GigaHands p36-tea",
+        clip_len=638, robot_type="g1_29dof_inspire", object_asset="right_object", object_body="right_object", extra_objects=("table",),
+        contact_eef_bodies=("left_hand_base", "right_hand_base"), contact_eef_offsets=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
+        contact_target_offsets=((0.098, -0.057, -0.187), (-0.108, 0.129, -0.11)), contact_cols=2,  # the palms on the teapot, from the clip
+        rewards=reward_table(add={"tracking": HAND_TRACKING}), reset=ResetCfg(object_pose_range=FLAT_OBJECT),
+        randomization=ObjectRandomization(mass_range=(1.8, 2.6)), body=G1_INSPIRE_BODY, object_body_prim="Geometry/right_object",
+    ),
+)
+HDMI_TASKS: dict[str, HDMITaskCfg] = {c.name: c for c in _TASKS}  # HDMI's 13, on its G1
+TASKS: dict[str, HDMITaskCfg] = {**HDMI_TASKS, **{c.name: c for c in WHOLE_BODY_TASKS}}
 
 
 def get(name: str) -> HDMITaskCfg:

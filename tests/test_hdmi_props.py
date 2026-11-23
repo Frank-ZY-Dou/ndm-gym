@@ -19,7 +19,7 @@ import torch
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, REPO)
-from ndm_gym.tasks.hdmi_tasks import TASKS  # noqa: E402
+from ndm_gym.tasks.hdmi_tasks import HDMI_TASKS, TASKS  # noqa: E402
 
 HAVE_ISAACLAB = importlib.util.find_spec("isaaclab") is not None
 HAVE_SIM = HAVE_ISAACLAB and torch.cuda.is_available() and os.path.isdir(os.path.join(REPO, "data", "hdmi", "clips"))
@@ -210,7 +210,7 @@ def test_topple_props_out_of_contact(tmp_path):
 
 @pytest.mark.slow
 @needs_sim
-@pytest.mark.parametrize("task", sorted(TASKS))
+@pytest.mark.parametrize("task", sorted(HDMI_TASKS))
 def test_candidate_pairs_without_prop_pairs(tmp_path, task):
     """The filter removes exactly the candidates between two props or a prop and the ground (none for a task without
     props) and keeps every other pair in its order; without it those pairs carry contacts in topple only."""

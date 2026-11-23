@@ -95,7 +95,7 @@ def close(a, b, tol=1e-9):
 
 # ---------------- configurations ----------------
 def test_task_table():
-    T = hdmi_tasks.TASKS
+    T = hdmi_tasks.HDMI_TASKS
     assert len(T) == 13
     hinged = {n for n, c in T.items() if c.object_joint}
     assert hinged == {"open_door-feet", "open_foldchair-sit", "push_door-hand", "traverse_door"}
@@ -132,7 +132,7 @@ def test_supertrack_selections_of_every_task():
     group plus the object group's largest values: 2 for a free object's pose or 1 for a hinge angle, and 5 for the contact
     reward with every flag on (1 for roll_ball's). A term whose largest value is not known, or a loco or feet term that is
     not a penalty <= 0, is an error."""
-    for name, cfg in hdmi_tasks.TASKS.items():
+    for name, cfg in hdmi_tasks.HDMI_TASKS.items():
         assert hdmi.reward_selection(cfg, "keypoint_lin_vel_tracking_product") == VEL
         assert hdmi.reward_selection(cfg, "keypoint_ang_vel_tracking_product") == VEL
         assert hdmi.reward_selection(cfg, "joint_vel_tracking_product") == JOINT_REWARD
@@ -152,7 +152,7 @@ def test_supertrack_selections_of_every_task():
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 def test_reference_is_the_maximum_and_never_terminates(dtype):
     tol = 1e-6 if dtype == torch.float32 else 1e-12
-    for name, cfg in hdmi_tasks.TASKS.items():
+    for name, cfg in hdmi_tasks.HDMI_TASKS.items():
         task = make_task(name, dtype=dtype)
         x = at_reference(task, dtype=dtype)
         task.reset(torch.arange(N), x.now)
@@ -466,7 +466,7 @@ def test_reference_window_timing():
 
 def test_observation_dims():
     priv = {"open_foldchair-sit": 1717, "truman": 1719, "traverse_door": 1722}  # 1714 for the others (spec §4.4)
-    for name, cfg in hdmi_tasks.TASKS.items():
+    for name, cfg in hdmi_tasks.HDMI_TASKS.items():
         task = make_task(name, noise=True, dtype=torch.float32)
         x = at_reference(task, dtype=torch.float32)
         task.reset(torch.arange(N), x.now)
