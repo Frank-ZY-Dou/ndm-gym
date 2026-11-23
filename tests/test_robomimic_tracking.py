@@ -494,9 +494,10 @@ SCALE, WIDTH = [0.25] * 7 + [0.02] * 2, [0.4] * 7 + [0.04] * 2  # an arm joint's
 
 
 def test_target_rate_cost(setup):
-    """--target_rate_w's cost in the task: off by default (None, the reward as it was); on, an action after another worked out
-    by hand, its gradient, the reward less it, a change of the kernel's width on every actuator costing the weight, and the
-    widths following --reward_std_scale."""
+    """--target_rate_w's cost in the task: off by default (None, the reward as it was, with its own small term on the action's
+    change); on, an action after another worked out by hand, its gradient, the reward the tracking terms less it and nothing
+    else on the action's change, a change of the kernel's width on every actuator costing the weight, and the widths following
+    --reward_std_scale."""
     _, scene, _, _, kin, task0 = setup
     w = 4.0
     task = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=w))
@@ -515,8 +516,12 @@ def test_target_rate_cost(setup):
     f = torch.tensor([3])
     S = (task.ref.qpos[f], task.ref.qvel[f])
     fk = task.fk(S[0])
+    tracking = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_action_rate=0.0))  # the tracking terms alone
     with torch.no_grad():
-        assert torch.allclose(task.reward(S, fk, f, a, a_prev), task0.reward(S, fk, f, a, a_prev) - cost * CONTROL_DT, atol=1e-7)
+        only = tracking.reward(S, fk, f, a, a_prev)
+        assert torch.allclose(task.reward(S, fk, f, a, a_prev), only - cost * CONTROL_DT, atol=1e-7)  # the cost in the small term's place
+        own = -0.05 * (0.4**2 + 0.2**2) / 9  # the task's own term, as contributed: -0.05 times the mean squared change of the action
+        assert torch.allclose(task0.reward(S, fk, f, a, a_prev), only + own * CONTROL_DT, atol=1e-7)
         assert torch.equal(task0.reward(S, fk, f, a, a), task.reward(S, fk, f, a, a))  # no change of the target, no cost
         one_width = torch.tensor(WIDTH) / torch.tensor(SCALE)  # every actuator's target changed by its kernel's width
         assert float(task.smooth_cost(one_width[None], a_prev)) == pytest.approx(w, rel=1e-6)
@@ -525,25 +530,33 @@ def test_target_rate_cost(setup):
 
 
 def test_target_rate_on_both_algorithms(setup, monkeypatch):
-    """--target_rate_w on both algorithms' own paths, each against the same update with the option off (the same networks, starts
-    and noise). The per-step quantity is the same for both, the cost written out by hand from the actions each recorded:
-    SuperTrack's loss rises by its mean over the imagined steps and the batch, SuperMimic's policy loss by its discounted,
-    survival-weighted sum times the control step (the reward's place). In each algorithm's own step the cost's gradient on the
-    action is the one worked out by hand."""
+    """--target_rate_w on both algorithms' own paths, each against the same update on the tracking terms alone (the same
+    networks, starts and noise; the task's own small term off, whose place the cost takes). The per-step quantity is the same for
+    both, the cost written out by hand from the actions each recorded, and it is the only term on the action's change:
+    SuperTrack's loss rises by its mean over the imagined steps and the batch (as its tracking terms are summed: every step
+    alike, after an imagined failure too), SuperMimic's policy loss by its discounted, survival-weighted sum times the
+    control step (the reward's place in its return). In each algorithm's own step the cost's gradient on the action is the one
+    worked out by hand."""
     monkeypatch.setattr(torch, "compile", lambda f, **_: f)
     model, scene, _, _, kin, task0 = setup
     w = 4.0
     task_on = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_target_rate=w))
+    tracking = RobomimicTask(scene, kin, task0.ref, RewardCfg(w_action_rate=0.0))  # the tracking terms alone
     per_step = {}
     for argv in (["--algo", "supertrack", "--st_task_weights", "--st_fail_w", "2"], ["--algo", "supermimic", "--critic_minibatches", "2"]):
         st = argv[1] == "supertrack"
         runs = {}
-        for name, task in (("off", task0), ("on", task_on)):
+        for name, task in (("off", tracking), ("on", task_on)):
             torch.manual_seed(0)  # the same networks in both
             args, algo, buffer = agent_and_replay(model, task, argv + (["--target_rate_w", str(w)] if name == "on" else []))
             assert args.target_rate_w == (w if name == "on" else 0.0)
-            with torch.no_grad():  # the output layer at its plain initialization (the policy starts it 100 times smaller): actions
-                algo.pi.net[-1].weight.mul_(100.0)  # that change from step to step
+            calls, plain = [0], algo.pi.from_features
+
+            def varied(x, _plain=plain, _calls=calls):  # the policy's action plus an offset that differs at every step
+                _calls[0] += 1
+                return (_plain(x) + 0.3 * math.sin(1.7 * _calls[0])).clamp(-1, 1)
+
+            algo.pi.from_features = varied
             seen = []
             step = algo.st_step if st else algo.imag_step
 
@@ -559,7 +572,7 @@ def test_target_rate_on_both_algorithms(setup, monkeypatch):
         (loss0, seen0, args, _, _), (loss1, seen1, _, _, _) = runs["off"], runs["on"]
         assert len(seen0) == len(seen1) == args.horizon and all(torch.equal(x[1], y[1]) for x, y in zip(seen0, seen1, strict=True))
         costs = np.stack([cost_by_hand(a.detach(), a_prev.detach(), w, SCALE, WIDTH) for a_prev, a, _, _, _ in seen0])  # (H, B)
-        assert costs.shape == (args.horizon, args.pi_batch) and costs.mean() > 1e-4
+        assert costs.shape == (args.horizon, args.pi_batch) and costs.mean(1).min() > 1e-3  # a cost at every step
         for (_, _, _, r0, c0), (_, _, _, r1, c1), by_hand in zip(seen0, seen1, costs, strict=True):
             assert c0 is None and np.allclose((r0 - r1).detach().numpy() / CONTROL_DT, by_hand, atol=1e-6)  # the reward less the cost
             if st:
@@ -630,6 +643,11 @@ def test_target_rate_wiring(setup, tmp_path, monkeypatch):
     _, built, _ = train_robomimic.build("lift", 0, str(tmp_path), "cpu", target_rate_w=4.0)
     assert built.cfg.w_target_rate == 4.0
     assert float(built.smooth_cost(a, a_prev)) == pytest.approx(float(cost_by_hand(a, a_prev, 4.0, SCALE, WIDTH)[0]), rel=1e-6)
+    f = torch.tensor([2])
+    S = (built.ref.qpos[f], built.ref.qvel[f])
+    fk = built.fk(S[0])
+    alone = RobomimicTask(built.scene, built.kin, built.ref, RewardCfg(w_action_rate=0.0)).reward(S, fk, f, a, a_prev)  # the tracking terms
+    assert torch.allclose(built.reward(S, fk, f, a, a_prev), alone - built.smooth_cost(a, a_prev) * CONTROL_DT, atol=1e-7)
     assert train_robomimic.build("lift", 0, str(tmp_path), "cpu")[1].smooth_cost(a, a_prev) is None
     # main: the option reaches build
     pytest.importorskip("mujoco_warp")  # main imports the simulator

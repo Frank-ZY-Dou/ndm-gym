@@ -133,7 +133,7 @@ class RewardCfg:
     w_action_rate: float = -0.05
     # train_robomimic --target_rate_w (0: off): a cost per step on the policy's part of the targets' change, each actuator's over its
     # tracking kernel's width, squared, mean over the actuators (RobomimicTask.smooth_cost): in the reward with a minus sign, in
-    # SuperTrack's loss as it is
+    # the place of w_action_rate's term, and in SuperTrack's loss as it is, so that both objectives carry the one same term
     w_target_rate: float = 0.0
     term_object: float = 0.15  # m, a tracked object's distance from its reference
     term_keypoint: float = 0.2  # m, a keypoint's
@@ -233,10 +233,11 @@ class RobomimicTask:
             + c.w_joint * torch.exp(-e["joint"].pow(2) / c.joint_std**2)
             + c.w_object_pos * torch.exp(-e["object_pos"].pow(2) / c.object_pos_std**2).mean(-1)
             + c.w_object_ori * torch.exp(-e["object_ori_sq"] / c.object_ori_std**2).mean(-1)
-            + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
         )
         cost = self.smooth_cost(a, a_prev)
-        if cost is not None:
+        if cost is None:  # the task's own small term on the action's change
+            r = r + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
+        else:  # --target_rate_w: the target-rate cost in its place, the one smoothness term of both algorithms
             r = r - cost
         return r * CONTROL_DT
 
@@ -244,7 +245,7 @@ class RobomimicTask:
         """The smoothness cost of action ``a`` after ``a_prev`` (per step, before CONTROL_DT), or None when it is off
         (``w_target_rate`` 0): the weight times the mean over the actuators of the policy's part of the target's change,
         scale (a - a_prev), over the actuator's kernel width, squared. A change of the width on every actuator costs the weight,
-        and following the reference costs nothing."""
+        and following the reference costs nothing. With it on, the reward carries it in the place of ``w_action_rate``'s term."""
         if not self.cfg.w_target_rate:
             return None
         return self.cfg.w_target_rate * (self.rate_k * (a - a_prev)).pow(2).mean(-1)

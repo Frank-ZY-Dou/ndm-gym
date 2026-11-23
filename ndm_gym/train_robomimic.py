@@ -63,8 +63,8 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--target_rate_w", type=float, default=0.0,
                         help="both algorithms: a cost per step on the policy's part of the targets' change, each actuator's over its "
                         "tracking kernel's width (the arms' joints 0.4 rad, the fingers 0.04 m), squared and averaged over the actuators, "
-                        "times this weight: in SuperMimic's reward with a minus sign, in SuperTrack's loss as its mean over the imagined "
-                        "steps (with --st_task_weights); 0: off")  # fmt: skip
+                        "times this weight: in the reward with a minus sign, in the place of its small term on the action's change, and "
+                        "in SuperTrack's loss as its mean over the imagined steps (with --st_task_weights); 0: off")  # fmt: skip
     parser.add_argument("--ckpt_keep", action="store_true", help="also keep ckpt_<iteration>.pt at every --ckpt_every (the policy and its arguments)")
     for action in parser._actions:
         if action.dest == "algo":
