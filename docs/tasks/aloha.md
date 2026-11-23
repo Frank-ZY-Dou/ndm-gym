@@ -19,10 +19,10 @@ python -m venv /tmp/act-mujoco && /tmp/act-mujoco/bin/pip install mujoco==2.3.7 
 /tmp/act-mujoco/bin/python tools/make_aloha_demos.py   # into data/aloha: 10 demonstrations per task, pinned
 
 # one demonstration: train (SuperTrack, then SuperMimic), evaluate from perturbed starts beside the open-loop targets
-python -m ndm_gym.train_robomimic --config aloha-supertrack --task aloha_insertion --log_dir logs/insertion_st
-python -m ndm_gym.train_robomimic --config aloha-supermimic --task aloha_insertion --log_dir logs/insertion_sm
+python -m ndm_gym.train_robomimic --config aloha-supertrack --task aloha_insertion --demo 4 --log_dir logs/insertion_st
+python -m ndm_gym.train_robomimic --config aloha-supermimic --task aloha_insertion --demo 4 --log_dir logs/insertion_sm
 python -m ndm_gym.evaluate_robomimic --ckpt logs/insertion_st/last.pt --out logs/insertion_st/eval
-MUJOCO_GL=egl python tools/render_robomimic.py --rollout logs/insertion_st/eval/rollout_0.npz --out insertion.webp --title SuperTrack
+MUJOCO_GL=egl python tools/render_robomimic.py --rollout logs/insertion_st/eval/rollout_4.npz --out insertion.webp --title SuperTrack
 ```
 
 ## Demonstrations
@@ -96,25 +96,31 @@ free joints) over one control step on windows of simulator transitions, and trai
 the frozen model (`ndm_gym/algos/robomimic_algos.py`), as in the manipulation task.
 
 `--config list` prints the configurations with what each measured. `aloha-supertrack` and `aloha-supermimic` take
-`robomimic-supertrack`'s and `robomimic-supermimic`'s algorithm options with episodes of up to 500 control steps (10 s; the
-choice of the benchmark's tuning round on demonstration 1, for both), `--solver_iterations 20` and the benchmark's budget
-(12,000 iterations with the learning rate's cosine over them, the choice of its second round, for both).
+`robomimic-supertrack`'s and `robomimic-supermimic`'s algorithm options with episodes of up to 500 control steps (10 s;
+the choice of the benchmark's tuning round on demonstration 1, for both), `--solver_iterations 20` and the benchmark's
+budget (12,000 iterations with the learning rate's cosine over them, the choice of its second round, for both). A third
+round, of each algorithm's own option and the exploration noise, left them as they are. The benchmark's runs go on from
+the 12,000 iterations at the learning rate the cosine ends on until they have settled (`--iterations 48000` is the cap;
+`benchmarks/aloha_bimanual_tracking/run_formal.sh`), on Transfer Cube's demonstration 0 and Insertion's demonstration 4:
+per task the first whose recorded targets, replayed open loop, reach ACT's reward of 4 on MuJoCo-Warp (Insertion's
+demonstration 0 replays to the reward of 3).
 
-Results: [benchmarks/aloha_bimanual_tracking](../../benchmarks/aloha_bimanual_tracking/results.md). In short (demonstration
-0, seeds 0 / 1 / 2, the last checkpoint of 12,000 iterations, each run alone on an A100 80GB SXM4; SuperTrack's three
-runs on Transfer Cube settled, in each other case some run had not, so those are the cap's numbers and no comparison
-between the algorithms is drawn): SuperTrack a success of 100 / 100 / 100 % on Transfer Cube with the cube within
-2.69 / 1.14 / 1.56 mm, and 0 / 0 / 0 % on Insertion with the peg and the socket within 5.14 / 4.12 / 4.34 mm and no
-rollout ended early; SuperMimic 97.3 / 99.2 / 82.0 % on Transfer Cube with the cube within 6.98 / 6.42 / 6.48 mm, and
-0 / 0.4 / 0 % on Insertion with 7 to 28 % of the rollouts ended early. On Insertion a checkpoint's rollouts mostly all
-touch the pin or none does (SuperTrack: 5 / 7 / 7 of a run's 60 checkpoints meet the target). Success is ACT's reward of 4
-from the simulator's contacts on a rollout that never terminated. The first runs, at 6,000 iterations, are on the results
-page beside these.
+Results: [benchmarks/aloha_bimanual_tracking](../../benchmarks/aloha_bimanual_tracking/results.md). In short (seeds 0 /
+1 / 2, the checkpoint each run stops at, each run alone on an A100 80GB SXM4; eleven of the twelve runs settled and
+SuperMimic's seed 2 on Transfer Cube had not at the cap, so no comparison between the algorithms is drawn on Transfer
+Cube): SuperTrack a success of 100 / 100 / 100 % on Transfer Cube with the cube within 1.66 / 1.82 / 1.15 mm, and 0 / 0
+/ 0 % on Insertion with the peg and the socket within 4.96 / 4.11 / 7.19 mm, every rollout reaching the reward of 3 (the
+peg touches the socket) and none ended early; SuperMimic 98.8 / 100 / 3.1 % on Transfer Cube with the cube within 9.25 /
+4.48 / 13.34 mm, and 0 / 1.2 / 0 % on Insertion with 100 / 39.5 / 0 % reaching the reward of 3 and the objects within
+7.84 / 13.75 / 9.49 mm. On Insertion a checkpoint's rollouts mostly all touch the pin or none does (SuperTrack: 5 / 47 /
+0 of a run's 240 checkpoints meet the target). Success is ACT's reward of 4 from the simulator's contacts on a rollout
+that never terminated. The earlier runs, at 12,000 and 6,000 iterations on demonstration 0 of both tasks, are on the
+results page beside these.
 
 ![SuperTrack and SuperMimic on Transfer Cube and Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/grid.webp)
 
-Per case the seed with the highest success, then the lowest object error, from the unperturbed start, the demonstration's
-arms and objects in translucent blue (in both Insertion rollouts the peg meets the socket off the table and does not
-touch the pin). The animations:
+Per case, among the seeds whose unperturbed rollout plays the whole demonstration, the one with the highest success,
+then the lowest object error, from the unperturbed start, the demonstration's arms and objects in translucent blue (in
+both Insertion rollouts the peg meets the socket off the table and does not touch the pin). The animations:
 [Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_st.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_st.webp) (SuperTrack);
 [Transfer Cube](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/transfer_cube_sm.webp), [Insertion](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/aloha/insertion_sm.webp) (SuperMimic).

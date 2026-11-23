@@ -200,14 +200,18 @@ CONFIGS = {
                                  "SXM4)"),
         "aloha-supertrack": (f"{ROBOMIMIC_ST} {ALOHA_RUN}",
                              "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
-                             "default), 12,000 iterations, the cap's last checkpoint: success 100 / 100 / 100 % with the cube within 2.69 / 1.14 / "
-                             "1.56 mm on Transfer Cube (the three runs settled), 0 / 0 / 0 % with the objects within 5.14 / 4.12 / 4.34 mm on "
-                             "Insertion (seeds 0 / 1 / 2, 256 perturbed rollouts, A100 80GB SXM4; one of its three runs settled)"),
+                             "default, the benchmark's Insertion runs --demo 4), 12,000 iterations; the benchmark's runs go on until they have "
+                             "settled (--iterations 48000 is the cap) and stop at 12,000 / 12,000 / 12,000 iterations on Transfer Cube: success 100 "
+                             "/ 100 / 100 % with the cube within 1.66 / 1.82 / 1.15 mm; at 13,600 / 19,000 / 12,000 on Insertion: 0 / 0 / 0 % with "
+                             "the objects within 4.96 / 4.11 / 7.19 mm and every rollout at ACT's reward of 3 (seeds 0 / 1 / 2, 256 perturbed "
+                             "rollouts, A100 80GB SXM4)"),
         "aloha-supermimic": (f"{ROBOMIMIC_SM} {ALOHA_RUN}",
                              "one demonstration of ACT's simulated ALOHA tasks (add --task aloha_transfer_cube or aloha_insertion; --demo 0 by "
-                             "default), 12,000 iterations, the cap's last checkpoint: success 97.3 / 99.2 / 82.0 % with the cube within 6.98 / 6.42 / "
-                             "6.48 mm on Transfer Cube, 0 / 0.4 / 0 % on Insertion (seeds 0 / 1 / 2, 256 perturbed rollouts, A100 80GB SXM4; none of "
-                             "its Transfer Cube runs settled, two of its three on Insertion)"),
+                             "default, the benchmark's Insertion runs --demo 4), 12,000 iterations; the benchmark's runs go on until they have "
+                             "settled (--iterations 48000 is the cap) and stop at 16,600 / 18,400 / 48,000 (the cap, not settled) iterations on "
+                             "Transfer Cube: success 98.8 / 100 / 3.1 % with the cube within 9.25 / 4.48 / 13.34 mm; at 12,000 / 13,000 / 12,000 on "
+                             "Insertion: 0 / 1.2 / 0 % with the objects within 7.84 / 13.75 / 9.49 mm and 100 / 39.5 / 0 % of the rollouts at ACT's "
+                             "reward of 3 (seeds 0 / 1 / 2, 256 perturbed rollouts, A100 80GB SXM4)"),
     },
 }
 

@@ -1,0 +1,25 @@
+{
+  "iteration": 12000,
+  "minutes": 30.259500000000003,
+  "sim_steps": 24576000.0,
+  "it_per_s": 7.95771,
+  "config": "aloha-supermimic",
+  "options": {
+    "task": "aloha_insertion",
+    "demo": [
+      5
+    ],
+    "seed": 0,
+    "algo": "supermimic",
+    "iterations": 12000,
+    "lr_decay_iters": 12000,
+    "horizon": 16,
+    "episode": 500,
+    "ckpt_every": 200,
+    "solver_iterations": 20,
+    "pi_ema": 0.0,
+    "action_noise": 0.3,
+    "st_imag_noise": 0.1,
+    "bptt_decay": 1.0
+  }
+}

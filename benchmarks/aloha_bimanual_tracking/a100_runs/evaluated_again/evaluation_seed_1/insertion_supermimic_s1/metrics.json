@@ -1,10 +1,10 @@
 {
   "task": "aloha_insertion",
   "demos": [
-    0
+    4
   ],
-  "iteration": 12000,
-  "wall_time_s": 1564.8993680477142,
+  "iteration": 13000,
+  "wall_time_s": 1697.288731098175,
   "control_dt": 0.02,
   "num_envs": 256,
   "solver_iterations": [
@@ -12,62 +12,62 @@
     50
   ],
   "per_demo": {
-    "0": {
+    "4": {
       "frames": 426,
       "nominal": {
         "success_rate": 0.0,
         "terminated": 0.0,
         "tracked_s": 8.5,
-        "object_mm": 10.463133454322815,
-        "object_final_mm": 23.556366562843323,
-        "object_deg": 30.24360636176373,
-        "keypoint_mm": 17.33965426683426,
-        "joint_rad": 0.1160539984703064,
-        "finger_mm": 2.9174089431762695,
+        "object_mm": 9.97364055365324,
+        "object_final_mm": 24.62078258395195,
+        "object_deg": 5.3398273789639825,
+        "keypoint_mm": 19.82586458325386,
+        "joint_rad": 0.14189277589321136,
+        "finger_mm": 2.727648476138711,
         "stage_rates": [
           1.0,
           1.0,
-          0.0,
+          1.0,
           0.0
         ],
         "final_state_rate": 0.0
       },
       "policy": {
-        "success_rate": 0.00390625,
-        "terminated": 0.07421875,
-        "tracked_s": 8.234296798706055,
-        "object_mm": 10.958313010632992,
-        "object_final_mm": 1904.715657234192,
-        "object_deg": 18.60709674263034,
-        "keypoint_mm": 18.160082399845123,
-        "joint_rad": 0.11517104506492615,
-        "finger_mm": 3.448404371738434,
+        "success_rate": 0.01171875,
+        "terminated": 0.32421875,
+        "tracked_s": 7.443359375,
+        "object_mm": 14.426336623728275,
+        "object_final_mm": 2453.6595344543457,
+        "object_deg": 10.313370495760399,
+        "keypoint_mm": 20.407402887940407,
+        "joint_rad": 0.14200115203857422,
+        "finger_mm": 3.4785212483257055,
         "stage_rates": [
-          0.94921875,
-          0.9453125,
-          0.5078125,
-          0.00390625
+          0.953125,
+          0.859375,
+          0.359375,
+          0.01171875
         ],
-        "final_state_rate": 0.0
+        "final_state_rate": 0.00390625
       }
     }
   },
   "policy": {
-    "success_rate": 0.00390625,
-    "terminated": 0.07421875,
-    "tracked_s": 8.234296798706055,
-    "object_mm": 10.958313010632992,
-    "object_final_mm": 1904.715657234192,
-    "object_deg": 18.60709674263034,
-    "keypoint_mm": 18.160082399845123,
-    "joint_rad": 0.11517104506492615,
-    "finger_mm": 3.448404371738434,
+    "success_rate": 0.01171875,
+    "terminated": 0.32421875,
+    "tracked_s": 7.443359375,
+    "object_mm": 14.426336623728275,
+    "object_final_mm": 2453.6595344543457,
+    "object_deg": 10.313370495760399,
+    "keypoint_mm": 20.407402887940407,
+    "joint_rad": 0.14200115203857422,
+    "finger_mm": 3.4785212483257055,
     "stage_rates": [
-      0.94921875,
-      0.9453125,
-      0.5078125,
-      0.00390625
+      0.953125,
+      0.859375,
+      0.359375,
+      0.01171875
     ],
-    "final_state_rate": 0.0
+    "final_state_rate": 0.00390625
   }
 }
