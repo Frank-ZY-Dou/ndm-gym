@@ -55,8 +55,12 @@ the air, and a peg that one arm inserts into a socket that the other arm holds.
 
 Fixed before the runs they apply to.
 
-- **Tasks:** Transfer Cube and Insertion, one policy per demonstration: each task's demonstration 0 (the generator's
-  first kept episode). One policy on several demonstrations, and start poses held out of training, are not measured.
+- **Tasks:** Transfer Cube and Insertion, one policy per demonstration. From the third round on, a task's demonstration
+  is the first whose recorded targets, replayed open loop on MuJoCo-Warp from its own start, reach ACT's reward of 4
+  (the data audit): Transfer Cube's demonstration 0 and Insertion's demonstration 4. The runs before it tracked
+  demonstration 0 of both tasks (the generator's first kept episode); Insertion's demonstration 0 replays to the reward
+  of 3 there, so a success on it partly measures the difference between MuJoCo 2.3.7 and MuJoCo-Warp (the pull
+  request's review). One policy on several demonstrations, and start poses held out of training, are not measured.
 - **Algorithms:** SuperTrack and SuperMimic, treated alike: the same starting point (the manipulation task's
   configurations, `robomimic-supertrack` and `robomimic-supermimic`), the same seeds, budget, checkpoints and
   evaluation starts.
@@ -91,6 +95,24 @@ Fixed before the runs they apply to.
   Its outcome: variant 1, 12,000 iterations without the average. Two of every variant's four runs settled, and variant 1
   has the highest success at its last checkpoint averaged over the four (54.1 % against 41.0, 44.7 and 41.3 % for
   variants 2 to 4); so the reported runs train 12,000 iterations.
+- **Third round** (asked for in the pull request's review; the second round's text ruled a third out): the first two
+  rounds vary options that the two algorithms share, so neither algorithm's own options were searched. One more round
+  follows, as the first two: seed 0, the same number of runs for both algorithms, from the second round's choice
+  (12,000 iterations), on each task's tuning demonstration. That is the next demonstration after the reported one whose
+  replay reaches the reward of 4: Transfer Cube's demonstration 1 and Insertion's demonstration 5 (the first two rounds
+  used demonstration 1 of both; Insertion's replays to the reward of 2). Four variants per algorithm and task:
+  1. nothing else changed;
+  2. the algorithm's own option: for SuperTrack the noise on the imagined actions at 0.2 (`--st_imag_noise 0.2`; 0.1
+     otherwise), for SuperMimic the gradient through the imagined state scaled by 0.95 at every step
+     (`--bptt_decay 0.95`; 1 otherwise);
+  3. the exploration noise on the actions at 0.3 (`--action_noise 0.3`; 0.1 otherwise);
+  4. both.
+
+  Per algorithm one variant is taken, by the first round's rule: the highest success at its last checkpoint averaged
+  over the two tasks; among those within 0.02 of it the lowest objects' position error (averaged over the tasks, over
+  the rollouts that do not terminate); then the fewest changes (the order above). The round is reported with every run.
+  The reported runs then train until the settled test holds (also asked for in review); their budgets and stopping rule
+  are fixed here after this round and before those runs.
 - **Budget and stopping:** one rule for both algorithms. Every reported run trains for the second round's iterations
   (the cap) and its last checkpoint is the one evaluated. A run has settled if its last five kept checkpoints (the last
   1,000 iterations) agree: their successes within 0.05 of one another and their objects' errors within 1 mm or a
