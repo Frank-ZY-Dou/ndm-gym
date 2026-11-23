@@ -1,10 +1,12 @@
 """Dexterous hands on position-controlled floating palms, as in SPIDER's hand-object scenes: the XHand (12 finger
-joints), the Allegro hand (16, four fingers) and the Inspire hand (12); one hand, or a right and a left one.
+joints), the Allegro hand (16, four fingers) and the Inspire hand (12); one hand, or a right and a left one. A hand can
+also be mounted on a robot's arm (a Unitree G1's), whose hinges then move its palm.
 
 The hands are read from the compiled scene. Their joints are the actuated ones in the order of the scene's actuators:
-per hand the palm's three slides and three hinges, then the fingers' hinges. Their state is those joints' positions and
-velocities. ``HandKinematics`` is the differentiable forward kinematics of the tracked keypoints (per hand the palm and
-the fingertips it has), shared by the reference, the simulator's states and the world model's predictions.
+per hand the joints that move its palm (a floating palm's three slides and three hinges, or an arm's hinges), then the
+fingers' hinges. Their state is those joints' positions and velocities. ``HandKinematics`` is the differentiable forward
+kinematics of the tracked keypoints (per hand the palm and the fingertips it has), shared by the reference, the
+simulator's states and the world model's predictions.
 """
 
 from __future__ import annotations
@@ -16,31 +18,55 @@ import torch
 from ..core.kinematics import mat_mat, mat_vec
 from ..core.rotations import axis_angle_to_mat, quat_to_mat
 
-NUM_PALM = 6  # a palm's joints: three slides, then three hinges
 SIDES = ("right", "left")
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 OBJECT_BODY = "right_object"
+NUM_PALM = 6  # a floating palm's joints, three slides then three hinges, first in its hand's (tools/hand_motion_check.py)
 
-# the largest offset of a position target from the reference pose: palm translation (m), palm rotation and fingers (rad)
+# the largest offset of a position target from the reference pose: palm translation (m), palm rotation and fingers (rad);
+# an arm's hinges move the palm as a floating palm's hinges do, and take the palm rotation's
 PALM_TRANSLATION_SCALE, PALM_ROTATION_SCALE, FINGER_SCALE = 0.03, 0.3, 0.4
 
 
-def hand_joints(model: mujoco.MjModel) -> tuple[list[int], list[int]]:
-    """The ids of the hands' joints in the order of the scene's actuators, and where each hand starts in them: a hand is
-    a palm's three slides and three hinges followed by its fingers' hinges."""
+def body_joints(model: mujoco.MjModel, body: int) -> range:
+    return range(int(model.body_jntadr[body]), int(model.body_jntadr[body]) + int(model.body_jntnum[body]))
+
+
+def ancestors(model: mujoco.MjModel, body: int) -> list[int]:
+    """``body`` and the bodies between it and the world."""
+    bodies = []
+    while body != 0:
+        bodies.append(body)
+        body = int(model.body_parentid[body])
+    return bodies
+
+
+def hand_joints(model: mujoco.MjModel) -> tuple[list[int], list[int], set[int]]:
+    """The ids of the hands' joints in the order of the scene's actuators, where each hand starts in them, and the ids of
+    the joints that move a palm. Per palm's site (``<side>_palm``), a hand is the joints that move it (a floating palm's
+    slides and hinges, or the hinges of the arm it is on), then the joints of the bodies it carries (the fingers'); each
+    is actuated once, a hand's joints follow each other, its palm's first."""
     joints = [int(model.actuator_trnid[a, 0]) for a in range(model.nu)]
-    kinds = [int(model.jnt_type[j]) for j in joints]
-    slide, hinge = int(mujoco.mjtJoint.mjJNT_SLIDE), int(mujoco.mjtJoint.mjJNT_HINGE)
-    starts = [i for i in range(len(kinds)) if kinds[i : i + 3] == [slide] * 3]
-    expected = []
-    for start, stop in zip(starts, starts[1:] + [len(kinds)], strict=True):
-        expected += [slide] * 3 + [hinge] * (stop - start - 3)
-        if stop - start <= NUM_PALM:
-            expected = None
-            break
-    if len(set(joints)) != len(joints) or not starts or kinds != expected:
-        raise ValueError("the scene's actuators are not, per hand, a palm's three slides and three hinges followed by finger hinges")
-    return joints, starts
+    column = {j: i for i, j in enumerate(joints)}
+    by_joint = all(int(model.actuator_trntype[a]) == int(mujoco.mjtTrn.mjTRN_JOINT) for a in range(model.nu))
+    hands = []
+    for side in SIDES:
+        site = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, f"{side}_palm")
+        if site >= 0:
+            palm_body = int(model.site_bodyid[site])
+            palm = [j for b in ancestors(model, palm_body) for j in body_joints(model, b)]
+            fingers = [j for b in range(model.nbody) if b != palm_body and palm_body in ancestors(model, b) for j in body_joints(model, b)]
+            hands.append((palm, fingers))
+    hands.sort(key=lambda hand: min((column.get(j, len(joints)) for j in hand[0]), default=len(joints)))
+    starts, expected = [], []
+    for palm, fingers in hands:
+        starts.append(len(expected))
+        expected += sorted(palm, key=lambda j: column.get(j, -1)) + sorted(fingers, key=lambda j: column.get(j, -1))
+    shared = len({j for palm, _ in hands for j in palm}) < sum(len(palm) for palm, _ in hands)
+    if not by_joint or not hands or shared or any(not palm for palm, _ in hands) or joints != expected:
+        raise ValueError("the scene's actuators are not, per palm's site, the joints that move the palm followed by those of the "
+                         "fingers it carries, each actuated once and moving one palm")  # fmt: skip
+    return joints, starts, {j for palm, _ in hands for j in palm}
 
 
 def hand_keypoints(model: mujoco.MjModel) -> list[list[int]]:
@@ -62,21 +88,15 @@ class HandKinematics:
     are in the order of their joints; a hand's keypoints are consecutive, its palm first."""
 
     def __init__(self, model: mujoco.MjModel, device: str):
-        joint_ids, starts = hand_joints(model)
+        joint_ids, starts, palm_joints = hand_joints(model)
         self.num_joints, self.num_hands = len(joint_ids), len(starts)
         column = {j: i for i, j in enumerate(joint_ids)}
 
         def chain_of(site_id: int) -> list[int]:  # the bodies between a site and the world
-            bodies, b = [], int(model.site_bodyid[site_id])
-            while b != 0:
-                bodies.append(b)
-                b = int(model.body_parentid[b])
-            return bodies
+            return ancestors(model, int(model.site_bodyid[site_id]))
 
         def first_joint(sites: list[int]) -> int:  # the column of the palm's first joint: orders the hands as their joints
-            return min(
-                column[j] for b in chain_of(sites[0]) for j in range(int(model.body_jntadr[b]), int(model.body_jntadr[b]) + int(model.body_jntnum[b]))
-            )
+            return min(column[j] for b in chain_of(sites[0]) for j in body_joints(model, b))
 
         hands = sorted(hand_keypoints(model), key=first_joint)
         if len(hands) != self.num_hands:
@@ -93,7 +113,7 @@ class HandKinematics:
         self.steps = []
         for b in order:
             joints = []
-            for j in range(int(model.body_jntadr[b]), int(model.body_jntadr[b]) + int(model.body_jntnum[b])):
+            for j in body_joints(model, b):
                 if j not in column:
                     raise ValueError(f"joint {model.joint(j).name} moves a keypoint and has no actuator")
                 kind = "slide" if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_SLIDE) else "hinge"
@@ -112,14 +132,12 @@ class HandKinematics:
         self.site_pos = tensor(model.site_pos[site_ids])
         lo, hi = model.jnt_range[joint_ids].T
         self.q_lo, self.q_hi = tensor(lo), tensor(hi)
-        scale, fingers, translations = [], [], []
-        for start, stop in zip(starts, starts[1:] + [self.num_joints], strict=True):
-            scale += [PALM_TRANSLATION_SCALE] * 3 + [PALM_ROTATION_SCALE] * 3 + [FINGER_SCALE] * (stop - start - NUM_PALM)
-            fingers += range(start + NUM_PALM, stop)
-            translations += range(start, start + 3)
-        self.action_scale = tensor(scale)
+        slides = {j for j in joint_ids if int(model.jnt_type[j]) == int(mujoco.mjtJoint.mjJNT_SLIDE)}
+        self.action_scale = tensor([FINGER_SCALE if j not in palm_joints else PALM_TRANSLATION_SCALE if j in slides else PALM_ROTATION_SCALE
+                                    for j in joint_ids])  # fmt: skip
+        fingers = [c for c, j in enumerate(joint_ids) if j not in palm_joints]
         self.finger_joints = torch.tensor(fingers, device=device)  # the columns of the fingers' joints
-        self.palm_translations = translations  # the columns of the palms' slides
+        self.palm_translations = [c for c, j in enumerate(joint_ids) if j in palm_joints and j in slides]  # the columns of the palms' slides
 
     def _bodies(self, q: torch.Tensor, bodies) -> tuple[dict, dict]:
         """The positions and rotations of ``bodies`` (parents before children). A body's joints act in their order, as in
@@ -174,7 +192,7 @@ class HandKinematics:
 
 def scene_indices(model: mujoco.MjModel) -> dict[str, np.ndarray | int]:
     """Where the hands' joints, their actuators and the object's free joint sit in the scene's qpos, qvel and ctrl."""
-    joint_ids, _ = hand_joints(model)
+    joint_ids, _, _ = hand_joints(model)
     body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, OBJECT_BODY)
     if body < 0 or int(model.body_jntnum[body]) != 1 or int(model.jnt_type[model.body_jntadr[body]]) != int(mujoco.mjtJoint.mjJNT_FREE):
         raise ValueError("the scene lacks the object or its free joint")
