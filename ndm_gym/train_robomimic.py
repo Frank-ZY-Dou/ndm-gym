@@ -31,12 +31,12 @@ ROBOMIMIC_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 20_0
                       "warmup_steps": 32, "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4,
                       "amp": "none"}  # fmt: skip
 # the options a resumed run must share with its checkpoint: the algorithm and SuperTrack's weights, the optimizers' layouts
-# and states, the policy average
-RESUME_MATCH = ("algo", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
+# and states, the policy average, the smoothness weight (a checkpoint from before --target_rate_w has none: 0)
+RESUME_MATCH = ("algo", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "target_rate_w")
 # hand_fast's options that hand training's own code implements (hand_algos, its collector's compiled step, its phase times),
 # refused here unless at their defaults; the inductor's settings (--elementwise_3x3, --combo_kernels, --mix_order_reductions,
 # --autotune_gemm) apply as in hand training
-HAND_ONLY = ("compile_updates", "compile_collect", "compile_rollout", "sm_reuse_input", "wm_palm_fk", "phase_times")
+HAND_ONLY = ("compile_updates", "compile_collect", "compile_rollout", "sm_reuse_input", "st_no_imag_r", "wm_palm_fk", "phase_times")
 
 
 def parse_args(argv: list[str] | None = None):
@@ -175,8 +175,9 @@ def main():
     resume_ck = torch.load(args.resume, map_location=dev, weights_only=False) if args.resume else None
     if resume_ck is not None:
         for k in RESUME_MATCH:
-            if resume_ck["args"][k] != getattr(args, k):
-                raise ValueError(f"--resume: --{k} must match the checkpoint's run ({resume_ck['args'][k]!r})")
+            old = resume_ck["args"].get(k, 0.0) if k == "target_rate_w" else resume_ck["args"][k]
+            if old != getattr(args, k):
+                raise ValueError(f"--resume: --{k} must match the checkpoint's run ({old!r})")
     if os.path.exists(log_path):
         if resume_ck is None:
             raise ValueError(f"{log_path} exists: continue that run with --resume (its last.pt) or use another --log_dir")

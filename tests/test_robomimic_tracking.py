@@ -668,6 +668,15 @@ def test_target_rate_wiring(setup, tmp_path, monkeypatch):
     (args, kw), = calls
     assert args[:3] == ("lift", [0], str(tmp_path)) and args[-1] == 4.0 and len(args) == 8 and not kw
     assert json.load(open(tmp_path / "run" / "args.json"))["target_rate_w"] == 4.0
+    # resume: the run's weight is the checkpoint's (0 in a checkpoint from before the option)
+    for i, (old, new, same) in enumerate(((4.0, 4.0, True), (4.0, 2.0, False), (None, 0.0, True), (None, 4.0, False))):
+        argv = ["--task", "lift", "--algo", "supermimic", "--target_rate_w", str(new), "--data_dir", str(tmp_path)]
+        ck_args = vars(parse_args(argv))
+        ck_args.pop("target_rate_w")
+        torch.save({"args": ck_args if old is None else {**ck_args, "target_rate_w": old}}, tmp_path / f"ck{i}.pt")
+        monkeypatch.setattr(sys, "argv", ["train_robomimic", *argv, "--log_dir", str(tmp_path / f"resume{i}"), "--resume", str(tmp_path / f"ck{i}.pt")])
+        with pytest.raises(Stop if same else ValueError, match=None if same else "--target_rate_w must match"):
+            train_robomimic.main()
 
 
 def test_evaluation_saves_targets(setup):
