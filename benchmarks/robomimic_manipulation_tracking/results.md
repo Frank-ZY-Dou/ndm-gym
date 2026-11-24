@@ -107,7 +107,8 @@ lower object error on Lift (0.60 against 2.30 mm) and about the same on Square (
 One step of the world model, one network evaluation, stands in for the 25 physics steps of the 50 ms control step it
 predicts, each with its collision detection and its constraint solve (20 iterations). `ndm_gym.wmbench.speed_robomimic`
 times both on one A100 40GB SXM4 with nothing else on the machine: MuJoCo-Warp's control step of the training's scene (one
-CUDA graph) and the seed-0 final's world model (its stop checkpoint) in fp32 (its step one CUDA graph) and as a bf16
+CUDA graph) and the world model of each configuration's seed-0 run without the smoothness term (its stop checkpoint; the
+term changes neither the network nor its step) in fp32 (its step one CUDA graph) and as a bf16
 inference copy (compiled, one CUDA graph). Every world starts from a frame of the final's nominal test rollout and holds
 the reference's targets of that frame. World-steps per second, the median of 5 runs of 200 steps; not engineered (no
 per-phase table).
@@ -116,16 +117,16 @@ per-phase table).
 |---|---|---|---|---|---|---|
 | Transport | SuperTrack's acceleration model | 1,024 | 10,662 | 0.634 M | 4.78 M | 448x |
 | | | 4,096 | 15,196 | 1.48 M | 11.63 M | 765x |
-| | SuperMimic's increment model | 1,024 | 10,164 | 0.619 M | 4.41 M | 434x |
-| | | 4,096 | 14,390 | 1.44 M | 11.01 M | 765x |
+| | SuperMimic's increment model | 1,024 | 10,115 | 0.619 M | 4.42 M | 437x |
+| | | 4,096 | 14,614 | 1.44 M | 11.06 M | 757x |
 | Lift | SuperTrack's acceleration model | 1,024 | 29,621 | 1.51 M | 10.46 M | 353x |
 | | | 4,096 | 78,335 | 2.56 M | 20.02 M | 256x |
-| | SuperMimic's increment model | 1,024 | 29,369 | 1.42 M | 10.04 M | 342x |
-| | | 4,096 | 79,765 | 2.54 M | 20.03 M | 251x |
+| | SuperMimic's increment model | 1,024 | 29,001 | 1.42 M | 10.08 M | 347x |
+| | | 4,096 | 79,472 | 2.54 M | 20.36 M | 256x |
 | Square | SuperTrack's acceleration model | 1,024 | 15,290 | 1.20 M | 7.85 M | 513x |
 | | | 4,096 | 24,679 | 2.24 M | 17.89 M | 725x |
-| | SuperMimic's increment model | 1,024 | 13,524 | 1.18 M | 7.57 M | 560x |
-| | | 4,096 | 21,863 | 2.19 M | 17.01 M | 778x |
+| | SuperMimic's increment model | 1,024 | 14,647 | 1.18 M | 7.54 M | 515x |
+| | | 4,096 | 23,389 | 2.19 M | 17.22 M | 736x |
 
 The control step's cost grows with the scene and its contacts: at 4,096 worlds Lift's one arm and cube take 52 ms a step,
 Transport's two arms, bins and objects 270-285 ms. The world model's step grows only with the state it predicts: 0.21,
