@@ -57,7 +57,7 @@ last state held for 0.5 s.
 | action | one per actuator: an offset of its position target about the reference's joint position at the next frame |
 | observation | the actuated joints and their velocities, the grippers' keypoints (end effector and fingers), each tracked object about each end effector, its rotation and velocities, the previous action |
 | goal | 5 reference frames ahead about the state: the joints' offsets, the tracked objects' offsets and relative rotations, the keypoints' offsets |
-| reward | kernels on the keypoints (4 cm), the arms' joints (0.4 rad), the objects' positions (4 cm) and rotations (0.5 rad); an action-rate cost |
+| reward | kernels on the keypoints (4 cm), the arms' joints (0.4 rad), the objects' positions (4 cm) and rotations (0.5 rad); an action-rate cost, or with `--target_rate_w` a target-rate cost in its place ([smooth targets](#smooth-targets)) |
 | termination | a tracked object 15 cm or a keypoint 20 cm from its reference |
 | episode | from a random frame of the reference with noise on the arms' joints (the objects and the grippers as recorded, so that a grasp stays a grasp), to its demonstration's end |
 
@@ -68,6 +68,31 @@ free joints) over one control step on windows of simulator transitions, and trai
 the frozen model (`ndm_gym/algos/robomimic_algos.py`): SuperTrack with the acceleration model and L1 errors of the
 keypoints, the joints, the fingers and the objects' poses; SuperMimic with the increment model, the imagined reward and a
 critic. The systems options are the hand task's.
+
+## Smooth targets
+
+A policy's action is an offset about the demonstration's joint position at the next frame. Nothing in SuperTrack's loss, and
+only a small term in SuperMimic's reward (`w_action_rate`, 0.05 times the actions' mean squared change), ties one step's
+offset to the next, so the servos' targets can jump back and forth at every 50 ms step. The servos pass part of that on to
+the arms as jerk and tremor.
+
+`--target_rate_w w` (both algorithms; 0, the default, is off) adds a cost per step (`RobomimicTask.smooth_cost`): `w` times
+the mean over the actuators of the change of the policy's part of the targets since the previous step, each actuator's over
+its tracking kernel's width (an arm joint 0.4 rad, a finger 0.04 m), squared. A jump costs; following the demonstration does
+not. The reward carries it in the place of `w_action_rate`'s term, and SuperTrack's loss adds its mean over the imagined
+steps, at the scale of the task-weighted terms (`--st_task_weights`, required with it), so that both algorithms have the one
+same term. The benchmark's configurations use `--target_rate_w 64`.
+
+`benchmarks/robomimic_manipulation_tracking/motion.py` measures an evaluation's unperturbed rollout against its
+demonstration's same frames: the arms' joint acceleration and jerk, the share of their velocity's spectral power above 5 Hz, the
+change of their position targets per step (with `evaluate_robomimic --save_targets`), limit hits, and a held object's slip.
+
+```bash
+python -m ndm_gym.evaluate_robomimic --ckpt logs/square_st/ckpt_<stop>.pt --out logs/square_st/eval --save_targets
+python benchmarks/robomimic_manipulation_tracking/motion.py st=logs/square_st/eval/rollout_0.npz --json motion.jsonl
+```
+
+## Configurations
 
 `--config list` prints the configurations with what each measured. Each is one of four with the same kinds of change from
 the hand task's accurate presets, chosen by one rule on another seed: `robomimic-supertrack` is `hand-supertrack-accurate`'s
