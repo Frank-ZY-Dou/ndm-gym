@@ -492,6 +492,40 @@ synchronized at each boundary, so their sum is not the running iteration:
 With three GPUs the steps run at once, so an iteration takes about as long as the slowest: 25.3 ms for SuperTrack (its
 two updates, 24.9 and 24.6 ms) and 33.8 ms for SuperMimic (its policy update with the critic's, 33.3 ms).
 
+## A G1 with Inspire hands
+
+GigaHands' making tea carried out by a Unitree G1 with the two Inspire hands on its wrists
+([`build_g1_hand_task.py`](../../tools/build_g1_hand_task.py), [`g1_hands.py`](../../ndm_gym/robots/g1_hands.py)). The
+hands' bases replace the G1's rubber hands; the G1 stands at a small table whose top is the clip's floor, and its arms are
+solved by inverse kinematics so that each base keeps the clip's pose, clear of the robot's body. The policy drives each
+arm's seven hinges and each hand's twelve finger joints; the pelvis, the legs and the waist are fixed. Two tasks:
+
+- **standing:** the G1 at the table for the whole clip (338 frames);
+- **walk, then tea:** the G1 walks 4.35 m to the table (LAFAN1's `walk1_subject1` retargeted to the G1, up to its frame
+  3,600), its arms clear of its legs and the table, then reaches for the clip's first pose in 1 s and makes tea. The walk
+  is the reference's, replayed; the task is the reach and the tea (387 frames).
+
+```bash
+TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
+python tools/build_g1_hand_task.py --clip $TEA --out data/g1_hands/tea
+python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
+python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --seed 0 --log_dir logs/g1_walk_tea_s0
+python -m ndm_gym.evaluate_hand --ckpt logs/g1_walk_tea_s0/last.pt --out logs/g1_walk_tea_s0/evaluation
+MUJOCO_GL=egl python tools/render_g1_hands.py --task data/g1_hands/walk_tea --rollout logs/g1_walk_tea_s0/evaluation/rollout.npz \
+       --out g1_walk_tea.mp4 --webp g1_walk_tea.webp
+```
+
+| task | | seeds | success | object position | object position, last frame | fingertips |
+|---|---|---|---|---|---|---|
+| standing | reference targets |  | 0 % | 142.7 mm | 93.6 mm | 117.9 mm |
+|  | SuperMimic | 0 / 1 / 2 | 99.6 / 100.0 / 99.6 % | 15.7 / 9.5 / 15.0 mm | 14.2 / 8.9 / 12.0 mm | 26.4 / 22.5 / 24.6 mm |
+| walk, then tea | reference targets |  | 0 % | 127.8 mm | 95.9 mm | 100.9 mm |
+|  | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 98.4 % | 11.7 / 12.4 / 14.5 mm | 9.9 / 8.8 / 12.0 mm | 21.2 / 23.1 / 26.0 mm |
+
+- **Training:** `--config hand-supermimic-fast --iterations 12000`, the two-hand tea task's, 2,048 worlds, training seeds
+  0-2.
+- **Evaluation:** the last checkpoint, 256 rollouts from perturbed starts.
+
 ## Training time
 
 These times are before the speed options ([with them](#training-time-with-the-speed-options)).

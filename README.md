@@ -919,7 +919,7 @@ A floating hand tracks human grasp-and-lift demonstrations on MuJoCo-Warp: the X
 hand, each on an apple, a spray bottle and a can. The reference is [SPIDER](https://github.com/facebookresearch/spider)'s
 kinematic retarget of the captured hand and of the object's pose. Contributed by
 [Dechen Gao](https://github.com/gaodechen) ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2),
-[#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)): the task with SuperMimic, three hands and eight tasks, one of them with two hands.
+[#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15), [#17](https://github.com/Frank-ZY-Dou/ndm-gym/pull/17)): the task with SuperMimic, three hands, eight tasks (one with two hands) and a G1 with Inspire hands.
 
 Five more tasks, one with two hands at once: the mustard bottle and the mug on the three hands, stir beaker and pour tube
 (OakInk2's `hold` of a tube) on the XHand, making tea with two of each hand ([the task lists](docs/tasks/hand.md)).
@@ -931,6 +931,19 @@ python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_t
 ALGO=supertrack ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0   # <task id> <seed>
 ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
+
+**A G1 with Inspire hands.** Making tea on a Unitree G1 with the two Inspire hands on its wrists: it walks to a table,
+reaches and makes tea, each hand driven by its arm's seven hinges and its twelve finger joints. SuperMimic, success
+100.0 / 100.0 / 98.4 % (seeds 0-2; [results](benchmarks/xhand_tracking/results.md#a-g1-with-inspire-hands)).
+
+```bash
+TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
+python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
+python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --log_dir logs/g1_walk_tea
+```
+
+<p align="center"><img src="docs/media/hand/g1_walk_tea.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea" width="76%"/></p>
+<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (seed 0, from the unperturbed start).</i></p>
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|
