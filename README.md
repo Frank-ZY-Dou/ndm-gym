@@ -915,7 +915,7 @@ lower mean time to the target over the nine runs is SuperTrack's on the Inspire 
 each on one GPU, 1.40 and 1.44 on three).
 
 <p align="center"><img src="docs/media/hand/grid.webp" alt="The XHand, the Allegro hand and the Inspire hand tracking the apple, the spray bottle and the can with SuperTrack and SuperMimic" width="100%"/></p>
-<p align="center"><i>Three hands on the apple, the spray bottle and the can, with SuperTrack and with SuperMimic (half speed, the reference in blue).<br>The XHand's spray bottle and can with smooth targets; from the unperturbed start, a tile holding its last frame (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs</a>).</i></p>
+<p align="center"><i>Three hands on the apple, the spray bottle and the can, with SuperTrack and with SuperMimic (half speed, the reference in blue).<br>The XHand with smooth targets; from the unperturbed start, a tile holding its last frame (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 **Smooth targets.** A policy's action is an offset about the next reference pose. Nothing in SuperTrack's loss, and only a

@@ -169,9 +169,9 @@ the README's grid as one synchronized loop, and the single animations are
 `docs/media/hand/<hand>_<algorithm>_<clip>.webp`. On the dark stage a hand darker than mid grey (the Allegro's, the
 Inspire's) is lifted to graphite.
 
-The README's animations one by one (per hand, algorithm and clip one policy: on the XHand's spray bottle and can a run
-with smooth targets, elsewhere the lowest object error among that algorithm's configurations of record; which runs and
-why: [results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
+The README's animations one by one (per hand, algorithm and clip one policy: on the XHand a run with smooth targets,
+elsewhere the lowest object error among that algorithm's configurations of record; which runs and why:
+[results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
 
 | | apple | spray bottle | can |
 |---|---|---|---|

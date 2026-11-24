@@ -299,22 +299,21 @@ configuration: Allegro, SuperTrack 4.21 min (preset) and 3.90 min, SuperMimic 5.
 
 Per hand, algorithm and clip the README's grid shows one run, from the unperturbed start.
 
-- *The XHand's `oakink_a01002` and `can`* (smooth targets, [above](#the-xhand-with-the-target-rate-penalty)): of the three
-  seeds of each algorithm's most accurate configuration on the clip, the run at a success of 0.99 or more whose fingers
-  reverse direction least often against the reference (a tie broken by the lower power of the joints' velocity between 1 and
-  5 Hz). Each is
-  within the motion check's bounds on its own rollout (share / jerk / change, times the reference's): SuperTrack 1.68 / 0.38
-  / 1.74 and 1.25 / 0.38 / 1.63, SuperMimic 0.44 / 0.18 / 1.25 and 0.82 / 0.34 / 1.61.
+- *The XHand* (smooth targets, [above](#the-xhand-with-the-target-rate-penalty)): of the three seeds of each algorithm's most
+  accurate configuration on the clip, the run at a success of 0.99 or more whose fingers reverse direction least often against
+  the reference (a tie broken by the lower power of the joints' velocity between 1 and 5 Hz). Each is within the motion check's
+  bounds on its own rollout (share / jerk / change, times the reference's; `apple`, `oakink_a01002`, `can`): SuperTrack 1.10 /
+  0.49 / 1.97, 1.68 / 0.38 / 1.74 and 1.25 / 0.38 / 1.63; SuperMimic 0.37 / 0.33 / 1.56, 0.44 / 0.18 / 1.25 and 0.82 / 0.34 /
+  1.61.
 - *The others:* the run with the lowest object error over the perturbed starts at its last checkpoint among that algorithm's
-  configurations of record on the hand (for the XHand's `apple` its accurate preset: the fast presets' timed runs kept no
-  rollout).
+  configurations of record on the hand.
 
 Configuration and training seed:
 
 | hand | | `apple` | `oakink_a01002` | `can` |
 |---|---|---|---|---|
-| XHand | SuperTrack | `hand-supertrack-accurate`, 1 | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000`, 1 | the same, 2 |
-| | SuperMimic | `hand-supermimic-accurate`, 2 | `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`, 1 | the same, 2 |
+| XHand | SuperTrack | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000`, 2 | the same, 1 | the same, 2 |
+| | SuperMimic | `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`, 2 | the same, 1 | the same, 2 |
 | Allegro | SuperTrack | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`, 2 | the same, 1 | the same, 0 |
 | | SuperMimic | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`, 0 | `hand-supermimic-fast`, 2 | as on `apple`, 2 |
 | Inspire | SuperTrack | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`, 1 | the same, 1 | the same, 2 |
