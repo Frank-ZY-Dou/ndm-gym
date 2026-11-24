@@ -328,6 +328,9 @@ class HDMITaskCfg:
     reset: ResetCfg = field(default_factory=ResetCfg)
     body: HDMIBody = G1_BODY
     object_body_prim: str | None = None  # the object body's prim relative to the object's, when not its name (a nested USD)
+    # per end effector, the links whose contact forces with the object add up to its force (a hand: the palm and the
+    # fingers); None: each end effector's own link
+    contact_eef_links: tuple[tuple[str, ...], ...] | None = None
 
     def __post_init__(self):
         E, nt, ne = len(self.contact_eef_bodies), len(self.contact_target_offsets), len(self.contact_eef_offsets)
@@ -335,6 +338,8 @@ class HDMITaskCfg:
             raise ValueError(f"{self.name}: {E} end effectors, {nt} target offsets and {ne} end-effector offsets")
         if self.contact_cols not in (1, E):
             raise ValueError(f"{self.name}: {self.contact_cols} contact columns for {E} end effectors")
+        if self.contact_eef_links is not None and len(self.contact_eef_links) != E:
+            raise ValueError(f"{self.name}: {len(self.contact_eef_links)} sets of contact links for {E} end effectors")
         r = self.randomization
         if (self.object_joint is None) != (r.hinge_armature_range is None and r.hinge_friction_range is None and r.hinge_damping_range is None):
             raise ValueError(f"{self.name}: hinge randomization must be given exactly for a hinged object")
@@ -342,6 +347,11 @@ class HDMITaskCfg:
     @property
     def num_eefs(self) -> int:
         return len(self.contact_eef_bodies)
+
+    @property
+    def eef_links(self) -> tuple[tuple[str, ...], ...]:
+        """Each end effector's contact links: ``contact_eef_links``, or its own link."""
+        return self.contact_eef_links if self.contact_eef_links is not None else tuple((b,) for b in self.contact_eef_bodies)
 
 
 SPHERE_FEET = "g1_29dof_rubberhand-feet_sphere-eef_box-body_capsule"
@@ -484,6 +494,9 @@ INSPIRE_FINGERS = tuple(f"{side}_{joint}_joint" for side in ("left", "right") fo
 INSPIRE_KEYPOINTS = tuple(f"{side}_{body}" for side in ("left", "right") for body in (
     "thumb_distal", "index_intermediate", "middle_intermediate", "ring_intermediate", "pinky_intermediate"))  # the fingertips  # fmt: skip
 INSPIRE_PALM_OFFSETS = ((0.0421, 0.003, 0.0), (0.0421, -0.003, 0.0))  # the palms' origins in the wrists' frames: the model fuses them
+INSPIRE_HAND_LINKS = tuple((f"{side}_wrist_yaw_link",) + tuple(f"{side}_{link}" for link in (
+    "thumb_proximal_base", "thumb_proximal", "thumb_intermediate", "thumb_distal", "index_proximal", "index_intermediate", "middle_proximal",
+    "middle_intermediate", "ring_proximal", "ring_intermediate", "pinky_proximal", "pinky_intermediate")) for side in ("left", "right"))  # fmt: skip
 INSPIRE_FINGER_MOTOR = (5.0, 10.0, 0.01)  # effort (N m), velocity (rad/s), armature (kg m^2): kp 39 N m/rad at the G1's 10 Hz
 G1_INSPIRE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "hdmi", "g1_inspire")
 G1_INSPIRE_BODY = dataclasses.replace(
@@ -507,6 +520,7 @@ WHOLE_BODY_TASKS = (
         name="g1_inspire_walk_tea", hdmi_name="", data_path="g1_hands/sequence.py: LAFAN1 walk1_subject1, then GigaHands p36-tea",
         clip_len=638, robot_type="g1_29dof_inspire", object_asset="right_object", object_body="right_object", extra_objects=("table",),
         contact_eef_bodies=("left_wrist_yaw_link", "right_wrist_yaw_link"), contact_eef_offsets=INSPIRE_PALM_OFFSETS,
+        contact_eef_links=INSPIRE_HAND_LINKS,  # the palm and the fingers hold the teapot
         contact_target_offsets=((0.098, -0.057, -0.187), (-0.108, 0.129, -0.11)), contact_cols=2,  # the palms on the teapot, from the clip
         rewards=reward_table(add={"tracking": HAND_TRACKING}), reset=ResetCfg(object_pose_range=FLAT_OBJECT),
         randomization=ObjectRandomization(mass_range=(1.8, 2.6)), body=G1_INSPIRE_BODY, object_body_prim="Geometry/right_object",

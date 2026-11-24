@@ -168,9 +168,10 @@ def scene_cfg(cfg: HDMITaskCfg, side: dict, num_envs: int):
     for name in cfg.extra_objects:  # static props: kinematic bodies (§9)
         attrs[f"extra_{name}"] = RigidObjectCfg(prim_path=f"{{ENV_REGEX_NS}}/{name}", spawn=sim_utils.UsdFileCfg(
             usd_path=usd(side["extra_object_usd"][name]), variants=variants, rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True)))  # fmt: skip
-    for e, body in enumerate(cfg.contact_eef_bodies):  # the end effectors' forces from the object's contact body (LOC:89-100)
-        attrs[f"eef{e}"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.link_prim(body)}",
-                                            filter_prim_paths_expr=[f"{{ENV_REGEX_NS}}/{cfg.object_asset}/{cfg.object_body_prim or cfg.object_body}"])  # fmt: skip
+    obj_body = f"{{ENV_REGEX_NS}}/{cfg.object_asset}/{cfg.object_body_prim or cfg.object_body}"
+    for e, links in enumerate(cfg.eef_links):  # the end effectors' forces from the object's contact body (LOC:89-100), summed over their links
+        for k, link in enumerate(links):
+            attrs[f"eef{e}_{k}"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.link_prim(link)}", filter_prim_paths_expr=[obj_body])
     attrs["feet"] = ContactSensorCfg(prim_path=f"{{ENV_REGEX_NS}}/Robot/{cfg.body.feet_prim_pattern}")
     cls = configclass(type("HDMISceneCfg", (InteractiveSceneCfg,), {"__annotations__": {k: type(v) for k, v in attrs.items()}, **attrs}))
     return cls(num_envs=num_envs, env_spacing=0.0, replicate_physics=True)
@@ -378,7 +379,7 @@ class HDMISim:
         check_prop_contacts(self.sim, self.scene, cfg)
         self.robot, self.obj = self.scene["robot"], self.scene["obj"]
         self.extras = [self.scene[f"extra_{n}"] for n in cfg.extra_objects]
-        self.eef_sensors = [self.scene[f"eef{e}"] for e in range(cfg.num_eefs)]
+        self.eef_sensors = [[self.scene[f"eef{e}_{k}"] for k in range(len(links))] for e, links in enumerate(cfg.eef_links)]
         self.feet_sensor = self.scene["feet"]
         names = list(self.robot.joint_names)
         if sorted(names) != sorted(body.joint_names):
@@ -643,7 +644,7 @@ class HDMISim:
         q, qd = d.joint_pos.torch[:, self.j_hdmi], d.joint_vel.torch[:, self.j_hdmi]  # gathers: fresh tensors
         ep = epose[..., :3] - org[:, None] + (eR @ self.eef_offsets.unsqueeze(-1)).squeeze(-1)
         tp = cp[:, None] + (cR[:, None] @ (self.target_offsets * self.obj_scale[:, None]).unsqueeze(-1)).squeeze(-1)
-        fw = torch.stack([_t(s.data.force_matrix_w)[:, 0, 0] for s in self.eef_sensors], 1)  # (N, E, 3) world
+        fw = torch.stack([sum(_t(s.data.force_matrix_w)[:, 0, 0] for s in links) for links in self.eef_sensors], 1)  # (N, E, 3) world
         fb = (fw.unsqueeze(-2) @ cR[:, None]).squeeze(-2)  # in the contact body's frame (R^T f)
         hq = hqd = None
         if self.hinged:
