@@ -61,8 +61,8 @@ GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
 # manipulation demonstration tracking: each algorithm's choice of four (the hand task's accurate preset and three single changes,
 # benchmarks/robomimic_manipulation_tracking): SuperTrack the preset with imagination noise 0, SuperMimic the preset (its defaults)
-ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0 --st_task_weights {HAND_SYSTEMS}"
-ROBOMIMIC_SM = f"--algo supermimic {HAND_SYSTEMS}"
+ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0 --st_task_weights --target_rate_w 64 {HAND_SYSTEMS}"
+ROBOMIMIC_SM = f"--algo supermimic --bptt_decay 0.95 --target_rate_w 64 {HAND_SYSTEMS}"
 # the benchmark's runs (benchmarks/robomimic_manipulation_tracking): a cap of 6,000 iterations with the learning rate's decay over
 # it, the solver at 20 iterations, a checkpoint kept every 250 for the stop rule (stop_rule.py) and the time to the target
 ROBOMIMIC_RUN = "--solver_iterations 20 --iterations 6000 --lr_decay_iters 6000 --ckpt_every 250 --ckpt_keep"

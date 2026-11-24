@@ -134,8 +134,7 @@ def test_the_manipulation_configurations_are_their_runs(name):
     assert got["config"] == name and set(rec) <= set(got)
     assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
     added = set(got) - set(rec) - {"config", "log_dir", "data_dir", "motion_dir"}  # options added after the runs: off here
-    plain = vars(parse("train_robomimic", ["--task", rec["task"]]))
-    assert added == {"target_rate_w"} and all(got[k] == plain[k] for k in added) and got["target_rate_w"] == 0.0
+    assert added == set()  # every option of the trainer is in the runs' records
     if name == "robomimic-supertrack":
         plain = vars(parse("train_robomimic", ["--algo", "supertrack", "--task", "lift"]))
         assert (got["st_imag_noise"], plain["st_imag_noise"]) == (0.0, 0.1)
