@@ -94,7 +94,7 @@ def main():
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--no_reference", action="store_true", help="skip the rollouts under the reference's targets")
     parser.add_argument("--save_targets", action="store_true",
-                        help="the saved rollout's position targets at every control step and the reference's beside them")
+                        help="the saved rollout's position targets at every control step and the reference's beside them")  # fmt: skip
     parser.add_argument("--solver_iterations", type=int, default=-1,
                         help="the simulated scene's solver iterations: -1 the checkpoint's training physics, 0 the scene's own (robosuite's), "
                         "else a cap (its line search: --solver_ls_iterations)")  # fmt: skip
@@ -165,7 +165,7 @@ def main():
         if saved is not None:  # the targets of the rollout's n steps, and the reference's (the setpoints of a zero action)
             frames = torch.arange(start, end, device=dev)
             extra = {"targets": torch.stack(saved)[:n, d].cpu().numpy(),
-                     "reference_targets": task.setpoint(torch.zeros(n, task.nu, device=dev), frames).cpu().numpy()}
+                     "reference_targets": task.setpoint(torch.zeros(n, task.nu, device=dev), frames).cpu().numpy()}  # fmt: skip
         np.savez(os.path.join(args.out, f"rollout_{name}.npz"), state=runs["nominal"][0][: n + 1, d].cpu().numpy(),
                  reference_qpos=ref.qpos[start : end + 1].cpu().numpy(), reference_targets_state=open_loop[: n + 1, d].cpu().numpy(), nq=task.nq,
                  control_dt=CONTROL_DT, task=targs.task, demo=name, terminated_at=int(until[d]) if bool(failed[d]) else -1,
