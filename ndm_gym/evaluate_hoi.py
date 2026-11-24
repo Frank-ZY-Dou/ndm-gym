@@ -391,9 +391,31 @@ class Evaluator:
         cmp = (lambda f: torch.compile(f, dynamic=False, options=TASK_COMPILE_OPTIONS)) if compile_ else (lambda f: f)  # noqa: E731
         self.step_fn, self.reset_obs_fn = cmp(step), cmp(reset_obs)
 
+    def _record(self, rows: list, ended: bool):
+        """Env 0's state after a reset or a step, in tools/render_hoi.py's --states format, until its first episode ends."""
+        if ended:
+            return
+        env, pose = self.env, lambda d: (d[0, :3] - self.env.scene.env_origins[0], d[0, [6, 3, 4, 5]])  # noqa: E731  wxyz
+        root, obj = pose(env.robot.data.root_link_pose_w.torch), pose(env.obj.data.root_link_pose_w.torch)
+        props = [pose(e.data.root_link_pose_w.torch) for e in env.extras]
+        rows.append([x.double().cpu() for x in (*root, env.robot.data.joint_pos.torch[0, env.j_state], *obj)] + [int(env.t[0])] +
+                    [[x.double().cpu() for x in p] for p in props])  # fmt: skip
+
+    def _save_record(self, rows: list, path: str):
+        import numpy as np
+
+        stack = lambda i: np.stack([r[i].numpy() for r in rows])  # noqa: E731
+        out = {"task": np.array(self.task.cfg.name), "fps": np.array(1.0 / (DECIMATION * PHYSICS_DT)), "root_pos": stack(0), "root_quat_wxyz": stack(1),
+               "joint_pos": stack(2), "object_pos": stack(3), "object_quat_wxyz": stack(4), "frame": np.array([r[5] for r in rows])}  # fmt: skip
+        if self.env.extras:
+            out["extra_pos"] = np.stack([[p[0].numpy() for p in r[6]] for r in rows])
+            out["extra_quat_wxyz"] = np.stack([[p[1].numpy() for p in r[6]] for r in rows])
+        np.savez(path, **out)
+
     @torch.no_grad()
-    def __call__(self, ck: dict) -> dict:
-        """The checkpoint's evaluation: the result of ``summarize`` plus the protocol and the time it took."""
+    def __call__(self, ck: dict, record: str | None = None) -> dict:
+        """The checkpoint's evaluation: the result of ``summarize`` plus the protocol and the time it took. ``record``: also
+        save env 0's first episode (from the reference's first frame, the robot unperturbed in evaluation) to that npz."""
         from ndm_gym.wmbench.collect_hoi import merge_states
 
         env, task, actor, N = self.env, self.task, self.actor, self.N
@@ -413,12 +435,15 @@ class Evaluator:
         st = new_stats(Ns, len(self.names), len(task.term_names), dev)
         a_sim = torch.zeros(Ns, task.body.num_actions, device=dev)
         done_sim = torch.ones(Ns, dtype=torch.bool, device=dev)
+        rows, recorded = [], record is None
         for _ in range(steps):  # HLP:227-235
+            self._record(rows, recorded)
             a_sim[:N].copy_(actor.act(carry, env.t))
             x, truncated = env.step(a_sim, prev)
             obs, done, st = self.step_fn(x, task.draw_noise(), truncated, env.t, env.ep_step, st, a_sim)
             carry = actor.observe(carry, obs, env.t)
             done_sim[:N].copy_(done[:N])
+            recorded = recorded or bool(done_sim[0])
             ids = torch.nonzero_static(done_sim, size=Ns, fill_value=N).squeeze(-1)  # the done envs, then the spare env
             env.reset(ids)
             env.refresh()
@@ -428,6 +453,8 @@ class Evaluator:
             carry = actor.reset(carry, done_sim, self.reset_obs_fn(env.reset_input(prev), noise) if actor.needs_reset_obs else None)
         if not bool(st["ended"][:N].all()):
             raise RuntimeError(f"after {steps} steps not every env's first episode has ended")
+        if record is not None:
+            self._save_record(rows, record)
         res = summarize(st, self.names, task.term_names, N, env.L)
         torch.cuda.synchronize()
         res.update({"task": task.cfg.name, "algo": self.algo, "n_envs": N, "seed": self.seed, "steps": steps, "clip_len": env.L,
@@ -443,6 +470,7 @@ def parse_args():
     parser.add_argument("--watch", action="store_true", help="keep evaluating new checkpoints as they appear")
     parser.add_argument("--ckpt", type=str, default=None, help="evaluate one checkpoint")
     parser.add_argument("--out_json", type=str, default=None, help="--ckpt mode: also write the full result here")
+    parser.add_argument("--record", type=str, default=None, help="--ckpt mode: env 0's first episode as tools/render_hoi.py's --states npz")
     parser.add_argument("--every", type=int, default=1, help="evaluate every n-th checkpoint (iterations in units of the run's --ckpt_every)")
     parser.add_argument("--num_envs", type=int, default=NUM_ENVS, help="HDMI's evaluation script: 2048 (cfg/eval.yaml); its paper: 4096")
     parser.add_argument("--seed", type=int, default=SEED, help="seed of the startup randomization, the resets and the observation noise")
@@ -450,8 +478,8 @@ def parse_args():
     parser.add_argument("--no_compile", action="store_true", help="no torch.compile (the same computations)")
     add_launcher_args(parser)
     args = parser.parse_args()
-    if args.out_json is not None and args.ckpt is None:
-        parser.error("--out_json needs --ckpt")
+    if (args.out_json is not None or args.record is not None) and args.ckpt is None:
+        parser.error("--out_json and --record need --ckpt")
     if args.ckpt is not None and args.watch:
         parser.error("--ckpt evaluates one checkpoint, --watch the run's")
     return args
@@ -476,7 +504,7 @@ def main():
         if args.ckpt:
             ck = load(args.ckpt)
             check_ckpt(ck, a, args.ckpt)
-            res = ev(ck)
+            res = ev(ck, record=args.record)
             res.update({"ckpt": os.path.abspath(args.ckpt), "iteration": ck["iteration"], "wall_time": ck["wall_time"],
                         "eval_at": time.strftime("%Y-%m-%d %H:%M:%S")})  # fmt: skip
             print(json.dumps({k: v for k, v in res.items() if k != "hdmi"}, indent=1), flush=True)
