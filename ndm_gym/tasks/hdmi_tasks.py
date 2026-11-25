@@ -515,16 +515,26 @@ HAND_TRACKING = {
     "tracking_hand_pos": term("keypoint_pos_tracking_local_product", 0.5, body_names=(".*_distal", ".*_intermediate"), sigma=0.1),
     "hand_joint_pos_tracking": term("joint_pos_tracking_product", 0.5, joint_names=(".*_wrist_.*_joint",) + INSPIRE_FINGERS, sigma=0.25),
 }
-WHOLE_BODY_TASKS = (
-    HDMITaskCfg(
-        name="g1_inspire_walk_tea", hdmi_name="", data_path="g1_hands/sequence.py: LAFAN1 walk1_subject1, then GigaHands p36-tea",
-        clip_len=638, robot_type="g1_29dof_inspire", object_asset="right_object", object_body="right_object", extra_objects=("table",),
+
+
+def walk_tea(name: str, source: str, clip_len: int, contact_target_offsets: tuple) -> HDMITaskCfg:
+    """The G1 with Inspire hands walking to a table and making tea; ``contact_target_offsets``: the palms on the teapot, from
+    the clip (their mean place in the teapot's frame over the frames each palm touches it)."""
+    return HDMITaskCfg(
+        name=name, hdmi_name="", data_path=f"g1_hands/sequence.py: LAFAN1 walk1_subject1, then GigaHands p36-tea ({source})",
+        clip_len=clip_len, robot_type="g1_29dof_inspire", object_asset="right_object", object_body="right_object", extra_objects=("table",),
         contact_eef_bodies=("left_wrist_yaw_link", "right_wrist_yaw_link"), contact_eef_offsets=INSPIRE_PALM_OFFSETS,
         contact_eef_links=INSPIRE_HAND_LINKS,  # the palm and the fingers hold the teapot
-        contact_target_offsets=((0.098, -0.057, -0.187), (-0.108, 0.129, -0.11)), contact_cols=2,  # the palms on the teapot, from the clip
+        contact_target_offsets=contact_target_offsets, contact_cols=2,
         rewards=reward_table(add={"tracking": HAND_TRACKING}), reset=ResetCfg(object_pose_range=FLAT_OBJECT),
         randomization=ObjectRandomization(mass_range=(1.8, 2.6)), body=G1_INSPIRE_BODY, object_body_prim="Geometry/right_object",
-    ),
+    )
+
+
+WHOLE_BODY_TASKS = (
+    walk_tea("g1_inspire_walk_tea", "SPIDER's kinematic retarget", 638, ((0.098, -0.057, -0.187), (-0.108, 0.129, -0.11))),
+    # SPIDER's physics-optimised retarget (trajectory_mjwp.npz): the fingers out of the teapot
+    walk_tea("g1_inspire_walk_tea_mjwp", "SPIDER's physics-optimised retarget", 640, ((0.132, -0.11, -0.114), (-0.099, 0.023, -0.149))),
 )
 HDMI_TASKS: dict[str, HDMITaskCfg] = {c.name: c for c in _TASKS}  # HDMI's 13, on its G1
 TASKS: dict[str, HDMITaskCfg] = {**HDMI_TASKS, **{c.name: c for c in WHOLE_BODY_TASKS}}
