@@ -70,8 +70,11 @@ def _block(T, N, rope=True, film=True, bias=True, seed=0):
     return blk, (x, cos, sin, b, c)
 
 
-@pytest.mark.parametrize("T,N", [(33, 1), (33, 7), (33, 1000), (33, 4096), (32, 1001), (34, 999), (17, 100), (64, 50), (100, 20), (128, 9)])
+@pytest.mark.parametrize(
+    "T,N", [(33, 1), (33, 7), (33, 1000), (33, 4096), (32, 1001), (34, 999), (17, 100), (16, 257), (64, 50), (100, 20), (128, 9)]
+)
 def test_block_matches_reference(T, N):
+    """T = 16, 32, 64 and 128 fill a tile with whole environments (FiLM per environment; the first three: the attention too)."""
     from ndm_gym.kernels.rf_block import FusedBlock
 
     blk, args = _block(T, N, seed=T + N)
@@ -148,6 +151,29 @@ def test_block_is_deterministic():
     fb = FusedBlock(blk)
     with torch.no_grad():
         assert torch.equal(fb(*args), fb(*args))
+
+
+def test_kernel_cos_sin():
+    """The whole-network kernel's cos and sin of the rotation's angles (reduced to a turn, PTX's approximate
+    instructions) against float64, over angles far outside a turn."""
+    import triton
+    import triton.language as tl
+
+    from ndm_gym.kernels.rf_block import _cos_sin
+
+    @triton.jit
+    def kernel(A, C, S_, n, BLOCK: tl.constexpr):
+        i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        c, s = _cos_sin(tl.load(A + i, mask=i < n, other=0.0))
+        tl.store(C + i, c, mask=i < n)
+        tl.store(S_ + i, s, mask=i < n)
+
+    a = torch.cat((torch.linspace(-400.0, 400.0, 100001, device=DEV), torch.tensor([0.0, 3.14159265, -3.14159265, 1e-7, -1e-7], device=DEV)))
+    c, s = torch.empty_like(a), torch.empty_like(a)
+    kernel[(triton.cdiv(a.numel(), 256),)](a, c, s, a.numel(), BLOCK=256)
+    err = torch.maximum((c.double() - a.double().cos()).abs(), (s.double() - a.double().sin()).abs())
+    assert float(err.max()) < 1e-4, float(err.max())  # at 400 radians the reduced angle is rounded to about 3e-5 radians
+    assert float(err[a.abs() <= 3.2].max()) < 2e-6, float(err[a.abs() <= 3.2].max())  # within a turn: the instructions' own error
 
 
 def test_block_refuses_what_it_does_not_do():
@@ -235,6 +261,11 @@ def test_network_matches_reference(n, props, hinged, whole):
             ref16, y = wm.net(x).float(), fused(x).float()
         if whole:
             assert torch.equal(fused(x), y)  # deterministic
+            assert not fused.knobs["rope_tables"]  # the rotation in the kernel; from tables computed before it: the same test
+            tables = fused_copy(wm.net, whole_network=True, rope_tables=True)
+            with torch.autocast("cuda", dtype=torch.bfloat16):
+                yt = tables(x).float()
+            _assert_at_bf16_rounding(yt, ref16, ref32, f"network n={n} props={props} hinged={hinged} with the rotation's tables")
     _assert_at_bf16_rounding(y, ref16, ref32, f"network n={n} props={props} hinged={hinged} whole={whole}", max_factor=1.0 if whole else 1.5)
 
 
@@ -273,7 +304,7 @@ def test_fused_network_refuses_what_it_does_not_do():
     with pytest.raises(TypeError, match="HOIRigidFormerNet"):
         FusedHOIRigidFormerNet.from_net(fused)
     with torch.no_grad():
-        fused.k_wout.mul_(1.5)  # a kernel that computes something else
+        fused.k_hm3.mul_(1.5)  # a kernel that computes something else
     with pytest.raises(RuntimeError, match="miscompiled"):
         self_check(wm.net, fused, 0, 0, True)
 
@@ -373,6 +404,51 @@ def test_lafan1_backbone(rope, tree_bias, film):
         with torch.autocast("cuda", dtype=torch.bfloat16):
             ref16, y = net(x).float(), fused(x).float()
     _assert_at_bf16_rounding(y, ref16, ref32, f"RigidFormerNet rope={rope} tree_bias={tree_bias} film={film}", max_factor=1.5)
+
+
+@pytest.mark.parametrize("merge,registers,layers,token_readout", [("none", 2, 3, None), ("joints", 2, 2, None), ("joints", 2, 2, False),
+                                                                  ("distal", 8, 2, None), ("distal", 8, 2, False), ("joints", 4, 2, None)])  # fmt: skip
+@pytest.mark.parametrize("n", [1, 333, 2048])
+def test_lafan1_backbone_whole_network(merge, registers, layers, token_readout, n):
+    """The LAFAN1 world models' RigidFormerNet as the whole-network kernel: one token per body in one launch, or merged
+    tokens (--rf_merge: the embedding of a token's member bodies and the blocks, then every body read out of its token
+    with its read-out embedding) in one launch too, the read-out from the tokens' rows (the default with 16 or 32
+    tokens), or in two, the read-out per body (token_readout False, and the default with 18 tokens); closer to fp32
+    than the autocast reference, and deterministic."""
+    from ndm_gym.kernels.rf_block import FusedG1RigidFormerNet, fused_copy
+    from ndm_gym.robots.g1 import kinematics
+    from ndm_gym.worldmodels.rigidformer import RigidFormerNet
+
+    _skip_whole_on_sm90(True)
+    torch.manual_seed(0)
+    net = RigidFormerNet(kinematics("cpu"), 6, 1, layers=layers, registers=registers, merge=merge).to(DEV)
+    with torch.no_grad():  # the heads, FiLM and the tree bias start at zero; give every path a signal
+        for m in [net.root_head, net.joint_head] + [b.film for b in net.blocks]:
+            m.weight.normal_(0.0, 0.05)
+            m.bias.normal_(0.0, 0.05)
+        net.rel_bias.normal_(0.0, 0.3)
+    x = torch.cat((torch.randn(n, net.in_dim, device=DEV), (2 * torch.rand(n, 3 * net.n_body, device=DEV) - 1) / 0.1), 1)
+    fused = fused_copy(net, whole_network=True, token_readout=token_readout)
+    assert isinstance(fused, FusedG1RigidFormerNet) and fused.k_merged == (merge != "none") and type(net) is RigidFormerNet
+    assert fused.k_token_readout == (merge != "none" and token_readout is None and fused.n_tok % 16 == 0)
+    with torch.no_grad():
+        ref32 = _fp32(lambda: net(x))
+        with torch.autocast("cuda", dtype=torch.bfloat16):
+            ref16, y = net(x).float(), fused(x).float()
+        assert torch.equal(fused(x), y)
+    _assert_at_bf16_rounding(y, ref16, ref32, f"RigidFormerNet whole network merge={merge} token_readout={token_readout} n={n}")
+    assert fused.knobs["rope_tables"] == (merge == "none")  # the rotation's default; the other form: the same test
+    with torch.no_grad(), torch.autocast("cuda", dtype=torch.bfloat16):  # packed under autocast: the same tensors
+        other = fused_copy(net, whole_network=True, token_readout=token_readout, rope_tables=merge != "none")
+        assert all(torch.equal(getattr(other, k), getattr(fused, k)) for k, _ in fused.named_buffers() if k.startswith("k_"))
+        yr = other(x).float()
+    _assert_at_bf16_rounding(yr, ref16, ref32, f"RigidFormerNet whole network merge={merge} n={n}, the rotation's other form")
+    if not fused.k_token_readout and token_readout is None:  # one token per body, or 18 tokens
+        with pytest.raises(ValueError, match="read-out from the tokens' rows"):
+            FusedG1RigidFormerNet.from_net(net, token_readout=True)
+    if token_readout is False:  # the per-body read-out's tile must hold whole environments
+        with pytest.raises(ValueError, match="head_m"):
+            FusedG1RigidFormerNet.from_net(net, head_m=16, token_readout=False)
 
 
 @pytest.mark.skipif(not (os.environ.get("NDM_RF_CKPT") and os.environ.get("NDM_RF_DATA")), reason="NDM_RF_CKPT and NDM_RF_DATA not set")

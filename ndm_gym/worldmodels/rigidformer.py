@@ -316,6 +316,13 @@ class RigidFormerNet(nn.Module):
         keep_ops: with fused_train, the fused forward passes whose parameters train (the world-model fit) also keep the
             bf16 operands their backward passes would recompute (``rf_block_train(keep_ops=True)``; about 100 MB more per
             block at 2048 windows); the same function up to float rounding. Off by default.
+        fused_readout: with fused_train, the read-out's passes under bf16 autocast while its parameters are frozen (the
+            policy's BPTT) as the fused kernels of ``ndm_gym.kernels.rf_head`` (the same function up to float rounding;
+            they keep nothing but the read-out's inputs, so "frozen_readout" then recomputes nothing). Off by default.
+        fused_inputs: ``inputs`` on a GPU as one kernel (``g1_fused.rf_inputs``: the forward kinematics and every
+            token's features) with a hand-written backward pass in a second kernel, in place of the compiled kinematics
+            and their autograd (hundreds of small kernels per step in the policy's BPTT); the same function up to float
+            rounding. Needs one rotary point per body and no external wrench. Off by default.
         anchors: K anchor points per body for the rotary attention (RigidFormer's ARoPE): K > 1 places them by
             RigidFormer's farthest point sampling over the body's visual meshes (``ArticulationKinematics.anchors``) and
             moves them with the body; 1 (default) keeps one point per body, its link origin (either mode).
@@ -342,7 +349,8 @@ class RigidFormerNet(nn.Module):
                  heads: int = 4, ffn_mult: float = 2.5, registers: int = 2, rope: bool = True, rope_max_freq: float = 10.0,
                  rope_detach: bool = False, tree_bias: bool = True, film: bool = True, head_layers: tuple[int, ...] | None = None,
                  ext_wrench: bool = False, checkpoint: str = "frozen", fused_rope: bool = False, fused_train: bool = False, anchors: int = 1,
-                 anchor_mode: str = "mean", rope_center: bool = False, keep_ops: bool = False, merge: str = "none"):  # fmt: skip
+                 anchor_mode: str = "mean", rope_center: bool = False, keep_ops: bool = False, merge: str = "none",
+                 fused_readout: bool = False, fused_inputs: bool = False):  # fmt: skip
         super().__init__()
         B = kin.num_bodies
         assert kin.parent[0] == -1 and all(p >= 0 for p in kin.parent[1:]), kin.parent
@@ -367,6 +375,13 @@ class RigidFormerNet(nn.Module):
         self.chunk = 64 if int(ffn_mult * dim) % 64 == 0 else 32  # the fused kernels' SwiGLU columns per step (64 for RF-S)
         if keep_ops and not fused_train:
             raise ValueError("keep_ops keeps the fused blocks' operands: it needs fused_train")
+        if fused_readout and not fused_train:
+            raise ValueError("fused_readout runs the read-out's bf16 passes as fused kernels beside the blocks': it needs fused_train")
+        self.fused_readout, self._head_tables = fused_readout, None
+        if fused_inputs and (ext_wrench or anchors != 1):
+            raise ValueError("fused_inputs (--rf_fused_inputs) writes one rotary point per body (its link origin) and no external wrench: "
+                             f"anchors {anchors}, ext_wrench {ext_wrench} are not supported")  # fmt: skip
+        self.fused_inputs, self._fk = fused_inputs, None
         self.ext_wrench, self.checkpoint, self.rope_detach, self.fused_train = ext_wrench, checkpoint, rope_detach, fused_train
         self.keep_ops = keep_ops
         self.tok_dim = TOKEN_DIM + (WRENCH_DIM if ext_wrench else 0)
@@ -456,6 +471,31 @@ class RigidFormerNet(nn.Module):
         read-out embeddings, the tree bias, the norms, the biases, FiLM, and the read-out's SwiGLU fusion and heads."""
         return block_matrices(self.blocks)
 
+    def _apply(self, fn, recurse=True):
+        out = super()._apply(fn, recurse)
+        self._fused_tables()
+        return out
+
+    def _fused_tables(self):
+        """The tables of the fused read-out and of the fused inputs (``rf_head.head_tables``, ``g1_fused.body_tables``) on the
+        parameters' device, rebuilt whenever the module is moved or cast (``.to``, ``.cuda``; none off a GPU, where neither
+        kernel runs). Built at the first pass that uses them, they were built inside the compiled step that made it: the
+        read-out's table reads a buffer on the host, which broke that call's graph (nine graphs, then the step compiled
+        again), and what torch.compile kept of the broken trace held the step's inputs with their autograd graph into the
+        capture of the policy update as a CUDA graph (--update_graphs), which then failed."""
+        dev = self.embed.weight.device
+        self._head_tables = self._fk = None
+        if dev.type != "cuda":
+            return
+        if self.fused_readout:
+            from ..kernels.rf_head import head_tables
+
+            self._head_tables = head_tables(self)
+        if self.fused_inputs:
+            from . import g1_fused
+
+            self._fk = g1_fused.body_tables(self.kin, self.q0, self.alpha, self.kp, self.kd, self.tau_max, dev)
+
     def inputs(self, S, a, xi_n, f=None):
         """Flat raw features (N, in_dim) of states S, normalized setpoints a (N, J) and normalized sim context xi_n.
 
@@ -463,6 +503,17 @@ class RigidFormerNet(nn.Module):
         in the root's heading frame; required with ``ext_wrench``, must be None without.
         """
         p, R, v, w, q, qd = S
+        if self.fused_inputs and p.is_cuda:  # one kernel forward, one backward (g1_fused); CPU and other dtypes: below
+            if f is not None:
+                raise ValueError("ext_wrench=False: f must be None")
+            from . import g1_fused
+
+            if self._fk is None or self._fk[0].device != p.device:
+                raise RuntimeError(f"fused_inputs: states on {p.device}, the network's tables on "
+                                   f"{None if self._fk is None else self._fk[0].device} (they are built when the network is moved)")  # fmt: skip
+            lead, flat = p.shape[:-1], lambda t, k: t.reshape(-1, *t.shape[-k:]).float().contiguous()  # noqa: E731
+            args = [flat(p, 1), flat(R, 2), flat(v, 1), flat(w, 1), flat(q, 1), flat(qd, 1), flat(a, 1), flat(xi_n, 1)]
+            return g1_fused.rf_inputs(*args, self._fk, self.in_dim).t()[:, : self.in_dim].unflatten(0, lead)
         P, Rb, V, W = self.kin(p, R, v, w, q, qd)
         Ht = yaw_mat(R).transpose(-1, -2).unsqueeze(-3)
         origin = torch.cat((p[..., :2], torch.zeros_like(p[..., 2:])), -1).unsqueeze(-2)
@@ -501,9 +552,14 @@ class RigidFormerNet(nn.Module):
             pos = pos.detach()
         if recompute and torch.is_grad_enabled():
             return torch.utils.checkpoint.checkpoint(self._trunk, x, pos, use_reentrant=False, preserve_rng_state=False)
-        if self.checkpoint == "frozen_readout" and frozen and torch.is_grad_enabled():
+        if self.checkpoint == "frozen_readout" and frozen and torch.is_grad_enabled() and not self._fused_readout_now():
             return torch.utils.checkpoint.checkpoint(self._readout, *self._blocks(x, pos), use_reentrant=False, preserve_rng_state=False)
         return self._trunk(x, pos)
+
+    def _fused_readout_now(self) -> bool:
+        """Whether this pass's read-out runs as the fused kernels: ``fused_readout``, bf16 autocast on a GPU, frozen parameters."""
+        return (self.fused_readout and self.embed.weight.is_cuda and torch.is_autocast_enabled("cuda")
+                and not self.head_w12.weight.requires_grad)  # fmt: skip
 
     def _trunk(self, x, pos):
         return self._readout(*self._blocks(x, pos))
@@ -543,6 +599,14 @@ class RigidFormerNet(nn.Module):
     def _readout(self, *hs):
         """The read-out of the head layers' token features: SwiGLU fusion of the body tokens, root and joint heads."""
         B = self.n_body
+        if self._fused_readout_now():
+            from ..kernels.rf_head import rf_readout
+
+            if self._head_tables is None or self._head_tables["tob"].device != hs[0].device:
+                raise RuntimeError(f"fused_readout: features on {hs[0].device}, the network's tables on "
+                                   f"{None if self._head_tables is None else self._head_tables['tob'].device} (they are built when the "
+                                   f"network is moved)")  # fmt: skip
+            return rf_readout(self, hs[0], hs[1], self._head_tables)
         if self.merge == "none":
             z = torch.cat([h[:, :B] for h in hs], -1)
         else:  # every body its token's features, plus its own embedding where bodies share the token
@@ -558,7 +622,8 @@ def rigidformer_kwargs(a: dict) -> dict | None:
     """RigidFormerNet keyword arguments for training arguments ``a`` (``--wm_backbone``, ``--rf_*``), None for the MLP.
     The MLP's own flags must stay at their defaults with this backbone (they would otherwise be silently ignored)."""
     if a["wm_backbone"] == "mlp":
-        for flag in ("rf_rope_detach", "rf_fused_rope", "rf_fused_train", "rf_bptt_keep_blocks", "rf_fit_keep_ops"):
+        for flag in ("rf_rope_detach", "rf_fused_rope", "rf_fused_train", "rf_bptt_keep_blocks", "rf_fit_keep_ops", "rf_fused_readout",
+                     "rf_fused_inputs"):
             if a.get(flag, False):
                 raise ValueError(f"--{flag} configures the RigidFormer backbone, not the MLP")
         if a.get("rf_anchors", 1) != 1 or a.get("rf_anchor_mode", "mean") != "mean" or a.get("rf_rope_center", False):
@@ -578,9 +643,13 @@ def rigidformer_kwargs(a: dict) -> dict | None:
     if keep_blocks and (not fused_train or a.get("wm_bptt_fp32", False)):
         raise ValueError("--rf_bptt_keep_blocks keeps the fused blocks' tensors through the policy's BPTT: it needs --rf_fused_train, and "
                          "excludes --wm_bptt_fp32, whose fp32 BPTT runs the unfused blocks (their activations do not fit)")  # fmt: skip
+    if a.get("rf_fused_readout", False) and not fused_train:
+        raise ValueError("--rf_fused_readout runs the read-out's bf16 passes as fused kernels beside the blocks': it needs --rf_fused_train")
     return dict(kin=kinematics("cpu"), dim=a["rf_dim"], layers=a["rf_layers"], heads=a["rf_heads"], registers=a["rf_registers"],
                 tree_bias=not a["rf_no_tree_bias"], rope=not a["rf_no_rope"], rope_detach=a.get("rf_rope_detach", False),
-                fused_rope=a.get("rf_fused_rope", False), fused_train=fused_train, checkpoint="frozen_readout" if keep_blocks else "frozen",
+                fused_rope=a.get("rf_fused_rope", False), fused_train=fused_train,
+                checkpoint="frozen_readout" if keep_blocks else "frozen",
                 anchors=a.get("rf_anchors", 1), anchor_mode=a.get("rf_anchor_mode", "mean"), rope_center=a.get("rf_rope_center", False),
-                keep_ops=a.get("rf_fit_keep_ops", False), merge=a.get("rf_merge", "none"))  # fmt: skip
+                keep_ops=a.get("rf_fit_keep_ops", False), merge=a.get("rf_merge", "none"),
+                fused_readout=a.get("rf_fused_readout", False), fused_inputs=a.get("rf_fused_inputs", False))  # fmt: skip
 

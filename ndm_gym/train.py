@@ -238,6 +238,14 @@ def add_speed_args(parser: argparse.ArgumentParser, rigidformer: bool = True):
     parser.add_argument("--rf_bptt_keep_blocks", action="store_true",
                         help="rigidformer, with --rf_fused_train: the policy's BPTT keeps the fused blocks' tensors, recomputing only the "
                              "read-out (same results, about 12 GB more at 4096 rollouts x 32 steps)")
+    parser.add_argument("--rf_fused_readout", action="store_true",
+                        help="rigidformer, with --rf_fused_train: the read-out's bf16 passes with frozen parameters (the policy's BPTT) as "
+                             "fused Triton kernels (kernels/rf_head.py; changes results by rounding; nothing of the read-out is kept or "
+                             "recomputed)")
+    parser.add_argument("--rf_fused_inputs", action="store_true",
+                        help="rigidformer: the network's input features (forward kinematics, every token's features) as one Triton kernel "
+                             "with a hand-written backward pass (worldmodels/g1_fused.py), wherever the world model computes them on a "
+                             "GPU: the fit's rollouts, the policy's BPTT, the normalizers (changes results by rounding)")
 
 
 def parse_args():

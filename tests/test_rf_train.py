@@ -262,8 +262,11 @@ def test_network_matches_reference(frozen, compiled, arope):
 @pytest.mark.parametrize("compiled", [False, True])
 def test_network_keeps_blocks(compiled, arope):
     """--rf_bptt_keep_blocks (checkpoint="frozen_readout"): in the policy's BPTT the fused blocks' saved tensors (x and
-    x1) take the place of their recomputation; the output and the input's gradient are the default recomputation's;
-    also with the official anchor RoPE."""
+    x1) take the place of their recomputation; the output and the input's gradient are the default recomputation's, bit
+    for bit when eager; also with the official anchor RoPE. Compiled, the two modes are two graphs (the checkpoint cuts
+    them at different places) whose bf16 code outside the kernels rounds differently, as any compiled graph's against
+    the eager network (the context network's output differs in every entry): each is then as close to the fp32 network
+    as the other (factor 1.5 on the relative error, as test_network_matches_reference)."""
     g = torch.Generator(device=DEV).manual_seed(7)
     out = []
     for mode in ("frozen", "frozen_readout"):
@@ -278,8 +281,23 @@ def test_network_keeps_blocks(compiled, arope):
             y = (torch.compile(net) if compiled else net)(xi)
         y.float().backward(dy)
         out.append((y.detach().float(), xi.grad))
-    torch.testing.assert_close(out[1][0], out[0][0], rtol=0, atol=0)
-    torch.testing.assert_close(out[1][1], out[0][1], rtol=0, atol=0)
+    if not compiled:
+        torch.testing.assert_close(out[1][0], out[0][0], rtol=0, atol=0)
+        torch.testing.assert_close(out[1][1], out[0][1], rtol=0, atol=0)
+        return
+    ref = _net(False, **arope)
+    for p in ref.parameters():
+        p.requires_grad_(False)
+
+    def fp32():
+        xi = x.clone().requires_grad_(True)
+        y = ref(xi)
+        y.backward(dy)
+        return y.detach(), xi.grad
+
+    for name, a, b, c in zip(("y", "x"), out[0], out[1], _fp32(fp32)):
+        _assert_at_bf16_rounding(b, a, c, f"keeps blocks, compiled, {arope}: {name}", rel_factor=1.5)
+        _assert_at_bf16_rounding(a, b, c, f"recomputes the trunk, compiled, {arope}: {name}", rel_factor=1.5)
 
 
 @GPU

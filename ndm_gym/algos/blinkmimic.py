@@ -34,6 +34,7 @@ changes to the options and lists what is not ported.
 from __future__ import annotations
 
 import argparse
+import gc
 import time
 
 import torch
@@ -269,6 +270,10 @@ class Graphed:
             torch.cuda.current_stream().wait_stream(self.side)
             return out
         if self.graph is None:
+            # what torch.compile leaves of a trace after a graph break is cyclic garbage that can hold an earlier update's
+            # autograd graph: its AccumulateGrad nodes, made on the eager phase's stream, would be reused inside the capture
+            # (cudaErrorStreamCaptureImplicit)
+            gc.collect()
             torch.cuda.synchronize()
             torch.cuda.empty_cache()  # the eager phase's cached blocks back before the graph takes its own pool
             t0 = time.time()

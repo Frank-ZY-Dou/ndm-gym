@@ -152,9 +152,30 @@ Speed options (`add_speed_args`, off by default):
   the compiled block and is faster only with `--wm_cudagraphs` and `--pi_cudagraphs`. The kernels replace the blocks'
   passes under bf16 autocast; passes without autocast (the BPTT of `--wm_bptt_fp32`, the fp32 penalty of
   `--wm_smooth_w`) run the blocks as without the option. Refused with `--amp none`.
+  The kernels have been reworked since these timings, which are their first version's: the attention per environment in
+  tiles of whole environments of 16 or 32 tokens, FiLM's vectors loaded once per environment, a sigmoid without the
+  full-range division.
 - `--rf_bptt_keep_blocks` (with `--rf_fused_train`, not with `--wm_bptt_fp32`): the policy's BPTT keeps the fused
   blocks' saved tensors and recomputes only the read-out (`checkpoint="frozen_readout"`), with the same results and
   about 12 GB more at 4096 rollouts × 32 steps.
+- `--rf_fused_readout` (with `--rf_fused_train`): the read-out's passes in the policy's BPTT (frozen parameters, bf16
+  autocast) as two Triton kernels (`ndm_gym/kernels/rf_head.py`): RMSNorm, the SwiGLU chunk by chunk and the heads per
+  body in one launch, and their backward pass in another, which recomputes the forward products and keeps nothing but the
+  read-out's inputs. The output projection and the heads are multiplied as one matrix, so the results differ from the
+  default path's by rounding (the kernels are closer to fp32). Merged tokens (`--rf_merge`) are read out from the tokens'
+  rows: the read-out's first products once per token, and a one-hot product that copies a token's columns to its bodies'
+  rows (forward) or sums the bodies' gradients per token (backward). With parameters that train (the world-model fit) and
+  in fp32 passes the read-out runs as without the option.
+- `--rf_fused_inputs`: the network's input features (the forward kinematics of the 30 bodies in the root's heading frame
+  and every token's features) as one Triton kernel (`ndm_gym/worldmodels/g1_fused.py`), with a second kernel for its
+  backward pass: the forward recursion's reverse sweep written by hand, in place of the compiled kinematics and their
+  autograd, which are hundreds of small kernels per imagined step in the policy's BPTT. The same function up to float
+  rounding; on the CPU the inputs are computed as without it, and anchor points or an external wrench are refused.
+- The last two in training (the small RigidFormer of the LAFAN1 configurations, one A100 40GB SXM4 per run, seeds 0-2):
+  the time per iteration over iterations 200-1000 falls from 265.2 to 234.2 ms (11.7 %) for SuperTrack-RF and from 409.8
+  to 372.7 ms (9.1 %) for SuperMimic-RF. Both are launched once per imagined step, where the compiled read-out and
+  kinematics were many small launches, forward, again in the backward pass (the checkpoint recomputes the read-out) and
+  through autograd.
 - `--combo_kernels`: inductor launches independent small kernels of a compiled graph as one
   (`torch._inductor.config.combo_kernels`); RigidFormer's world-model step at 2048 windows: 93 forward and 307 backward
   kernels instead of 223 and 498.
@@ -272,6 +293,12 @@ bits), also with the anchor RoPE (RigidFormer's v1 configuration and `concat`) a
 models' 4-step rollouts with the anchor RoPE and with `--rf_fit_keep_ops`, fit and BPTT; the refusals. With
 `NDM_RF_TRAIN_CKPT` (a LAFAN1 RigidFormer checkpoint) and `NDM_RF_TRAIN_DATA` (a recording of its policy,
 `python -m ndm_gym.wmbench.collect`) set, also the world-model fit on recorded windows.
+
+`python -m pytest tests/test_rf_head.py` checks `--rf_fused_readout` on a GPU: the read-out's output and both gradients
+against the fp32 read-out, next to the bf16-autocast read-out's own errors, for one token per body and merged tokens, over
+batch sizes and tile settings, twice (the same bits); the network with it, eager and compiled, trained and frozen; the
+refusals. `python -m pytest tests/test_rf_inputs.py` checks `--rf_fused_inputs` there: the features and every gradient
+against autograd, for both token layouts, and the network with it in the compiled step.
 
 `tests/test_lafan1_training.py` checks `--compile_eager`: which functions it compiles (both algorithms, on CPU, with the
 same bits when the compiler is replaced by the identity) and, on a GPU, the compiled reward, normalizer features

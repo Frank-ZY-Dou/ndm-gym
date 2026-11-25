@@ -7,9 +7,10 @@ The forward pass is one kernel, as ``rf_block``'s inference kernel: one program 
 environments (4 of the G1's 32 tokens in 128 rows) on chip through the block: RMSNorm, the q/k/v/gate products head by
 head (the even and odd channels of q and k as separate products, so that the rotation needs no shuffles), QK-RMSNorm,
 rotation, attention over the tile's rows with a precomputed (H, BLOCK_M, BLOCK_M) tile that holds the bias within an
-environment and -inf between environments (``attention_tile``), softmax, the gate, the output projection,
-FiLM, RMSNorm, SwiGLU. It also stores the residual stream after the attention (x1), from which the backward pass
-starts its second half.
+environment and -inf between environments (``attention_tile``), or, where the tokens of an environment are a multiple
+of 16, per environment (``env_attention``: every group of 16 rows against its environment's T tokens, the bias (H, T,
+T)), softmax, the gate, the output projection, FiLM, RMSNorm, SwiGLU. It also stores the residual stream after the
+attention (x1), from which the backward pass starts its second half.
 
 The backward pass: (1) one kernel for the SwiGLU half, from x1 (FiLM, RMSNorm and the SwiGLU recomputed, their
 gradients, FiLM's gamma and beta summed over each environment's tokens), holding only the tile's normalized input, dy
@@ -63,6 +64,14 @@ ROWS = 64  # rows per program of the RMSNorm row kernels
 BM_HID, WARPS_HID = 64, 4  # the hidden-chunk kernel's rows per program and warps (keep_ops; A100: 0.27 ms at 2048 x 32 tokens)
 
 
+def env_attention(T: int, block_m: int) -> bool:
+    """Whether a tile's attention runs per environment (the kernels' ``EA``): the tile holds two or more whole
+    environments of T tokens and T is a multiple of 16, a warp's rows, so that every group of 16 rows meets the T tokens
+    of its own environment and nothing else (a tile of one environment has nothing to leave out). The bias is then
+    ``attention_tile(bias, heads, T, T, device)``, (H, T, T)."""
+    return block_m % T == 0 and T % 16 == 0 and block_m // T >= 2
+
+
 def attention_tile(bias: torch.Tensor | None, heads: int, T: int, block_m: int, device) -> torch.Tensor:
     """(H, block_m, block_m) bf16: bias[0, h, t_i, t_j] * log2(e) for rows i, j of one environment (row i = e T + t,
     idle rows past E T count as one more environment), -inf between environments."""
@@ -70,6 +79,15 @@ def attention_tile(bias: torch.Tensor | None, heads: int, T: int, block_m: int, 
     e, t = i // T, i % T
     tile = torch.zeros(heads, block_m, block_m, device=device) if bias is None else bias[0][:, t[:, None], t[None, :]].float() * LOG2E
     return tile.masked_fill(e[:, None] != e[None, :], float("-inf")).to(torch.bfloat16).contiguous()
+
+
+@triton.jit
+def _sigmoid(x):
+    """1 / (1 + exp(-x)) as the square of the reciprocal square root of 1 + 2^(-x log2 e), within a few ulp of
+    ``tl.sigmoid``: five instructions a value where that one's full-range division makes it twelve. In the kernels a
+    sigmoid's result is multiplied into a value rounded to bf16."""
+    r = tl.rsqrt(1.0 + tl.exp2(x * -1.4426950408889634))
+    return r * r
 
 
 @triton.jit
@@ -86,6 +104,39 @@ def _tile_rows(E: tl.constexpr, T: tl.constexpr, n_env):
     env = tl.program_id(0) * E + i // T
     row = env.to(tl.int64) * T + i % T
     return row, env, (env < n_env)[:, None]
+
+
+@triton.jit
+def _film(GB, gb_stride, env0, n_env, EF: tl.constexpr, RPE: tl.constexpr, D: tl.constexpr):
+    """FiLM's scale 1 + gamma and shift beta (EF RPE, D) fp32 for a tile of EF whole environments of RPE rows each, the
+    first of them env0 (int64). GB: every environment's gamma, then beta (D each), rows gb_stride apart; environments
+    past n_env give 1 and 0. An environment's vectors are loaded once, (EF, 1, D), and repeated over its rows in
+    registers. Loaded per row, (EF RPE, D), each of the two passes through shared memory to reach the tensor-core tiling
+    of the residual it scales: a twentieth of a block's time on an A100."""
+    ef = env0 + tl.arange(0, EF)
+    gb = GB + ef[:, None, None] * gb_stride + tl.arange(0, D)[None, None, :]
+    ok = (ef < n_env)[:, None, None]
+    sc = tl.reshape(tl.broadcast_to(1.0 + tl.load(gb, mask=ok, other=0.0), [EF, RPE, D]), [EF * RPE, D])
+    sh = tl.reshape(tl.broadcast_to(tl.load(gb + D, mask=ok, other=0.0), [EF, RPE, D]), [EF * RPE, D])
+    return sc, sh
+
+
+@triton.jit
+def _env_cols(x, E: tl.constexpr, G: tl.constexpr, T: tl.constexpr, K: tl.constexpr):
+    """(E T, K) -> (E G, T, K): for each of an environment's G groups of 16 rows (a warp's; its T / 16 groups of tokens, or
+    its groups of body slots in the merged tokens' read-out), the T token rows of that environment."""
+    return tl.reshape(tl.broadcast_to(tl.reshape(x, [E, 1, T, K]), [E, G, T, K]), [E * G, T, K])
+
+
+@triton.jit
+def _env_bias(BT, h, E: tl.constexpr, T: tl.constexpr):
+    """Head h's attention bias (E T / 16, 16, T) fp32 from BT (H, T, T) bf16 (``env_attention``): for every group of 16
+    rows, its tokens' rows of the bias within an environment."""
+    r = tl.arange(0, T // 16)
+    i = tl.arange(0, 16)
+    j = tl.arange(0, T)
+    b = tl.load(BT + h * T * T + (r[:, None, None] * 16 + i[None, :, None]) * T + j[None, None, :])
+    return tl.reshape(tl.broadcast_to(tl.reshape(b, [1, T // 16, 16, T]), [E, T // 16, 16, T]), [E * T // 16, 16, T]).to(tl.float32)
 
 
 @triton.jit
@@ -140,10 +191,12 @@ def _vg_head(xn, h, WVG, BVG, Z, zrow, rmask, D: tl.constexpr, HD: tl.constexpr,
 @triton.jit
 def _fwd_kernel(X, Y, X1, XN1, Z, XN2, COS, SIN, BT, GB, N1, QN, KN, BP, N2, B3, WQK, BQK, WVG, BVG, WP, W12, B12, W3, n_env, eps, scale2,
                 T: tl.constexpr, E: tl.constexpr, D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr,
-                NCH: tl.constexpr, BH: tl.constexpr, SAVE_X1: tl.constexpr, SAVE_OPS: tl.constexpr, STAGES: tl.constexpr):  # fmt: skip
+                NCH: tl.constexpr, BH: tl.constexpr, SAVE_X1: tl.constexpr, SAVE_OPS: tl.constexpr, STAGES: tl.constexpr,
+                EA: tl.constexpr):  # fmt: skip
     """The block on the tokens of environments [E pid, E pid + E): x (N T, D) -> y; with SAVE_X1 also x1, the residual
     after the attention (before FiLM). BT (H, BM, BM) bf16: the attention bias times log2(e) within an environment,
-    -inf between environments. GB (N, 2 D): FiLM's gamma, beta of every environment. Packed weights as ``pack``'s. With
+    -inf between environments; with EA (``env_attention``) the attention runs per environment and BT is (H, T, T).
+    GB (N, 2 D): FiLM's gamma, beta of every environment. Packed weights as ``pack``'s. With
     SAVE_OPS (the fit, ``keep_ops``) also the bf16 operands the backward pass would recompute: the normalized input and
     the normalized FiLM output (XN1, XN2 (N T, D + 8), each with a column of ones) and the q/k/v/gate products without
     their bias (Z (N T, 4 D), qkvg's order)."""
@@ -156,8 +209,10 @@ def _fwd_kernel(X, Y, X1, XN1, Z, XN2, COS, SIN, BT, GB, N1, QN, KN, BP, N2, B3,
     x = tl.load(X + off, mask=rmask, other=0.0)
     xh, _ = _rms(x, eps, D)
     xn = (xh * tl.load(N1 + d)[None, :]).to(tl.bfloat16)
-    if SAVE_OPS:
-        tl.store(XN1 + row[:, None] * (D + 8) + d[None, :], xn, mask=rmask)
+    if SAVE_OPS:  # stored as (BM, D, 1), here and below: Triton gives accesses of one shape one layout, and a bf16 store of
+        #           x's shape would change the layout x is loaded in, and with it the order of the norm's sum of squares:
+        #           the output must be the kernel's without these stores, bit for bit
+        tl.store((XN1 + row[:, None] * (D + 8) + d[None, :])[:, :, None], xn[:, :, None], mask=rmask[:, :, None])
         _ones_column(XN1, row, rmask, D + 8, D)
     zrow = row[:, None] * 4 * D
     cs, sn = _rope_tables(COS, SIN, row, rmask, BM, R, HD // 2)
@@ -165,22 +220,33 @@ def _fwd_kernel(X, Y, X1, XN1, Z, XN2, COS, SIN, BT, GB, N1, QN, KN, BP, N2, B3,
     for h in tl.range(H, num_stages=STAGES):
         qre, qro, _, _, _ = _qk_head(xn, h, WQK, BQK, QN, cs, sn, eps, Z, zrow, rmask, D, HD, 0, SAVE_OPS)
         kre, kro, _, _, _ = _qk_head(xn, h, WQK, BQK, KN, cs, sn, eps, Z, zrow, rmask, D, HD, 2, SAVE_OPS)
-        s = tl.dot(qre.to(tl.bfloat16), tl.trans(kre.to(tl.bfloat16)))
-        s = tl.dot(qro.to(tl.bfloat16), tl.trans(kro.to(tl.bfloat16)), s)
-        s = s * scale2 + tl.load(BT + h * BM * BM + i[:, None] * BM + i[None, :]).to(tl.float32)
-        p = tl.exp2(s - tl.max(s, 1)[:, None])
-        p = p / tl.sum(p, 1)[:, None]
-        o = tl.dot(p.to(tl.bfloat16), _vg_head(xn, h, WVG, BVG, Z, zrow, rmask, D, HD, 0, SAVE_OPS).to(tl.bfloat16))
-        og = (o * tl.sigmoid(_vg_head(xn, h, WVG, BVG, Z, zrow, rmask, D, HD, 1, SAVE_OPS))).to(tl.bfloat16)
+        vb = _vg_head(xn, h, WVG, BVG, Z, zrow, rmask, D, HD, 0, SAVE_OPS).to(tl.bfloat16)
+        if EA:  # every group of 16 rows against the T tokens of its environment: (BM / 16, 16, T) scores instead of (BM, BM)
+            ke3 = tl.permute(_env_cols(kre.to(tl.bfloat16), E, T // 16, T, HD // 2), [0, 2, 1])
+            ko3 = tl.permute(_env_cols(kro.to(tl.bfloat16), E, T // 16, T, HD // 2), [0, 2, 1])
+            s = tl.dot(tl.reshape(qre.to(tl.bfloat16), [BM // 16, 16, HD // 2]), ke3)
+            s = tl.dot(tl.reshape(qro.to(tl.bfloat16), [BM // 16, 16, HD // 2]), ko3, s)
+            s = s * scale2 + _env_bias(BT, h, E, T)
+            p = tl.exp2(s - tl.max(s, 2)[:, :, None])
+            p = p * (1.0 / tl.sum(p, 2))[:, :, None]
+            o = tl.reshape(tl.dot(p.to(tl.bfloat16), _env_cols(vb, E, T // 16, T, HD)), [BM, HD])
+        else:
+            s = tl.dot(qre.to(tl.bfloat16), tl.trans(kre.to(tl.bfloat16)))
+            s = tl.dot(qro.to(tl.bfloat16), tl.trans(kro.to(tl.bfloat16)), s)
+            s = s * scale2 + tl.load(BT + h * BM * BM + i[:, None] * BM + i[None, :]).to(tl.float32)
+            p = tl.exp2(s - tl.max(s, 1)[:, None])
+            p = p * (1.0 / tl.sum(p, 1))[:, None]
+            o = tl.dot(p.to(tl.bfloat16), vb)
+        og = (o * _sigmoid(_vg_head(xn, h, WVG, BVG, Z, zrow, rmask, D, HD, 1, SAVE_OPS))).to(tl.bfloat16)
         acc = tl.dot(og, tl.load(WP + h * HD * D + c[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
     if SAVE_X1:
         tl.store(X1 + off, acc, mask=rmask)
-    gb = GB + env.to(tl.int64)[:, None] * 2 * D + d[None, :]
-    x2 = acc * (1.0 + tl.load(gb, mask=rmask, other=0.0)) + tl.load(gb + D, mask=rmask, other=0.0)
+    sc, sh = _film(GB, 2 * D, (tl.program_id(0) * E).to(tl.int64), n_env, E, T, D)
+    x2 = acc * sc + sh
     xh2, _ = _rms(x2, eps, D)
     xn2 = (xh2 * tl.load(N2 + d)[None, :]).to(tl.bfloat16)
     if SAVE_OPS:
-        tl.store(XN2 + row[:, None] * (D + 8) + d[None, :], xn2, mask=rmask)
+        tl.store((XN2 + row[:, None] * (D + 8) + d[None, :])[:, :, None], xn2[:, :, None], mask=rmask[:, :, None])
         _ones_column(XN2, row, rmask, D + 8, D)
     acc = x2 + tl.load(B3 + d)[None, :]
     cb = tl.arange(0, BH)
@@ -188,7 +254,7 @@ def _fwd_kernel(X, Y, X1, XN1, Z, XN2, COS, SIN, BT, GB, N1, QN, KN, BP, N2, B3,
     for j in tl.range(NCH, num_stages=STAGES):
         u = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + cb)[None, :]
         z = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + BH + cb)[None, :]
-        acc = tl.dot((u * z * tl.sigmoid(z)).to(tl.bfloat16), tl.load(W3 + j * BH * D + cb[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
+        acc = tl.dot((u * z * _sigmoid(z)).to(tl.bfloat16), tl.load(W3 + j * BH * D + cb[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
     tl.store(Y + off, acc, mask=rmask)
 
 
@@ -202,7 +268,7 @@ def _ones_column(P, row, rmask, LD: tl.constexpr, COL: tl.constexpr):
 
 
 @triton.jit
-def _bwd_ffn_kernel(DY, X1, GB, N2, W12, B12, W3T, W12T, DX1, DX1B, DGB, XN2, DUZ, HH, DYB, PART, n_env, eps, T: tl.constexpr, E: tl.constexpr,
+def _bwd_ffn_kernel(DY, X1, GB, N2, W12, B12, W3T, DX1, DX1B, DGB, XN2, DUZ, HH, DYB, PART, n_env, eps, T: tl.constexpr, E: tl.constexpr,
                     D: tl.constexpr, NCH: tl.constexpr, BH: tl.constexpr, FILM_GRAD: tl.constexpr, WGRAD: tl.constexpr,
                     STAGES: tl.constexpr):  # fmt: skip
     """Backward pass of the block's second half (FiLM, RMSNorm, SwiGLU, residual) from x1 and dy: dx1 (fp32, and in bf16
@@ -211,15 +277,17 @@ def _bwd_ffn_kernel(DY, X1, GB, N2, W12, B12, W3T, W12T, DX1, DX1B, DGB, XN2, DU
     normalized input and a column of ones, whose product gives the bias's gradient, DUZ the gradients of the value and
     gate columns, HH (N T, HID + 8) the hidden values and a column of ones, DYB dy) and the program's sums PART[pid] =
     dnorm2 (D). Only the normalized input, dy (bf16) and the gradient accumulator are held through the loop over hidden
-    chunks; the rest is reloaded."""
+    chunks; the rest is reloaded. A chunk's value and gate tiles (W12) are fetched once: the gradient's products take
+    their transposes."""
     BM: tl.constexpr = E * T
     HID: tl.constexpr = NCH * BH
     row, env, rmask = _tile_rows(E, T, n_env)
     d = tl.arange(0, D)
     off = row[:, None] * D + d[None, :]
-    gbp = GB + env.to(tl.int64)[:, None] * 2 * D + d[None, :]
     pid = tl.program_id(0)
-    x2 = tl.load(X1 + off, mask=rmask, other=0.0) * (1.0 + tl.load(gbp, mask=rmask, other=0.0)) + tl.load(gbp + D, mask=rmask, other=0.0)
+    env0 = (pid * E).to(tl.int64)
+    sc, sh = _film(GB, 2 * D, env0, n_env, E, T, D)
+    x2 = tl.load(X1 + off, mask=rmask, other=0.0) * sc + sh
     xh2, _ = _rms(x2, eps, D)
     n2 = tl.load(N2 + d)
     xn2 = (xh2 * n2[None, :]).to(tl.bfloat16)
@@ -232,12 +300,13 @@ def _bwd_ffn_kernel(DY, X1, GB, N2, W12, B12, W3T, W12T, DX1, DX1B, DGB, XN2, DU
     dxn2 = tl.zeros([BM, D], dtype=tl.float32)
     cb = tl.arange(0, BH)
     w12 = d[:, None] * BH + cb[None, :]
-    w12t = cb[:, None] * D + d[None, :]
     for j in tl.range(NCH, num_stages=STAGES):
-        u = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + cb)[None, :]
-        z = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + BH + cb)[None, :]
+        wu = tl.load(W12 + j * 2 * D * BH + w12, cache_modifier=".cg")
+        wz = tl.load(W12 + j * 2 * D * BH + D * BH + w12, cache_modifier=".cg")
+        u = tl.dot(xn2, wu) + tl.load(B12 + j * 2 * BH + cb)[None, :]
+        z = tl.dot(xn2, wz) + tl.load(B12 + j * 2 * BH + BH + cb)[None, :]
         dh = tl.dot(dyb, tl.load(W3T + j * D * BH + w12, cache_modifier=".cg"))
-        sg = tl.sigmoid(z)
+        sg = _sigmoid(z)
         sl = z * sg
         du = dh * sl
         dz = dh * u * sg * (1.0 + z * (1.0 - sg))
@@ -247,16 +316,16 @@ def _bwd_ffn_kernel(DY, X1, GB, N2, W12, B12, W3T, W12T, DX1, DX1B, DGB, XN2, DU
             tl.store(HH + row[:, None] * (HID + 8) + ru[None, :], (u * sl).to(tl.bfloat16), mask=rmask)
             tl.store(DUZ + row[:, None] * 2 * HID + ru[None, :], dub, mask=rmask)
             tl.store(DUZ + row[:, None] * 2 * HID + HID + ru[None, :], dzb, mask=rmask)
-        dxn2 = tl.dot(dub, tl.load(W12T + j * 2 * BH * D + w12t, cache_modifier=".cg"), dxn2)
-        dxn2 = tl.dot(dzb, tl.load(W12T + j * 2 * BH * D + BH * D + w12t, cache_modifier=".cg"), dxn2)
+        dxn2 = tl.dot(dub, tl.trans(wu), dxn2)
+        dxn2 = tl.dot(dzb, tl.trans(wz), dxn2)
     x1 = tl.load(X1 + off, mask=rmask, other=0.0)
-    gm = tl.load(gbp, mask=rmask, other=0.0)
-    xh2, r2 = _rms(x1 * (1.0 + gm) + tl.load(gbp + D, mask=rmask, other=0.0), eps, D)
+    sc, sh = _film(GB, 2 * D, env0, n_env, E, T, D)
+    xh2, r2 = _rms(x1 * sc + sh, eps, D)
     dy = tl.load(DY + off, mask=rmask, other=0.0)
     dxh2 = dxn2 * n2[None, :]
     dx2 = dy + r2[:, None] * (dxh2 - xh2 * (tl.sum(dxh2 * xh2, 1) / D)[:, None])
-    tl.store(DX1 + off, dx2 * (1.0 + gm), mask=rmask)
-    tl.store(DX1B + off, (dx2 * (1.0 + gm)).to(tl.bfloat16), mask=rmask)
+    tl.store(DX1 + off, dx2 * sc, mask=rmask)
+    tl.store(DX1B + off, (dx2 * sc).to(tl.bfloat16), mask=rmask)
     if FILM_GRAD:
         e = tl.arange(0, E)
         emask = (pid * E + e < n_env)[:, None]
@@ -286,7 +355,7 @@ def _ffn_hidden_bwd_kernel(XN2, DYB, W12, B12, W3T, DUZ, HH, n_rows, D: tl.const
     u = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + cb)[None, :]
     z = tl.dot(xn2, tl.load(W12 + j * 2 * D * BH + D * BH + w12, cache_modifier=".cg")) + tl.load(B12 + j * 2 * BH + BH + cb)[None, :]
     dh = tl.dot(dyb, tl.load(W3T + j * D * BH + w12, cache_modifier=".cg"))
-    sg = tl.sigmoid(z)
+    sg = _sigmoid(z)
     sl = z * sg
     ru = j * BH + cb
     tl.store(HH + row[:, None] * (HID + 8) + ru[None, :], (u * sl).to(tl.bfloat16), mask=msk)
@@ -424,10 +493,10 @@ def _attn_core_bwd_kernel(Z, BQ, DOG, COS, SIN, BT, QN, KN, DZ, OG, DCOS, DSIN, 
         s = tl.dot(qob, tl.trans(kob), tl.dot(qeb, tl.trans(keb)))
         s = s * scale2 + tl.load(BT + h * BM * BM + i[:, None] * BM + i[None, :]).to(tl.float32)
         p = tl.exp2(s - tl.max(s, 1)[:, None])
-        p = p / tl.sum(p, 1)[:, None]
+        p = p * (1.0 / tl.sum(p, 1))[:, None]
         vb = (tl.load(zr + rv[None, :], mask=rmask, other=0.0).to(tl.float32) + tl.load(BQ + rv)[None, :]).to(tl.bfloat16)
         o = tl.dot(p.to(tl.bfloat16), vb)
-        sg = tl.sigmoid(tl.load(zr + D + rv[None, :], mask=rmask, other=0.0).to(tl.float32) + tl.load(BQ + D + rv)[None, :])
+        sg = _sigmoid(tl.load(zr + D + rv[None, :], mask=rmask, other=0.0).to(tl.float32) + tl.load(BQ + D + rv)[None, :])
         dog = tl.load(DOG + row[:, None] * D + h * HD + c[None, :], mask=rmask, other=0.0).to(tl.float32)
         do = dog * sg
         tl.store(dz + D + rv[None, :], (dog * o * sg * (1.0 - sg)).to(tl.bfloat16), mask=rmask)
@@ -472,8 +541,9 @@ def pack(params: list[torch.Tensor], heads: int, chunk: int, keep_ops: bool = Fa
     k (even, odd) of each head; BQK (H, 4, HD/2); WVG (H, 2, D, HD) v and the gate; BVG (H, 2, HD); WP (H, HD, D) the
     output projection's rows of each head; W12 (NCH, 2, D, chunk) the SwiGLU's value and gate columns in chunks; B12
     (NCH, 2, chunk); W3 (NCH, chunk, D). The backward pass's: WQ (4 D, D) and WPB (D, D), qkvg's and the output
-    projection's weights as they are (for cuBLAS); W12T (NCH, 2, chunk, D) and W3T (NCH, D, chunk), the SwiGLU's tiles
-    transposed; with keep_ops also W12F (2 HID, D), the SwiGLU's input weight as it is (for cuBLAS)."""
+    projection's weights as they are (for cuBLAS); W3T (NCH, D, chunk), the SwiGLU's output tiles transposed (its value
+    and gate tiles are multiplied transposed in the kernel); with keep_ops also W12F (2 HID, D), the SwiGLU's input
+    weight as it is (for cuBLAS)."""
     _, wq, bq, _, _, wp, _, _, w12, b12, w3, _ = params
     D = wq.shape[1]
     hd, hid = D // heads, w3.shape[1]
@@ -488,7 +558,7 @@ def pack(params: list[torch.Tensor], heads: int, chunk: int, keep_ops: bool = Fa
         b12p = b12.view(2, nch, chunk).transpose(0, 1).float().contiguous()
         out = [bf(wqkt.transpose(-1, -2)), bqk.float().contiguous(), bf(w4[2:].transpose(0, 1).transpose(-1, -2)),
                b4[2:].transpose(0, 1).float().contiguous(), bf(wp.t().reshape(heads, hd, D)), bf(w12t.transpose(-1, -2)), b12p, bf(w3t),
-               bf(wq), bf(wp), bf(w12t), bf(w3t.transpose(-1, -2))]  # fmt: skip
+               bf(wq), bf(wp), bf(w3t.transpose(-1, -2))]  # fmt: skip
         return out + [bf(w12)] if keep_ops else out
 
 
@@ -519,7 +589,7 @@ def rf_train_fwd(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, bias: to
     _fwd_kernel[(triton.cdiv(x.shape[0], E),)](x, y, x1, xn1, z, xn2, cos, sin, tile_f, gb, n1, qn, kn, bp, n2, b3, *packed[:8], x.shape[0],
                                                eps, k["HD"] ** -0.5 * LOG2E, T=k["T"], E=E, D=k["D"], H=k["H"], HD=k["HD"], R=k["R"],
                                                NCH=k["HID"] // k["BH"], BH=k["BH"], SAVE_X1=save_x1, SAVE_OPS=z.numel() > 0,
-                                               STAGES=k["STAGES"], num_warps=k["WARPS_FWD"])  # fmt: skip
+                                               STAGES=k["STAGES"], EA=env_attention(k["T"], k["BM_FWD"]), num_warps=k["WARPS_FWD"])  # fmt: skip
     return y, x1, xn1, z, xn2
 
 
@@ -549,7 +619,7 @@ def rf_train_bwd(dy: torch.Tensor, x: torch.Tensor, x1: torch.Tensor, ops: list[
     e0 = lambda dtype=x.dtype: x.new_empty(0, dtype=dtype)  # noqa: E731  (a distinct empty tensor for every output not needed)
     bf = lambda n, need=wgrad: torch.empty(N * T, n, device=x.device, dtype=torch.bfloat16) if need else e0(torch.bfloat16)  # noqa: E731
     n1, _, bq, qn, kn, _, _, n2, _, _, _, _ = params
-    _, _, _, _, _, w12, b12, _, wq, wpb, w12t, w3t = packed[:12]
+    _, _, _, _, _, w12, b12, _, wq, wpb, w3t = packed[:11]
     kept = wgrad and ops[1].numel() > 0  # the fit with the forward pass's operands (keep_ops)
     # the SwiGLU half: dx1 (fp32, and bf16 for the product with the output projection's weight)
     dx1, dx1b = torch.empty_like(x), bf(D, True)
@@ -560,11 +630,11 @@ def rf_train_bwd(dy: torch.Tensor, x: torch.Tensor, x1: torch.Tensor, ops: list[
         _ffn_hidden_bwd_kernel[(HID // BH, triton.cdiv(N * T, BM_HID))](xn2, dyb, w12, b12, w3t, duz, hh, N * T, D=D, NCH=HID // BH, BH=BH,
                                                                         BM=BM_HID, num_warps=WARPS_HID)  # fmt: skip
         part2 = x.new_empty(N, D)
-        _ffn_tail_bwd_kernel[(N,)](torch.mm(duz, packed[12], out_dtype=torch.float32), x1, gb, n2, dy, dx1, dx1b, dgb, part2, N, eps, T=T, D=D,
+        _ffn_tail_bwd_kernel[(N,)](torch.mm(duz, packed[11], out_dtype=torch.float32), x1, gb, n2, dy, dx1, dx1b, dgb, part2, N, eps, T=T, D=D,
                                    FILM_GRAD=film_g, num_warps=4)  # fmt: skip
     else:
         part2 = x.new_empty(nt2, D) if wgrad else e0()
-        _bwd_ffn_kernel[(nt2,)](dy, x1, gb, n2, w12, b12, w3t, w12t, dx1, dx1b, dgb, xn2, duz, hh, dyb, part2, N, eps, T=T, E=E2, D=D,
+        _bwd_ffn_kernel[(nt2,)](dy, x1, gb, n2, w12, b12, w3t, dx1, dx1b, dgb, xn2, duz, hh, dyb, part2, N, eps, T=T, E=E2, D=D,
                                 NCH=HID // BH, BH=BH, FILM_GRAD=film_g, WGRAD=wgrad, STAGES=k["STAGES"], num_warps=k["WARPS_FFN"])  # fmt: skip
     # the attention half, between cuBLAS products with qkvg's and the output projection's weights
     og = bf(D + 8)
@@ -659,15 +729,16 @@ def check_block(blk, T: int, chunk: int):
 
 
 def rf_block_train(blk, x: torch.Tensor, cos, sin, bias, c: torch.Tensor, packed: list[torch.Tensor] | None = None,
-                   block_m: tuple[int, int, int] = (128, 64, 32), chunk: int = 64, warps: tuple[int, int, int] = (8, 8, 2),
+                   block_m: tuple[int, int, int] | None = None, chunk: int = 64, warps: tuple[int, int, int] | None = None,
                    stages: int = 2, keep_ops: bool = False) -> torch.Tensor:  # fmt: skip
     """``blk(x, cos, sin, bias, c)`` (a ``Block``) by the fused kernels as under bf16 autocast (whether autocast is on or
     off; refused under autocast to another dtype), differentiable: x (N, T, D) fp32; cos, sin (N, 1, T, r) fp32 or None;
     bias (1, H, T, T) or None; c (N, C), FiLM's context. ``packed``: ``pack(params, heads, chunk)``
     of the block's current parameters (made here if None). FiLM's (gamma, beta) are computed here in fp32 (autocast
     off), as everything outside the products in the kernels. ``block_m`` and ``warps``: the rows per program and the
-    warps of the forward, the SwiGLU-backward and the attention-backward kernels (the defaults the fastest measured on an
-    A100: 4 environments of 32 tokens per forward program, 2 per SwiGLU-backward and 1 per attention-backward program);
+    warps of the forward, the SwiGLU-backward and the attention-backward kernels (None, the fastest measured on an A100:
+    128 rows per forward program, 64 per SwiGLU-backward program, and per attention-backward program one environment of
+    16 tokens or 32 rows, with 16 rows a warp there);
     ``chunk``: the SwiGLU's hidden columns per loop step; ``stages``: software pipelining of the loops. ``keep_ops``
     (``--rf_fit_keep_ops``; effective when the parameters require gradients): the forward pass also keeps the bf16
     operands the backward pass would recompute (the normalized input and FiLM output, the q/k/v/gate products: 3
@@ -675,6 +746,10 @@ def rf_block_train(blk, x: torch.Tensor, cos, sin, bias, c: torch.Tensor, packed
     hidden-chunk kernel, cuBLAS dxn2 and a row kernel: equal up to float rounding."""
     N, T, D = x.shape
     check_block(blk, T, chunk)
+    if block_m is None:
+        block_m = (128, 64, 16 if T == 16 else 32)
+    if warps is None:
+        warps = (8, 8, block_m[2] // 16)
     if x.dtype != torch.float32:
         raise ValueError(f"x must be fp32, got {x.dtype}")
     if torch.is_autocast_enabled("cuda") and torch.get_autocast_dtype("cuda") != torch.bfloat16:
@@ -690,14 +765,14 @@ def rf_block_train(blk, x: torch.Tensor, cos, sin, bias, c: torch.Tensor, packed
     bias = e0 if bias is None else bias.reshape(blk.heads, T, T)
     with torch.no_grad():
         b4 = None if bias.numel() == 0 else bias.unsqueeze(0)
-        tile_f = attention_tile(b4, blk.heads, T, block_m[0], x.device)
+        tile_f = attention_tile(b4, blk.heads, T, T if env_attention(T, block_m[0]) else block_m[0], x.device)
         tile_b = attention_tile(b4, blk.heads, T, block_m[2], x.device)
     params = [blk.get_parameter(n) for n in PARAMS]
     save = torch.is_grad_enabled() and any(t.requires_grad for t in [x, cos, sin, bias, gb, *params])
     keep_ops = keep_ops and save and any(p.requires_grad for p in params)  # only the fit's backward pass reads them
     if packed is None:
         packed = pack(params, blk.heads, chunk, keep_ops)
-    elif keep_ops and len(packed) < 13:
+    elif keep_ops and len(packed) < 12:
         raise ValueError("keep_ops needs pack(..., keep_ops=True)'s matrices")
     config = [T, D, blk.heads, blk.hd, R, blk.w3.in_features, chunk, int(bias.numel() > 0), *block_m, *warps, stages, int(keep_ops)]
     y = rf_train_fwd(x.contiguous(), cos, sin, bias, tile_f, tile_b, gb.contiguous(), params, packed, blk.norm1.eps, save, config)[0]

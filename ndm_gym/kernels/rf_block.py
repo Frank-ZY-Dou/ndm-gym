@@ -5,21 +5,28 @@ One program holds the tokens of E = BLOCK_M // T environments (3 environments of
 scenes) on chip through the whole block: RMSNorm, the q/k/v/gate projection head by head, QK-RMSNorm, rotary rotation,
 attention with the per-head additive bias (exact softmax over the tile's rows; a precomputed (H, BLOCK_M, BLOCK_M) tile
 holds the bias of every pair of rows of one environment and -inf between environments), the sigmoid gate, the output
-projection, FiLM, RMSNorm, SwiGLU. The residual stream stays fp32; it is the initial value of the output projection's
-and of the SwiGLU's accumulators, so no second copy of it is held. The weights (bf16 copies made once, each tile
-contiguous) are streamed from L2, prefetched one loop iteration ahead (the head loop and the SwiGLU's hidden chunks are
-software-pipelined; ``stages`` >= 2: unpipelined, Triton 3.6 miscompiles the kernel on an H100).
+projection, FiLM, RMSNorm, SwiGLU. Where a tile holds two or more whole environments of a multiple of 16 tokens (the
+G1's 32, or 16 merged), the attention runs per environment instead (``rf_train.env_attention``): every group of 16 rows
+against the T tokens of its own environment, a product per group, with the bias (H, T, T). The residual stream stays
+fp32; it is the initial value of the output projection's and of the SwiGLU's accumulators, so no second copy of it is
+held. The weights (bf16 copies made once, each tile contiguous) are streamed from L2, prefetched one loop iteration
+ahead (the head loop and the SwiGLU's hidden chunks are software-pipelined; ``stages`` >= 2: unpipelined, Triton 3.6
+miscompiles the kernel on an H100).
 
 ``FusedBlock`` runs one block per launch (the residual read and written once per block). ``FusedHOIRigidFormerNet``
 (opt-in, and refused on an H100 until it passes there: with the rotation computed in the kernel from the token
 positions, Triton 3.6 compiled it to a kernel that reads past its shared memory; tools/bench_rf_kernel.py --diagnose
 bisects it on a GPU) runs the whole network in one launch: the tile's environments enter as the network's inputs and
 leave as its outputs; the token embedding (one product over the features of every token type), all blocks with the
-residual on chip, the read-out SwiGLU on the embedding and the last block's tokens (the embedding recomputed there),
+residual on chip, the read-out SwiGLU on the embedding and the last block's tokens (the embedding held through the blocks),
 and the read-out heads as one product whose outputs are scattered to their places. Before it, in PyTorch: the
-per-environment FiLM vectors (the context network and every block's FiLM layer) and the rotation's cos, sin tables.
+per-environment FiLM vectors (the context network and every block's FiLM layer). The rotation's cos and sin are
+computed in the kernel from the token positions, or read from tables that PyTorch computes before every launch
+(``rope_tables``; by default the tables on an H100 and for the G1 networks with one token per body, whose kernel
+measures faster with them); the attention's bias tile is made once, with the kernel's other tensors.
 ``FusedG1RigidFormerNet`` runs the G1's ``RigidFormerNet`` (LAFAN1, the two-G1 scene) through the same kernel with its
-own tables (one token type, the root and joint heads).
+own tables (one token type, the root and joint heads); merged tokens are read out per body from the tokens' rows in
+the same kernel (``rf_head._token_readout``).
 Both kernels are launched as opaque operators (``torch.library.custom_op``): torch.compile and CUDA graphs run them as
 Triton compiled them. They take models with fp32 parameters, also ``HOIWorldModel.inference_copy(None, ...)`` (its
 step outside the network as Triton kernels); a bf16 inference copy is refused.
@@ -52,13 +59,25 @@ import triton
 import triton.language as tl
 
 from ..robots.g1 import NUM_J
-from .rf_train import attention_tile
+from .rf_head import HEAD_CFG, _head_fwd_kernel, _token_readout, token_head_tensors
+from .rf_train import _env_bias, _env_cols, _film, _sigmoid, attention_tile, env_attention
 from ..tasks.hdmi import DECIMATION
 from ..worldmodels.hoi import HOIRigidFormerNet
 from ..worldmodels.rigidformer import POS_SCALE, Block, RigidFormerNet
 
 LOG2E = math.log2(math.e)
 BLOCK_BUFFERS = ("n1", "wqk", "bqk", "qkn", "wvg", "bvg", "wp", "bp", "n2", "w12", "b12", "w3", "b3")
+
+
+@triton.jit
+def _cos_sin(a):
+    """cos and sin of fp32 angles with PTX's cos.approx.f32 and sin.approx.f32, an instruction each (libdevice's
+    full-range functions, which ``tl.cos`` and ``tl.sin`` call, take about 85 a value and a branch region), on the angle
+    reduced to [-pi, pi): there their absolute error is below 2^-20, and the rotated q and k are rounded to bf16."""
+    t = a * 0.15915494309189535
+    a = (t - tl.floor(t + 0.5)) * 6.283185307179586
+    return (tl.inline_asm_elementwise("cos.approx.f32 $0, $1;", "=f,f", [a], dtype=tl.float32, is_pure=True, pack=1),
+            tl.inline_asm_elementwise("sin.approx.f32 $0, $1;", "=f,f", [a], dtype=tl.float32, is_pure=True, pack=1))
 
 
 @triton.jit
@@ -73,8 +92,7 @@ def _rope(t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, R: tl.const
         sn = tl.load(SIN + row[:, None] * R + c2[None, :], mask=rmask, other=0.0)
     else:
         pi = tl.load(PIDX + t[:, None] * HD2 + c2[None, :])
-        ang = tl.load(X + env[:, None] * xd + pi, mask=xmask & (pi >= 0), other=0.0) * pos_scale * tl.load(FRQ + c2)[None, :]
-        cs, sn = tl.cos(ang), tl.sin(ang)
+        cs, sn = _cos_sin(tl.load(X + env[:, None] * xd + pi, mask=xmask & (pi >= 0), other=0.0) * pos_scale * tl.load(FRQ + c2)[None, :])
     return cs, sn
 
 
@@ -100,12 +118,11 @@ def _qkvg(xn, h, WQK, BQK, BM: tl.constexpr, D: tl.constexpr, HD: tl.constexpr):
 
 
 @triton.jit
-def _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM: tl.constexpr,
-            HD: tl.constexpr, R: tl.constexpr, ROPE: tl.constexpr, FAST_EXP: tl.constexpr, SOFTMAX: tl.constexpr, QKNORM: tl.constexpr):  # fmt: skip
-    """Head h's attention probabilities, not normalized (fp16 with FAST_EXP), and their row sums, from its q and k
-    channels (even, odd): QK-RMSNorm, rotation, scores with the bias tile, softmax in log2 units."""
+def _qk(qe, qo, ke, ko, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, eps, qk_scale, BM: tl.constexpr, HD: tl.constexpr,
+        R: tl.constexpr, ROPE: tl.constexpr, QKNORM: tl.constexpr):  # fmt: skip
+    """A head's q and k (BM, HD) bf16, channels in order, from their even and odd channels: QK-RMSNorm (q takes the
+    scores' scale), rotation."""
     HD2: tl.constexpr = HD // 2
-    i = tl.arange(0, BM)
     c2 = tl.arange(0, HD2)
     if QKNORM:
         rq = tl.rsqrt((tl.sum(qe * qe, 1) + tl.sum(qo * qo, 1)) / HD + eps)[:, None] * qk_scale  # QK-RMSNorm; q takes the scale
@@ -116,9 +133,17 @@ def _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, p
             cs, sn = _rope(t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, R, HD2, ROPE)
             qe, qo = qe * cs - qo * sn, qe * sn + qo * cs
             ke, ko = ke * cs - ko * sn, ke * sn + ko * cs
-    q = tl.reshape(tl.join(qe, qo), [BM, HD]).to(tl.bfloat16)  # channels back in order: the product is one K = HD dot
-    k = tl.reshape(tl.join(ke, ko), [BM, HD]).to(tl.bfloat16)
-    s = tl.dot(q, tl.trans(k)) + tl.load(BT + h * BM * BM + i[:, None] * BM + i[None, :]).to(tl.float32)  # log2 units
+    return tl.reshape(tl.join(qe, qo), [BM, HD]).to(tl.bfloat16), tl.reshape(tl.join(ke, ko), [BM, HD]).to(tl.bfloat16)
+
+
+@triton.jit
+def _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM: tl.constexpr,
+            HD: tl.constexpr, R: tl.constexpr, ROPE: tl.constexpr, FAST_EXP: tl.constexpr, SOFTMAX: tl.constexpr, QKNORM: tl.constexpr):  # fmt: skip
+    """Head h's attention probabilities, not normalized (fp16 with FAST_EXP), and their row sums, from its q and k
+    channels (even, odd): QK-RMSNorm, rotation, scores with the bias tile, softmax in log2 units."""
+    i = tl.arange(0, BM)
+    q, k = _qk(qe, qo, ke, ko, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, eps, qk_scale, BM, HD, R, ROPE, QKNORM)
+    s = tl.dot(q, tl.trans(k)) + tl.load(BT + h * BM * BM + i[:, None] * BM + i[None, :]).to(tl.float32)  # log2 units; one K = HD dot
     if not SOFTMAX:
         p = s.to(tl.float16) if FAST_EXP else s
         den = tl.zeros([BM], dtype=tl.float32) + 1.0
@@ -132,11 +157,31 @@ def _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, p
 
 
 @triton.jit
+def _scores_env(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM: tl.constexpr,
+                HD: tl.constexpr, R: tl.constexpr, ROPE: tl.constexpr, E: tl.constexpr, T: tl.constexpr):  # fmt: skip
+    """``_scores`` on a tile of E whole environments of T tokens, T a multiple of 16 (``rf_train.env_attention``): every
+    group of 16 rows (a warp's) against the T tokens of its own environment, as a product per group. Probabilities (BM /
+    16, 16, T), not normalized, and their row sums (BM / 16, 16), in place of (BM, BM) scores of which all but T a row
+    are -inf. BT (H, T, T) bf16: the bias within an environment."""
+    q, k = _qk(qe, qo, ke, ko, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, eps, qk_scale, BM, HD, R, ROPE, True)
+    s = tl.dot(tl.reshape(q, [BM // 16, 16, HD]), tl.permute(_env_cols(k, E, T // 16, T, HD), [0, 2, 1])) + _env_bias(BT, h, E, T)  # log2 units
+    p = tl.exp2(s - tl.max(s, 2)[:, :, None])
+    return p, tl.sum(p, 2)
+
+
+@triton.jit
+def _pv_env(p, v, den, BM: tl.constexpr, HD: tl.constexpr, E: tl.constexpr, T: tl.constexpr):
+    """The attention's output (BM, HD) from ``_scores_env``'s probabilities: their product with their environment's v,
+    normalized."""
+    return tl.reshape(tl.dot(p.to(tl.bfloat16), _env_cols(v.to(tl.bfloat16), E, T // 16, T, HD)) * (1.0 / den)[:, :, None], [BM, HD])
+
+
+@triton.jit
 def _pv(p, v, den, FAST_EXP: tl.constexpr):
     """The attention's output: the probabilities' product with v, normalized."""
     if FAST_EXP:
-        return tl.dot(p, v.to(tl.float16)) / den[:, None]
-    return tl.dot(p.to(tl.bfloat16), v.to(tl.bfloat16)) / den[:, None]
+        return tl.dot(p, v.to(tl.float16)) * (1.0 / den)[:, None]
+    return tl.dot(p.to(tl.bfloat16), v.to(tl.bfloat16)) * (1.0 / den)[:, None]
 
 
 @triton.jit
@@ -155,14 +200,33 @@ def _merged_head(z4, h, acc, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos
     p, den = _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM, HD, R, ROPE,
                      FAST_EXP, SOFTMAX, QKNORM)  # fmt: skip
     o = _pv(p, v, den, FAST_EXP)
-    return tl.dot((o * tl.sigmoid(g)).to(tl.bfloat16), tl.load(WP + h * HD * D + c[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
+    return tl.dot((o * _sigmoid(g)).to(tl.bfloat16), tl.load(WP + h * HD * D + c[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
+
+
+@triton.jit
+def _film_rows(GB, gb_stride, env, env0, n_env, EP: tl.constexpr, BM: tl.constexpr, D: tl.constexpr):
+    """FiLM's scale 1 + gamma and shift beta (BM, D) fp32 for a tile of EP environments and idle rows (``rf_train._film``
+    takes a tile of whole environments): each environment's vectors loaded as (D,), which a thread reads in the layout
+    of what they scale, and chosen per row by the row's environment env (the tile's first: env0; both int64). Idle rows
+    and environments past n_env get 1 and 0, as with the vectors loaded per row."""
+    d = tl.arange(0, D)
+    sc = tl.full([BM, D], 1.0, tl.float32)
+    sh = tl.zeros([BM, D], tl.float32)
+    for e in tl.static_range(EP):
+        gb = GB + (env0 + e) * gb_stride + d
+        ok = (d >= 0) & (env0 + e < n_env)
+        on = (env == env0 + e)[:, None]
+        sc = tl.where(on, 1.0 + tl.load(gb, mask=ok, other=0.0)[None, :], sc)
+        sh = tl.where(on, tl.load(gb + D, mask=ok, other=0.0)[None, :], sh)
+    return sc, sh
 
 
 @triton.jit
 def _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12, B12,
            W3, B3, eps, qk_scale, BM: tl.constexpr, D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr, NCH: tl.constexpr,
            BH: tl.constexpr, ROPE: tl.constexpr, HAS_FILM: tl.constexpr, STAGES: tl.constexpr, MERGE: tl.constexpr,
-           FAST_EXP: tl.constexpr, ABL: tl.constexpr, PREFETCH: tl.constexpr):  # fmt: skip
+           FAST_EXP: tl.constexpr, ABL: tl.constexpr, PREFETCH: tl.constexpr, EW: tl.constexpr, EA: tl.constexpr, EP: tl.constexpr, env0,
+           n_env):  # fmt: skip
     """One block on a tile's residual x (BM, D) fp32 -> the new residual. t, row (BM,): a row's token and index; env (BM,)
     int64, xmask (BM, 1) the rows of environments; the rotation (``_rope``: none with ROPE 0) recomputed for every head,
     so that it is not held through the block. ABL (0) leaves parts out to time the rest, wrong outputs (bits: 1 the
@@ -175,7 +239,13 @@ def _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB,
     v and the gate, BQK (H, 4 HD), WVG and BVG unused; MERGE 2, two per head, WQK (H, D, 2 HD) q and k with their
     channels in order, WVG (H, D, 2 HD) v and the gate, BQK and BVG (H, 2 HD); both, one per chunk, W12 (NCH, D, 2 BH),
     B12 (NCH, 2 BH). BT (H, BM, BM) bf16: the attention bias times log2(e) within an environment, -inf between
-    environments. GB: FiLM's gamma, beta (D each) of every environment, rows gb_stride apart.
+    environments. GB: FiLM's gamma, beta (D each) of every environment, rows gb_stride apart. EW: the tile's
+    environments when it holds whole environments one after another (BM = EW T rows; the first of them env0, int64, of
+    n_env), 0 otherwise: FiLM's vectors are then loaded per environment (``rf_train._film``), otherwise per row, or, with
+    EP (the environments of a tile that also has idle rows; the whole-network kernel with 4 environments at most, where
+    it measures faster; the block kernel 0), per environment and chosen per row (``_film_rows``). EA
+    (``rf_train.env_attention``; MERGE 0, no FAST_EXP, no ABL): the attention per environment (``_scores_env``), BT
+    (H, T, T).
     """
     HD2: tl.constexpr = HD // 2
     ATTN: tl.constexpr = ABL % 2 == 0
@@ -216,24 +286,36 @@ def _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB,
                                BM, HD)  # fmt: skip
                 o = _pv(p, v, den, FAST_EXP)
                 wp = tl.load(WP + h * HD * D + c[:, None] * D + d[None, :], cache_modifier=".cg")
-                acc = tl.dot((o * tl.sigmoid(g)).to(tl.bfloat16), wp, acc)
+                acc = tl.dot((o * _sigmoid(g)).to(tl.bfloat16), wp, acc)
             else:
                 wq, bq = WQK + h * 4 * D * HD2, BQK + h * 4 * HD2
                 qe = tl.dot(xn, tl.load(wq + wqk, cache_modifier=".cg")) + tl.load(bq + c2)[None, :]
                 qo = tl.dot(xn, tl.load(wq + D * HD2 + wqk, cache_modifier=".cg")) + tl.load(bq + HD2 + c2)[None, :]
                 ke = tl.dot(xn, tl.load(wq + 2 * D * HD2 + wqk, cache_modifier=".cg")) + tl.load(bq + 2 * HD2 + c2)[None, :]
                 ko = tl.dot(xn, tl.load(wq + 3 * D * HD2 + wqk, cache_modifier=".cg")) + tl.load(bq + 3 * HD2 + c2)[None, :]
-                p, den = _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM, HD,
-                                 R, ROPE, FAST_EXP, SOFTMAX, QKNORM)  # fmt: skip
                 wv, bv = WVG + h * 2 * D * HD, BVG + h * 2 * HD
-                o = _pv(p, tl.dot(xn, tl.load(wv + wvg, cache_modifier=".cg")) + tl.load(bv + c)[None, :], den, FAST_EXP)
+                if EA:
+                    p, den = _scores_env(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale,
+                                         BM, HD, R, ROPE, EW, BM // EW)  # fmt: skip
+                    o = _pv_env(p, tl.dot(xn, tl.load(wv + wvg, cache_modifier=".cg")) + tl.load(bv + c)[None, :], den, BM, HD, EW, BM // EW)
+                else:
+                    p, den = _scores(qe, qo, ke, ko, h, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, QKN, BT, eps, qk_scale, BM,
+                                     HD, R, ROPE, FAST_EXP, SOFTMAX, QKNORM)  # fmt: skip
+                    o = _pv(p, tl.dot(xn, tl.load(wv + wvg, cache_modifier=".cg")) + tl.load(bv + c)[None, :], den, FAST_EXP)
                 g = tl.dot(xn, tl.load(wv + D * HD + wvg, cache_modifier=".cg")) + tl.load(bv + HD + c)[None, :]
                 wp = tl.load(WP + h * HD * D + c[:, None] * D + d[None, :], cache_modifier=".cg")
-                acc = tl.dot((o * tl.sigmoid(g)).to(tl.bfloat16), wp, acc)
+                acc = tl.dot((o * _sigmoid(g)).to(tl.bfloat16), wp, acc)
     x = acc
     if HAS_FILM:
-        gb = GB + env[:, None] * gb_stride + d[None, :]
-        x = x * (1.0 + tl.load(gb, mask=xmask, other=0.0)) + tl.load(gb + D, mask=xmask, other=0.0)
+        if EW:
+            sc, sh = _film(GB, gb_stride, env0, n_env, EW, BM // EW, D)
+            x = x * sc + sh
+        elif EP:
+            sc, sh = _film_rows(GB, gb_stride, env, env0, n_env, EP, BM, D)
+            x = x * sc + sh
+        else:
+            gb = GB + env[:, None] * gb_stride + d[None, :]
+            x = x * (1.0 + tl.load(gb, mask=xmask, other=0.0)) + tl.load(gb + D, mask=xmask, other=0.0)
     xn = (x * tl.rsqrt(tl.sum(x * x, 1) / D + eps)[:, None] * tl.load(N2 + d)[None, :]).to(tl.bfloat16)
     cb = tl.arange(0, BH)
     cb2 = tl.arange(0, 2 * BH)
@@ -246,7 +328,7 @@ def _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB,
         else:
             u = tl.dot(xn, tl.load(w + w12, cache_modifier=".cg")) + tl.load(b + cb)[None, :]
             z = tl.dot(xn, tl.load(w + D * BH + w12, cache_modifier=".cg")) + tl.load(b + BH + cb)[None, :]
-        acc = tl.dot((u * z * tl.sigmoid(z)).to(tl.bfloat16), tl.load(W3 + j * BH * D + cb[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
+        acc = tl.dot((u * z * _sigmoid(z)).to(tl.bfloat16), tl.load(W3 + j * BH * D + cb[:, None] * D + d[None, :], cache_modifier=".cg"), acc)
     return acc
 
 
@@ -254,9 +336,9 @@ def _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB,
 def _block_kernel(X, Y, COS, SIN, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12, B12, W3, B3, n_env, eps, qk_scale,
                   T: tl.constexpr, E: tl.constexpr, BM: tl.constexpr, D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr,
                   NCH: tl.constexpr, BH: tl.constexpr, ROPE: tl.constexpr, HAS_FILM: tl.constexpr, STAGES: tl.constexpr,
-                  MERGE: tl.constexpr, FAST_EXP: tl.constexpr, ABL: tl.constexpr, PREFETCH: tl.constexpr):  # fmt: skip
+                  MERGE: tl.constexpr, FAST_EXP: tl.constexpr, ABL: tl.constexpr, PREFETCH: tl.constexpr, EA: tl.constexpr):  # fmt: skip
     """One block on the tokens of environments [E pid, E pid + E): rows i = e T + t of the tile; rows past E T idle.
-    COS, SIN (N T, R): the rotation of the leading R channel pairs (ROPE 1; 0: none)."""
+    COS, SIN (N T, R): the rotation of the leading R channel pairs (ROPE 1; 0: none). EA: ``_block``'s."""
     i = tl.arange(0, BM)
     e_loc = i // T
     t = i % T
@@ -266,52 +348,86 @@ def _block_kernel(X, Y, COS, SIN, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG
     d = tl.arange(0, D)
     x = tl.load(X + row[:, None] * D + d[None, :], mask=xmask, other=0.0)
     y = _block(x, t, row, env, xmask, COS, SIN, X, 0, X, X, 0.0, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12, B12, W3, B3, eps,
-               qk_scale, BM, D, H, HD, R, NCH, BH, ROPE, HAS_FILM, STAGES, MERGE, FAST_EXP, ABL, PREFETCH)  # fmt: skip
+               qk_scale, BM, D, H, HD, R, NCH, BH, ROPE, HAS_FILM, STAGES, MERGE, FAST_EXP, ABL, PREFETCH, E if BM == E * T else 0, EA, 0,
+               (tl.program_id(0) * E).to(tl.int64), n_env)  # fmt: skip
     tl.store(Y + row[:, None] * D + d[None, :], y, mask=xmask)
 
 
 @triton.jit
-def _embed(X, xd, GIDX, WE, CT, env, t, xmask, D: tl.constexpr, KE: tl.constexpr):
+def _embed(X, xd, GIDX, WE, CT, env, t, xmask, D: tl.constexpr, KE: tl.constexpr, EC: tl.constexpr, VIEW: tl.constexpr, TWO: tl.constexpr):
     """Token embeddings (BM, D) fp32 of a tile: GIDX (T, KE) the column of x of every channel of a token's features (-1:
     none; each token type has its own channels), WE (KE, D) bf16 the embeddings' weights stacked, CT (T, D) fp32 every
-    token's constant (its embedding's bias and token embedding; a register's value)."""
+    token's constant (its embedding's bias and token embedding; a register's value). EC 0: the constants per row (BM, D),
+    which the compiler makes the product's initial value. EC the environments of a tile of whole environments (BM = EC T
+    rows): the constants once per token (1, T, D). With VIEW they are added to the product viewed per environment: a
+    product that is alone at the kernel's top level then leaves in the tiling of the blocks' products (it is tiled on
+    its own otherwise, and so is what is computed from it after the blocks). Without VIEW they are repeated over the
+    environments and added in the product's shape: for a product that has the blocks' tiling already (another product
+    at the top level, as the merged tokens' read-out has), where the view would keep a second copy of the embedding in
+    the constants' layout. TWO (a tile that does not hold whole environments, so EC 0): the product in two halves of
+    the features' columns, the second on the first's result, which gives it the blocks' tiling with no conversion."""
     k = tl.arange(0, KE)
     d = tl.arange(0, D)
+    if TWO:
+        kh = tl.arange(0, KE // 2)
+        gh = tl.load(GIDX + t[:, None] * KE + kh[None, :])
+        fh = tl.load(X + env[:, None] * xd + gh, mask=xmask & (gh >= 0), other=0.0)
+        x = tl.dot(fh.to(tl.bfloat16), tl.load(WE + kh[:, None] * D + d[None, :]))
+        gh = tl.load(GIDX + t[:, None] * KE + KE // 2 + kh[None, :])
+        fh = tl.load(X + env[:, None] * xd + gh, mask=xmask & (gh >= 0), other=0.0)
+        x = tl.dot(fh.to(tl.bfloat16), tl.load(WE + (KE // 2 + kh)[:, None] * D + d[None, :]), x)
+        return x + tl.load(CT + t[:, None] * D + d[None, :])
     gi = tl.load(GIDX + t[:, None] * KE + k[None, :])
     f = tl.load(X + env[:, None] * xd + gi, mask=xmask & (gi >= 0), other=0.0)
-    return tl.dot(f.to(tl.bfloat16), tl.load(WE + k[:, None] * D + d[None, :])) + tl.load(CT + t[:, None] * D + d[None, :])
+    x = tl.dot(f.to(tl.bfloat16), tl.load(WE + k[:, None] * D + d[None, :]))
+    if EC:
+        RPE: tl.constexpr = t.shape[0] // EC
+        ct = tl.load(CT + tl.arange(0, RPE)[None, :, None] * D + d[None, None, :])
+        if VIEW:
+            return tl.reshape(tl.reshape(x, [EC, RPE, D]) + ct, [EC * RPE, D])
+        return x + tl.reshape(tl.broadcast_to(ct, [EC, RPE, D]), [EC * RPE, D])
+    return x + tl.load(CT + t[:, None] * D + d[None, :])
 
 
 @triton.jit
 def _net_block(x, blk, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12,
                B12, W3, B3, eps, qk_scale, BM: tl.constexpr, D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr,
                NCH: tl.constexpr, BH: tl.constexpr, ROPE: tl.constexpr, STAGES: tl.constexpr, MERGE: tl.constexpr,
-               FAST_EXP: tl.constexpr, PREFETCH: tl.constexpr):  # fmt: skip
+               FAST_EXP: tl.constexpr, PREFETCH: tl.constexpr, EW: tl.constexpr, EA: tl.constexpr, EP: tl.constexpr, env0, n_env):  # fmt: skip
     """Block ``blk`` of the network's stacked blocks on a tile's residual x."""
     return _block(x, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB + blk * 2 * D, gb_stride, N1 + blk * D,
                   WQK + blk * H * (2 + 2 * (MERGE == 1)) * D * HD, BQK + blk * H * (2 + 2 * (MERGE == 1)) * HD, QKN + blk * 2 * HD,
                   WVG + blk * H * 2 * D * HD, BVG + blk * H * 2 * HD, WP + blk * H * HD * D, BP + blk * D, N2 + blk * D,
                   W12 + blk * NCH * 2 * D * BH, B12 + blk * NCH * 2 * BH, W3 + blk * NCH * BH * D, B3 + blk * D, eps, qk_scale, BM, D, H, HD, R, NCH,
-                  BH, ROPE, True, STAGES, MERGE, FAST_EXP, 0, PREFETCH)  # fmt: skip
+                  BH, ROPE, True, STAGES, MERGE, FAST_EXP, 0, PREFETCH, EW, EA, EP, env0, n_env)  # fmt: skip
 
 
 @triton.jit
-def _net_kernel(X, Y, xd, yd, GIDX, WE, CT, PIDX, FRQ, COS, SIN, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12, B12, W3, B3, HNW,
-                HW12, HB12, HW3, HB3, WOUT, BOUT, DEST, n_env, eps, qk_scale, pos_scale, T: tl.constexpr, E: tl.constexpr, BM: tl.constexpr,
-                D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr, NCH: tl.constexpr, BH: tl.constexpr, KE: tl.constexpr,
-                HNCH: tl.constexpr, HBH: tl.constexpr, NO: tl.constexpr, NB: tl.constexpr, STAGES: tl.constexpr, OUTER: tl.constexpr,
-                ROPE: tl.constexpr, SKIP_EMBED: tl.constexpr, SKIP_BLOCKS: tl.constexpr, SKIP_HEAD: tl.constexpr, SKIP_STORE: tl.constexpr,
-                MERGE: tl.constexpr, FAST_EXP: tl.constexpr, PREFETCH: tl.constexpr):  # fmt: skip
+def _net_kernel(X, Y, Y0, xd, yd, GIDX, WE, CT, PIDX, FRQ, COS, SIN, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG, WP, BP, N2, W12, B12, W3, B3,
+                HNW, HW12, HB12, HM3, BOUT, DEST, TOB, UNE, ENQ, CQ, n_env, eps, qk_scale, pos_scale, T: tl.constexpr, E: tl.constexpr,
+                BM: tl.constexpr, D: tl.constexpr, H: tl.constexpr, HD: tl.constexpr, R: tl.constexpr, NCH: tl.constexpr, BH: tl.constexpr,
+                KE: tl.constexpr, HNCH: tl.constexpr, HBH: tl.constexpr, NO: tl.constexpr, NB: tl.constexpr, STAGES: tl.constexpr,
+                OUTER: tl.constexpr, ROPE: tl.constexpr, SKIP_EMBED: tl.constexpr, SKIP_BLOCKS: tl.constexpr, SKIP_HEAD: tl.constexpr,
+                SKIP_STORE: tl.constexpr, MERGE: tl.constexpr, FAST_EXP: tl.constexpr, PREFETCH: tl.constexpr, TOKENS_OUT: tl.constexpr,
+                EA: tl.constexpr, BPS: tl.constexpr):  # fmt: skip
     """HOIRigidFormerNet.forward on the environments [E pid, E pid + E): x rows (xd apart) in, y rows (yd apart) out.
+    With TOKENS_OUT, the embedding and the blocks only: Y0 and Y (N T, D) fp32 take the tokens' embedding and their
+    features after the last block, a row per token (a merged-token RigidFormerNet whose read-out then runs per body:
+    ``kernels.rf_head._head_fwd_kernel``); without it Y0 is not written. With BPS, the body slots of an environment of
+    a merged-token RigidFormerNet (a multiple of 16; the tile whole environments), the read-out runs here from the
+    tokens' rows (``kernels.rf_head._token_readout``, which describes TOB, UNE, ENQ and CQ; HW12 then with the norm's
+    weight multiplied in, DEST (BPS, NO) per body slot).
 
     PIDX (T, HD/2): the column of x of the coordinate of each rotary pair of a token (-1: none), FRQ (HD/2,) its
     frequency; the NB blocks' weights stacked (NB, ...) as _block's; GB rows (NB, 2 D); HNW (2 D,) the read-out norm's
     weight; HW12 (HNCH, 4, D, HBH): the read-out SwiGLU's value and gate columns on the embedding's and the last block's
-    halves; HB12 (HNCH, 2, HBH); HW3 (HNCH, HBH, D); WOUT (D, NO) bf16 all read-out heads' weights; DEST (T, NO) the
-    column of y of each head output of a token (-1: none). The loop over blocks: OUTER 0 a loop, 1 a loop that is not
-    software-pipelined, 2 unrolled. The rotation: ROPE 1 from the tables COS, SIN (N T, R) computed before, 2 from the
-    token positions in the kernel. Diagnosis only (FusedHOIRigidFormerNet.debug; wrong outputs): ROPE 0 no rotation, SKIP_EMBED the
-    embedding's product, SKIP_BLOCKS, SKIP_HEAD the read-out SwiGLU, SKIP_STORE.
+    halves; HB12 (HNCH, 2, HBH); HM3 (HNCH, HBH, NO) bf16 the SwiGLU's output projection times all read-out heads'
+    weights (two linear maps in a row, multiplied as their product: a hidden column -> the head outputs) and BOUT (NO,)
+    their bias; DEST (T, NO) the column of y of each head output of a token (-1: none). The loop over blocks: OUTER 0 a
+    loop, 1 a loop that is not software-pipelined, 2 unrolled. The rotation: ROPE 1 from the tables COS, SIN (N T, R)
+    computed before, 2 from the token positions in the kernel. Diagnosis only (FusedHOIRigidFormerNet.debug; wrong
+    outputs): ROPE 0 no rotation, SKIP_EMBED the embedding's product, SKIP_BLOCKS, SKIP_HEAD the read-out SwiGLU (the sum of
+    a token's features in its place), SKIP_STORE.
     """
     i = tl.arange(0, BM)
     e_loc = i // T
@@ -320,65 +436,78 @@ def _net_kernel(X, Y, xd, yd, GIDX, WE, CT, PIDX, FRQ, COS, SIN, BT, GB, gb_stri
     row = env * T + t
     xmask = ((e_loc < E) & (env < n_env))[:, None]
     d = tl.arange(0, D)
+    EW: tl.constexpr = E if BM == E * T else 0  # the tile's environments when it holds whole environments
+    EP: tl.constexpr = E if (BM != E * T and E <= 4) else 0  # a few environments and idle rows (the HOI scenes' 3 x 33 tokens): _film_rows
+    env0 = (tl.program_id(0) * E).to(tl.int64)
     if SKIP_EMBED:
         x = tl.zeros([BM, D], dtype=tl.float32) + tl.load(CT + t[:, None] * D + d[None, :])
-    else:
-        x = _embed(X, xd, GIDX, WE, CT, env, t, xmask, D, KE)
+    else:  # the read-out below uses the embedding again: it then leaves in the blocks' tiling (_embed's EC and VIEW, or TWO)
+        x = _embed(X, xd, GIDX, WE, CT, env, t, xmask, D, KE, 0 if TOKENS_OUT else EW, BPS == 0, EW == 0 and TOKENS_OUT == 0 and KE >= 32)
+    h0 = x  # held through the blocks (on the stack)
+    if TOKENS_OUT:
+        tl.store(Y0 + row[:, None] * D + d[None, :], x, mask=xmask)
     if not SKIP_BLOCKS:
         if OUTER == 2:
             for blk in tl.static_range(NB):
                 x = _net_block(x, blk, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG,
                                WP, BP, N2, W12, B12, W3, B3, eps, qk_scale, BM, D, H, HD, R, NCH, BH, ROPE, STAGES, MERGE,
-                               FAST_EXP, PREFETCH)  # fmt: skip
+                               FAST_EXP, PREFETCH, EW, EA, EP, env0, n_env)  # fmt: skip
         elif OUTER == 1:
             for blk in tl.range(NB, num_stages=1):
                 x = _net_block(x, blk, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG,
                                WP, BP, N2, W12, B12, W3, B3, eps, qk_scale, BM, D, H, HD, R, NCH, BH, ROPE, STAGES, MERGE,
-                               FAST_EXP, PREFETCH)  # fmt: skip
+                               FAST_EXP, PREFETCH, EW, EA, EP, env0, n_env)  # fmt: skip
         else:
             for blk in range(NB):
                 x = _net_block(x, blk, t, row, env, xmask, COS, SIN, X, xd, PIDX, FRQ, pos_scale, BT, GB, gb_stride, N1, WQK, BQK, QKN, WVG, BVG,
                                WP, BP, N2, W12, B12, W3, B3, eps, qk_scale, BM, D, H, HD, R, NCH, BH, ROPE, STAGES, MERGE,
-                               FAST_EXP, PREFETCH)  # fmt: skip
-    if SKIP_HEAD:
-        acc = x
+                               FAST_EXP, PREFETCH, EW, EA, EP, env0, n_env)  # fmt: skip
+    if TOKENS_OUT:
+        tl.store(Y + row[:, None] * D + d[None, :], x, mask=xmask)
+    elif BPS:
+        out = _token_readout(h0, x, TOB, UNE, ENQ, CQ, HW12, HB12, HM3, BOUT, eps, E, T, D, HNCH, HBH, NO, BPS, STAGES)
+        if not SKIP_STORE:
+            ib = tl.arange(0, E * BPS)
+            envb = env0 + ib // BPS
+            dest = tl.load(DEST + (ib % BPS)[:, None] * NO + tl.arange(0, NO)[None, :])
+            tl.store(Y + envb[:, None] * yd + dest, out, mask=(envb < n_env)[:, None] & (dest >= 0))
     else:
-        if SKIP_EMBED:
-            h0 = tl.zeros([BM, D], dtype=tl.float32) + tl.load(CT + t[:, None] * D + d[None, :])
-        else:
-            h0 = _embed(X, xd, GIDX, WE, CT, env, t, xmask, D, KE)  # recomputed: cheaper than holding it through the blocks
-        r = tl.rsqrt((tl.sum(h0 * h0, 1) + tl.sum(x * x, 1)) / (2 * D) + eps)[:, None]
-        xa = (h0 * r * tl.load(HNW + d)[None, :]).to(tl.bfloat16)
-        xb = (x * r * tl.load(HNW + D + d)[None, :]).to(tl.bfloat16)
-        cb = tl.arange(0, HBH)
-        cb2 = tl.arange(0, 2 * HBH)
-        w12 = d[:, None] * HBH + cb[None, :]
-        w12m = d[:, None] * 2 * HBH + cb2[None, :]
-        acc = tl.zeros([BM, D], dtype=tl.float32) + tl.load(HB3 + d)[None, :]
-        for j in tl.range(HNCH, num_stages=STAGES):
-            w, b = HW12 + j * 4 * D * HBH, HB12 + j * 2 * HBH
-            if MERGE:  # value and gate as one product per half of the input (HW12 (HNCH, 2, D, 2 HBH), HB12 (HNCH, 2 HBH))
-                uz = tl.dot(xa, tl.load(w + w12m, cache_modifier=".cg"))
-                u, z = _halves(tl.dot(xb, tl.load(w + 2 * D * HBH + w12m, cache_modifier=".cg"), uz) + tl.load(b + cb2)[None, :], BM, HBH)
-            else:
-                u = tl.dot(xa, tl.load(w + w12, cache_modifier=".cg"))
-                u = tl.dot(xb, tl.load(w + D * HBH + w12, cache_modifier=".cg"), u) + tl.load(b + cb)[None, :]
-                z = tl.dot(xa, tl.load(w + 2 * D * HBH + w12, cache_modifier=".cg"))
-                z = tl.dot(xb, tl.load(w + 3 * D * HBH + w12, cache_modifier=".cg"), z) + tl.load(b + HBH + cb)[None, :]
-            w3 = tl.load(HW3 + j * HBH * D + cb[:, None] * D + d[None, :], cache_modifier=".cg")
-            acc = tl.dot((u * z * tl.sigmoid(z)).to(tl.bfloat16), w3, acc)
-    if not SKIP_STORE:
         o = tl.arange(0, NO)
-        out = tl.dot(acc.to(tl.bfloat16), tl.load(WOUT + d[:, None] * NO + o[None, :])) + tl.load(BOUT + o)[None, :]
-        dest = tl.load(DEST + t[:, None] * NO + o[None, :])
-        tl.store(Y + env[:, None] * yd + dest, out, mask=xmask & (dest >= 0))
+        out = tl.zeros([BM, NO], dtype=tl.float32) + tl.load(BOUT + o)[None, :]
+        if SKIP_HEAD:
+            out += tl.sum(x, 1)[:, None]
+        else:
+            r = tl.rsqrt((tl.sum(h0 * h0, 1) + tl.sum(x * x, 1)) / (2 * D) + eps)[:, None]
+            xa = (h0 * r * tl.load(HNW + d)[None, :]).to(tl.bfloat16)
+            xb = (x * r * tl.load(HNW + D + d)[None, :]).to(tl.bfloat16)
+            cb = tl.arange(0, HBH)
+            cb2 = tl.arange(0, 2 * HBH)
+            w12 = d[:, None] * HBH + cb[None, :]
+            w12m = d[:, None] * 2 * HBH + cb2[None, :]
+            for j in tl.range(HNCH, num_stages=STAGES):
+                w, b = HW12 + j * 4 * D * HBH, HB12 + j * 2 * HBH
+                if MERGE:  # value and gate as one product per half of the input (HW12 (HNCH, 2, D, 2 HBH), HB12 (HNCH, 2 HBH))
+                    uz = tl.dot(xa, tl.load(w + w12m, cache_modifier=".cg"))
+                    u, z = _halves(tl.dot(xb, tl.load(w + 2 * D * HBH + w12m, cache_modifier=".cg"), uz) + tl.load(b + cb2)[None, :], BM, HBH)
+                else:
+                    u = tl.dot(xa, tl.load(w + w12, cache_modifier=".cg"))
+                    u = tl.dot(xb, tl.load(w + D * HBH + w12, cache_modifier=".cg"), u) + tl.load(b + cb)[None, :]
+                    z = tl.dot(xa, tl.load(w + 2 * D * HBH + w12, cache_modifier=".cg"))
+                    z = tl.dot(xb, tl.load(w + 3 * D * HBH + w12, cache_modifier=".cg"), z) + tl.load(b + HBH + cb)[None, :]
+                m3 = tl.load(HM3 + j * HBH * NO + cb[:, None] * NO + o[None, :], cache_modifier=".cg")
+                out = tl.dot((u * z * _sigmoid(z)).to(tl.bfloat16), m3, out)
+        if not SKIP_STORE:
+            dest = tl.load(DEST + t[:, None] * NO + o[None, :])
+            tl.store(Y + env[:, None] * yd + dest, out, mask=xmask & (dest >= 0))
 
 
 # The kernels are launched as opaque operators: torch.compile calls them as they are (and CUDA graphs capture their
 # launches) instead of compiling the Triton kernels a second time, which ran 25-40 % slower than the launch's own.
-BLOCK_CONFIG = ("T", "E", "BM", "D", "H", "HD", "R", "NCH", "BH", "ROPE", "HAS_FILM", "STAGES", "MERGE", "FAST_EXP", "ABL", "PREFETCH", "num_warps")
+BLOCK_CONFIG = ("T", "E", "BM", "D", "H", "HD", "R", "NCH", "BH", "ROPE", "HAS_FILM", "STAGES", "MERGE", "FAST_EXP", "ABL", "PREFETCH", "EA",
+                "num_warps")  # fmt: skip
 NET_CONFIG = ("T", "E", "BM", "R", "NB", "STAGES", "MERGE", "FAST_EXP", "PREFETCH", "D", "H", "HD", "NCH", "BH", "KE", "HNCH", "HBH", "NO",
-              "OUTER", "ROPE", "SKIP_EMBED", "SKIP_BLOCKS", "SKIP_HEAD", "SKIP_STORE", "num_warps", "num_stages")  # fmt: skip
+              "OUTER", "ROPE", "SKIP_EMBED", "SKIP_BLOCKS", "SKIP_HEAD", "SKIP_STORE", "TOKENS_OUT", "EA", "BPS", "num_warps", "num_stages",
+              "maxnreg")  # fmt: skip
 
 
 @torch.library.custom_op("ndm_gym::rf_block", mutates_args=())
@@ -400,17 +529,47 @@ def _(x, cos, sin, tile, gb, gb_stride, weights, eps, qk_scale, config):
 def rf_hoi_net_op(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, tile: torch.Tensor, gb: torch.Tensor, tensors: list[torch.Tensor],
                   out_size: int, eps: float, qk_scale: float, pos_scale: float, config: list[int]) -> torch.Tensor:  # fmt: skip
     """The whole network (``_net_kernel``) on x (N, in_dim + 3 tokens) -> y (N, out_size); tensors: the embedding's
-    five (GIDX, WE, CT, PIDX, FRQ), the blocks' thirteen, the read-out's eight, in _net_kernel's order; config as
-    NET_CONFIG."""
+    five (GIDX, WE, CT, PIDX, FRQ), the blocks' thirteen, the read-out's six and, for merged tokens read out from the
+    tokens' rows (the config's BPS), their four (TOB, UNE, ENQ, CQ), in _net_kernel's order; config as NET_CONFIG."""
     y = x.new_empty(x.shape[0], out_size)
     kw = dict(zip(NET_CONFIG, config))
-    _net_kernel[(triton.cdiv(x.shape[0], kw["E"]),)](x, y, x.stride(0), y.stride(0), *tensors[:5], cos, sin, tile, gb, gb.stride(0), *tensors[5:],
-                                                     x.shape[0], eps, qk_scale, pos_scale, **kw)  # fmt: skip
+    kw["maxnreg"] = kw["maxnreg"] or None  # 0: the assembler's own choice
+    if len(tensors) != (28 if kw["BPS"] else 24):
+        raise ValueError(f"{len(tensors)} tensors with BPS {kw['BPS']}")
+    slots = [] if kw["BPS"] else [y] * 4  # not read
+    _net_kernel[(triton.cdiv(x.shape[0], kw["E"]),)](x, y, y, x.stride(0), y.stride(0), *tensors[:5], cos, sin, tile, gb, gb.stride(0),
+                                                     *tensors[5:], *slots, x.shape[0], eps, qk_scale, pos_scale, **kw)  # fmt: skip
     return y
 
 
 @rf_hoi_net_op.register_fake
 def _(x, cos, sin, tile, gb, tensors, out_size, eps, qk_scale, pos_scale, config):
+    return x.new_empty(x.shape[0], out_size)
+
+
+@torch.library.custom_op("ndm_gym::rf_merged_net", mutates_args=())
+def rf_merged_net_op(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, tile: torch.Tensor, gb: torch.Tensor, tensors: list[torch.Tensor],
+                     head: list[torch.Tensor], out_size: int, eps: float, qk_scale: float, pos_scale: float, config: list[int],
+                     head_config: list[int]) -> torch.Tensor:  # fmt: skip
+    """A merged-token network in two launches on x (N, in_dim + 3 bodies) -> y (N, out_size): ``_net_kernel`` with
+    TOKENS_OUT (the embedding and the blocks; tensors and config as rf_hoi_net_op's; the tokens' embedding and their
+    features after the last block out), then the read-out per body from the two (``rf_head._head_fwd_kernel``, the
+    training passes' forward kernel; head: its tensors TOB, UNM, HNW, HW12, HB12, HM3, BOUT, DEST; head_config as
+    ``rf_head.HEAD_CFG``)."""
+    N = x.shape[0]
+    kw, hk = dict(zip(NET_CONFIG, config)), dict(zip(HEAD_CFG, head_config))
+    kw["maxnreg"] = kw["maxnreg"] or None  # 0: the assembler's own choice
+    tok0, tok = x.new_empty(N * kw["T"], kw["D"]), x.new_empty(N * kw["T"], kw["D"])
+    _net_kernel[(triton.cdiv(N, kw["E"]),)](x, tok, tok0, x.stride(0), 0, *tensors[:5], cos, sin, tile, gb, gb.stride(0), *tensors[5:], tok,
+                                            tok, tok, tok, N, eps, qk_scale, pos_scale, **kw)  # fmt: skip
+    y = x.new_empty(N, out_size)
+    maxnreg = hk.pop("maxnreg") or None
+    _head_fwd_kernel[(triton.cdiv(N, hk["EB"]),)](tok0, tok, y, y.stride(0), *head, N, eps, **hk, maxnreg=maxnreg)
+    return y
+
+
+@rf_merged_net_op.register_fake
+def _(x, cos, sin, tile, gb, tensors, head, out_size, eps, qk_scale, pos_scale, config, head_config):
     return x.new_empty(x.shape[0], out_size)
 
 
@@ -551,9 +710,10 @@ class FusedBlock(nn.Module):
         elif c is not None:
             raise ValueError("the block has no FiLM: c must be None")
         x = x.contiguous()
-        tile = attention_tile(bias, self.heads, T, self.block_m, x.device)
+        ea = env_attention(T, self.block_m) and self.merge == 0 and self.fast_exp == 0 and self.debug["ABL"] == 0
+        tile = attention_tile(bias, self.heads, T, T if ea else self.block_m, x.device)
         config = [T, E, self.block_m, self.dim, self.heads, self.hd, R, self.hidden // self.hidden_chunk, self.hidden_chunk, 0 if cos is None else 1,
-                  int(self.has_film), self.stages, self.merge, self.fast_exp, self.debug["ABL"], self.prefetch, self.num_warps]  # fmt: skip
+                  int(self.has_film), self.stages, self.merge, self.fast_exp, self.debug["ABL"], self.prefetch, int(ea), self.num_warps]  # fmt: skip
         weights = [getattr(self, n) for n in BLOCK_BUFFERS]
         return rf_block_op(x, x if cos is None else cos, x if sin is None else sin, tile, x if gb is None else gb, 0 if gb is None else gb.stride(0),
                            weights, self.eps, self.hd**-0.5 * LOG2E, config)  # fmt: skip
@@ -573,7 +733,7 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
     @classmethod
     def from_net(cls, net: HOIRigidFormerNet, block_m: int = 128, hidden_chunk: int = 64, head_chunk: int = 32, num_warps: int = 8,
                  stages: int | None = None, merge: int | None = None, fast_exp: int = 0, prefetch: int = 0,
-                 force: bool = False) -> FusedHOIRigidFormerNet:  # fmt: skip
+                 force: bool = False, maxnreg: int = 0, rope_tables: bool | None = None) -> FusedHOIRigidFormerNet:  # fmt: skip
         if type(net) is not HOIRigidFormerNet:
             raise TypeError(f"expected an HOIRigidFormerNet, got {type(net).__name__}")
         _fp32_parameters(net)
@@ -583,10 +743,10 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
                                "(shared-memory reads past the allocation, NaN); fuse the blocks only (fused_copy's default)")  # fmt: skip
         m = copy.deepcopy(net)
         m.__class__ = cls  # the same module with this forward
-        m._pack(block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch)
+        m._pack(block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch, maxnreg, rope_tables)
         return m
 
-    def _pack(self, block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch):
+    def _pack(self, block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch, maxnreg=0, rope_tables=None):
         B, P, NR, D = self.n_body, self.n_props, self.n_reg, self.tok_emb.shape[1]
         NT = B + 1 + P  # tokens with features: bodies, the object, props; then the registers
         self.n_tok = T = NT + NR
@@ -600,7 +760,7 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
         ar = lambda n, s=0: torch.arange(s, s + n, dtype=torch.int32)  # noqa: E731
         f32 = lambda t: t.detach().float().contiguous().to(dev)  # noqa: E731
         bf = lambda t: t.detach().to(torch.bfloat16).contiguous().to(dev)  # noqa: E731
-        with torch.no_grad():
+        with torch.no_grad(), torch.autocast("cuda", enabled=False):  # the packed tensors do not depend on the caller's autocast
             # token embedding: one product over KE channels, a body's features in [0, kb), the object's in [kb, kb + ko), a prop's after
             kb, ko, kp = self.body_dim, self.obj_dim, self.prop_dim if P else 0
             KE = max(16, _next_pow2(kb + ko + kp))
@@ -642,7 +802,8 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
             if merge:  # value and gate as one product per half of the input: (HNCH, 2, D, 2 hc), biases (HNCH, 2 hc)
                 hw12 = torch.stack((torch.cat((hw12[:, 0], hw12[:, 2]), -1), torch.cat((hw12[:, 1], hw12[:, 3]), -1)), 1)
                 hb12 = hb12.flatten(1)
-            # read-out heads as one product (D, NO); DEST: the column of y of a token's head output (HOIRigidFormerNet.forward's layout)
+            # read-out heads as one product (D, NO), multiplied into the SwiGLU's output projection below (hidden column -> head
+            # outputs); DEST: the column of y of a token's head output (HOIRigidFormerNet.forward's layout)
             heads = [self.root_head, self.joint_head, self.obj_head, self.eef_head, self.feet_head]
             widths = [h.out_features for h in heads]
             NO = max(16, _next_pow2(sum(widths)))
@@ -668,9 +829,10 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
             written = dest[dest >= 0].sort().values
             if not torch.equal(written, torch.arange(self.out_size, dtype=torch.int32)):
                 raise RuntimeError("the read-out heads do not write every output exactly once")
+            w3, b3 = f32(self.head_w3.weight), f32(self.head_w3.bias)  # (D, hid): the SwiGLU's output projection
             bufs = dict(gidx=gidx, we=bf(we), ct=f32(ct), pidx=pidx, frq=frq, film_w=f32(film_w), film_b=f32(film_b), hnw=f32(self.head_norm.weight),
-                        hw12=bf(hw12), hb12=f32(hb12), hw3=bf(self.head_w3.weight.t().reshape(hid // hc, hc, D)), hb3=f32(self.head_w3.bias),
-                        wout=bf(wout), bout=f32(bout), dest=dest)  # fmt: skip
+                        hw12=bf(hw12), hb12=f32(hb12), hm3=bf((w3.t() @ wout).reshape(hid // hc, hc, NO)), bout=f32(bout + b3 @ wout),
+                        dest=dest)  # fmt: skip
             bufs |= {f"blk_{n}": torch.stack([getattr(f, n) for f in fbs]) for n in BLOCK_BUFFERS}
             for name, buf in bufs.items():
                 self.register_buffer("k_" + name, buf.to(dev), persistent=False)
@@ -678,13 +840,33 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
         if len(eps) != 1:
             raise ValueError(f"the RMSNorms need one eps, got {eps}")
         self.knobs = dict(block_m=block_m, hidden_chunk=hidden_chunk, head_chunk=head_chunk, num_warps=num_warps, stages=stages, merge=merge,
-                          fast_exp=fast_exp, prefetch=prefetch)
+                          fast_exp=fast_exp, prefetch=prefetch, maxnreg=maxnreg)  # fmt: skip
         # diagnosis of a GPU on which the kernel fails: _net_kernel's constexprs (anything but these defaults gives wrong outputs, except
-        # OUTER) and the launch's num_stages (the default for loops without their own: the loop over blocks)
-        self.debug = dict(OUTER=0, ROPE=1, SKIP_EMBED=False, SKIP_BLOCKS=False, SKIP_HEAD=False, SKIP_STORE=False, LAUNCH_STAGES=stages)
+        # OUTER and ROPE 1 or 2) and the launch's num_stages (the default for loops without their own: the loop over blocks)
+        self.debug = dict(OUTER=0, ROPE=self._pack_rope(rope_tables, dev), SKIP_EMBED=False, SKIP_BLOCKS=False, SKIP_HEAD=False, SKIP_STORE=False,
+                          LAUNCH_STAGES=stages)  # fmt: skip
         self.k_eps, self.k_dims = fb.eps, dict(D=D, H=fb.heads, HD=hd, NCH=fb.hidden // hidden_chunk, BH=hidden_chunk, KE=KE,
                                                   HNCH=hid // hc, HBH=hc, NO=NO)  # fmt: skip
         self.k_scal = B * kb + ko + P * kp  # the context's scalars: x[:, k_scal : in_dim]
+        self._pack_tile(fb.heads, T, block_m, merge, fast_exp, dev)
+
+    def _pack_rope(self, rope_tables, dev, tables: bool = False) -> int:
+        """The kernel's ROPE: 2, the rotation's cos and sin computed in the kernel from the token positions, or 1, read from
+        tables that PyTorch computes before every launch (``rope_tables``; None: the tables on compute capability 9.x,
+        where Triton 3.6 miscompiled the kernel with the rotation in it, and where ``tables`` says the network's kernel
+        measures faster with them; in the kernel otherwise)."""
+        if rope_tables is None:
+            rope_tables = tables or torch.cuda.get_device_capability(dev)[0] == 9
+        self.knobs["rope_tables"] = bool(rope_tables)
+        return 1 if rope_tables else 2
+
+    def _pack_tile(self, heads, T, block_m, merge, fast_exp, dev):
+        """The attention's bias as the kernel takes it (``attention_tile``; per environment where ``env_attention``), made
+        once as the kernel's other tensors are: k_ea, k_tile."""
+        self.k_ea = env_attention(T, block_m) and merge == 0 and fast_exp == 0
+        with torch.no_grad():
+            tile = attention_tile(self.rel_bias[:, self.rel].unsqueeze(0), heads, T, T if self.k_ea else block_m, dev)
+        self.register_buffer("k_tile", tile, persistent=False)
 
     def forward(self, x):
         _no_grad_check("FusedHOIRigidFormerNet")
@@ -698,17 +880,18 @@ class FusedHOIRigidFormerNet(HOIRigidFormerNet):
             gb = F.linear(c, self.k_film_w, self.k_film_b)
         bm = self.knobs["block_m"]
         T, E = self.n_tok, bm // self.n_tok
-        tile = attention_tile(self.rel_bias[:, self.rel].unsqueeze(0), self.k_dims["H"], T, bm, x.device)
+        ea, tile = self.k_ea, self.k_tile
         cos = sin = x
         R = 3 * self.rope.freqs.numel()
-        if self.debug["ROPE"] == 1:  # the rotation from cos, sin tables computed here (as FusedBlock's; in the kernel: ROPE 2)
+        if self.debug["ROPE"] == 1:  # the rotation from cos, sin tables computed here, as FusedBlock's (rope_tables; in the kernel: ROPE 2)
             pos = POS_SCALE * x[:, self.in_dim :].unflatten(-1, (self.n_tok - self.n_reg, 3))
             cos, sin = (t.reshape(N * T, R).contiguous() for t in self.rope(torch.cat((pos, pos.new_zeros(N, self.n_reg, 3)), 1)))
         tensors = [self.k_gidx, self.k_we, self.k_ct, self.k_pidx, self.k_frq] + [getattr(self, "k_blk_" + n) for n in BLOCK_BUFFERS]
-        tensors += [self.k_hnw, self.k_hw12, self.k_hb12, self.k_hw3, self.k_hb3, self.k_wout, self.k_bout, self.k_dest]
+        tensors += [self.k_hnw, self.k_hw12, self.k_hb12, self.k_hm3, self.k_bout, self.k_dest]
         kw = dict(T=T, E=E, BM=bm, R=R, NB=len(self.blocks), STAGES=self.knobs["stages"], MERGE=self.knobs["merge"],
                   FAST_EXP=self.knobs["fast_exp"], PREFETCH=self.knobs["prefetch"], num_warps=self.knobs["num_warps"],
-                  num_stages=self.debug["LAUNCH_STAGES"]) | self.k_dims | {k: v for k, v in self.debug.items() if k != "LAUNCH_STAGES"}  # fmt: skip
+                  num_stages=self.debug["LAUNCH_STAGES"], maxnreg=self.knobs["maxnreg"], TOKENS_OUT=0, EA=ea, BPS=0) | self.k_dims | {
+                      k: v for k, v in self.debug.items() if k != "LAUNCH_STAGES"}  # fmt: skip
         return rf_hoi_net_op(x, cos, sin, tile, gb, tensors, self.out_size, self.k_eps, self.k_dims["HD"] ** -0.5 * LOG2E, POS_SCALE,
                              [int(kw[k]) for k in NET_CONFIG])  # fmt: skip
 
@@ -722,14 +905,20 @@ class FusedG1RigidFormerNet(RigidFormerNet):
     environment FiLM vectors and the rotation's cos, sin tables. Inference only; made from a network by ``from_net`` (a
     copy, so ``inputs`` and ``make_input_norm`` are the network's; the kernel uses copies of the parameters made then).
     Takes a network with fp32 parameters, FiLM, the rotary positions and the tree bias, one rotary point per body, no
-    ``rope_center``, one token per body (no ``merge``; the kernel embeds one body per token and reads every body out of
-    its own token) and the read-out on the embedding and the last block (the defaults); refused on compute capability 9.x
-    (an H100), as ``FusedHOIRigidFormerNet``, unless ``force`` or NDM_RF_WHOLE_ON_SM90=1."""
+    ``rope_center`` and the read-out on the embedding and the last block (the defaults); refused on compute capability 9.x
+    (an H100), as ``FusedHOIRigidFormerNet``, unless ``force`` or NDM_RF_WHOLE_ON_SM90=1. With merged tokens
+    (``--rf_merge``) ``_net_kernel`` embeds each token from its member bodies' features, and every body is read out of
+    its token (with its read-out embedding where bodies share one): in the same kernel from the tokens' rows
+    (``rf_head._token_readout``) where a tile holds whole environments of a multiple of 16 tokens and of 16 body slots
+    (``token_readout``: None where the shapes allow it, True or False to ask for it or for the other), otherwise in a
+    second launch per body from the tokens' embedding and features (``rf_head._head_fwd_kernel``, in tiles of ``head_m``
+    rows)."""
 
     @classmethod
     def from_net(cls, net: RigidFormerNet, block_m: int = 128, hidden_chunk: int = 64, head_chunk: int = 32, num_warps: int = 8,
-                 stages: int | None = None, merge: int | None = None, fast_exp: int = 0, prefetch: int = 0,
-                 force: bool = False) -> FusedG1RigidFormerNet:  # fmt: skip
+                 stages: int | None = None, merge: int | None = None, fast_exp: int = 0, prefetch: int = 0, force: bool = False,
+                 head_m: int | None = None, head_warps: int | None = None, maxnreg: int = 0, token_readout: bool | None = None,
+                 rope_tables: bool | None = None) -> FusedG1RigidFormerNet:  # fmt: skip
         if not isinstance(net, RigidFormerNet) or isinstance(net, FusedG1RigidFormerNet):
             raise TypeError(f"expected a RigidFormerNet, got {type(net).__name__}")
         _fp32_parameters(net)
@@ -739,18 +928,22 @@ class FusedG1RigidFormerNet(RigidFormerNet):
                                "(shared-memory reads past the allocation, NaN); fuse the blocks only (fused_copy's default)")  # fmt: skip
         unsupported = {"no FiLM": net.ctx_net is None, "no rotary positions": net.rope is None, "no tree bias": net.rel_bias is None,
                        "anchors": net.n_anchor != 1, "rope_center": net.rope_center,
-                       "merged tokens (--rf_merge: one token per body only)": net.merge != "none",
                        "a read-out on other layers than the embedding and the last block": tuple(net.head_layers) != (0, len(net.blocks))}  # fmt: skip
         if any(unsupported.values()):
             raise ValueError(f"the whole-network kernel does not support {', '.join(k for k, v in unsupported.items() if v)}")
         m = copy.deepcopy(net)
         m.__class__ = cls  # the same module with this forward
-        m._pack(block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch)
+        m._pack(block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch, head_m, head_warps, maxnreg, token_readout,
+                rope_tables)  # fmt: skip
         return m
 
-    def _pack(self, block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch):
+    def _pack(self, block_m, hidden_chunk, head_chunk, num_warps, stages, merge, fast_exp, prefetch, head_m=None, head_warps=None, maxnreg=0,
+              token_readout=None, rope_tables=None):
         B, NR, D, td = self.n_body, self.n_reg, self.embed.weight.shape[0], self.tok_dim
-        self.n_tok = T = B + NR
+        merged = self.merge != "none"  # the network's merged tokens (--rf_merge), not the kernels' products knob ``merge``
+        TB = self.n_tok  # the bodies' tokens: one per body, or fewer with merged tokens
+        self.k_merged, self.n_tok = merged, TB + NR
+        T = self.n_tok
         fbs = [FusedBlock(b, block_m, hidden_chunk, num_warps, stages, merge, fast_exp, prefetch) for b in self.blocks]
         fb = fbs[0]
         merge, stages = fb.merge, fb.stages  # resolved for the device
@@ -761,20 +954,27 @@ class FusedG1RigidFormerNet(RigidFormerNet):
         ar = lambda n, s=0: torch.arange(s, s + n, dtype=torch.int32)  # noqa: E731
         f32 = lambda t: t.detach().float().contiguous().to(dev)  # noqa: E731
         bf = lambda t: t.detach().to(torch.bfloat16).contiguous().to(dev)  # noqa: E731
-        with torch.no_grad():
-            # token embedding: the bodies' td features, body b's at columns [b td, (b + 1) td) of x; each body's constant
-            # its embedding's bias plus its body embedding; the registers' their values
-            KE = max(16, _next_pow2(td))
+        with torch.no_grad(), torch.autocast("cuda", enabled=False):  # the packed tensors do not depend on the caller's autocast
+            # token embedding: the bodies' td features, body b's at columns [b td, (b + 1) td) of x, a token's member bodies
+            # side by side (one body per token without merged tokens; an empty slot: no input); each token's constant its
+            # embedding's bias plus its token embedding; the registers' their values
+            members = self.slots.tolist() if merged else [[b] for b in range(B)]
+            G = len(members[0])
+            KE = max(16, _next_pow2(td * G))
             we = torch.zeros(KE, D, device=dev)
-            we[:td] = self.embed.weight.t()
+            we[: td * G] = self.embed.weight.t()
             gidx = torch.full((T, KE), -1, dtype=torch.int32)
-            for b in range(B):
-                gidx[b, :td] = ar(td, b * td)
+            for tok, mem in enumerate(members):
+                for slot, b in enumerate(mem):
+                    if b < B:
+                        gidx[tok, slot * td : (slot + 1) * td] = ar(td, b * td)
             ct = torch.zeros(T, D, device=dev)
-            ct[:B] = self.embed.bias + self.body_emb
+            ct[:TB] = self.embed.bias + self.body_emb
             if NR:
-                ct[B:] = self.registers[0]
-            # rotary angles from the bodies' positions, x[:, in_dim + 3 b + coordinate] * POS_SCALE; pair m: coordinate m // F, frequency m % F
+                ct[TB:] = self.registers[0]
+            # rotary angles from the bodies' positions, x[:, in_dim + 3 b + coordinate] * POS_SCALE (a merged token: its last
+            # member's); pair m: coordinate m // F, frequency m % F
+            at = self.rep.cpu().to(torch.int32) if merged else ar(B)
             freqs, HD2 = self.rope.freqs.detach().float().cpu(), hd // 2
             F_, R = freqs.numel(), 3 * freqs.numel()
             if R > HD2:
@@ -782,7 +982,7 @@ class FusedG1RigidFormerNet(RigidFormerNet):
             pidx, frq = torch.full((T, HD2), -1, dtype=torch.int32), torch.zeros(HD2)
             for m in range(R):
                 frq[m] = freqs[m % F_]
-                pidx[:B, m] = self.in_dim + 3 * ar(B) + m // F_
+                pidx[:TB, m] = self.in_dim + 3 * at + m // F_
             film_w = torch.cat([b.film.weight for b in self.blocks])
             film_b = torch.cat([b.film.bias for b in self.blocks])
             w12, b12 = self.head_w12.weight.detach(), self.head_w12.bias.detach()  # (2 hid, 2D): value rows, then gate rows
@@ -791,39 +991,74 @@ class FusedG1RigidFormerNet(RigidFormerNet):
             hw12 = torch.stack([torch.stack([w12[rows(j, g), half * D : (half + 1) * D].t() for g in (0, 1) for half in (0, 1)])
                                 for j in range(hid // hc)])  # fmt: skip
             hb12 = torch.stack([torch.stack([b12[rows(j, g)] for g in (0, 1)]) for j in range(hid // hc)])
+            hw12b, hb12b = hw12, hb12  # the per-body read-out's (merged tokens): value and gate always separate products
             if merge:  # value and gate as one product per half of the input: (HNCH, 2, D, 2 hc), biases (HNCH, 2 hc)
                 hw12 = torch.stack((torch.cat((hw12[:, 0], hw12[:, 2]), -1), torch.cat((hw12[:, 1], hw12[:, 3]), -1)), 1)
                 hb12 = hb12.flatten(1)
-            # the root and joint heads as one product (D, NO); DEST: the column of y of a token's head output (_readout's layout:
-            # the root's outputs, then each joint output o of the J joints at root_out + o J + j)
+            # the root and joint heads as one product (D, NO), multiplied into the SwiGLU's output projection below (hidden column ->
+            # head outputs); DEST: the column of y of a body's head output (_readout's layout:
+            # the root's outputs, then each joint output o of the J joints at root_out + o J + j), a row per token without merged
+            # tokens (a body's token is its own), per body slot with them (the read-out then runs per body: rf_head's kernel)
             ro, jo = self.root_head.out_features, self.joint_head.out_features
             NO = max(16, _next_pow2(ro + jo))
             wout, bout = torch.zeros(D, NO, device=dev), torch.zeros(NO, device=dev)
             wout[:, :ro], bout[:ro] = self.root_head.weight.t(), self.root_head.bias
             wout[:, ro : ro + jo], bout[ro : ro + jo] = self.joint_head.weight.t(), self.joint_head.bias
-            dest = torch.full((T, NO), -1, dtype=torch.int32)
-            dest[0, :ro] = ar(ro)
-            for tok in range(1, B):
-                dest[tok, ro : ro + jo] = ro + ar(jo) * NUM_J + int(self.joint_of_body[tok - 1])
+            BP = _next_pow2(B)  # body slots per environment in the per-body read-out
+            body_dest = torch.full((BP if merged else T, NO), -1, dtype=torch.int32)
+            body_dest[0, :ro] = ar(ro)
+            for b in range(1, B):
+                body_dest[b, ro : ro + jo] = ro + ar(jo) * NUM_J + int(self.joint_of_body[b - 1])
             self.out_size = ro + NUM_J * jo
-            written = dest[dest >= 0].sort().values
+            written = body_dest[body_dest >= 0].sort().values
             if not torch.equal(written, torch.arange(self.out_size, dtype=torch.int32)):
                 raise RuntimeError("the read-out heads do not write every output exactly once")
+            dest = torch.full((T, NO), -1, dtype=torch.int32) if merged else body_dest
+            if merged:  # each body slot's token, and its read-out embedding where bodies share the token (RigidFormerNet._readout)
+                tob = torch.full((BP,), -1, dtype=torch.int32)
+                tob[:B] = self.tok_of_body.cpu().to(torch.int32)
+                unm = torch.zeros(BP, 2 * D, device=dev)
+                unm[:B] = (self.unmerge_emb * self.shared).float()
+            # the read-out from the tokens' rows in the network's kernel: a tile of whole environments, 16 token rows and 16
+            # body slots to a warp
+            allowed = merged and block_m % T == 0 and T % 16 == 0 and BP % 16 == 0 and T <= BP
+            if token_readout and not allowed:
+                raise ValueError(f"the read-out from the tokens' rows takes merged tokens, tiles of whole environments and multiples of 16 of "
+                                 f"tokens and body slots, the tokens not more than the body slots; got merge {self.merge}, {T} tokens in tiles "
+                                 f"of {block_m} rows, {BP} body slots")  # fmt: skip
+            self.k_token_readout = allowed if token_readout is None else bool(token_readout)
+            w3, b3 = f32(self.head_w3.weight), f32(self.head_w3.bias)  # (D, hid): the SwiGLU's output projection
             bufs = dict(gidx=gidx, we=bf(we), ct=f32(ct), pidx=pidx, frq=frq, film_w=f32(film_w), film_b=f32(film_b), hnw=f32(self.head_norm.weight),
-                        hw12=bf(hw12), hb12=f32(hb12), hw3=bf(self.head_w3.weight.t().reshape(hid // hc, hc, D)), hb3=f32(self.head_w3.bias),
-                        wout=bf(wout), bout=f32(bout), dest=dest)  # fmt: skip
+                        hw12=bf(hw12), hb12=f32(hb12), hm3=bf((w3.t() @ wout).reshape(hid // hc, hc, NO)), bout=f32(bout + b3 @ wout),
+                        dest=dest)  # fmt: skip
             bufs |= {f"blk_{n}": torch.stack([getattr(f, n) for f in fbs]) for n in BLOCK_BUFFERS}
+            if merged:
+                bufs |= dict(tob=tob, unm=f32(unm), body_dest=body_dest, hw12b=bf(hw12b), hb12b=f32(hb12b))
+            if self.k_token_readout:
+                bufs |= dict(zip(("hw12g", "une", "enq", "cq"), token_head_tensors(hw12b, self.head_norm.weight.detach(), unm)))
             for name, buf in bufs.items():
                 self.register_buffer("k_" + name, buf.to(dev), persistent=False)
         eps = {fb.eps, self.head_norm.eps}
         if len(eps) != 1:
             raise ValueError(f"the RMSNorms need one eps, got {eps}")
         self.knobs = dict(block_m=block_m, hidden_chunk=hidden_chunk, head_chunk=head_chunk, num_warps=num_warps, stages=stages, merge=merge,
-                          fast_exp=fast_exp, prefetch=prefetch)
-        self.debug = dict(OUTER=0, ROPE=1, SKIP_EMBED=False, SKIP_BLOCKS=False, SKIP_HEAD=False, SKIP_STORE=False, LAUNCH_STAGES=stages)
+                          fast_exp=fast_exp, prefetch=prefetch, maxnreg=maxnreg, token_readout=self.k_token_readout)  # fmt: skip
+        # the rotation: in the kernel with merged tokens (the lightweight model's step 4.67 against 4.63 M robot-steps/s at 4,096 robots on
+        # an A100), from tables with one token per body (RF-S: 2.168 against 2.163 M)
+        self.debug = dict(OUTER=0, ROPE=FusedHOIRigidFormerNet._pack_rope(self, rope_tables, dev, not merged), SKIP_EMBED=False,
+                          SKIP_BLOCKS=False, SKIP_HEAD=False, SKIP_STORE=False, LAUNCH_STAGES=stages)  # fmt: skip
         self.k_eps, self.k_dims = fb.eps, dict(D=D, H=fb.heads, HD=hd, NCH=fb.hidden // hidden_chunk, BH=hidden_chunk, KE=KE,
                                                   HNCH=hid // hc, HBH=hc, NO=NO)  # fmt: skip
+        self.k_bps = BP if self.k_token_readout else 0
+        if merged and not self.k_token_readout:  # the per-body read-out's tile: BMB rows (``head_m``; 16 a warp unless ``head_warps``)
+            bmb = 64 if head_m is None else head_m
+            if not (_pow2(bmb) and BP <= bmb <= 128):
+                raise ValueError(f"head_m {bmb} must be a power of two from the {BP} body slots of an environment to 128")
+            self.k_head = dict(T=T, EB=bmb // BP, BP=BP, BMB=bmb, D=D, HNCH=hid // hc, HBH=hc, NO=NO, STAGES=2,
+                               num_warps=bmb // 16 if head_warps is None else head_warps, maxnreg=0)  # fmt: skip
+            self.knobs |= dict(head_m=bmb, head_warps=self.k_head["num_warps"])
         self.k_scal = B * td  # the global context: x[:, k_scal : in_dim]
+        FusedHOIRigidFormerNet._pack_tile(self, fb.heads, T, block_m, merge, fast_exp, dev)
 
     def forward(self, x):
         _no_grad_check("FusedG1RigidFormerNet")
@@ -837,19 +1072,31 @@ class FusedG1RigidFormerNet(RigidFormerNet):
             gb = F.linear(c, self.k_film_w, self.k_film_b)
         bm = self.knobs["block_m"]
         T, E = self.n_tok, bm // self.n_tok
-        tile = attention_tile(self.rel_bias[:, self.rel].unsqueeze(0), self.k_dims["H"], T, bm, x.device)
+        ea, tile = self.k_ea, self.k_tile
         cos = sin = x
         R = 3 * self.rope.freqs.numel()
-        if self.debug["ROPE"] == 1:  # the rotation from cos, sin tables computed here (as FusedBlock's; in the kernel: ROPE 2)
+        if self.debug["ROPE"] == 1:  # the rotation from cos, sin tables computed here, as FusedBlock's (rope_tables; in the kernel: ROPE 2)
             pos = POS_SCALE * x[:, self.in_dim :].unflatten(-1, (B, 3))
+            if self.k_merged:  # a merged token's position: its last member's
+                pos = pos[:, self.rep]
             cos, sin = (t.reshape(N * T, R).contiguous() for t in self.rope(torch.cat((pos, pos.new_zeros(N, self.n_reg, 3)), 1)))
         tensors = [self.k_gidx, self.k_we, self.k_ct, self.k_pidx, self.k_frq] + [getattr(self, "k_blk_" + n) for n in BLOCK_BUFFERS]
-        tensors += [self.k_hnw, self.k_hw12, self.k_hb12, self.k_hw3, self.k_hb3, self.k_wout, self.k_bout, self.k_dest]
+        if self.k_token_readout:  # merged tokens read out in the network's kernel, from the tokens' rows
+            tensors += [self.k_hnw, self.k_hw12g, self.k_hb12b, self.k_hm3, self.k_bout, self.k_body_dest, self.k_tob, self.k_une, self.k_enq,
+                        self.k_cq]  # fmt: skip
+        else:
+            tensors += [self.k_hnw, self.k_hw12, self.k_hb12, self.k_hm3, self.k_bout, self.k_dest]
+        two = self.k_merged and not self.k_token_readout
         kw = dict(T=T, E=E, BM=bm, R=R, NB=len(self.blocks), STAGES=self.knobs["stages"], MERGE=self.knobs["merge"],
                   FAST_EXP=self.knobs["fast_exp"], PREFETCH=self.knobs["prefetch"], num_warps=self.knobs["num_warps"],
-                  num_stages=self.debug["LAUNCH_STAGES"]) | self.k_dims | {k: v for k, v in self.debug.items() if k != "LAUNCH_STAGES"}  # fmt: skip
-        return rf_hoi_net_op(x, cos, sin, tile, gb, tensors, self.out_size, self.k_eps, self.k_dims["HD"] ** -0.5 * LOG2E, POS_SCALE,
-                             [int(kw[k]) for k in NET_CONFIG])  # fmt: skip
+                  num_stages=self.debug["LAUNCH_STAGES"], maxnreg=self.knobs["maxnreg"], TOKENS_OUT=int(two), EA=ea, BPS=self.k_bps) | self.k_dims | {
+                      k: v for k, v in self.debug.items() if k != "LAUNCH_STAGES"}  # fmt: skip
+        qk_scale = self.k_dims["HD"] ** -0.5 * LOG2E
+        if two:  # the embedding and the blocks, then the read-out per body
+            head = [self.k_tob, self.k_unm, self.k_hnw, self.k_hw12b, self.k_hb12b, self.k_hm3, self.k_bout, self.k_body_dest]
+            return rf_merged_net_op(x, cos, sin, tile, gb, tensors, head, self.out_size, self.k_eps, qk_scale, POS_SCALE,
+                                    [int(kw[k]) for k in NET_CONFIG], [int(self.k_head[k]) for k in HEAD_CFG])  # fmt: skip
+        return rf_hoi_net_op(x, cos, sin, tile, gb, tensors, self.out_size, self.k_eps, qk_scale, POS_SCALE, [int(kw[k]) for k in NET_CONFIG])
 
 
 def self_check(ref: nn.Module, fused: nn.Module, T: int, rope_pairs: int, bias: bool, n: int = 7):
@@ -870,7 +1117,7 @@ def self_check(ref: nn.Module, fused: nn.Module, T: int, rope_pairs: int, bias: 
             c = torch.randn(n, fused.film_w.shape[1], device="cuda", generator=g)
         args = (x, cos, sin, b, c)
     else:  # normalized features ~ N(0, 1), positions within a metre (in units of POS_SCALE)
-        nt = fused.n_tok - fused.n_reg
+        nt = fused.n_body if isinstance(fused, FusedG1RigidFormerNet) else fused.n_tok - fused.n_reg  # the tokens with a position input
         pos = (2 * torch.rand(n, 3 * nt, device="cuda", generator=g) - 1) / POS_SCALE
         args = (torch.cat((torch.randn(n, fused.in_dim, device="cuda", generator=g), pos), 1),)
     tf32 = torch.backends.cuda.matmul.allow_tf32
@@ -899,11 +1146,11 @@ def fused_copy(module: nn.Module, whole_network: bool = False, check: bool = Tru
     ``whole_network``, every HOIRigidFormerNet instead becomes a ``FusedHOIRigidFormerNet`` and every RigidFormerNet a
     ``FusedG1RigidFormerNet`` (one launch for the whole network; opt-in: it faults on an H100 with Triton 3.6, under
     investigation, and a fault kills the process before the self-check can refuse it). ``kw`` are the kernels' knobs
-    (FusedBlock's; the whole networks' also ``head_chunk``). The original is left as it is; parameters changed later are
-    not seen by the copy. With ``check``, every fused piece is first compared with its reference on the device
-    (``self_check``)."""
+    (FusedBlock's; the whole networks' also ``head_chunk`` and ``rope_tables``). The original is left as it is;
+    parameters changed later are not seen by the copy. With ``check``, every fused piece is first compared with its
+    reference on the device (``self_check``)."""
     m = copy.deepcopy(module)
-    head_kw = {k: kw.pop(k) for k in ("head_chunk",) if k in kw}
+    head_kw = {k: kw.pop(k) for k in ("head_chunk", "rope_tables") if k in kw}
     n = 0
     whole = (FusedHOIRigidFormerNet, FusedG1RigidFormerNet)
     if whole_network:
