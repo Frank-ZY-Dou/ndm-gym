@@ -42,6 +42,8 @@ as a CUDA graph and runs all ``steps`` (BlinkMimic's ``--eprobe_graph``); withou
 ``--eprobe_lean`` (this library's): a sweep step computes what the sweep reads, the policy, the simulator's step and the
 termination test (``TrackingSim.step_probe``), and not the step's reward, flattened states and returns; the failures are
 the same, and the sweep's kernels fewer (the reward's forward kinematics run eagerly in the worker).
+``--eprobe_restarts`` (this library's): a worker that dies of a native fault (a segmentation fault, say) is started again and
+its request sent again, at most that many times in the run, instead of ending the run. Each restart is printed and counted.
 
 The two-robot scene (``--paired``; this library's): a probe world is a pair's env, its tiles every ``--eprobe_tile`` frames of
 the pair's first side, both robots started the lead earlier at the same time of their clips and run to the tile's end, in
@@ -54,10 +56,12 @@ distribution over the pair bins (``PairedTrackingSim.set_focus``), each pair bin
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import math
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -68,6 +72,9 @@ import torch
 from ..motion.library import MotionLib
 
 READY, STOP = "ready", "stop"
+# the signals of a process that died of a fault of its own native code (--eprobe_restarts); a signal sent to stop it is none of them:
+# SIGTERM, or SIGKILL, the kernel's when memory runs out included
+NATIVE_FAULTS = (signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT, signal.SIGFPE, signal.SIGILL)
 
 
 def add_eprobe_args(g):
@@ -91,15 +98,22 @@ def add_eprobe_args(g):
     g.add_argument("--eprobe_lean", action="store_true",
                    help="with --eprobe_share: a sweep step computes what the sweep reads (the policy, the simulator's step, the "
                    "termination test) and not the step's reward, flattened states and returns (the same failures; this library's)")  # fmt: skip
+    g.add_argument("--eprobe_restarts", type=int, default=0,
+                   help="with --eprobe_share: a probe worker that dies of a native fault (a segmentation fault, say) is started again and its "
+                   "sweep sent again, at most this many times in the run (0: the run ends; this library's)")  # fmt: skip
 
 
 def check_eprobe_args(args: argparse.Namespace):
     """The ``--eprobe_*`` options' constraints; raises ValueError."""
     if not 0 <= args.eprobe_share < 1:
         raise ValueError(f"--eprobe_share must be in [0, 1), got {args.eprobe_share}")
+    if getattr(args, "eprobe_restarts", 0) < 0:
+        raise ValueError(f"--eprobe_restarts must not be negative, got {args.eprobe_restarts}")
     if args.eprobe_share == 0:
         if args.eprobe_graph or args.eprobe_async or getattr(args, "eprobe_lean", False):
             raise ValueError("--eprobe_graph, --eprobe_async and --eprobe_lean need --eprobe_share")
+        if getattr(args, "eprobe_restarts", 0):
+            raise ValueError("--eprobe_restarts needs --eprobe_share")
         return
     if args.pi_ema <= 0:
         raise ValueError("--eprobe_share sweeps the policy average: needs --pi_ema")
@@ -300,29 +314,61 @@ class EvalProbe:
             self.focus = FailureFocus(motion, args.eprobe_win, args.eprobe_decay)
         self.dir = tempfile.mkdtemp(prefix="eprobe_", dir=os.environ.get("TMPDIR"))
         self.log = open(os.path.join(log_dir, "eprobe_worker.log"), "a")
-        cmd = [sys.executable, "-m", "ndm_gym.algos.eprobe", "--worker", self.dir, os.path.join(log_dir, "args.json")]
+        self.cmd = [sys.executable, "-m", "ndm_gym.algos.eprobe", "--worker", self.dir, os.path.join(log_dir, "args.json")]
         gpu, env_vars = getattr(args, "eprobe_gpu", -1), None
         if gpu >= 0:  # --eprobe_gpu (XMimic's prober GPU): the worker on another of the GPUs the trainer sees
             from .xmimic import probe_device
 
             env_vars = {**os.environ, "CUDA_VISIBLE_DEVICES": probe_device(gpu, os.environ.get("CUDA_VISIBLE_DEVICES"))}
-        self.proc = subprocess.Popen(cmd, stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=env_vars)
+        self.env_vars = env_vars
+        self.proc = self._start()
         self.k = 0  # requests sent
         self.pending = None  # (k, start iteration, lead, apply iteration, t0)
+        self.restarts, self.request = 0, None  # --eprobe_restarts: the restarts so far; the running sweep's request, to be sent again
         where = f"on GPU {env_vars['CUDA_VISIBLE_DEVICES']} (--eprobe_gpu {gpu})" if env_vars else "on the trainer's GPU"
         what = f"{len(self.tiles)} probe worlds" if not getattr(args, "paired", False) else f"{len(self.tiles)} probe envs of two robots"
         print(f"--eprobe: {what} (tiles of {args.eprobe_tile} frames) in a worker process {where} ({self.dir})", flush=True)
 
+    def _start(self, k: int = 0) -> subprocess.Popen:
+        """The worker process; ``k``: the first request it serves (a restarted worker's)."""
+        cmd = [*self.cmd, str(k)] if k else self.cmd
+        return subprocess.Popen(cmd, stdout=self.log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=self.env_vars)
+
     def _path(self, kind: str, k: int) -> str:
         return os.path.join(self.dir, f"{kind}_{k:05d}.pt")
 
+    def _send(self, k: int, req: dict):
+        path = self._path("req", k)
+        torch.save(req, path + ".tmp")
+        os.replace(path + ".tmp", path)
+
     def _wait(self, path: str) -> dict:
         while not os.path.exists(path):
-            if self.proc.poll() is not None:
+            if self.proc.poll() is not None and not self._restart(path):
                 self.log.flush()
                 raise RuntimeError(f"the probe worker exited ({self.proc.returncode}); see eprobe_worker.log in the run's directory")
             time.sleep(0.005)
         return torch.load(path, map_location="cpu")
+
+    def _restart(self, path: str) -> bool:
+        """--eprobe_restarts, for a worker that has exited: after a native fault, while restarts are left, a new worker is
+        started at the running sweep's request, which is sent again (True); else False. A worker that answered at ``path``
+        before it died is not started again here (True): its death is found at the next sweep. A dead worker leaves no
+        half-written answer or request: both are written aside and renamed."""
+        rc, n = self.proc.returncode, getattr(self.args, "eprobe_restarts", 0)
+        if self.restarts >= n or -rc not in NATIVE_FAULTS:
+            return False
+        if os.path.exists(path):
+            return True
+        self.restarts += 1
+        k, it0 = self.pending[:2]
+        what = f"died of {signal.Signals(-rc).name}, found at the sweep of iteration {it0}; started again (restart {self.restarts} of at most {n})"
+        print(f"--eprobe: the probe worker {what}", flush=True)
+        self.log.write(f"---- the worker above {what}\n")
+        self.log.flush()
+        self._send(k, self.request)
+        self.proc = self._start(k)
+        return True
 
     def tick(self, it: int, pi_avg_module):
         """Iteration ``it``, before its collection: a running sweep's failures applied when due, then a new sweep
@@ -336,9 +382,9 @@ class EvalProbe:
             lead = int(torch.randint(a.eprobe_lead_min, a.eprobe_lead_max + 1, (1,)))
             steps = lead + a.eprobe_tile - (3 if a.eprobe_graph and self.k == 0 else 0)  # BlinkMimic: the graph warm-up's 3 steps
             sd = {k: v.detach().to("cpu", copy=True) for k, v in pi_avg_module.state_dict().items()}
-            path = self._path("req", self.k)
-            torch.save({"pi": sd, "lead": lead, "it": it}, path + ".tmp")
-            os.replace(path + ".tmp", path)
+            req = {"pi": sd, "lead": lead, "it": it}
+            self._send(self.k, req)
+            self.request = req if getattr(a, "eprobe_restarts", 0) else None
             due = it + math.ceil(steps / a.eprobe_async) if a.eprobe_async else it
             self.pending = (self.k, it, lead, due, time.time())
             self.k += 1
@@ -349,7 +395,7 @@ class EvalProbe:
         k, it0, lead, _, t0 = self.pending
         res = self._wait(self._path("res", k))
         os.remove(self._path("res", k))
-        self.pending = None
+        self.pending = self.request = None
         fail_f = res["fail_f"]
         q = self.focus.update(fail_f)
         if q is not None:
@@ -364,8 +410,11 @@ class EvalProbe:
         """For a checkpoint: the failure counts and the focus with its share (a sweep in flight is not kept, as BlinkMimic's)."""
         env = self.env
         share = float(env.focus_share_t) if getattr(env, "focus_static", False) else env.focus_share
-        return {"eprobe_fail": self.focus.counts.cpu(), "eprobe_focus": None if env.focus_q is None else env.focus_q.cpu(),
-                "eprobe_focus_share": share}  # fmt: skip
+        out = {"eprobe_fail": self.focus.counts.cpu(), "eprobe_focus": None if env.focus_q is None else env.focus_q.cpu(),
+               "eprobe_focus_share": share}  # fmt: skip
+        if getattr(self.args, "eprobe_restarts", 0):
+            out["eprobe_restarts"] = self.restarts
+        return out
 
     def load_state_dict(self, ck: dict):
         if "eprobe_fail" not in ck:
@@ -373,6 +422,7 @@ class EvalProbe:
         self.focus.counts.copy_(ck["eprobe_fail"].to(self.focus.counts.device))
         if ck["eprobe_focus"] is not None:
             self.env.set_focus(ck["eprobe_focus"].to(self.focus.counts.device), ck["eprobe_focus_share"])
+        self.restarts = ck.get("eprobe_restarts", 0)
 
     def close(self):
         """Stop the worker (its exit is waited for; a worker that does not stop is killed) and remove the request
@@ -390,9 +440,11 @@ class EvalProbe:
         shutil.rmtree(self.dir, ignore_errors=True)
 
 
-def worker(qdir: str, args_json: str):
+def worker(qdir: str, args_json: str, k: int = 0):
     """The probe simulator: builds the motion library, the evaluation's MDP and an evaluation-mode TrackingSim with one
-    world per tile from the run's arguments, then serves the trainer's sweep requests in order until told to stop."""
+    world per tile from the run's arguments, then serves the trainer's sweep requests in order, from number ``k`` (a worker
+    started again after a fault), until told to stop."""
+    faulthandler.enable()  # a native fault prints its Python stacks into eprobe_worker.log
     from isaaclab.app import launch_simulation
 
     import ndm_gym.core.nets as nets
@@ -436,7 +488,6 @@ def worker(qdir: str, args_json: str):
                            tiles, a.eprobe_tile, a.eprobe_graph, lean=getattr(a, "eprobe_lean", False), pair_off=pair_off)  # fmt: skip
         open(os.path.join(qdir, READY), "w").close()
         print(f"probe worker ready: {env.N} worlds", flush=True)
-        k = 0
         while True:
             req = os.path.join(qdir, f"req_{k:05d}.pt")
             while not os.path.exists(req):
@@ -459,6 +510,6 @@ def worker(qdir: str, args_json: str):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 4 or sys.argv[1] != "--worker":
-        raise SystemExit("usage: python -m ndm_gym.algos.eprobe --worker <request dir> <run's args.json>")
-    worker(sys.argv[2], sys.argv[3])
+    if len(sys.argv) not in (4, 5) or sys.argv[1] != "--worker":
+        raise SystemExit("usage: python -m ndm_gym.algos.eprobe --worker <request dir> <run's args.json> [<first request>]")
+    worker(sys.argv[2], sys.argv[3], *(int(x) for x in sys.argv[4:]))

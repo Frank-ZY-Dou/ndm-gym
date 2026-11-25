@@ -5,7 +5,8 @@ probe simulator itself runs in the GPU smoke runs (docs/blinkmimic.md); at the d
 (test_algo_equivalence, test_supertrack_golden). --eprobe_lean (this library's): the sweep takes the simulator's lean step and
 records the same failures (a stand-in simulator, on CPU); the lean step against the default one in the simulator (a process
 of this file, ``--worker``, on the synthetic clips; marked slow, needs a GPU and Isaac Lab). The two-robot scene's sweeps: tiles,
-offsets, focus and frames on CPU; its steps and sweeps in the simulator (``--worker --pairs``, slow)."""
+offsets, focus and frames on CPU; its steps and sweeps in the simulator (``--worker --pairs``, slow). --eprobe_restarts (this
+library's): a worker that dies of a native fault is started again at its request (a stand-in worker process, on CPU)."""
 
 import argparse
 import importlib.util
@@ -21,6 +22,7 @@ import torch
 from conftest import DEV, REPO, synthetic_clips
 
 HAVE_SIM = torch.cuda.is_available() and importlib.util.find_spec("isaaclab") is not None
+POPEN = subprocess.Popen  # the real one, under the tests' stand-in
 
 
 def _blinkmimic_tiles(motion, tile):
@@ -151,7 +153,8 @@ def _args(**kw):
     "kw",
     [dict(pi_ema=0.0), dict(eprobe_graph=False), dict(eprobe_async=5), dict(eprobe_share=1.0), dict(eprobe_tile=0),
      dict(eprobe_lead_min=500), dict(eprobe_share=0.0), dict(eprobe_decay=1.5),
-     dict(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0, eprobe_lean=True)],
+     dict(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0, eprobe_lean=True), dict(eprobe_restarts=-1),
+     dict(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0, eprobe_restarts=1)],
 )  # fmt: skip
 def test_unsupported_probe_settings_are_refused(kw):
     from ndm_gym.algos.eprobe import check_eprobe_args
@@ -168,6 +171,7 @@ def test_probe_settings_accepted():
     check_eprobe_args(_args(eprobe_share=0.0, eprobe_graph=False, eprobe_async=0))  # off
     check_eprobe_args(_args(eprobe_lean=True))  # the lean sweep step
     check_eprobe_args(_args(paired=True))  # the two-robot scene
+    check_eprobe_args(_args(eprobe_restarts=2))  # a worker started again after a native fault
 
 
 def test_lean_step_is_off_by_default():
@@ -176,6 +180,7 @@ def test_lean_step_is_off_by_default():
     p = argparse.ArgumentParser()
     add_eprobe_args(p)
     assert p.parse_args([]).eprobe_lean is False and p.parse_args(["--eprobe_lean"]).eprobe_lean is True
+    assert p.parse_args([]).eprobe_restarts == 0 and p.parse_args(["--eprobe_restarts", "3"]).eprobe_restarts == 3
 
 
 class _SweepEnv:
@@ -401,6 +406,124 @@ def test_probe_state_round_trip(motion, tmp_path):
         q.load_state_dict({})
 
 
+# a stand-in for the worker process (--eprobe_restarts, on CPU): it answers each request with failures computed from the request's lead
+# and policy, and dies as <run directory>/faults.json says for a request: {"<request>": ["SIGSEGV", ...]}, one entry per death (a signal's
+# name, or an exit code), before it answers ("after": once it has answered); it exits 9 if nothing comes for a minute
+STANDIN = """
+import json, os, signal, sys, time
+import torch
+
+qdir, args_json = sys.argv[1:3]
+k = int(sys.argv[3]) if len(sys.argv) > 3 else 0
+run = os.path.dirname(args_json)
+open(os.path.join(run, "starts.txt"), "a").write(f"{k}\\n")
+faults, n = os.path.join(run, "faults.json"), json.load(open(args_json))["n"]
+t0 = time.time()
+while True:
+    req = os.path.join(qdir, f"req_{k:05d}.pt")
+    while not os.path.exists(req):
+        if os.path.exists(os.path.join(qdir, "stop")):
+            sys.exit(0)
+        if time.time() - t0 > 60:
+            sys.exit(9)
+        time.sleep(0.005)
+    r = torch.load(req)
+    os.remove(req)
+    t0 = time.time()
+    f = json.load(open(faults))
+    how = f.get(str(k), [])
+    what = how.pop(0) if how else None
+    json.dump(f, open(faults, "w"))
+    late = isinstance(what, str) and what.startswith("after ")
+    if late:
+        what = what[6:]
+    if what is not None and not late:
+        if isinstance(what, str):
+            os.kill(os.getpid(), getattr(signal, what))
+            time.sleep(30)
+        sys.exit(what)
+    fail_f = torch.full((n,), -1)
+    fail_f[: 1 + (r["lead"] + int(1000 * float(r["pi"]["weight"].sum()))) % n] = 5 + r["it"] % 20
+    res = os.path.join(qdir, f"res_{k:05d}.pt")
+    torch.save({"fail_f": fail_f, "sweep_s": 0.0}, res + ".tmp")
+    os.replace(res + ".tmp", res)
+    k += 1
+    if late:
+        os.kill(os.getpid(), getattr(signal, what))
+        time.sleep(30)
+"""
+
+
+def _faulty_run(motion, tmp_path, monkeypatch, name, faults, sweeps=4, **kw):
+    """``sweeps`` sweeps of an EvalProbe whose worker is the stand-in above: the probe (closed), its focus counts after each applied sweep,
+    and the stand-ins' first requests in the order they were started."""
+    import json
+
+    from ndm_gym.algos import eprobe
+
+    run = tmp_path / name
+    run.mkdir()
+    standin = run / "standin.py"
+    standin.write_text(STANDIN)
+    args = _args(eprobe_start=10, eprobe_every=50, **kw)
+    (run / "args.json").write_text(json.dumps({"n": len(eprobe.probe_tiles(motion, args.eprobe_tile))}))
+    (run / "faults.json").write_text(json.dumps(faults))
+
+    def popen(cmd, **k):
+        assert cmd[1:4] == ["-m", "ndm_gym.algos.eprobe", "--worker"]
+        return POPEN([cmd[0], str(standin), *cmd[4:]], **k)
+
+    monkeypatch.setattr(eprobe.subprocess, "Popen", popen)
+    torch.manual_seed(7)
+    pi = torch.nn.Linear(2, 2)
+    p = eprobe.EvalProbe(args, motion, _Env(), str(run))
+    counts = []
+    real_apply = eprobe.EvalProbe._apply
+
+    def apply(self, it):
+        real_apply(self, it)
+        counts.append(self.focus.counts.clone())
+
+    p._apply = types.MethodType(apply, p)
+    try:
+        torch.manual_seed(11)  # the leads
+        for it in range(50 * (sweeps + 1) + 10):
+            with torch.no_grad():
+                pi.weight += 1e-3  # each request's policy is its own
+            p.tick(it, pi)
+    finally:
+        p.close()
+    starts = [int(x) for x in (run / "starts.txt").read_text().split()]
+    return p, counts, starts, (run / "eprobe_worker.log").read_text()
+
+
+def test_a_worker_that_dies_of_a_native_fault_is_started_again(motion, tmp_path, monkeypatch, capsys):
+    """--eprobe_restarts: after a native fault of the worker (before it answered, or after) a new worker serves the same request and the
+    sweeps go on with the same failures; every restart is printed, counted and in the worker's log, and the count is in the checkpoint
+    state only with the option. Without restarts left, or at any other exit, the run ends as without the option."""
+    from ndm_gym.algos.eprobe import EvalProbe
+
+    p, want, starts, log = _faulty_run(motion, tmp_path, monkeypatch, "clean", {})
+    assert starts == [0] and len(want) >= 4 and "----" not in log and "eprobe_restarts" not in p.state_dict()
+    assert "restart" not in capsys.readouterr().out
+    p, counts, starts, log = _faulty_run(motion, tmp_path, monkeypatch, "one", {"2": ["SIGSEGV"]}, eprobe_restarts=2)
+    assert starts == [0, 2] and len(counts) == len(want) and all(torch.equal(a, b) for a, b in zip(counts, want))
+    out = capsys.readouterr().out
+    assert out.count("the probe worker died of SIGSEGV, found at the sweep of iteration 150; started again (restart 1 of at most 2)") == 1
+    assert log.count("---- the worker above died of SIGSEGV") == 1 and p.restarts == 1 and p.state_dict()["eprobe_restarts"] == 1
+    q = EvalProbe.__new__(EvalProbe)
+    q.focus, q.env = p.focus, p.env
+    q.load_state_dict(p.state_dict())
+    assert q.restarts == 1  # the limit is the run's, across a resume
+    p, counts, starts, _ = _faulty_run(motion, tmp_path, monkeypatch, "late", {"1": ["after SIGABRT"], "3": ["SIGBUS", "SIGFPE"]}, eprobe_restarts=3)
+    assert starts == [0, 2, 3, 3] and all(torch.equal(a, b) for a, b in zip(counts, want)) and len(counts) == len(want) and p.restarts == 3
+    for name, faults, n, exited in (("none", {"2": ["SIGSEGV"]}, 0, -11), ("spent", {"1": ["SIGSEGV"], "2": ["SIGBUS"]}, 1, -7),
+                                    ("exit", {"2": [3]}, 5, 3), ("stopped", {"2": ["SIGTERM"]}, 5, -15),
+                                    ("killed", {"2": ["SIGKILL"]}, 5, -9)):  # fmt: skip
+        with pytest.raises(RuntimeError, match=rf"the probe worker exited \({exited}\); see eprobe_worker.log"):
+            _faulty_run(motion, tmp_path, monkeypatch, name, faults, eprobe_restarts=n)
+
+
 def worker(out: str):
     """An evaluation-mode TrackingSim on the synthetic clips, one probe world per tile of 40 frames, with termination
     thresholds of 2 cm and 0.02 so that probes fail within a few steps. (1) From the same reset and with the same actions,
@@ -502,6 +625,99 @@ def test_lean_step_is_the_default_step_without_its_reward(tmp_path):
     a, b = res["sweep_default"], res["sweep_lean"]
     assert torch.equal(b["fail_f"], a["fail_f"]) and torch.equal(b["f"], a["f"]) and torch.equal(b["done"], a["done"])
     assert int((a["fail_f"] >= 0).sum()) > 0
+
+
+def test_a_worker_that_answered_before_it_died_is_not_started_again_for_it(tmp_path):
+    """--eprobe_restarts: an answer that is there when the worker's death is seen is read, and no worker is started; the request and
+    the answer are renamed into place whole, and a dead worker's unfinished file is written over."""
+    from ndm_gym.algos.eprobe import EvalProbe
+
+    p = EvalProbe.__new__(EvalProbe)
+    p.args, p.dir, p.restarts, p.pending, p.request = _args(eprobe_restarts=3), str(tmp_path), 0, (4, 100, 200, 130, 0.0), {"lead": 200}
+    res = p._path("res", 4)
+
+    class Dead:  # its answer lands between the look for it and the look at the process
+        returncode = None
+
+        def poll(self):
+            torch.save({"fail_f": torch.arange(3), "sweep_s": 0.0}, res)
+            self.returncode = -11
+            return -11
+
+    p.proc, p.log = Dead(), open(tmp_path / "log", "w")
+    p._start = lambda k=0: pytest.fail("a worker was started")
+    assert torch.equal(p._wait(res)["fail_f"], torch.arange(3)) and p.restarts == 0
+    p.log.close()
+    (tmp_path / "req_00004.pt.tmp").write_bytes(b"a dead trainer's half-written request")
+    p._send(4, {"lead": 7})
+    assert torch.load(p._path("req", 4)) == {"lead": 7} and not (tmp_path / "req_00004.pt.tmp").exists()
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(not HAVE_SIM, reason="the simulator needs a GPU and Isaac Lab")
+def test_a_killed_worker_is_started_again_in_the_simulator(tmp_path, monkeypatch):
+    """--eprobe_restarts with the real worker, on two LAFAN1 clips and a policy whose probes fail: a worker killed by a segmentation
+    fault in its second sweep, that sweep and the later ones served by the one started again, against an undisturbed worker's: the
+    same failures within the simulator's run-to-run differences (a worker's own two sweeps of one request differ in a probe or two of
+    1,489, by at most 13 frames, on an RTX 2080 Ti)."""
+    import json
+    import signal
+    import time
+
+    from ndm_gym.algos import eprobe
+    from ndm_gym.motion.library import MotionLib
+    from ndm_gym.motion.sources import lafan1, select
+    from ndm_gym.policies.tracking_policy import TrackingPolicy
+    from ndm_gym.robots import g1
+    from ndm_gym.tasks.tracking import OBS_DIM
+    from ndm_gym.train import parse_args
+
+    names = ["walk1_subject1", "jumps1_subject1"]
+    clips = tmp_path / "clips.txt"
+    clips.write_text("\n".join(names))
+    motion = MotionLib(select(lafan1.load_dir(os.path.join(REPO, "data", "lafan1_g1")), names), g1.kinematics(DEV), DEV)
+    res = {}
+    for kind in ("undisturbed", "killed"):
+        run = tmp_path / kind
+        run.mkdir()
+        argv = f"train --config lafan1-supermimic-fast --amp none --clips {clips} --eprobe_restarts 1 --eprobe_start 0 --log_dir {run}"
+        monkeypatch.setattr(sys, "argv", [*argv.split(), "--motion_dir", os.path.join(REPO, "data", "lafan1_g1")])
+        args = parse_args()
+        json.dump(vars(args), open(run / "args.json", "w"))
+        torch.manual_seed(3)
+        pi = TrackingPolicy(OBS_DIM, 73 * args.goal_frames, hist=args.hist)
+        torch.manual_seed(4)  # the leads
+        p = eprobe.EvalProbe(args, motion, _Env(), str(run))
+        fails = []
+        wait = p._wait
+
+        def keep(path, wait=wait, fails=fails):
+            r = wait(path)
+            fails.append(r["fail_f"].clone())
+            return r
+
+        p._wait = keep
+        pids = [p.proc.pid]
+        try:
+            for it in range(0, 4 * args.eprobe_every + 1):
+                p.tick(it, pi)
+                if it == args.eprobe_every and kind == "killed":  # the second sweep has just been requested
+                    time.sleep(1.5)
+                    os.kill(p.proc.pid, signal.SIGSEGV)
+                if p.proc.pid != pids[-1]:
+                    pids.append(p.proc.pid)
+        finally:
+            p.close()
+        res[kind] = (fails, p.focus.counts.clone(), p.restarts, len(pids), (run / "eprobe_worker.log").read_text())
+    (fa, ca, ra, na, la), (fb, cb, rb, nb, lb) = res["undisturbed"], res["killed"]
+    assert len(fa) == len(fb) >= 4
+    for x, y in zip(fa, fb):
+        assert int((x != y).sum()) <= max(2, len(x) // 50) and int((x - y).abs().max()) <= 30, (x, y)
+    assert abs(float(ca.sum() - cb.sum())) <= 2 and float((ca - cb).abs().sum()) <= 0.1 * float(ca.sum())
+    assert all(int((x >= 0).sum()) > 0 for x in fa) and any(int((fa[0] != x).sum()) > len(x) // 10 for x in fa[1:])  # not all the same
+    assert (ra, na, rb, nb) == (0, 1, 1, 2)
+    assert la.count("probe worker ready") == 1 and lb.count("probe worker ready") == 2
+    assert lb.count("Fatal Python error: Segmentation fault") == 1 and lb.count("---- the worker above died of SIGSEGV") == 1
 
 
 def worker_paired(pairs: str, out: str):

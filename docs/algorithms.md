@@ -37,7 +37,7 @@ the original behavior, checked bit for bit by upstream equivalence and SuperTrac
 | imagination, both | `--horizon`, `--imag_start_perturb`, `--imag_fail_starts`, `--bptt_clip_k`, `--bptt_decay`, `--pi_rollout_clip`, `--wm_bptt_fp32` |
 | world model | `--wm_backbone`, `--wm_hidden`, `--wm_act`, `--wm_no_ln`, `--wm_lr`, `--wm_window`, `--wm_batches`, `--wm_batch`, `--wm_sample`, `--wm_fail_windows`, `--wm_input_noise`, `--wm_smooth_w`, `--rf_*` |
 | optimization | `--lr`, `--pi_lr_mult`, `--lr_decay_iters`, `--lr_decay_hours`, `--pi_opt`, `--wm_opt`, `--pi_ema`, `--pi_updates` |
-| resets | `--fail_reset`, `--bin_fix`, `--eprobe_*` (evaluation-guided resets) |
+| resets | `--fail_reset`, `--bin_fix`, `--eprobe_*` (evaluation-guided resets; `--eprobe_restarts`: the worker started again after a native fault) |
 | motions | `--motions`, `--motion_dir`, `--clips`, `--paired` |
 | speed (same results up to rounding, except `--fused_adam`, `--elementwise_3x3` and `--critic_cudagraphs`; `ndm-train --help`) | `--fused_adam`, `--elementwise_3x3`, `--combo_kernels`, `--compile_eager`, `--wm_cudagraphs`, `--pi_cudagraphs`, `--critic_cudagraphs`, `--goal_table`, `--pi_encode_once`, `--fk_fused`, `--compile_norms`, `--rf_fused_train`, `--rf_fit_keep_ops`, `--rf_bptt_keep_blocks`; SuperTrack's `--st_wm_fused` and SuperMimic's `--critic_compile`, `--critic_fused` on their pages |
 | systems (BlinkMimic) | `--no_sync`, `--update_graphs`, `--graph_early`, `--collect_graph`, `--reset_masked`, `--ckpt_light` (with `--last_every_min`) |

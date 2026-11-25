@@ -84,7 +84,9 @@ Evaluation-guided resets use a probe process:
   worker replays one captured step, as `evaluate --graph` does. The trainer applies failures at BlinkMimic's iteration:
   `ceil(steps / 20)` iterations after the start (steps = lead + tile; the first sweep three fewer, its graph warm-up).
   It waits for the worker if needed, as BlinkMimic waits for its side stream. `tests/test_eprobe.py` checks the counts,
-  window and focus's share against BlinkMimic's code.
+  window and focus's share against BlinkMimic's code. `--eprobe_restarts N` (this library's, off by default): a worker that
+  dies of a native fault (a segmentation fault, say) is started again and its sweep sent again, at most `N` times in the
+  run, instead of ending the run. Each restart is printed.
 - **Differences.** Processes share the GPU by time slicing rather than concurrent streams, changing only wall-clock
   cost. Checkpoints keep counts, focus and its share, but omit in-flight sweeps, as in BlinkMimic. The worker exits when
   its trainer is gone.
