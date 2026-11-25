@@ -1,0 +1,22 @@
+{
+  "iteration": 12000,
+  "minutes": 26.14512,
+  "sim_steps": 24576000.0,
+  "it_per_s": 8.69811,
+  "config": "aloha-supermimic",
+  "options": {
+    "task": "aloha_transfer_cube",
+    "demo": [
+      1
+    ],
+    "seed": 0,
+    "algo": "supermimic",
+    "iterations": 12000,
+    "lr_decay_iters": 12000,
+    "horizon": 16,
+    "episode": 500,
+    "ckpt_every": 200,
+    "solver_iterations": 20,
+    "pi_ema": 0.0
+  }
+}

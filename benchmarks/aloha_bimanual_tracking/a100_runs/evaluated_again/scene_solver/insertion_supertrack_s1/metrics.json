@@ -1,0 +1,73 @@
+{
+  "task": "aloha_insertion",
+  "demos": [
+    4
+  ],
+  "iteration": 19000,
+  "wall_time_s": 2231.4415607452393,
+  "control_dt": 0.02,
+  "num_envs": 256,
+  "solver_iterations": [
+    100,
+    50
+  ],
+  "per_demo": {
+    "4": {
+      "frames": 426,
+      "nominal": {
+        "success_rate": 0.0,
+        "terminated": 0.0,
+        "tracked_s": 8.5,
+        "object_mm": 4.035062622278929,
+        "object_final_mm": 8.484920486807823,
+        "object_deg": 3.6695362070622757,
+        "keypoint_mm": 6.236760411411524,
+        "joint_rad": 0.04532445967197418,
+        "finger_mm": 0.4007801762782037,
+        "stage_rates": [
+          1.0,
+          1.0,
+          1.0,
+          0.0
+        ],
+        "final_state_rate": 0.0
+      },
+      "policy": {
+        "success_rate": 0.0,
+        "terminated": 0.0,
+        "tracked_s": 8.5,
+        "object_mm": 4.10163588821888,
+        "object_final_mm": 8.902675472199917,
+        "object_deg": 3.7851439889539114,
+        "keypoint_mm": 6.247314624488354,
+        "joint_rad": 0.04534031078219414,
+        "finger_mm": 0.39699519402347505,
+        "stage_rates": [
+          1.0,
+          1.0,
+          1.0,
+          0.0
+        ],
+        "final_state_rate": 0.0
+      }
+    }
+  },
+  "policy": {
+    "success_rate": 0.0,
+    "terminated": 0.0,
+    "tracked_s": 8.5,
+    "object_mm": 4.10163588821888,
+    "object_final_mm": 8.902675472199917,
+    "object_deg": 3.7851439889539114,
+    "keypoint_mm": 6.247314624488354,
+    "joint_rad": 0.04534031078219414,
+    "finger_mm": 0.39699519402347505,
+    "stage_rates": [
+      1.0,
+      1.0,
+      1.0,
+      0.0
+    ],
+    "final_state_rate": 0.0
+  }
+}

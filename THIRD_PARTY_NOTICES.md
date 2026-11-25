@@ -47,6 +47,34 @@ reads is downloaded by the user at pinned commits (`tools/download_lifelike.sh`)
 pinned at `46a81c2`) from the user's own checkout to retarget the motion capture. The joints' damping of `ndm_gym/robots/go2.py` (0.1 N m s / rad) is the value of Unitree's own model
 of the Go2 ([unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco), `unitree_robots/go2/go2.xml`).
 
+## Manipulation demonstration tracking
+
+The manipulation tracking task ([`docs/tasks/robomimic.md`](docs/tasks/robomimic.md)) copies no third-party file. What it
+reads is downloaded by the user at pinned revisions (`tools/download_robomimic.py`) and is not redistributed:
+
+- robomimic's proficient-human demonstrations ("What Matters in Learning from Offline Human Demonstrations for Robot
+  Manipulation", Mandlekar et al., CoRL 2021;
+  [robomimic/robomimic_datasets](https://huggingface.co/datasets/robomimic/robomimic_datasets) @ `74fa018`, v1.5, MIT),
+  each with the scene it was recorded in;
+- the meshes and textures of [robosuite](https://github.com/ARISE-Initiative/robosuite) @ `dc7fcf9` (v1.5.0, MIT) that
+  those scenes name.
+
+`ndm_gym/robots/robomimic_scenes.py` writes robosuite's success tests (`_check_success` of Lift, NutAssemblySquare and
+TwoArmTransport) as functions of the state; robosuite itself is not imported.
+
+## Bimanual demonstration tracking
+
+The bimanual tracking task ([`docs/tasks/aloha.md`](docs/tasks/aloha.md)) copies no file of
+[ACT](https://github.com/tonyzhaozh/act) @ `742c753` (MIT; "Learning Fine-Grained Bimanual Manipulation with Low-Cost
+Hardware", Zhao et al., RSS 2023). Its scenes and meshes (ALOHA's two ViperX 300 arms, the table, the cube, the peg and the
+socket) are downloaded by the user at that commit (`tools/make_aloha_demos.py`) and are not redistributed.
+
+Adapted from ACT, under the MIT License reproduced below: in `tools/make_aloha_demos.py` the scripted policies' waypoints
+and their interpolation (`scripted_policy.py`), the arms' start pose and the gripper's range (`constants.py`), the objects'
+draws (`utils.py`), the mocap bodies' start poses (`ee_sim_env.py`) and the reward tests (`sim_env.py`); the reward tests'
+geoms and stages in `ndm_gym/robots/aloha_scenes.py` and `ndm_gym/tasks/robomimic_tracking.py`. ACT and dm_control are not
+imported.
+
 ## Ported code
 
 The options of `--algo blinkmimic` ([`docs/blinkmimic.md`](docs/blinkmimic.md)) are ported from
@@ -116,6 +144,32 @@ SOFTWARE.
 MIT License
 
 Copyright (c) Facebook, Inc. and its affiliates.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## ACT
+
+```
+MIT License
+
+Copyright (c) 2023 Tony Z. Zhao
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

@@ -1,0 +1,21 @@
+{
+  "iteration": 6000,
+  "minutes": 14.599440000000001,
+  "sim_steps": 12288000.0,
+  "it_per_s": 8.68982,
+  "config": "robomimic-supermimic",
+  "options": {
+    "task": "aloha_transfer_cube",
+    "demo": [
+      1
+    ],
+    "seed": 0,
+    "algo": "supermimic",
+    "iterations": 6000,
+    "lr_decay_iters": 6000,
+    "horizon": 16,
+    "episode": 200,
+    "ckpt_every": 500,
+    "solver_iterations": 20
+  }
+}

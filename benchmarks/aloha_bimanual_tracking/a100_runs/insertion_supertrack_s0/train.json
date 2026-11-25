@@ -1,0 +1,33 @@
+{
+  "at_stop": {
+    "iteration": 13600,
+    "minutes": 26.29038,
+    "sim_steps": 27852800.0,
+    "it_per_s": 8.6806
+  },
+  "at_cap": {
+    "iteration": 48000,
+    "minutes": 93.8622,
+    "sim_steps": 98304000.0,
+    "it_per_s": 8.5781
+  },
+  "config": "aloha-supertrack",
+  "options": {
+    "task": "aloha_insertion",
+    "demo": [
+      4
+    ],
+    "seed": 0,
+    "algo": "supertrack",
+    "iterations": 48000,
+    "lr_decay_iters": 12000,
+    "horizon": 16,
+    "episode": 500,
+    "ckpt_every": 200,
+    "solver_iterations": 20,
+    "pi_ema": 0.0,
+    "action_noise": 0.1,
+    "st_imag_noise": 0.1,
+    "bptt_decay": 1.0
+  }
+}

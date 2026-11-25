@@ -1,0 +1,22 @@
+{
+  "iteration": 24000,
+  "minutes": 43.09332,
+  "sim_steps": 49152000.0,
+  "it_per_s": 10.0393,
+  "config": "aloha-supertrack",
+  "options": {
+    "task": "aloha_transfer_cube",
+    "demo": [
+      1
+    ],
+    "seed": 0,
+    "algo": "supertrack",
+    "iterations": 24000,
+    "lr_decay_iters": 24000,
+    "horizon": 16,
+    "episode": 500,
+    "ckpt_every": 200,
+    "solver_iterations": 20,
+    "pi_ema": 0.0
+  }
+}

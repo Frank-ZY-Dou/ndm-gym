@@ -1,0 +1,3613 @@
+{
+  "stop_iteration": 12000,
+  "stop_minutes": 23.132302252451577,
+  "settled": true,
+  "minutes_to_target": null,
+  "iteration_to_target": null,
+  "after_stop": {
+    "checkpoints": 180,
+    "success_within_band": 180
+  },
+  "checkpoints": [
+    {
+      "iteration": 200,
+      "minutes": 0.3007621248563131,
+      "success_rate": 0.0,
+      "stage_rates": [
+        0.01953125,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": NaN,
+      "terminated": 1.0,
+      "target": false
+    },
+    {
+      "iteration": 400,
+      "minutes": 0.7115668972333272,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 21.18602581322193,
+      "terminated": 0.24609375,
+      "target": false
+    },
+    {
+      "iteration": 600,
+      "minutes": 1.0851214170455932,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.719410117715597,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 800,
+      "minutes": 1.4694072246551513,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 3.5793581046164036,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 1.85581636428833,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 3.519501071423292,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 1200,
+      "minutes": 2.2413482507069906,
+      "success_rate": 0.00390625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.140625,
+        0.00390625
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 17.74190366268158,
+      "terminated": 0.890625,
+      "target": false
+    },
+    {
+      "iteration": 1400,
+      "minutes": 2.627678894996643,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.826085340231657,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 1600,
+      "minutes": 3.0133902112642925,
+      "success_rate": 0.234375,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.390625
+      ],
+      "final_state_rate": 0.0390625,
+      "object_mm": 5.01507893204689,
+      "terminated": 0.20703125,
+      "target": false
+    },
+    {
+      "iteration": 1800,
+      "minutes": 3.395968238512675,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.420999601483345,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 2000,
+      "minutes": 3.7786879698435465,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.927559290081263,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 2200,
+      "minutes": 4.163303204377493,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.749893236905336,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 2400,
+      "minutes": 4.547421526908875,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.110846668481827,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 2600,
+      "minutes": 4.93247226079305,
+      "success_rate": 0.0,
+      "stage_rates": [
+        0.13671875,
+        0.12109375,
+        0.0078125,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": NaN,
+      "terminated": 1.0,
+      "target": false
+    },
+    {
+      "iteration": 2800,
+      "minutes": 5.308290859063466,
+      "success_rate": 0.03515625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.03515625
+      ],
+      "final_state_rate": 0.01171875,
+      "object_mm": 9.66478418558836,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 3000,
+      "minutes": 5.692237464586894,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.00191655009985,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 3200,
+      "minutes": 6.076485534509023,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.461671389639378,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 3400,
+      "minutes": 6.458851981163025,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.310735501348972,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 3600,
+      "minutes": 6.845606871445974,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 11.2007986754179,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 3800,
+      "minutes": 7.230917052427928,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.553730625659227,
+      "terminated": 0.03515625,
+      "target": false
+    },
+    {
+      "iteration": 4000,
+      "minutes": 7.6135149280230205,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.857431959360838,
+      "terminated": 0.11328125,
+      "target": false
+    },
+    {
+      "iteration": 4200,
+      "minutes": 7.995766178766886,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.00390625
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 14.755324460566044,
+      "terminated": 0.375,
+      "target": false
+    },
+    {
+      "iteration": 4400,
+      "minutes": 8.378130527337392,
+      "success_rate": 0.95703125,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.95703125
+      ],
+      "final_state_rate": 0.95703125,
+      "object_mm": 2.634237054735422,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 4600,
+      "minutes": 8.762053898970287,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.945407155901194,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 4800,
+      "minutes": 9.148855197429658,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 10.942582041025162,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 5000,
+      "minutes": 9.53584532737732,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 9.668855927884579,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 5200,
+      "minutes": 9.92126704454422,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.093070678412914,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 5400,
+      "minutes": 10.314896909395854,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.987291060388088,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 5600,
+      "minutes": 10.699958316485088,
+      "success_rate": 0.34765625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.34765625
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.864619605243206,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 5800,
+      "minutes": 11.082100141048432,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0703125,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 23.059366270899773,
+      "terminated": 0.9375,
+      "target": false
+    },
+    {
+      "iteration": 6000,
+      "minutes": 11.467086172103881,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.33547518029809,
+      "terminated": 0.3515625,
+      "target": false
+    },
+    {
+      "iteration": 6200,
+      "minutes": 11.846009929974874,
+      "success_rate": 0.0,
+      "stage_rates": [
+        0.01953125,
+        0.01171875,
+        0.0078125,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 15.270094387233257,
+      "terminated": 0.9921875,
+      "target": false
+    },
+    {
+      "iteration": 6400,
+      "minutes": 12.229091993967693,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.364084616303444,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 6600,
+      "minutes": 12.61750594774882,
+      "success_rate": 0.15234375,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.15234375
+      ],
+      "final_state_rate": 0.12109375,
+      "object_mm": 4.536711145192385,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 6800,
+      "minutes": 13.010062603155772,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.640874918550253,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 7000,
+      "minutes": 13.398962652683258,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.352717824280262,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 7200,
+      "minutes": 13.789040724436441,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.047186441719532,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 7400,
+      "minutes": 14.174868253866832,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.2265625,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.399076759815216,
+      "terminated": 0.1328125,
+      "target": false
+    },
+    {
+      "iteration": 7600,
+      "minutes": 14.561820828914643,
+      "success_rate": 0.00390625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.859375,
+        0.01171875
+      ],
+      "final_state_rate": 0.00390625,
+      "object_mm": 16.577308997511864,
+      "terminated": 0.83203125,
+      "target": false
+    },
+    {
+      "iteration": 7800,
+      "minutes": 14.95096428791682,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.33203125,
+        0.01953125
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 22.57387526333332,
+      "terminated": 0.95703125,
+      "target": false
+    },
+    {
+      "iteration": 8000,
+      "minutes": 15.343839927514393,
+      "success_rate": 0.01171875,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.6484375,
+        0.015625
+      ],
+      "final_state_rate": 0.00390625,
+      "object_mm": 10.509787127375603,
+      "terminated": 0.78125,
+      "target": false
+    },
+    {
+      "iteration": 8200,
+      "minutes": 15.735056873162588,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.1796875,
+        0.0
+      ],
+      "final_state_rate": 0.00390625,
+      "object_mm": 16.83262549340725,
+      "terminated": 0.890625,
+      "target": false
+    },
+    {
+      "iteration": 8400,
+      "minutes": 16.118920358022056,
+      "success_rate": 0.00390625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.12109375,
+        0.0078125
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 15.12979343533516,
+      "terminated": 0.98828125,
+      "target": false
+    },
+    {
+      "iteration": 8600,
+      "minutes": 16.505122780799866,
+      "success_rate": 0.00390625,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.234375,
+        0.00390625
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 14.593731611967087,
+      "terminated": 0.91015625,
+      "target": false
+    },
+    {
+      "iteration": 8800,
+      "minutes": 16.891395397981007,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.006470579653978,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 9000,
+      "minutes": 17.281421013673146,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.32463800907135,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 9200,
+      "minutes": 17.672732237974802,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.450203575193882,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 9400,
+      "minutes": 18.06047396659851,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.529954891651869,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 9600,
+      "minutes": 18.453180996576943,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.2751914374530315,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 9800,
+      "minutes": 18.840169624487558,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.875404924154282,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 10000,
+      "minutes": 19.226721978187562,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.831054903566837,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 10200,
+      "minutes": 19.613105420271555,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.978334255516529,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 10400,
+      "minutes": 19.999320276578267,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.847711745649576,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 10600,
+      "minutes": 20.385496417681377,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.913874626159668,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 10800,
+      "minutes": 20.773102609316506,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.457512103021145,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 11000,
+      "minutes": 21.162309074401854,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.539435289800167,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 11200,
+      "minutes": 21.553708072503408,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.12081091478467,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 11400,
+      "minutes": 21.94508967002233,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.5809590741992,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 11600,
+      "minutes": 22.347686374187468,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.251154933124781,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 11800,
+      "minutes": 22.742081876595815,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.657640915364027,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 12000,
+      "minutes": 23.132302252451577,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.183682639151812,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 12200,
+      "minutes": 23.525755596160888,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.584221962839365,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 12400,
+      "minutes": 23.916276478767394,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.877340842038393,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 12600,
+      "minutes": 24.306589992841086,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.446459494531155,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 12800,
+      "minutes": 24.696448798974355,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.111502181738615,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 13000,
+      "minutes": 25.086288865407308,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.604256108403206,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 13200,
+      "minutes": 25.47672209342321,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.884603597223759,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 13400,
+      "minutes": 25.866935503482818,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.295453757047653,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 13600,
+      "minutes": 26.257406810919445,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.696826942265034,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 13800,
+      "minutes": 26.648079085350037,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.979469977319241,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 14000,
+      "minutes": 27.039381241798402,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.485533270984888,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 14200,
+      "minutes": 27.429816683133442,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.5488886795938015,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 14400,
+      "minutes": 27.820045467217764,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.608486011624336,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 14600,
+      "minutes": 28.210628044605254,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.309488322585821,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 14800,
+      "minutes": 28.600631300608317,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.162916008383036,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 15000,
+      "minutes": 28.99026918808619,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.120575591921806,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 15200,
+      "minutes": 29.381236584981284,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.028069019317627,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 15400,
+      "minutes": 29.772257069746654,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.897454917430878,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 15600,
+      "minutes": 30.162691525618236,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.739108193665743,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 15800,
+      "minutes": 30.55359001159668,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.632876418530941,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 16000,
+      "minutes": 30.95999219814936,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.4715764708817005,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 16200,
+      "minutes": 31.350719968477886,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.551559083163738,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 16400,
+      "minutes": 31.74139403104782,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.564907263964415,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 16600,
+      "minutes": 32.13279666105906,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.224785000085831,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 16800,
+      "minutes": 32.52841588656108,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.142492242157459,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 17000,
+      "minutes": 32.92046541770299,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.728163756430149,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 17200,
+      "minutes": 33.33316947221756,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.8677406050264835,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 17400,
+      "minutes": 33.97774372498194,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.004700273275375,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 17600,
+      "minutes": 34.381790192921954,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.27680029720068,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 17800,
+      "minutes": 34.7734695037206,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.864065606147051,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 18000,
+      "minutes": 35.16455773115158,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.7770592868328094,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 18200,
+      "minutes": 35.556158598264055,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.1491806991398335,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 18400,
+      "minutes": 35.94841888348262,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.583448965102434,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 18600,
+      "minutes": 36.339797798792524,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.503420881927013,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 18800,
+      "minutes": 36.73065058787664,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.369953811168671,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 19000,
+      "minutes": 37.12129928270976,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.873025394976139,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 19200,
+      "minutes": 37.51106468041738,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.114313844591379,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 19400,
+      "minutes": 37.90070250431697,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.5158790200948715,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 19600,
+      "minutes": 38.29095715681712,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.230356473475695,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 19800,
+      "minutes": 38.67971316973368,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.89008629322052,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 20000,
+      "minutes": 39.074951807657875,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.91924786567688,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 20200,
+      "minutes": 39.467011551062264,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.364143755286932,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 20400,
+      "minutes": 39.85506201585134,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.016908049583435,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 20600,
+      "minutes": 40.24488612810771,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.277242977172136,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 20800,
+      "minutes": 40.63422822157542,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.373834632337093,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 21000,
+      "minutes": 41.02088622252146,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.615455400198698,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 21200,
+      "minutes": 41.407911376158395,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.7757793217897415,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 21400,
+      "minutes": 41.795109458764394,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.090605165809393,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 21600,
+      "minutes": 42.186566138267516,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.601025186479092,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 21800,
+      "minutes": 42.57226973772049,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.405518226325512,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 22000,
+      "minutes": 42.95794106324514,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.810873117297888,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 22200,
+      "minutes": 43.3434893767039,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.452355835586786,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 22400,
+      "minutes": 43.728107472260795,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 4.918963648378849,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 22600,
+      "minutes": 44.11500364939372,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.910831831395626,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 22800,
+      "minutes": 44.49964103301366,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.2265625,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.4743091352283955,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 23000,
+      "minutes": 44.88399140834808,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.250889506191015,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 23200,
+      "minutes": 45.274227666854856,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.438221782445908,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 23400,
+      "minutes": 45.65775648355484,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.493960507214069,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 23600,
+      "minutes": 46.04131367206573,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.8984548561275005,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 23800,
+      "minutes": 46.42546501159668,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.95318279415369,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 24000,
+      "minutes": 46.81026871999105,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.176465354859829,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 24200,
+      "minutes": 47.19386598269145,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.197617389261723,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 24400,
+      "minutes": 47.57818222443263,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.957644432783127,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 24600,
+      "minutes": 47.96183179219564,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.244354415684938,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 24800,
+      "minutes": 48.346251380443576,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.463538087904453,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 25000,
+      "minutes": 48.7304891705513,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.246340159326792,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 25200,
+      "minutes": 49.11513689359029,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.9921875,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.304146118462086,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 25400,
+      "minutes": 49.50027238527934,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.849615067243576,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 25600,
+      "minutes": 49.88490400711695,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.629061583429575,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 25800,
+      "minutes": 50.28498686552048,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.468084804713726,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 26000,
+      "minutes": 50.67066333691279,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.155150640755892,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 26200,
+      "minutes": 51.05678652127584,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.455702871084213,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 26400,
+      "minutes": 51.443690415223436,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.356826681643724,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 26600,
+      "minutes": 51.83049542506536,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.046774193644524,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 26800,
+      "minutes": 52.21684034268061,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.454238831996918,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 27000,
+      "minutes": 52.60335662762324,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.97265625,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.351049687713385,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 27200,
+      "minutes": 52.9901601990064,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.128953002393246,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 27400,
+      "minutes": 53.377895108858745,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.121592294424772,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 27600,
+      "minutes": 53.951596252123515,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.807401940226555,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 27800,
+      "minutes": 54.338796246051785,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.312525063753128,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 28000,
+      "minutes": 54.72692156632741,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.440394092351198,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 28200,
+      "minutes": 55.11366485754649,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.515414152294397,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 28400,
+      "minutes": 55.50126767555873,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.8543837405741215,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 28600,
+      "minutes": 55.887830185890195,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.026236038655043,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 28800,
+      "minutes": 56.27399170796077,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.180848624557257,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 29000,
+      "minutes": 56.6604176680247,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.314803846180439,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 29200,
+      "minutes": 57.046682087580365,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.61486154422164,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 29400,
+      "minutes": 57.432126768430074,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.961206439882517,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 29600,
+      "minutes": 57.817901102701825,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.788984872400761,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 29800,
+      "minutes": 58.202796296278635,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.954054348170757,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 30000,
+      "minutes": 58.58765170176824,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.533943582326174,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 30200,
+      "minutes": 58.9732513944308,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.370679639279842,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 30400,
+      "minutes": 59.364098016421,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.849166937172413,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 30600,
+      "minutes": 59.74893087943395,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.293690763413906,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 30800,
+      "minutes": 60.222370103995004,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.183224126696587,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 31000,
+      "minutes": 60.608911144733426,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.732260204851627,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 31200,
+      "minutes": 60.99420076608658,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.2730728425085545,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 31400,
+      "minutes": 61.38217989603678,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0390625,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.315474096685648,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 31600,
+      "minutes": 61.7883664727211,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.819957099854946,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 31800,
+      "minutes": 62.18168398141861,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.616789381951094,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 32000,
+      "minutes": 62.57091182867686,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.767221890389919,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 32200,
+      "minutes": 62.955444578329725,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.297556847333908,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 32400,
+      "minutes": 63.340974609057106,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.938808131963015,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 32600,
+      "minutes": 63.72542811234792,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.898140862584114,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 32800,
+      "minutes": 64.11070142587026,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.896698381751776,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 33000,
+      "minutes": 64.49574722846349,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.267336525022984,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 33200,
+      "minutes": 64.88101765314738,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.486360613256693,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 33400,
+      "minutes": 65.26672091086705,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.32561869174242,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 33600,
+      "minutes": 65.65177750984827,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.649368140846491,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 33800,
+      "minutes": 66.03804429372151,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.3671875,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.806627079844475,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 34000,
+      "minutes": 66.42316147486369,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.910591550171375,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 34200,
+      "minutes": 66.80833452145258,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.405188098549843,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 34400,
+      "minutes": 67.19269110759099,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.512692525982857,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 34600,
+      "minutes": 67.57720747788747,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.964659482240677,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 34800,
+      "minutes": 67.96082362731298,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.463984355330467,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 35000,
+      "minutes": 68.34457584222157,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.530445232987404,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 35200,
+      "minutes": 68.72974636952083,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.732894737273455,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 35400,
+      "minutes": 69.11355864206949,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.937259342521429,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 35600,
+      "minutes": 69.4971558769544,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.705108098685741,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 35800,
+      "minutes": 69.88125207026799,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.619546726346016,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 36000,
+      "minutes": 70.26597052415212,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.677408400923014,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 36200,
+      "minutes": 70.65878209670385,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.6867579482495785,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 36400,
+      "minutes": 71.04997391303381,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.429120294749737,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 36600,
+      "minutes": 71.4403005361557,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.5703125,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.538415025919676,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 36800,
+      "minutes": 71.82865363756815,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.832962390035391,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 37000,
+      "minutes": 72.21390188535055,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.293675094842911,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 37200,
+      "minutes": 72.59938025077184,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.403597701340914,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 37400,
+      "minutes": 72.98357003132502,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.043932098895311,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 37600,
+      "minutes": 73.3675490061442,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.266311906278133,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 37800,
+      "minutes": 73.75178056160608,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.59451587125659,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 38000,
+      "minutes": 74.13636650244395,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.5796710550785065,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 38200,
+      "minutes": 74.52104348738989,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.069081369787455,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 38400,
+      "minutes": 74.92376012802124,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.674768704921007,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 38600,
+      "minutes": 75.3077958424886,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.252586539834738,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 38800,
+      "minutes": 75.69196217854818,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.253532599657774,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 39000,
+      "minutes": 76.07851746082306,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.1401124112308025,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 39200,
+      "minutes": 76.46304841438929,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.91223843023181,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 39400,
+      "minutes": 76.84800618092218,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.551817525178194,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 39600,
+      "minutes": 77.23333657185236,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.027125287801027,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 39800,
+      "minutes": 77.61850014925002,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.998771637678146,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 40000,
+      "minutes": 78.00460018316905,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.604774389415979,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 40200,
+      "minutes": 78.38962718248368,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.191744934767485,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 40400,
+      "minutes": 78.77436706622441,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.974749732762575,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 40600,
+      "minutes": 79.15875473022462,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.251813542097807,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 40800,
+      "minutes": 79.54370011091233,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.822804920375347,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 41000,
+      "minutes": 79.92745859622956,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.691888906061649,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 41200,
+      "minutes": 80.31123861869176,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.058484643697739,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 41400,
+      "minutes": 80.69505798816681,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.105617016553879,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 41600,
+      "minutes": 81.07860877513886,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.330514024943113,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 41800,
+      "minutes": 81.46553848187129,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.109303493052721,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 42000,
+      "minutes": 81.84911541938781,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.92030431330204,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 42200,
+      "minutes": 82.2342142979304,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.427390199154615,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 42400,
+      "minutes": 82.61921728452047,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.551371283829212,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 42600,
+      "minutes": 83.00453402201335,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.527912199497223,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 42800,
+      "minutes": 83.38866298993429,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.162654004991055,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 43000,
+      "minutes": 83.77290230194727,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.082199841737747,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 43200,
+      "minutes": 84.15826832453409,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.106383495032787,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 43400,
+      "minutes": 84.54524712562561,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.603129535913467,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 43600,
+      "minutes": 84.92961707512538,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.533349096775055,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 43800,
+      "minutes": 85.31546436548233,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.734611000865698,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 44000,
+      "minutes": 85.70052434206009,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.613554432988167,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 44200,
+      "minutes": 86.08552102247874,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.125208619982004,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 44400,
+      "minutes": 86.47305167118708,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.369515486061573,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 44600,
+      "minutes": 86.85765190521876,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 8.20664782077074,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 44800,
+      "minutes": 87.24301458994547,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        0.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 7.462240289896727,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 45000,
+      "minutes": 87.62801650365193,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.474693771451712,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 45200,
+      "minutes": 88.01306228240331,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.309086456894875,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 45400,
+      "minutes": 88.40108123222987,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.604695226997137,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 45600,
+      "minutes": 88.78805386225382,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.454753689467907,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 45800,
+      "minutes": 89.28486021757126,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.100393366068602,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 46000,
+      "minutes": 89.67364044984181,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.940827541053295,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 46200,
+      "minutes": 90.06010966300964,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.193668883293867,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 46400,
+      "minutes": 90.44744268655776,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.759337916970253,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 46600,
+      "minutes": 90.83520560264587,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.718037486076355,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 46800,
+      "minutes": 91.22488102515538,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.610670428723097,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 47000,
+      "minutes": 91.61612652142843,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.142758298665285,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 47200,
+      "minutes": 92.00835967858633,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.925903562456369,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 47400,
+      "minutes": 92.40015807151795,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.708716042339802,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 47600,
+      "minutes": 92.7928249557813,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.124019622802734,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 47800,
+      "minutes": 93.19850310087205,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 6.381921470165253,
+      "terminated": 0.0,
+      "target": false
+    },
+    {
+      "iteration": 48000,
+      "minutes": 93.59219481150309,
+      "success_rate": 0.0,
+      "stage_rates": [
+        1.0,
+        1.0,
+        1.0,
+        0.0
+      ],
+      "final_state_rate": 0.0,
+      "object_mm": 5.275879520922899,
+      "terminated": 0.0,
+      "target": false
+    }
+  ]
+}
