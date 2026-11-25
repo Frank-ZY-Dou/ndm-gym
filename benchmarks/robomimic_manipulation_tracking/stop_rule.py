@@ -1,6 +1,6 @@
 """Each run's stop checkpoint by the benchmark's stop rule, the same for both algorithms: every kept checkpoint of the run
 (train_robomimic --ckpt_keep, every 250 iterations) in order, evaluated on 256 perturbed starts of evaluation seed 1 (other
-starts than the results', which are seed 0), without the reference's targets. With S(i) and E(i) the mean success and object
+starts than the results', which are seed 5), without the reference's targets. With S(i) and E(i) the mean success and object
 error of the evaluations at i, i - 250 and i - 500, the run stops at the first i where they and the same means 1,000
 iterations earlier exist, every error among them finite, E(i) > 0.97 E(i - 1,000) and either S(i) >= 0.99 or
 S(i) < S(i - 1,000) + 0.01; otherwise at its last checkpoint (the cap). Writes <run>/stop.json (the stop iteration and its

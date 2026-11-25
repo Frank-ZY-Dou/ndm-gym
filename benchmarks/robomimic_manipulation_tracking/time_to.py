@@ -1,10 +1,10 @@
 """The training time at which a run reaches the benchmark's target for good: every kept checkpoint of the run (train_robomimic
 --ckpt_keep) up to its stop (<run>/stop.json from stop_rule.py, when it exists) evaluated as the last one is (evaluate_robomimic,
-256 perturbed rollouts, without the reference's targets); the wall time of the first checkpoint from which every later one has
-a success of at least 0.99 with the tracked objects within 10 mm (the hand task's target). The last checkpoint's evaluation is
-the run's own (<run>/eval) when it exists. Writes <run>/time_to.json (minutes_to_target: null if never). The times are the
-runs' own wall clock, checkpoints every --ckpt_every iterations. A run without kept checkpoints, or with an evaluation in
-<run>/eval_ckpts that is not this script's, is an error.
+256 perturbed rollouts of evaluation seed 5, without the reference's targets); the wall time of the first checkpoint from which
+every later one has a success of at least 0.99 with the tracked objects within 10 mm (the hand task's target). The last
+checkpoint's evaluation is the run's own (<run>/eval) when it exists. Writes <run>/time_to.json (minutes_to_target: null if
+never). The times are the runs' own wall clock, checkpoints every --ckpt_every iterations. A run without kept checkpoints, or
+with an evaluation in <run>/eval_ckpts that is not this script's, is an error.
 
     python benchmarks/robomimic_manipulation_tracking/time_to.py <run directory> [...]
 """
@@ -16,13 +16,14 @@ import subprocess
 import sys
 
 SUCCESS, OBJECT_MM = 0.99, 10.0
-NUM_ENVS = 256  # evaluate_robomimic's perturbed rollouts per demonstration, as in the last checkpoint's evaluation
+NUM_ENVS, SEED = 256, 5  # evaluate_robomimic's perturbed rollouts per demonstration and their starts, as in the last checkpoint's evaluation
 
 
 def evaluate(ckpt: str, out: str) -> dict:
     path = os.path.join(out, "metrics.json")
     if not os.path.exists(path):
-        cmd = [sys.executable, "-m", "ndm_gym.evaluate_robomimic", "--ckpt", ckpt, "--out", out, "--no_reference", "--num_envs", str(NUM_ENVS)]
+        cmd = [sys.executable, "-m", "ndm_gym.evaluate_robomimic", "--ckpt", ckpt, "--out", out, "--no_reference", "--num_envs", str(NUM_ENVS),
+               "--seed", str(SEED)]  # fmt: skip
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
     return json.load(open(path))
 
