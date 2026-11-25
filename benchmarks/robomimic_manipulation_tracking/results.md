@@ -129,11 +129,13 @@ over the same frames; the slip in mm per step, in brackets the demonstration's:
 SuperMimic's Transport seeds 11 and 12 have an unperturbed rollout that does not pass the success test (seed 11 plays to the
 end, seed 12 ends at 590 of 724 frames); both are in the rows. The largest jerk ratio is 1.30 (SuperMimic's Transport).
 
-Against the same configurations without the term, on other seeds (3, 4 and 6): the object error is 0.37 to 0.26 mm on Lift, 1.30
-to 1.48 mm on Square and 2.99 to 4.24 mm on Transport for SuperTrack, and 0.89 to 1.01, 8.33 to 2.55 and 4.14 (2 of 3 runs) to
-4.50 mm for SuperMimic; Transport's success goes from 59.6 ± 42.3 to 99.9 ± 0.2 % for SuperTrack and from 34.4 ± 44.9 to
-89.2 ± 15.7 % for SuperMimic, Square's from 77.5 ± 39.0 to 100 % for SuperMimic (all other rows 100 % with and without). We
-have not separated what in the term does this: it also lowers a held object's slip in its gripper (above).
+Against the same configurations without the term, on other seeds (3, 4 and 6):
+
+- **Object error.** SuperTrack: from 0.37 to 0.26 mm on Lift, from 1.30 to 1.48 mm on Square, from 2.99 to 4.24 mm on Transport.
+  SuperMimic: from 0.89 to 1.01 mm, from 8.33 to 2.55 mm, from 4.14 (2 of 3 runs) to 4.50 mm.
+- **Success.** Transport: from 59.6 ± 42.3 to 99.9 ± 0.2 % (SuperTrack) and from 34.4 ± 44.9 to 89.2 ± 15.7 % (SuperMimic).
+  Square: from 77.5 ± 39.0 to 100 % (SuperMimic). Every other row is 100 % with and without.
+- We have not separated what in the term does this; it also lowers a held object's slip in its gripper (above).
 
 ## Time to the target
 

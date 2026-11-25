@@ -102,15 +102,16 @@ change from the hand task's accurate presets, chosen by the same rules on other 
 checkpoint kept every 250, from which the benchmark's stop rule
 (`benchmarks/robomimic_manipulation_tracking/stop_rule.py`) takes the run's result.
 
-Results: [benchmarks/robomimic_manipulation_tracking](../../benchmarks/robomimic_manipulation_tracking/results.md). In short
-(seeds 10-12, one A100 40GB SXM4 per run, each run to its stop): SuperTrack a success of 100 / 100 / 99.9 % with the object
-within 0.26 / 1.48 / 4.24 mm on Lift / Square / Transport, the target after 1.03 / 2.12 / 15.76 min; SuperMimic
-100 / 100 / 89.2 %, 1.01 / 2.55 / 4.50 mm, 1.11 / 4.53 min / not reached (time to the target, not
-engineered). Both configurations' motion passes the check of the
-[results' smooth motion](../../benchmarks/robomimic_manipulation_tracking/results.md#smooth-motion). Success is robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking
-proxy; MuJoCo-Warp's contact order is not deterministic, and two evaluations of one checkpoint differ by about 4 points on
-Transport. As the simulator, the world models' bf16 copies run 765 and 757 times MuJoCo-Warp's control step on Transport at
-4,096 worlds (11.63 M and 11.06 M world-steps per second on one A100 40GB SXM4; not engineered).
+Results: [benchmarks/robomimic_manipulation_tracking](../../benchmarks/robomimic_manipulation_tracking/results.md). In
+short (seeds 10-12, one A100 40GB SXM4 per run, each run to its stop): SuperTrack a success of 100 / 100 / 99.9 % with
+the object within 0.26 / 1.48 / 4.24 mm on Lift / Square / Transport, the target after 1.03 / 2.12 / 15.76 min;
+SuperMimic 100 / 100 / 89.2 %, 1.01 / 2.55 / 4.50 mm, 1.11 / 4.53 min / not reached (time to the target, not engineered).
+Both configurations' motion passes the check of the
+[results' smooth motion](../../benchmarks/robomimic_manipulation_tracking/results.md#smooth-motion). Success is
+robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking proxy; MuJoCo-Warp's
+contact order is not deterministic, and two evaluations of one checkpoint differ by about 4 points on Transport. As the
+simulator, the world models' bf16 copies run 765 and 757 times MuJoCo-Warp's control step on Transport at 4,096 worlds
+(11.63 M and 11.06 M world-steps per second on one A100 40GB SXM4; not engineered).
 
 ![SuperTrack and SuperMimic on Lift, Square and Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/grid.webp)
 
