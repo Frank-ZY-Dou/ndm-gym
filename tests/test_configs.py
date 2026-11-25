@@ -121,7 +121,7 @@ def test_the_quadrotor_configurations_are_their_runs(name):
 
 @pytest.mark.parametrize("name", list(configs.CONFIGS["train_robomimic"]))
 def test_the_manipulation_configurations_are_their_runs(name):
-    """Each manipulation configuration parses to the arguments a run of its results recorded (seed 0's on Lift,
+    """Each manipulation configuration parses to the arguments a run of its results recorded (seed 10's on Lift,
     tests/data/configs/<name>.args.json, kept without the configuration's name and the run's directories): every recorded
     argument but the seed, none of them unknown to the trainer, and the options added after the runs at their defaults.
     robomimic-supertrack's imagination noise is the 0 it writes out; the trainer's default, which a command line without
@@ -134,7 +134,8 @@ def test_the_manipulation_configurations_are_their_runs(name):
     assert got["config"] == name and set(rec) <= set(got)
     assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
     added = set(got) - set(rec) - {"config", "log_dir", "data_dir", "motion_dir"}  # options added after the runs: off here
-    assert added == set()  # every option of the trainer is in the runs' records
+    plain = vars(parse("train_robomimic", ["--task", rec["task"]]))
+    assert added == {"st_no_imag_r"} and all(got[k] == plain[k] for k in added)
     if name == "robomimic-supertrack":
         plain = vars(parse("train_robomimic", ["--algo", "supertrack", "--task", "lift"]))
         assert (got["st_imag_noise"], plain["st_imag_noise"]) == (0.0, 0.1)

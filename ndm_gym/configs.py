@@ -59,8 +59,9 @@ QUAD_TIMED = "--iterations 1500 --lr_decay_iters 6000 --ckpt_every 50 --ckpt_kee
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
-# manipulation demonstration tracking: each algorithm's choice of four (the hand task's accurate preset and three single changes,
-# benchmarks/robomimic_manipulation_tracking): SuperTrack the preset with imagination noise 0, SuperMimic the preset (its defaults)
+# manipulation demonstration tracking: each algorithm's choice of five (the hand task's accurate preset and four single changes,
+# benchmarks/robomimic_manipulation_tracking): SuperTrack the preset with imagination noise 0, SuperMimic the preset with --bptt_decay
+# 0.95; both with the smoothness term at one weight (smooth targets)
 ROBOMIMIC_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0 --st_task_weights --target_rate_w 64 {HAND_SYSTEMS}"
 ROBOMIMIC_SM = f"--algo supermimic --bptt_decay 0.95 --target_rate_w 64 {HAND_SYSTEMS}"
 # the benchmark's runs (benchmarks/robomimic_manipulation_tracking): a cap of 6,000 iterations with the learning rate's decay over
@@ -189,13 +190,13 @@ CONFIGS = {
     "train_robomimic": {
         "robomimic-supertrack": (f"{ROBOMIMIC_ST} {ROBOMIMIC_RUN}",
                                  "one demonstration (add --task; --demo 0 by default), the checkpoint at the benchmark's stop rule "
-                                 "(stop_rule.py): success 100 / 100 / 56.9 %, object 0.41 / 1.45 / 5.42 mm on Lift / Square / Transport; the "
-                                 "target in 1.04 / 2.14 min, Transport not reached (seeds 0-2, 256 perturbed rollouts, A100 40GB SXM4)"),
+                                 "(stop_rule.py): smooth targets (--target_rate_w 64), success 100 / 100 / 99.9 %, object 0.26 / 1.48 / 4.24 mm on "
+                                 "Lift / Square / Transport; the target in 1.03 / 2.12 / 15.76 min (seeds 10-12, 256 perturbed rollouts, A100 40GB SXM4)"),
         "robomimic-supermimic": (f"{ROBOMIMIC_SM} {ROBOMIMIC_RUN}",
                                  "one demonstration (add --task; --demo 0 by default), the checkpoint at the benchmark's stop rule "
-                                 "(stop_rule.py): success 100 / 69.5 / 54.9 %, object 0.92 / 7.62 / 6.73 mm on Lift / Square / Transport; the "
-                                 "target in 1.32 / 6.88 min (Square in 2 of 3 runs), Transport not reached (seeds 0-2, 256 perturbed rollouts, "
-                                 "A100 40GB SXM4)"),
+                                 "(stop_rule.py): smooth targets (--target_rate_w 64), success 100 / 100 / 89.2 %, object 1.01 / 2.55 / 4.50 mm on "
+                                 "Lift / Square / Transport; the target in 1.11 / 4.53 min, Transport not reached (seeds 10-12, 256 perturbed "
+                                 "rollouts, A100 40GB SXM4)"),
     },
 }
 
