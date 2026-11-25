@@ -94,23 +94,26 @@ python benchmarks/robomimic_manipulation_tracking/motion.py st=logs/square_st/ev
 
 ## Configurations
 
-`--config list` prints the configurations with what each measured. Each is one of four with the same kinds of change from
-the hand task's accurate presets, chosen by one rule on another seed: `robomimic-supertrack` is `hand-supertrack-accurate`'s
-options with imagination noise 0 (`--st_imag_noise 0`), `robomimic-supermimic` `hand-supermimic-accurate`'s; both add
-`--solver_iterations 20`, a cap of 6,000 iterations with the learning rate's decay over it and a checkpoint kept every 250,
-from which the benchmark's stop rule (`benchmarks/robomimic_manipulation_tracking/stop_rule.py`) takes the run's result.
+`--config list` prints the configurations with what each measured. Each is one of five candidates with the same kinds of
+change from the hand task's accurate presets, chosen by the same rules on other seeds: `robomimic-supertrack` is
+`hand-supertrack-accurate`'s options with imagination noise 0 (`--st_imag_noise 0`), `robomimic-supermimic`
+`hand-supermimic-accurate`'s with `--bptt_decay 0.95`; both add the smoothness term at one weight for both
+(`--target_rate_w 64`), `--solver_iterations 20`, a cap of 6,000 iterations with the learning rate's decay over it and a
+checkpoint kept every 250, from which the benchmark's stop rule
+(`benchmarks/robomimic_manipulation_tracking/stop_rule.py`) takes the run's result.
 
 Results: [benchmarks/robomimic_manipulation_tracking](../../benchmarks/robomimic_manipulation_tracking/results.md). In short
-(seeds 0-2, one A100 40GB SXM4 per run, each run to its stop): SuperTrack a success of 100 / 100 / 56.9 % with the object
-within 0.41 / 1.45 / 5.42 mm on Lift / Square / Transport, the target after 1.04 / 2.14 min / not reached; SuperMimic
-100 / 69.5 / 54.9 %, 0.92 / 7.62 / 6.73 mm, 1.32 / 6.88 min (Square in 2 of 3 runs) / not reached (time to the target, not
-engineered). Success is robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking
+(seeds 10-12, one A100 40GB SXM4 per run, each run to its stop): SuperTrack a success of 100 / 100 / 99.9 % with the object
+within 0.26 / 1.48 / 4.24 mm on Lift / Square / Transport, the target after 1.03 / 2.12 / 15.76 min; SuperMimic
+100 / 100 / 89.2 %, 1.01 / 2.55 / 4.50 mm, 1.11 / 4.53 min / not reached (time to the target, not
+engineered). Both configurations' motion passes the check of the
+[results' smooth motion](../../benchmarks/robomimic_manipulation_tracking/results.md#smooth-motion). Success is robosuite's test at the demonstration's last frame on a rollout that never terminated, a tracking
 proxy; MuJoCo-Warp's contact order is not deterministic, and two evaluations of one checkpoint differ by about 4 points on
 Transport. As the simulator, the world models' bf16 copies run 765 and 757 times MuJoCo-Warp's control step on Transport at
 4,096 worlds (11.63 M and 11.06 M world-steps per second on one A100 40GB SXM4; not engineered).
 
 ![SuperTrack and SuperMimic on Lift, Square and Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/grid.webp)
 
-Per case the seed with the lowest object error, from the unperturbed start (Transport at four times real time), the
-demonstration's arms and objects in translucent blue. The animations: [Lift](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/lift_st.webp), [Square](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/square_st.webp), [Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/transport_st.webp)
+Per case the run with the lowest object error among those whose own rollout from the unperturbed start passes the success
+test and the motion check (Transport at four times real time), the demonstration's arms and objects in translucent blue. The animations: [Lift](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/lift_st.webp), [Square](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/square_st.webp), [Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/transport_st.webp)
 (SuperTrack); [Lift](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/lift_sm.webp), [Square](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/square_sm.webp), [Transport](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/robomimic/transport_sm.webp) (SuperMimic).

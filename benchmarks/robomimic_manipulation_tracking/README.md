@@ -59,13 +59,17 @@ two arms handing an object over.
   - **Lift**: one arm lifts a cube (demonstrations of 1.8-3.2 s);
   - **Square**: one arm puts a square nut onto its peg, millimetre clearances (5.4-11.8 s);
   - **Transport**: two arms hand a hammer over and move a piece of trash (18.7-35.7 s).
-- **Configurations:** for each algorithm, one of four, all chosen by one rule on training seed 5 and evaluation seed 2:
-  the hand task's accurate preset and three single changes of the same kinds for both (SuperTrack: imagination noise 0
-  instead of 0.2, learning rate 2e-4 instead of 4e-4, failure weight 5 instead of 2; SuperMimic: action noise 0.3 instead
-  of 0.1, learning rate 4e-4 instead of 2e-4, discount 0.995 instead of 0.99), each on the three tasks with the stop rule
-  below. The rule: the highest success averaged over the three tasks; within one point of it, the lower mean object error.
-  The chosen ones are `configs.py`'s `robomimic-supertrack` and `robomimic-supermimic`.
-- **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD, and every seed; the GPU stated.
+- **Configurations:** for each algorithm, one of five candidates: the hand task's accurate preset and four single changes of
+  the same kinds for both (SuperTrack: imagination noise 0 instead of 0.2, learning rate 2e-4 instead of 4e-4, failure
+  weight 5 instead of 2, action noise 0.3 instead of 0.1; SuperMimic: action noise 0.3 instead of 0.1, learning rate 4e-4
+  instead of 2e-4, discount 0.995 instead of 0.99, `--bptt_decay` 0.95 instead of 1), each on the three tasks with the stop
+  rule below (training seed 5, evaluation seed 2). The rule: the highest success averaged over the three tasks; within one
+  point of it, the lower mean object error. The finalists of each algorithm ran on three more training seeds, and the better
+  by the same rule is kept. Both configurations then take the smoothness term at one weight, 64, the lowest that passes the
+  motion check below for both. The chosen ones are `configs.py`'s `robomimic-supertrack` and `robomimic-supermimic`
+  ([results](results.md#configurations)).
+- **Seeds:** three training seeds per configuration (10, 11, 12), which no choice has seen; mean and sample SD, and every
+  seed; the GPU stated.
 - **Training:** 2,048 worlds, a cap of 6,000 iterations with the learning rate's cosine decay over it, a checkpoint kept
   every 250 iterations.
 - **Stop rule, the same for both algorithms:** each kept checkpoint is evaluated on 256 perturbed starts of evaluation
@@ -74,7 +78,7 @@ two arms handing an object over.
   S(i) < S(i - 1,000) + 0.01: the error improved by less than 3 % over 1,000 iterations, and the success holds or stopped
   improving. Otherwise it runs to the cap. The checkpoint at the stop, not the best one, is the run's result.
 - **Evaluation:** `evaluate_robomimic` on the stop checkpoint: 256 rollouts of the whole demonstration from perturbed
-  starts (0.01 rad on the arms' joints, evaluation seed 0), without exploration noise. Per task and configuration: the
+  starts (0.01 rad on the arms' joints, evaluation seed 5), without exploration noise. Per task and configuration: the
   success; the share of episodes ended early; the tracked objects' position (mm) and rotation errors against the
   demonstration (means over the frames of the rollouts that do not terminate) and at the last frame; the grippers'
   keypoints. MuJoCo-Warp's contact order is not deterministic, so two evaluations of one checkpoint on the same starts
@@ -83,13 +87,17 @@ two arms handing an object over.
   clock of the first kept checkpoint from which every later one up to the stop meets it on the evaluation's starts.
 - **Reference:** the same rollouts with the demonstration's joint positions as the servos' targets, without a policy.
 - **Motion:** each run's rollout from the unperturbed start beside the demonstration's same frames (`motion.py`): the
-  arms' joint acceleration and jerk, the share of their velocity above 5 Hz, limit hits, and a held object's
-  displacement in its gripper's frame per control step.
+  arms' joint acceleration and jerk, the share of their velocity above 5 Hz (power over power, and the mean over the joints of
+  each joint's share), the position targets' change per step, limit hits, and a held object's displacement in its gripper's
+  frame per control step. A configuration passes the motion check if, as the mean over its runs, the jerk is at most 1.5
+  times, the share (power over power) at most 2 times and the targets' change at most 2 times the demonstration's, no arm
+  joint reaches a limit that the demonstration does not, and the slip is at most 1 mm per step more than the
+  demonstration's. Shown rollouts each pass it on their own.
 
 ```bash
 python tools/download_robomimic.py                                                          # the data and assets, pinned and checked
 benchmarks/robomimic_manipulation_tracking/run_formal.sh                                    # 18 runs, each evaluated at its stop
-python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s?     # the time to the target
+python benchmarks/robomimic_manipulation_tracking/time_to.py logs/robomimic_formal/*_s??    # the time to the target
 python benchmarks/robomimic_manipulation_tracking/motion.py SuperTrack=<run>/eval/rollout_0.npz   # its motion beside the demonstration's
 ```
 
