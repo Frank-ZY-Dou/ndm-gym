@@ -84,7 +84,9 @@ checkpoint its last). Seeds 1 and 2 trained on A100-SXM4-40GB GPUs to seed 0's i
 5,718, in the table's order), so training times are not compared across the seeds.
 
 The RigidFormer pair's budget is equal in time, not in iterations: in 0.5 h SuperTrack-RF runs 4,373 iterations and
-SuperMimic-RF 5,718, with two world-model batches per iteration against five. The six rounds' runs (seed 0, 0.5 h each):
+SuperMimic-RF 5,718, with two world-model batches per iteration against five. Both trained with the earlier version of
+`--rf_fused_train`'s kernels (the current version computes the same up to float rounding, [details](../../docs/rigidformer_backbone.md)).
+The six rounds' runs (seed 0, 0.5 h each):
 
 | round | SuperTrack-RF | SuperMimic-RF |
 |---|---|---|
@@ -204,7 +206,8 @@ step each robot on its own predictions (`torch.compile`, bf16).
 | 4096 (8192) | 312,231 | 7,208,713 (23.1x) | 1,345,609 (4.3x) |
 
 Inference paths, measured the same way on the same GPU with SuperTrack's checkpoints: RigidFormer uses an fp32 copy,
-Triton kernels for features and integration, and one kernel for the network. The MLP uses a bf16 copy with the fused step.
+Triton kernels for features and integration, and one kernel for the network (the network kernel's earlier version; the current one
+has not been measured here). The MLP uses a bf16 copy with the fused step.
 
 | pairs (robots) | physics | RigidFormer, as trained | RigidFormer, inference path | MLP, as trained | MLP, inference path |
 |---|---|---|---|---|---|

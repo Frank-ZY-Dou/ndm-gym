@@ -1648,8 +1648,8 @@ Each task's results are in its section; these are the factors behind them.
      distribution, 11-21% out of it; at the shared default 2e-4, -4% / -11% (SuperTrack's model) and +8% / +0%
      (SuperMimic's).
    - Online, tuned as the MLP was (the RigidFormer after 12 tuning runs, the MLP after 12): no significant difference at
-     equal iterations. Its final configurations (the RigidFormer after 21 and 19 tuning runs, SuperTrack-RF's and
-     SuperMimic-RF's, the MLP after 12): return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm.
+     equal iterations. Its final configurations of that time (the RigidFormer after 21 and 19 tuning runs, SuperTrack-RF's
+     and SuperMimic-RF's, the MLP after 12): return 0.832 / 0.804, MPJPE 21.0 / 33.1 mm.
    - The small RigidFormer's configurations, from the rounds for the time to return 0.82 and then 3 h with the cosine:
      return 0.886 / 0.892, MPJPE 11.9 / 18.1 mm in about 36,060 / 24,620 iterations, the MLP's 0.898 / 0.915 and 10.8 / 16.7
      mm in about 63,310 / 67,030 (seeds 7-9, 3 h on an A100 40GB SXM4;

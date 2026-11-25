@@ -662,7 +662,8 @@ Checkpoints of the selected configurations: SuperTrack last: iterations 12670, 1
 ## RigidFormer's final configurations
 
 These were the named RigidFormer configurations until [the small RigidFormer's](#the-rigidformers-most-accurate-configurations)
-replaced them. SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
+replaced them; their runs used the earlier version of `--rf_fused_train`'s kernels (the same up to float rounding). SuperTrack-RF
+and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
 40GB each; the RigidFormer after 21 and 19 tuning runs in all, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12),
 ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
 SuperMimic-RF `--imag_start_perturb 0.4 --wm_batches 7`, both `--wm_lr 4e-4`. The selected configurations then ran on

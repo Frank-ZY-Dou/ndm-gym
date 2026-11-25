@@ -150,6 +150,8 @@ Differences from the MLP's runs:
   rule before 3 h, at 14,450-32,500 iterations.
 - **A restart:** SuperMimic-RF seed 1's first attempt was preempted by a priority job at iteration 1,100, before its first checkpoint, and ran again from the
   beginning with the same seed and arguments.
+- **Kernels:** every RigidFormer run on this page trained with the earlier version of `--rf_fused_train`'s kernels; the current version computes the same up
+  to float rounding ([details](../../docs/rigidformer_backbone.md)).
 
 ### The RigidFormer's tuning
 
