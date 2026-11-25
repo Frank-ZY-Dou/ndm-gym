@@ -936,10 +936,18 @@ def test_motion_measures(tmp_path, monkeypatch):
     gain = lambda f: 2 * np.sin(np.pi * f * dt) / dt  # noqa: E731: a difference's gain on a sine of f Hz
     share = (0.05 * gain(8)) ** 2 / (gain(1) ** 2 + (0.05 * gain(8)) ** 2)  # the velocity's power above 5 Hz, second joint
     assert m["hf_share"] == pytest.approx(share / 2, abs=1e-9) and 0.08 < share < 0.09
+    weighted = (0.05 * gain(8)) ** 2 / (2 * gain(1) ** 2 + (0.05 * gain(8)) ** 2)  # the power over power share: the two joints' powers summed
+    assert m["hf_share_power"] == pytest.approx(weighted, abs=1e-9)
+    still = np.stack((np.sin(2 * np.pi * t), 0.3 + 1e-4 * np.sin(2 * np.pi * 8 * t)), 1)  # a swinging joint and one held but for a jitter
+    m2 = motion.joint_measures(still, dt, lo, hi)
+    jitter = (1e-4 * gain(8)) ** 2
+    assert m2["hf_share"] == pytest.approx(0.5, abs=1e-9)  # the mean of the shares 0 and 1
+    assert m2["hf_share_power"] == pytest.approx(jitter / (gain(1) ** 2 + jitter), rel=1e-6)  # weighs as little as it moves
     assert m["jerk"] == pytest.approx((gain(1) ** 3 + np.hypot(gain(1) ** 3, 0.05 * gain(8) ** 3)) / 2 / np.sqrt(2), rel=0.02)
     assert m["acc"] == pytest.approx((gain(1) ** 2 + np.hypot(gain(1) ** 2, 0.05 * gain(8) ** 2)) / 2 / np.sqrt(2), rel=0.02)
     assert m["limit_hits"] == pytest.approx((q[:, 1] < -0.96).mean() / 2) and m["limit_hits"] > 0  # within 1 % of the second joint's range
-    assert motion.joint_measures(np.zeros((20, 2)), dt, lo, hi)["hf_share"] == 0.0  # a joint at rest has no share
+    rest = motion.joint_measures(np.zeros((20, 2)), dt, lo, hi)
+    assert rest["hf_share"] == rest["hf_share_power"] == 0.0  # a joint at rest has no share
 
     hold = np.array([0, 1, 1, 1, 0, 1, 1], bool).reshape(-1, 1, 1)
     rel = np.zeros((7, 1, 1, 3))

@@ -10,7 +10,8 @@ the order given). Per rollout and for the demonstration:
 - acceleration and jerk: the RMS over the steps of the second and third differences of each arm joint's position, over dt^2
   and dt^3, then the mean over the arms' joints (rad/s^2, rad/s^3);
 - high-frequency share: per arm joint the share of its velocity's spectral power above 5 Hz (its mean removed; samples at
-  20 Hz hold up to 10 Hz), then the mean over the joints;
+  20 Hz hold up to 10 Hz), then the mean over the joints; and power over power (``hf_share_power``): the arms' joints' power above
+  5 Hz summed over the joints, over their total power, so that a joint that barely moves weighs as little as its power;
 - limit hits: the share of step and joint pairs within 1 % of the joint's range from a limit, for the arms' joints and,
   apart, for the grippers' fingers (an open gripper rests on its limit);
 - slip: over successive steps at which both fingers of one gripper touch a tracked object (MuJoCo's contacts at each
@@ -46,11 +47,12 @@ def joint_measures(q: np.ndarray, dt: float, lo: np.ndarray, hi: np.ndarray) -> 
     v = v - v.mean(0)
     power = np.abs(np.fft.rfft(v, axis=0)) ** 2
     freq = np.fft.rfftfreq(v.shape[0], dt)
-    total = power[freq > 0].sum(0)
-    share = np.where(total > 0, power[freq > CUTOFF_HZ].sum(0) / np.where(total > 0, total, 1), 0.0)
+    total, above = power[freq > 0].sum(0), power[freq > CUTOFF_HZ].sum(0)
+    share = np.where(total > 0, above / np.where(total > 0, total, 1), 0.0)
     near = (q - lo < LIMIT_FRAC * (hi - lo)) | (hi - q < LIMIT_FRAC * (hi - lo))
     return {"acc": float(rms(np.diff(q, 2, axis=0) / dt**2).mean()), "jerk": float(rms(np.diff(q, 3, axis=0) / dt**3).mean()),
-            "hf_share": float(share.mean()), "limit_hits": float(near.mean())}  # fmt: skip
+            "hf_share": float(share.mean()), "hf_share_power": float(above.sum() / total.sum()) if total.sum() > 0 else 0.0,
+            "limit_hits": float(near.mean())}  # fmt: skip
 
 
 def below(m: mujoco.MjModel, root: int) -> np.ndarray:
@@ -172,7 +174,8 @@ def measure(name: str, path: str, data_dir: str, scenes: dict) -> dict:
 
 def table(rows: list) -> str:
     """Per task and name each rollout's values in the order given, then the demonstration's over all its frames."""
-    cols = (("acc", "acceleration (rad/s²)", "{:.2f}", 1), ("jerk", "jerk (rad/s³)", "{:.1f}", 1), ("hf_share", "high-frequency share", "{:.3f}", 1),
+    cols = (("acc", "acceleration (rad/s²)", "{:.2f}", 1), ("jerk", "jerk (rad/s³)", "{:.1f}", 1),
+            ("hf_share", "high-frequency share", "{:.3f}", 1), ("hf_share_power", "the share, power over power", "{:.4f}", 1),
             ("slip_mm", "slip (mm per step)", "{:.2f}", 1), ("limit_hits", "arms' limit hits (%)", "{:.2f}", 100),
             ("finger_limit_hits", "fingers' limit hits (%)", "{:.1f}", 100),
             ("target_change", "target change (rad per step)", "{:.4f}", 1))  # fmt: skip
