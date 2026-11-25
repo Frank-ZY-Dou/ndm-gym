@@ -385,6 +385,22 @@ of 250 × 4096 states instead of 1000 × 4096 (`--replay-steps 250`). It is not 
 | `nm_a100_remat250_s2` | 0.716 | 1750 / 21.14 / 20.46 | 20.53 | 3250 / 39.17 / 38.49 | 0.872 (4984) | 0.872, 0 of 40 | 25.6 of 31.0 GB |
 | mean ± sd | 0.72 ± 0.00 | 1583 / 19.16 ± 1.72 / 18.48 ± 1.72 | 17.93 ± 2.33 | | | | |
 
+**Its published configuration on an H100 80GB SXM** (seeds 1, 2 and 5; seeds 0, 3 and 4 were cut short by other jobs of the machine, set
+aside unread and redone with the next seed): an hour each on one H100, while a second one ran this library's configurations (seed 1) or
+nothing.
+
+| run | s per update | first ≥ 0.82: update / min on its clock / min from update 50 | crossing, min (interpolated) | ≥ 0.82 without a fall, 3 in a row | best return (update) | last evaluation: return, clips with a fall | peak GPU memory |
+|---|---|---|---|---|---|---|---|
+| `nm_h100_published_s1` | 0.367 | 1500 / 9.38 / 9.00 | 8.76 | 1500 / 9.38 / 9.00 | 0.890 (9679) | 0.890, 0 of 40 | 44.7 of 63.8 GB |
+| `nm_h100_published_s2` | 0.366 | 1250 / 7.79 / 7.42 | 6.86 | 1250 / 7.79 / 7.42 | 0.890 (9500) | 0.889, 0 of 40 | 44.7 of 63.8 GB |
+| `nm_h100_published_s5` | 0.363 | 1250 / 7.72 / 7.35 | 7.10 | 2000 / 12.33 / 11.96 | 0.892 (9500) | 0.892, 0 of 40 | 44.8 of 63.8 GB |
+| mean ± sd | 0.365 ± 0.002 | 1333 / 8.30 ± 0.94 / 7.92 ± 0.93 | 7.57 ± 1.04 | 1583 / 9.83 ± 2.30 / 9.46 ± 2.31 | 0.891 ± 0.001 | 0.890 ± 0.001 | |
+
+This library's fast configurations on the second H100 at the same time, each a 60-iteration warm-up and then 3,000 iterations with a
+checkpoint every 100, scored after the training: SuperTrack 2.45 ± 0.19 min to return 0.82 (seeds 0-5) and SuperMimic 2.53 ± 0.17
+(seeds 0, 1 and 3-6), without the options `lafan1-supertrack-fast` and `lafan1-supermimic-fast` took later (the lean options, and
+`--pi_encode_once` for SuperMimic).
+
 **Beside this library's fastest configurations.** On one A100 40GB SXM4, SuperTrack reaches return 0.82 after
 4.13 ± 0.18 min and SuperMimic after 3.52 ± 0.30 min ([Training speed](#training-speed), seeds 0-2). NablaMimic's rows
 stand beside these numbers and are not ranked with them. The same in both: the 40 clips, the return's formula, each

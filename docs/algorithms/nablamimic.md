@@ -28,6 +28,12 @@ run, of the earlier recipe with absolute actions: 0.82 after 0.41 h.
 |---|---|---|---|---|---|
 | published, `configs/ours.args` | A100 80GB SXM4 | 0.67 | 14.48 ± 4.31 (15.12 ± 4.31) | 14.25 ± 3.39 | 0.876, 0.876, 0.851 |
 | reduced memory, `remat` with `--replay-steps 250` ([section 5](#5-memory-on-the-gpu)) | A100 40GB SXM4 | 0.72 | 18.48 ± 1.72 (19.16 ± 1.72) | 17.93 ± 2.33 | 0.871, 0.864, 0.872 |
+| published, `configs/ours.args` (seeds 1, 2 and 5) | H100 80GB SXM | 0.365 | 7.92 ± 0.93 (8.30 ± 0.94) | 7.57 ± 1.04 | 0.890, 0.889, 0.892 |
+
+The H100 runs were interrupted by other jobs of the machine: the interrupted seeds (0, 3 and 4) were set aside unread and redone
+with the next seed. On a second H100 at the same time `lafan1-supertrack-fast` and `lafan1-supermimic-fast` (without the options the two
+names took later: the lean options, and `--pi_encode_once` for SuperMimic; six seeds each) reached 0.82 after 2.45 ± 0.19 and 2.53 ±
+0.17 min.
 
 These numbers stand beside this library's [training speed](../../README.md#training-speed) on the A100 40GB SXM4
 (SuperTrack 4.13 ± 0.18 min and SuperMimic 3.52 ± 0.30 min to return 0.82, one GPU, seeds 0-2) and are not ranked
