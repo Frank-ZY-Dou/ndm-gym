@@ -95,3 +95,29 @@ def test_rollout_record(monkeypatch):
     assert torch.equal(rec["targets"][2], rec["actions"][2] + 2) and all(
         torch.equal(t, torch.full((3, 2), float(i))) for i, t in enumerate(rec0["targets"])
     )
+
+
+def test_scene_with_two_hands(monkeypatch):
+    """Two XHands: the scene's finger and palm-hinge columns are both hands', each fingertip knows its hand, the object is
+    measured in each palm's frame, and a hand holds the object only with two of its own fingertips."""
+    import mujoco
+
+    from tests.test_hand_tracking import XHAND_FINGERS, scene_xml
+
+    model = mujoco.MjModel.from_xml_string(scene_xml(XHAND_FINGERS, True, ("right", "left")))
+    monkeypatch.setattr(hmc, "load_scene", lambda clip: model)
+    sc = hmc.Scene("two_hands")
+    per = 6 + sum(XHAND_FINGERS.values())
+    assert sc.fingers.tolist() == [*range(6, per), *range(per + 6, 2 * per)] and sc.palm_hinges.tolist() == [3, 4, 5, per + 3, per + 4, per + 5]
+    assert sc.tip_hand.tolist() == [0] * 5 + [1] * 5 and len(sc.palm_sites) == 2
+    touch, tips_obj, obj_palm = sc.contacts_and_frames(np.tile(model.qpos0, (3, 1)))
+    assert touch.shape == (3, 10) and tips_obj.shape == (3, 10, 3) and obj_palm.shape == (3, 2, 3)
+    T = 6
+    touch = np.zeros((T, 10), bool)
+    touch[:, [0, 5]] = True  # one fingertip of each hand: neither holds
+    moving = np.zeros((T, 2, 3))
+    moving[:, :, 0] = np.arange(T)[:, None] * 0.001
+    assert hmc.slips(touch, np.zeros((T, 10, 3)), moving, sc.tip_hand)["object_slip_mm"] is None
+    touch[:, 6] = True  # the left hand's two: it holds, the object moving 1 mm a step in its palm's frame
+    s = hmc.slips(touch, np.zeros((T, 10, 3)), moving, sc.tip_hand)
+    assert abs(s["object_slip_mm"] - 1.0) < 1e-9 and s["held_steps"] == T

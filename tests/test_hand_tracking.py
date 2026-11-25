@@ -20,7 +20,7 @@ from ndm_gym.algos.hand_algos import HAND_ALGOS, WINDOW_KEYS, replay_fields
 from ndm_gym.buffer import ReplayBuffer
 from ndm_gym.core.muon import MuonAdam, hidden_matrices
 from ndm_gym.core.normalizer import RunningNorm
-from ndm_gym.robots.hands import FINGERTIP_SITES, PALM_SITE, HandKinematics, scene_indices
+from ndm_gym.robots.hands import HandKinematics, scene_indices
 from ndm_gym.train import add_train_args
 from ndm_gym.train_hand import HAND_DEFAULTS, UNSUPPORTED, parse_args
 from ndm_gym.tasks.hand_tracking import HOLD, HandTask, build_reference, flatten_state, unflatten_state
@@ -38,25 +38,28 @@ ALLEGRO_FINGERS = {"thumb": 4, "index": 4, "middle": 4, "ring": 4}  # the Allegr
 NUM_J = 6 + sum(XHAND_FINGERS.values())
 
 
-def scene_xml(fingers: dict = XHAND_FINGERS, palm_bodies: bool = True) -> str:
-    """The palm's slides and hinges (a chain of bodies, or the joints of one body), each finger a chain of its hinges
-    off the palm with its fingertip's site, and a free box."""
+def scene_xml(fingers: dict = XHAND_FINGERS, palm_bodies: bool = True, sides: tuple = ("right",)) -> str:
+    """Per side a hand: the palm's slides and hinges (a chain of bodies, or the joints of one body), each finger a chain
+    of its hinges off the palm with its fingertip's site; and a free box."""
     axes = ["1 0 0", "0 1 0", "0 0 1", "0 0 1", "1 0 0", "0 -1 0"]
-    palm_joints = [f"palm_joint_{i}" for i in range(6)]
-    joint = lambda i: f'<joint name="{palm_joints[i]}" type="{"slide" if i < 3 else "hinge"}" axis="{axes[i]}" range="-3 3"/>'  # noqa: E731
     geom = '<geom size="0.01" mass="0.1"/>'
-    palm = "".join(f"<body>{joint(i)}{geom}" for i in range(6)) if palm_bodies else "<body>" + "".join(joint(i) for i in range(6)) + geom
-    chains, finger_joints = "", []
-    for k, (finger, count) in enumerate(fingers.items()):
-        joints = [f"{finger}_joint_{i}" for i in range(count)]
-        finger_joints += joints
-        body = "".join(f'<body pos="0.01 {0.02 * k - 0.04} -0.03" quat="0.96 0.1 0.2 0.1"><joint name="{j}" axis="1 0.2 0" pos="0 0.005 0" range="0 1.5"/>'
-                       f'<geom size="0.008" mass="0.02"/>' for j in joints)  # fmt: skip
-        chains += body + f'<site name="right_{finger}_tip" pos="0 0.004 -0.027"/>' + "</body>" * count
-    actuators = "".join(f'<position joint="{j}" kp="50"/>' for j in palm_joints + finger_joints)
-    return (f'<mujoco><compiler angle="radian"/><worldbody><geom type="plane" size="1 1 0.1"/>{palm}<site name="{PALM_SITE}"/>{chains}'
-            f'{"</body>" * (6 if palm_bodies else 1)}<body name="right_object" pos="0.1 0 0.05"><freejoint/>'
-            f'<geom type="box" size="0.02 0.02 0.02" mass="0.1"/></body></worldbody><actuator>{actuators}</actuator></mujoco>')  # fmt: skip
+    hands, actuated = "", []
+    for side in sides:
+        palm_joints = [f"{side}_palm_joint_{i}" for i in range(6)]
+        joint = lambda i, names=palm_joints: f'<joint name="{names[i]}" type="{"slide" if i < 3 else "hinge"}" axis="{axes[i]}" range="-3 3"/>'  # noqa: E731
+        palm = "".join(f"<body>{joint(i)}{geom}" for i in range(6)) if palm_bodies else "<body>" + "".join(joint(i) for i in range(6)) + geom
+        chains, finger_joints = "", []
+        for k, (finger, count) in enumerate(fingers.items()):
+            joints = [f"{side}_{finger}_joint_{i}" for i in range(count)]
+            finger_joints += joints
+            body = "".join(f'<body pos="0.01 {0.02 * k - 0.04} -0.03" quat="0.96 0.1 0.2 0.1"><joint name="{j}" axis="1 0.2 0" pos="0 0.005 0" range="0 1.5"/>'
+                           f'<geom size="0.008" mass="0.02"/>' for j in joints)  # fmt: skip
+            chains += body + f'<site name="{side}_{finger}_tip" pos="0 0.004 -0.027"/>' + "</body>" * count
+        hands += f'{palm}<site name="{side}_palm"/>{chains}{"</body>" * (6 if palm_bodies else 1)}'
+        actuated += palm_joints + finger_joints
+    actuators = "".join(f'<position joint="{j}" kp="50"/>' for j in actuated)
+    return (f'<mujoco><compiler angle="radian"/><worldbody><geom type="plane" size="1 1 0.1"/>{hands}<body name="right_object" pos="0.1 0 0.05">'
+            f'<freejoint/><geom type="box" size="0.02 0.02 0.02" mass="0.1"/></body></worldbody><actuator>{actuators}</actuator></mujoco>')  # fmt: skip
 
 
 def hand_task(model: mujoco.MjModel, device: str = "cpu"):
@@ -75,35 +78,73 @@ def setup():
     return (model, *hand_task(model))
 
 
-@pytest.mark.parametrize("fingers,palm_bodies", [(XHAND_FINGERS, True), (ALLEGRO_FINGERS, False)])
-def test_kinematics_match_mujoco(fingers, palm_bodies):
-    """The palm as a chain of bodies or as one body's joints, five fingers or four: the keypoints are the palm and the
-    fingertips the hand has, and follow MuJoCo's."""
+@pytest.mark.parametrize("fingers,palm_bodies,sides", [(XHAND_FINGERS, True, ("right",)), (ALLEGRO_FINGERS, False, ("right",)),
+                                                       (XHAND_FINGERS, True, ("right", "left"))])  # fmt: skip
+def test_kinematics_match_mujoco(fingers, palm_bodies, sides):
+    """The palm as a chain of bodies or as one body's joints, five fingers or four, one hand or two: the keypoints are
+    per hand the palm and the fingertips it has, and follow MuJoCo's."""
     torch.manual_seed(0)
-    model = mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies))
+    model = mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies, sides))
     kin = HandKinematics(model, "cpu")
-    assert (kin.num_joints, kin.num_keypoints) == (6 + sum(fingers.values()), 1 + len(fingers))
+    hands = len(sides)
+    assert (kin.num_joints, kin.num_keypoints, kin.num_hands) == (hands * (6 + sum(fingers.values())), hands * (1 + len(fingers)), hands)
+    assert kin.palm_keypoints.tolist() == [h * (1 + len(fingers)) for h in range(hands)]
     idx, data = scene_indices(model), mujoco.MjData(model)
-    sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, n) for n in (PALM_SITE,) + FINGERTIP_SITES[: len(fingers)]]
+    names = [f"{side}_{part}" for side in sides for part in ("palm", *(f"{finger}_tip" for finger in fingers))]
+    sites = [mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_SITE, n) for n in names]
     q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(4, kin.num_joints)
     keypoints, palm_R = kin.forward(q)
     for i in range(4):
         data.qpos[idx["qpos"]] = q[i].numpy()
         mujoco.mj_kinematics(model, data)
         np.testing.assert_allclose(keypoints[i].numpy(), data.site_xpos[sites], atol=1e-5)
-        np.testing.assert_allclose(palm_R[i].numpy(), data.site_xmat[sites[0]].reshape(3, 3), atol=1e-5)
+        palms = palm_R[i].reshape(-1, 3, 3)  # one hand's (3, 3), two hands' (2, 3, 3)
+        for hand, k in enumerate(kin.palm_keypoints.tolist()):
+            np.testing.assert_allclose(palms[hand].numpy(), data.site_xmat[sites[k]].reshape(3, 3), atol=1e-5)
 
 
-def test_sizes_follow_the_hand(monkeypatch):
-    """A four-fingered hand with sixteen finger joints: the state, the observation and the networks take its sizes, and
-    an update of each algorithm runs."""
+def test_one_hand_keeps_the_plain_slices(setup):
+    """With one hand the kinematics, the observation, the errors, the termination and the world model's inputs are the
+    single-hand expressions (plain slices of the palm, its keypoint 0 and its joints 3: and 6:) bit for bit."""
+    from ndm_gym.core.rotations import mat_to_6d, rot_angle_sq
+
+    model, kin, task = setup
+    torch.manual_seed(1)
+    n = 8
+    q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(n, kin.num_joints)
+    keypoints, palm_R = fk = kin.forward(q)
+    assert palm_R.shape == (n, 3, 3) and kin.palm(q)[1].shape == (n, 3, 3)
+    R = torch.linalg.qr(torch.randn(n, 3, 3))[0]
+    S = (q, torch.randn(n, kin.num_joints), torch.randn(n, 3) * 0.05, R, torch.randn(n, 3), torch.randn(n, 3))
+    a_prev, f = torch.rand(n, kin.num_joints), torch.randint(0, task.ref.frames, (n,))
+    _, qd, p, _, v, w = S
+    Rt = palm_R.transpose(-1, -2)
+    local = lambda x: (Rt @ x.unsqueeze(-1)).squeeze(-1)  # noqa: E731
+    tips = (keypoints[..., 1:, :] - keypoints[..., :1, :]) @ palm_R
+    obs = torch.cat((q, 0.1 * qd, tips.flatten(-2), mat_to_6d(palm_R), local(p - keypoints[..., 0, :]), mat_to_6d(Rt @ R), local(v), 0.1 * local(w), a_prev), -1)
+    assert torch.equal(task.obs(S, fk, a_prev), obs) and torch.equal(kin.fingertips_about_palms(keypoints, palm_R), tips)
+    e = task.errors(S, fk, f)
+    assert torch.equal(e["finger"], (q[..., 6:] - task.ref.q[f][..., 6:]).pow(2).mean(-1).sqrt())
+    assert torch.equal(e["palm_ori_sq"], rot_angle_sq(palm_R, task.ref.palm_R[f]))
+    assert torch.equal(task.termination(S, fk, f), (e["object_pos"] > task.cfg.term_object) | (e["keypoint"][..., 0] > task.cfg.term_palm))
+    wm = HandWorldModel(kin.num_joints)
+    u = torch.rand(n, kin.num_joints)
+    inputs = torch.cat((q[..., 3:], qd, local(p - keypoints[..., 0, :]), mat_to_6d(Rt @ R), v, w, p[..., 2:3], mat_to_6d(R), u - q), -1)
+    assert torch.equal(wm.inputs(S, fk, u), inputs) and torch.equal(wm.inputs(S, kin.palm(q), u), inputs)
+
+
+@pytest.mark.parametrize("fingers,sides,sizes", [(ALLEGRO_FINGERS, ("right",), (22, 57, 3 * 22 + 3 * 4 + 21)),
+                                                 (XHAND_FINGERS, ("right", "left"), (36, 85, 3 * 36 + 3 * 10 + 2 * 21))])  # fmt: skip
+def test_sizes_follow_the_hands(monkeypatch, fingers, sides, sizes):
+    """A four-fingered hand with sixteen finger joints, and two XHands: the state, the observation and the networks take
+    their sizes, and an update of each algorithm runs, also with the world model on the palms' kinematics alone."""
     monkeypatch.setattr(torch, "compile", lambda f, **_: f)
     torch.manual_seed(0)
-    kin, task = hand_task(mujoco.MjModel.from_xml_string(scene_xml(ALLEGRO_FINGERS, palm_bodies=False)))
-    assert (kin.num_joints, task.state_dim, task.obs_dim) == (22, 57, 3 * 22 + 3 * 4 + 21)
-    for argv in (["--algo", "supermimic"], ["--algo", "supertrack", "--st_task_weights"]):
+    kin, task = hand_task(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies=False, sides=sides)))
+    assert (kin.num_joints, task.state_dim, task.obs_dim) == sizes
+    for argv in (["--algo", "supermimic"], ["--algo", "supertrack", "--st_task_weights"], ["--algo", "supermimic", "--wm_palm_fk"]):
         args, algo, buffer = agent_and_replay(kin, task, argv)
-        assert algo.pi.net[-1].out_features == 22
+        assert algo.pi.net[-1].out_features == kin.num_joints
         assert torch.isfinite(algo.wm_update(buffer))
         out = algo.policy_update(buffer)  # (loss, value loss: none for SuperTrack, ...)
         assert torch.isfinite(out[0]) and torch.isfinite(out[3])
@@ -874,14 +915,16 @@ def test_inductor_settings(monkeypatch):
     assert inductor.max_autotune_gemm and inductor.triton.cudagraphs == cudagraphs
 
 
-@pytest.mark.parametrize("fingers,palm_bodies", [(XHAND_FINGERS, True), (ALLEGRO_FINGERS, False)])
-def test_palm_kinematics(fingers, palm_bodies):
-    """HandKinematics.palm (--wm_palm_fk) is forward's palm keypoint and rotation bit for bit, from the palm's chain alone."""
-    kin = HandKinematics(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies)), "cpu")
+@pytest.mark.parametrize("fingers,palm_bodies,sides", [(XHAND_FINGERS, True, ("right",)), (ALLEGRO_FINGERS, False, ("right",)),
+                                                       (XHAND_FINGERS, True, ("right", "left"))])  # fmt: skip
+def test_palm_kinematics(fingers, palm_bodies, sides):
+    """HandKinematics.palm (--wm_palm_fk) is forward's palm keypoints and rotations bit for bit, from the palms' chains
+    alone, for one hand or two."""
+    kin = HandKinematics(mujoco.MjModel.from_xml_string(scene_xml(fingers, palm_bodies, sides)), "cpu")
     q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(64, kin.num_joints, generator=torch.Generator().manual_seed(0))
     (keypoints, palm_R), (palm, palm_R1) = kin.forward(q), kin.palm(q)
-    assert palm.shape == (64, 1, 3) and torch.equal(palm[:, 0], keypoints[:, 0]) and torch.equal(palm_R1, palm_R)
-    assert len(kin.palm_chain) == (6 if palm_bodies else 1) < len(kin.steps)
+    assert palm.shape == (64, len(sides), 3) and torch.equal(palm, keypoints[:, kin.palm_keypoints]) and torch.equal(palm_R1, palm_R)
+    assert len(kin.palm_chains) == len(sides) * (6 if palm_bodies else 1) < len(kin.steps)
 
 
 @pytest.mark.parametrize("extra", [[], ST_ARM, ST_ARM[:6] + ["--st_task_weights"]], ids=["supermimic", "supertrack", "supertrack_task_weights"])

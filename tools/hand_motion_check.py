@@ -16,8 +16,10 @@ share a label (a configuration's clips and seeds): the label's line is the mean 
 - joint-limit hits: the share of (step, finger joint) pairs within ``--limit_frac`` of the joint's range from a limit;
 - fingertip slip: for each fingertip in contact with the object at two consecutive steps, the displacement of its site in the
   object's frame between them; the mean over those (mm per step);
-- object slip: at the steps where at least two fingertips touch the object, the step-to-step displacement of the object in the
-  palm's frame; the mean over those (mm per step).
+- object slip: per hand, at the steps where at least two of its fingertips touch the object, the step-to-step displacement of
+  the object in its palm's frame; the mean over those (mm per step).
+
+With two hands the finger joints and fingertips are both hands', the palm's hinges both palms'.
 
 Contacts come from MuJoCo on the CPU at each recorded qpos (``mj_forward``); a fingertip is the body of its site. The kinematic
 reference has no contacts: it gives the joint measures, its own pose's change per step standing for the action change.
@@ -60,16 +62,22 @@ def change(x: np.ndarray) -> float:
 
 
 class Scene:
-    """A clip's scene on the CPU: the hand's joints, its fingertip and palm sites, the object's body and geoms."""
+    """A clip's scene on the CPU: the hands' joints (their finger and palm-hinge columns), their fingertip and palm sites, the
+    object's body and geoms."""
 
     def __init__(self, clip: str):
         self.model = load_scene(clip)
         self.data = mujoco.MjData(self.model)
-        joints = hand_joints(self.model)
+        joints, starts = hand_joints(self.model)
         self.qadr = np.array([int(self.model.jnt_qposadr[j]) for j in joints])
         self.lo, self.hi = self.model.jnt_range[joints].T
-        sites = hand_keypoints(self.model)
-        self.palm_site, self.tip_sites = sites[0], sites[1:]
+        stops = starts[1:] + [len(joints)]
+        self.fingers = np.array([c for a, b in zip(starts, stops, strict=True) for c in range(a + NUM_PALM, b)])
+        self.palm_hinges = np.array([c for a in starts for c in range(a + 3, a + NUM_PALM)])
+        hands = hand_keypoints(self.model)
+        self.palm_sites = [h[0] for h in hands]
+        self.tip_sites = [s for h in hands for s in h[1:]]
+        self.tip_hand = np.array([i for i, h in enumerate(hands) for _ in h[1:]])
         self.tip_bodies = [int(self.model.site_bodyid[s]) for s in self.tip_sites]
         self.obj = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, OBJECT_BODY)
         if self.obj < 0:
@@ -77,10 +85,10 @@ class Scene:
 
     def contacts_and_frames(self, qpos: np.ndarray) -> tuple:
         """Per step: which fingertips touch the object (T, F), the fingertips' sites in the object's frame (T, F, 3) and the
-        object in the palm's frame (T, 3)."""
+        object in each palm's frame (T, H, 3)."""
         m, d = self.model, self.data
         T, F = qpos.shape[0], len(self.tip_sites)
-        touch, tips_obj, obj_palm = np.zeros((T, F), bool), np.zeros((T, F, 3)), np.zeros((T, 3))
+        touch, tips_obj, obj_palm = np.zeros((T, F), bool), np.zeros((T, F, 3)), np.zeros((T, len(self.palm_sites), 3))
         for t in range(T):
             d.qpos[:] = qpos[t]
             mujoco.mj_forward(m, d)
@@ -92,20 +100,24 @@ class Scene:
             R, p = d.xmat[self.obj].reshape(3, 3), d.xpos[self.obj]
             for k, s in enumerate(self.tip_sites):
                 tips_obj[t, k] = R.T @ (d.site_xpos[s] - p)
-            Rp, pp = d.site_xmat[self.palm_site].reshape(3, 3), d.site_xpos[self.palm_site]
-            obj_palm[t] = Rp.T @ (p - pp)
+            for h, s in enumerate(self.palm_sites):
+                obj_palm[t, h] = d.site_xmat[s].reshape(3, 3).T @ (p - d.site_xpos[s])
         return touch, tips_obj, obj_palm
 
 
-def slips(touch: np.ndarray, tips_obj: np.ndarray, obj_palm: np.ndarray) -> dict:
-    """Fingertip slip and object slip (mm per step) from ``Scene.contacts_and_frames``; None where no step qualifies."""
+def slips(touch: np.ndarray, tips_obj: np.ndarray, obj_palm: np.ndarray, tip_hand: np.ndarray | None = None) -> dict:
+    """Fingertip slip and object slip (mm per step) from ``Scene.contacts_and_frames`` (``obj_palm`` (T, 3) for one hand or
+    (T, H, 3); ``tip_hand``: each fingertip's hand, by default the first); None where no step qualifies."""
+    obj_palm = obj_palm.reshape(len(obj_palm), -1, 3)
+    tip_hand = np.zeros(touch.shape[1], int) if tip_hand is None else tip_hand
     both = touch[1:] & touch[:-1]
     step = np.linalg.norm(np.diff(tips_obj, axis=0), axis=-1)
-    held = (touch.sum(1) >= 2)[1:] & (touch.sum(1) >= 2)[:-1]
+    holding = np.stack([touch[:, tip_hand == h].sum(1) >= 2 for h in range(obj_palm.shape[1])], 1)  # (T, H)
+    held = holding[1:] & holding[:-1]
     ostep = np.linalg.norm(np.diff(obj_palm, axis=0), axis=-1)
     return {"fingertip_slip_mm": float(step[both].mean() * 1000) if both.any() else None,
             "object_slip_mm": float(ostep[held].mean() * 1000) if held.any() else None,
-            "contact_steps": int(touch.any(1).sum()), "held_steps": int((touch.sum(1) >= 2).sum())}  # fmt: skip
+            "contact_steps": int(touch.any(1).sum()), "held_steps": int(holding.any(1).sum())}  # fmt: skip
 
 
 def measure(path: str, cutoff_hz: float, frac: float, scenes: dict, clip_root: str | None = None) -> dict:
@@ -122,19 +134,20 @@ def measure(path: str, cutoff_hz: float, frac: float, scenes: dict, clip_root: s
         clip = os.path.join(clip_root, clip[clip.index("processed/") :])
     sc = scenes.setdefault(clip, Scene(clip))
     dt = float(r["control_dt"])
-    fl, fh = sc.lo[NUM_PALM:], sc.hi[NUM_PALM:]
+    fi, ph = sc.fingers, sc.palm_hinges
+    fl, fh = sc.lo[fi], sc.hi[fi]
     out = {"dir": path, "clip": clip, "iteration": meta.get("iteration"), "frames": int(r["qpos"].shape[0])}
     for name, qp, tg in (("policy", r["qpos"], r["targets"]), ("reference_targets", r["reference_targets_qpos"], r["reference_targets"])):
         q = qp[:, sc.qadr]
-        m = joint_measures(q[:, NUM_PALM:], dt, cutoff_hz, fl, fh, frac)
-        palm = joint_measures(q[:, 3:NUM_PALM], dt, cutoff_hz, sc.lo[3:NUM_PALM], sc.hi[3:NUM_PALM], frac)
-        m.update({"palm_acc": palm["acc"], "palm_jerk": palm["jerk"], "target_change": change(tg[:, NUM_PALM:])})
-        m.update(slips(*sc.contacts_and_frames(qp)))
+        m = joint_measures(q[:, fi], dt, cutoff_hz, fl, fh, frac)
+        palm = joint_measures(q[:, ph], dt, cutoff_hz, sc.lo[ph], sc.hi[ph], frac)
+        m.update({"palm_acc": palm["acc"], "palm_jerk": palm["jerk"], "target_change": change(tg[:, fi])})
+        m.update(slips(*sc.contacts_and_frames(qp), sc.tip_hand))
         out[name] = m
-    out["policy"]["action_change"] = change(r["actions"][:, NUM_PALM:])
+    out["policy"]["action_change"] = change(r["actions"][:, fi])
     kq = r["reference_q"]
-    k = joint_measures(kq[:, NUM_PALM:], dt, cutoff_hz, fl, fh, frac)
-    k.update({"target_change": change(kq[:, NUM_PALM:])})
+    k = joint_measures(kq[:, fi], dt, cutoff_hz, fl, fh, frac)
+    k.update({"target_change": change(kq[:, fi])})
     out["reference_kinematic"] = k
     return out
 
