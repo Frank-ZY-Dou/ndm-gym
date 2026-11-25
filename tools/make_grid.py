@@ -42,8 +42,8 @@ The README's grids, from the repository's root:
   python tools/make_grid.py $M/robomimic/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
       --col_labels Lift Square "Transport (4x speed)" --row_labels SuperTrack SuperMimic \\
       $(for r in st sm; do for t in lift square transport; do echo --clip $M/robomimic/${t}_$r.webp; done; done)
-      (tools/render_robomimic.py's renders of each case's best seed's unperturbed rollout, 640 x 360 at 20 fps, Transport at
-      --speed 4 and --quality 55)
+      (tools/render_robomimic.py's renders of each case's run with the lowest object error among those whose own unperturbed
+      rollout passes the success test and the motion check, 640 x 360 at 20 fps, Transport at --speed 4 and --quality 55)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above. The
@@ -53,10 +53,11 @@ started open (--door-latch-offset 0.3, seed 0, the nominal start), drawn brighte
 hammer and relocate renders ($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each
 frame shown twice as long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its
 rollout. The fifth: the manipulation tracking renders (tools/render_robomimic.py --no_labels, 1040 x 780, as
-robomimic_<task>.mp4) of robomimic-supertrack's finals with the lowest object error per task, from the unperturbed start:
-Lift in real time, Square at 1.5 times the speed, Transport at four times over 12-36 s of its demonstration; their marks
-left out:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 1 --tile 256 192 --seconds 6 --quality 46 --max_mb 12 \\
+robomimic_<task>.mp4) of the run with the lowest object error per task among both algorithms' runs whose own unperturbed
+rollout passes the success test and the motion check (robomimic-supertrack's Lift seed 11 and Square seed 10,
+robomimic-supermimic's Transport seed 10), from the unperturbed start: Lift in real time, Square at 1.5 times the speed,
+Transport at four times over 12-36 s of its demonstration; their marks left out:
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 1 --tile 256 192 --seconds 6 --quality 45 --max_mb 12 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
