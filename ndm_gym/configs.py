@@ -17,6 +17,7 @@ SYSTEMS = "--fused_adam --elementwise_3x3 --combo_kernels --compile_eager --no_s
 # --critic_cudagraphs), RF_SPEED the RigidFormer's own
 SPEED = "--wm_cudagraphs --pi_cudagraphs --fused_adam --elementwise_3x3 --combo_kernels --compile_eager"
 RF_SPEED = "--rf_fused_train --rf_bptt_keep_blocks --rf_fit_keep_ops"
+RF_FUSED = "--rf_fused_readout --rf_fused_inputs"  # the read-out and the input features as kernels in the policy's BPTT
 RF_SMALL = "--rf_merge joints --rf_dim 128 --rf_layers 2 --rf_heads 4 --rf_registers 2"
 TIMED = "--iterations 6000 --ckpt_every 100"  # the timed runs' length and checkpoints, each evaluated (ndm-eval)
 LEAN = "--eprobe_lean --imag_hoist --wm_presample --muon_batched --gc_freeze"  # leaner probe sweeps and the learner's set (one GPU)
@@ -24,6 +25,12 @@ AWL4 = "--layout AWL --eprobe_gpu 3 --eprobe_every 250 --eprobe_async 4 --eprobe
 ST_FAST = f"--algo supertrack --st_fail_w 1 --st_balance_w 2 {RECIPE} --st_quad_w 0.5 --wm_lr 2e-3 --goal_table --pi_encode_once {RESETS} {SYSTEMS} {TIMED}"
 SM_FAST = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 {RECIPE} --pi_ema 0.99 --pi_batch 1024 --pi_lr_mult 2 "
            f"--pi_updates 1 --wm_lr 1.5e-3 --goal_table --contact_reward 0.15 --ref_contact_fix --sm_residual --wm_structured {RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
+# the small RigidFormer's configurations (LAFAN1), each algorithm's own, from the rounds for the time to return 0.82
+ST_RF = (f"--algo supertrack --st_fail_w 1 --st_balance_w 2 --wm_backbone rigidformer --wm_lr 4e-3 {RF_RECIPE} --wm_batches 2 {RF_SMALL} "
+         f"--goal_table --pi_encode_once {RF_SPEED} {RF_FUSED} {RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
+SM_RF = (f"--algo supermimic --reward_std_scale 0.7 --action_noise 0.3 --imag_start_perturb 0.15 --wm_backbone rigidformer --wm_lr 2.5e-3 "
+         f"{RF_RECIPE} --pi_ema 0.99 --pi_lr_mult 2 --contact_reward 0.25 --ref_contact_fix --sm_residual {RF_SMALL} {RF_SPEED} {RF_FUSED} "
+         f"{RESETS} {SYSTEMS} {TIMED}")  # fmt: skip
 # the most accurate configurations: the fastest ones trained 3 h with the learning rate's cosine over the 3 h, as their runs ran
 # (the arguments the runs recorded: tests/test_configs.py); SuperMimic's with action noise 0.1 in place of 0.3
 CONFIRMED_3H = "--max_hours 3 --iterations 1000000 --ckpt_every 2000 --lr_decay_hours 3"
@@ -88,12 +95,12 @@ CONFIGS = {
         "lafan1-supermimic-fast-4gpu": (f"{SM_FAST} --pi_encode_once {AWL4} --fk_fused",
                                         "LAFAN1 on four A100 40GB SXM4 (CUDA_VISIBLE_DEVICES of four GPUs): return 0.82 after 1.42 +- 0.09 min, 5.7 GPU-minutes "
                                         "(seeds 3-5; 1.49 +- 0.05 without --fk_fused in the same session)"),
-        "lafan1-supertrack-rf-accurate": (f"--algo supertrack --wm_backbone rigidformer --wm_lr 4e-4 --st_fail_w 5 --st_balance_w 2 --wm_batches 5 "
-                                          f"{SPEED} {RF_SPEED} --max_hours 3",
-                                          "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.832 +- 0.003, MPJPE 21.0 +- 1.3 mm (seeds 7-9)"),
-        "lafan1-supermimic-rf-accurate": (f"--algo supermimic --wm_backbone rigidformer --wm_lr 4e-4 --reward_std_scale 0.7 --action_noise 0.3 "
-                                          f"--imag_start_perturb 0.4 --wm_batches 7 {SPEED} --critic_cudagraphs {RF_SPEED} --max_hours 3",
-                                          "LAFAN1, RigidFormer world model, 3 h on an A100 40GB: return 0.804 +- 0.007, MPJPE 33.1 +- 0.5 mm (seeds 7-9)"),
+        "lafan1-supertrack-rf-accurate": (f"{ST_RF} {CONFIRMED_3H}",
+                                          "LAFAN1, small RigidFormer world model, 40 clips, 3 h on an A100 40GB SXM4 with the cosine over the 3 h "
+                                          "(about 36,060 iterations): return 0.886 +- 0.003, MPJPE 11.9 +- 0.3 mm (seeds 7-9)"),
+        "lafan1-supermimic-rf-accurate": (f"{SM_RF} {CONFIRMED_3H}",
+                                          "LAFAN1, small RigidFormer world model, 40 clips, 3 h on an A100 40GB SXM4 with the cosine over the 3 h "
+                                          "(about 24,620 iterations): return 0.892 +- 0.004, MPJPE 18.1 +- 0.5 mm (seeds 7-9)"),
         "two-g1-supertrack": (TWO_G1_ST_FAST,
                               "two G1s, InterHuman clip 1566 (add --motion_dir); its world-model loss as fused kernels (--st_wm_fused) and its "
                               "policy batch halved (--pi_batch 2048): return 0.88 after 3.48 +- 0.49 min, root-relative MPJPE there 16.8 mm, "

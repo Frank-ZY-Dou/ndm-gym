@@ -65,6 +65,45 @@ exclude 0.
   the order is the same: SuperTrack 0.898 ± 0.003 and 10.8 ± 0.0 mm at its last checkpoints, SuperMimic 0.913 ± 0.001
   and 16.7 ± 0.2 mm at 64,000 iterations (one evaluation per run).
 
+## The RigidFormer's most accurate configurations
+
+The named most accurate configurations with the small RigidFormer world model (`--rf_merge joints --rf_dim 128 --rf_layers 2`:
+one token per anatomical joint, width 128, 2 blocks): 3 h of training each on one A100 40GB SXM4, seeds 7-9, scored as the
+main comparison (the last checkpoint's three standard evaluations and its pushes of 1 and 2 m/s); mean ± sd over the seeds, beside
+the MLP's rows. No run dropped late (an evaluation during training below 0.60 after its first at or above 0.82).
+
+| 3 h on one A100 40GB SXM4, seeds 7-9 | SuperTrack, MLP | SuperMimic, MLP | SuperTrack-RF | SuperMimic-RF |
+|---|---|---|---|---|
+| return | 0.898 ± 0.002 | 0.915 ± 0.005 | 0.886 ± 0.003 | 0.892 ± 0.004 |
+| failed clips | 0.00 ± 0.00 | 0.00 ± 0.00 | 0.00 ± 0.00 | 0.00 ± 0.00 |
+| MPJPE-local (mm) | 10.8 ± 0.0 | 16.7 ± 0.1 | 11.9 ± 0.3 | 18.1 ± 0.5 |
+| joint angle (deg) | 2.07 ± 0.03 | 2.96 ± 0.02 | 2.14 ± 0.03 | 3.30 ± 0.11 |
+| failed at 1 m/s pushes | 2.0 ± 0.0 | 2.3 ± 0.6 | 2.0 ± 1.0 | 2.0 ± 0.0 |
+| failed at 2 m/s pushes | 15.7 ± 3.5 | 11.7 ± 0.6 | 14.0 ± 1.0 | 11.3 ± 0.6 |
+| iterations in 3 h | 63,200, 63,393, 63,324 | 66,837, 67,208, 67,058 | 35,998, 36,013, 36,157 | 24,613, 24,660, 24,594 |
+
+| per seed (7 / 8 / 9) | return | MPJPE-local (mm) | joint angle (deg) | failed at 2 m/s pushes |
+|---|---|---|---|---|
+| SuperTrack-RF | 0.885 / 0.883 / 0.889 | 11.6 / 12.1 / 11.8 | 2.12 / 2.17 / 2.12 | 14 / 15 / 13 |
+| SuperMimic-RF | 0.897 / 0.890 / 0.890 | 17.5 / 18.6 / 18.3 | 3.20 / 3.43 / 3.28 | 11 / 12 / 11 |
+
+| Welch 95 % intervals | return | MPJPE-local (mm) | joint angle (deg) | failed at 1 m/s pushes | failed at 2 m/s pushes |
+|---|---|---|---|---|---|
+| SuperTrack-RF - SuperMimic-RF | -0.006 [-0.015, 0.002] | **-6.2 [-7.4, -5.1]** | **-1.16 [-1.43, -0.90]** | +0.0 [-2.5, 2.5] | **+2.7 [0.6, 4.7]** |
+| SuperTrack-RF - SuperTrack MLP | **-0.012 [-0.018, -0.006]** | **+1.1 [0.5, 1.7]** | **+0.07 [0.01, 0.13]** | +0.0 [-2.5, 2.5] | -1.7 [-9.6, 6.3] |
+| SuperMimic-RF - SuperMimic MLP | **-0.022 [-0.033, -0.012]** | **+1.4 [0.1, 2.7]** | **+0.34 [0.06, 0.62]** | -0.3 [-1.8, 1.1] | -0.3 [-1.6, 1.0] |
+
+- **Same budget, fewer iterations.** All four rows train 3 h on one A100 40GB SXM4. An iteration of the RigidFormer takes longer
+  than the MLP's: SuperTrack-RF runs 57 % and SuperMimic-RF 37 % of the MLP's iterations in the 3 h, and scores below the MLP's row.
+- **How they were chosen.** Each algorithm's small RigidFormer comes from ten rounds of single changes for the time to return
+  0.82 (seed 0), the same change for both where it applies and each algorithm's own options besides. The fastest of each then
+  trained 3 h in two arms, its schedule as it was and the learning rate's cosine over the 3 h (`--lr_decay_hours 3`), one run each
+  with seed 0, and the better arm, the cosine for both, trained on seeds 7-9 (SuperTrack-RF: return 0.889 against 0.875,
+  MPJPE-local 11.7 against 13.0 mm; SuperMimic-RF: 0.901 against 0.701, 17.3 against 26.5 mm).
+- **What was not tuned.** At 3 h only the schedule was compared for the RigidFormer. The MLP's rows had further options tried at
+  3 h (the lean options, SuperMimic's action noise of 0.1 in place of 0.3). SuperMimic-RF keeps an action noise of 0.3; its three
+  runs did not drop late.
+
 ## The 3 h configurations at one budget
 
 These were the named 3 h configurations until [the most accurate configurations](#the-most-accurate-configurations)
@@ -606,7 +645,8 @@ Checkpoints of the selected configurations: SuperTrack last: iterations 12670, 1
 
 ## RigidFormer's final configurations
 
-SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
+These were the named RigidFormer configurations until [the small RigidFormer's](#the-rigidformers-most-accurate-configurations)
+replaced them. SuperTrack-RF and SuperMimic-RF tuned online as the MLP was, with every speed option, on 3 h runs with seed 0 (one A100
 40GB each; the RigidFormer after 21 and 19 tuning runs in all, SuperTrack-RF's and SuperMimic-RF's, the MLP after 12),
 ranked by return and, within 0.01, by fewer failed clips: SuperTrack-RF `--st_balance_w 2 --wm_batches 5`,
 SuperMimic-RF `--imag_start_perturb 0.4 --wm_batches 7`, both `--wm_lr 4e-4`. The selected configurations then ran on
