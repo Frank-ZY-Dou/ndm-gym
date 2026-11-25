@@ -37,7 +37,7 @@ site and the fingertip sites it has. The task, the world model, the policy and t
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire      # default: every hand of the task list
-# each algorithm's time configuration on the Allegro hand
+# each algorithm's time configuration on the Allegro hand, without the target-rate penalty
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
@@ -84,7 +84,9 @@ trade the hand's pose against the object as the reward does.
 
 [SuperMimic](../algorithms/supermimic.md) (the default): the world model predicts the increments of the state; the
 policy maximizes the imagined tracking return with a soft survival weight and a critic beyond the horizon.
-`--bptt_decay` scales the gradient through the imagined state at every step.
+
+Both take `--bptt_decay lam`: the policy's gradient through every imagined state times `lam` (1, the default, is off;
+`hand-supermimic-fast` has 0.95).
 
 ## Smooth targets
 
@@ -97,9 +99,10 @@ mean over the joints of the change of the policy's part of the position targets 
 its tracking kernel's width (`keypoint_std` for the palm's translation, `palm_ori_std` for its rotation, `finger_std` for
 the fingers), squared. A jump costs; following the reference does not. SuperMimic's reward subtracts it. SuperTrack's loss
 adds it, summed over the imagined window, or with `--st_cost_mean` (with `--st_task_weights`) as its mean over the window,
-the scale of the task-weighted tracking terms, so that it weighs against them as in the reward. The XHand's rows in the
-README use `--target_rate_w 4`, SuperTrack's with `--st_cost_mean`
-([results](../../benchmarks/xhand_tracking/results.md#the-xhand-with-the-target-rate-penalty)).
+the scale of the task-weighted tracking terms, so that it weighs against them as in the reward. The README's
+most accurate rows, and the XHand's time rows, use `--target_rate_w 4` on the XHand and the Allegro hand and 12.5 on the
+Inspire hand, SuperTrack's with `--st_cost_mean` (results: [the XHand](../../benchmarks/xhand_tracking/results.md#the-xhand-with-the-target-rate-penalty),
+[the other two hands](../../benchmarks/xhand_tracking/results.md#the-allegro-hand-and-the-inspire-hand-with-the-target-rate-penalty)).
 
 `tools/hand_motion_check.py` measures an evaluation's unperturbed rollout against its clip's references, on the finger
 joints: the acceleration and jerk of their positions, the share of their velocity's spectral power above 5 Hz, the change of
@@ -111,8 +114,21 @@ python -m ndm_gym.evaluate_hand --ckpt logs/apple_st/last.pt --out logs/apple_st
 python tools/hand_motion_check.py st=logs/apple_st/evaluation --json motion.jsonl
 ```
 
-The README's motion check: over a configuration's runs, the share above 5 Hz, the jerk and the targets' change per step
-at most 2, 1.5 and 2 times its clips' kinematic references'.
+The share is read two ways: the mean over the finger joints of each joint's own share, and power-weighted
+(`hf_share_power`), the joints' power above 5 Hz over their total power, so that a joint that barely moves weighs as little
+as it moves (a joint held at a limit, whose little motion is mostly above 5 Hz, weighs much in the mean of the joints'
+shares). The README's motion check: over a configuration's runs, the share above 5 Hz, the jerk and the targets' change per
+step at most 2, 1.5 and 2 times its clips' kinematic references', with the mean of the joints' shares on the XHand and the
+power-weighted share on the Allegro hand and the Inspire hand (on these two both are reported). A shown run
+passes it on its own rollout, on the Allegro hand and the Inspire hand by both shares.
+
+## Noise-free worlds
+
+A step's collection adds exploration noise to the policy's action (`--action_noise`), so the replay and the starts of the
+imagined rollouts hold the states the noisy policy reached; the evaluation runs the policy without it. With
+`--noise_free_frac f` (both algorithms; 0, the default, is off) the first `round(f N)` worlds collect without the noise, so that
+the policy's own states are among them. The other worlds' draws are the default step's. The Inspire hand's most accurate rows in the
+README use `--noise_free_frac 0.25`.
 
 ## Systems options
 
@@ -164,13 +180,14 @@ the reference pose as the targets, `--source reference` the reference alone; `to
 `--look noir` renders on a dark stage, `--brightness` scales its sky, floor and lights, and `--ghost_overlay` draws the
 reference over the frame as a blue silhouette. The README's animations use `--look noir --brightness 1.6 --orbit 30
 --zoom 0.72 --follow_z --elevation -12 --ghost_overlay` (the Allegro hand's `--zoom 0.9`);
-`benchmarks/xhand_tracking/scripts/hand_grid.py` tiles the 18 renders (three hands, two algorithms, three clips) into
+`benchmarks/xhand_tracking/scripts/hand_grid.py` tiles the renders (three hands, two algorithms, three clips; `--none inspire_supertrack_can
+inspire_supermimic_can` for the cells that have none) into
 the README's grid as one synchronized loop, and the single animations are
-`docs/media/hand/<hand>_<algorithm>_<clip>.webp`. On the dark stage a hand darker than mid grey (the Allegro's, the
+`docs/media/hand/<hand>_<algorithm>_<clip>.webp` (the Inspire hand's can has none). On the dark stage a hand darker than mid grey (the Allegro's, the
 Inspire's) is lifted to graphite.
 
-The README's animations one by one (per hand, algorithm and clip one policy: on the XHand a run with smooth targets,
-elsewhere the lowest object error among that algorithm's configurations of record; which runs and why:
+The README's animations one by one (per hand, algorithm and clip one policy, a run with smooth targets that passes the motion
+check on its own rollout; which runs, why, and why the Inspire hand's can has none:
 [results](../../benchmarks/xhand_tracking/results.md#the-readmes-animations)):
 
 | | apple | spray bottle | can |
@@ -179,7 +196,7 @@ elsewhere the lowest object error among that algorithm's configurations of recor
 | XHand, SuperMimic | <img src="../media/hand/xhand_supermimic_apple.webp" alt="XHand, SuperMimic, apple" width="320"/> | <img src="../media/hand/xhand_supermimic_oakink_a01002.webp" alt="XHand, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/xhand_supermimic_can.webp" alt="XHand, SuperMimic, can" width="320"/> |
 | Allegro, SuperTrack | <img src="../media/hand/allegro_supertrack_apple.webp" alt="Allegro, SuperTrack, apple" width="320"/> | <img src="../media/hand/allegro_supertrack_oakink_a01002.webp" alt="Allegro, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/allegro_supertrack_can.webp" alt="Allegro, SuperTrack, can" width="320"/> |
 | Allegro, SuperMimic | <img src="../media/hand/allegro_supermimic_apple.webp" alt="Allegro, SuperMimic, apple" width="320"/> | <img src="../media/hand/allegro_supermimic_oakink_a01002.webp" alt="Allegro, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/allegro_supermimic_can.webp" alt="Allegro, SuperMimic, can" width="320"/> |
-| Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/inspire_supertrack_can.webp" alt="Inspire, SuperTrack, can" width="320"/> |
-| Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/inspire_supermimic_can.webp" alt="Inspire, SuperMimic, can" width="320"/> |
+| Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | |
+| Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | |
 
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

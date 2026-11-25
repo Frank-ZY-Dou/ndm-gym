@@ -48,7 +48,7 @@ MuJoCo model.
 |---|---|---|
 | LAFAN1 tracking | SuperTrack's configuration from the tuning rounds, MLP world model, seed 2, 3 h checkpoint: dance1_subject2, fight1_subject2, fallAndGetUp2_subject2 and sprint1_subject2, 6 s of each clip's window in its section | |
 | Two G1s, muscles | SuperTrack's selected configuration on each task, MLP world model; MuscleVAE's walk and run | two G1s 13.2 mm (MPJPE, root-relative, over the window shown); the walk 24.9 mm (MPJPE, root frame, over its episodes) |
-| Hand-object | SuperTrack's runs in its section's grid ([which](benchmarks/xhand_tracking/results.md#the-readmes-animations)): the XHand on the spray bottle and the apple, the Allegro hand on the spray bottle, the Inspire hand on the can; half speed, last frames held | |
+| Hand-object | SuperTrack's runs in its section's grid ([which](benchmarks/xhand_tracking/results.md#the-readmes-animations)): the XHand on the spray bottle and the apple, the Allegro hand on the spray bottle, the Inspire hand on the apple; half speed, last frames held | |
 | Human-object interaction | carry_box_over_shoulder, open_foldchair-sit, roll_ball-hand and topple_wood_board_and_cross: one policy per task, trained in the world model and run in the simulator (evaluation seed 1), at 1.5 times the speed | |
 | RoboKit planning | G1 box carrying, G1 climbing and Go2 jumping, planned on SuperTrack's world model and executed on MuJoCo Warp; the references in blue | planning 3.0x, 1.8x and 2.1x faster than on MuJoCo Warp |
 | mbrl-lib planning | its CEM controller planning on SuperTrack's acceleration model, each plan executed in MuJoCo: the cart-pole (planner seed 10) and the pusher (seed 17), recorded again on a CPU in fp32 with the A100 runs' fits; half speed | returns 175.96 and -65.89 (175.77 and -62.53 in the A100 runs) |
@@ -119,12 +119,12 @@ re-verified on an A100. Manipulation: Lift / Square / Transport; the target is t
 |  | 🚀 fastest, three GPUs | `two-g1-supertrack-3gpu` and `two-g1-supermimic-3gpu` (the same with layout AWL: actor, world model and policy on a GPU each) | return 0.88 after **1.63 ± 0.15** and **1.48 ± 0.16 min**, level within the seeds' spread; root-relative MPJPE there **16.1 ± 0.3** and **20.6 ± 0.5 mm**, on three A100 40GB SXM4 (seeds 0-2) |
 |  | 🎯 lowest pose error (root-relative) | `two-g1-supertrack` | root-relative MPJPE **14.1 ± 0.2 mm** (MLP world model, seeds 0-2, 9,396 iterations) |
 |  | 📈 highest return | `two-g1-supermimic` | return **0.9055 ± 0.0011** (MLP world model, seeds 0-2, 9,396 iterations) |
-| **[Hand-object tracking](#hand-object-tracking)**, Inspire hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast` with the [speed options](#hand-object-tracking) | **1.0 / 0.8 / 2.0 min**, every run, mean 1.30 min (an A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 2.19 min) |
-|  | 🚀 fastest, three GPUs | `hand-supertrack-fast` with the speed options and `--layout AWL` | **0.6 / 0.6 / 0.9 min**, every run, mean 0.70 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 1.46 min) |
-|  | 🎯 most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object position **2.4 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
-| **Hand-object tracking**, Allegro hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast --st_fail_w 5` and `hand-supermimic-fast` with the speed options, level | **1.1 / 0.8 / 3.9** and **1.0 / 3.7 / 1.1 min**, every run, both a mean of 1.96 min (an A100 40GB, seeds 0-2) |
-|  | 🚀 fastest, three GPUs | `hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL` | **0.7 / 0.7 / 2.7 min**, 8 of 9 runs, mean 1.40 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast` 1.44 min, 7 of 9) |
-|  | 🎯 most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object position **2.6 / 1.3 / 2.0 mm** at a success of 99.7-100 % (seeds 0-2, A100 40GB) |
+| **[Hand-object tracking](#hand-object-tracking)**, Inspire hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast` with the [speed options](#hand-object-tracking), without the target-rate penalty | **1.0 / 0.8 / 2.0 min**, every run, mean 1.30 min (an A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 2.19 min) |
+|  | 🚀 fastest, three GPUs | `hand-supertrack-fast` with the speed options and `--layout AWL`, without the target-rate penalty | **0.6 / 0.6 / 0.9 min**, every run, mean 0.70 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast --lr 2e-4` 1.46 min) |
+|  | 🎯 most accurate, smooth targets | `hand-supertrack-fast --st_imag_noise 0.1 --target_rate_w 12.5 --st_cost_mean --noise_free_frac 0.25 --iterations 20000` | object position **2.5 / 1.4 / 2.8 mm** at a success of 99.9-100 % (seeds 20-22, A100 40GB); `hand-supermimic-accurate` with [HOI's optimizer options](benchmarks/xhand_tracking/results.md#the-allegro-hand-and-the-inspire-hand-with-the-target-rate-penalty) and `--target_rate_w 12.5 --noise_free_frac 0.25` **4.9 / 2.9 / 3.6 mm** at 100 % |
+| **Hand-object tracking**, Allegro hand, three clips | 🚀 fastest, one GPU | `hand-supertrack-fast --st_fail_w 5` and `hand-supermimic-fast` with the speed options, without the target-rate penalty, level | **1.1 / 0.8 / 3.9** and **1.0 / 3.7 / 1.1 min**, every run, both a mean of 1.96 min (an A100 40GB, seeds 0-2) |
+|  | 🚀 fastest, three GPUs | `hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL`, without the target-rate penalty | **0.7 / 0.7 / 2.7 min**, 8 of 9 runs, mean 1.40 min (three A100 40GB, seeds 0-2; `hand-supermimic-fast` 1.44 min, 7 of 9) |
+|  | 🎯 most accurate, smooth targets | `hand-supertrack-fast --st_fail_w 5 --target_rate_w 4 --st_cost_mean --iterations 20000` | object position **2.6 / 1.5 / 2.6 mm** at a success of 99.6-100 % (seeds 0-2 and 17-19, A100 40GB); `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000` **3.7 / 3.3 / 3.7 mm** at 99.7-100 % |
 | **Hand-object tracking**, XHand, three clips, smooth targets (`--target_rate_w 4`) | 🚀 fastest, one GPU | `hand-supermimic-fast --wm_batches 2` with the [speed options](#hand-object-tracking) | **0.8 / 0.8 / 1.0 min**, every run, mean 0.86 min, object 3.5 mm (an A100 40GB, seeds 0-2); `hand-supertrack-fast --st_cost_mean` mean 0.93 min with the lower object error, 2.5 mm |
 |  | 🚀 fastest, three GPUs | `hand-supertrack-fast --st_cost_mean` with the speed options and `--layout AWL` | **0.5 / 0.6 / 0.8 min**, every run, mean 0.62 min, object 2.2 mm (three A100 40GB, seeds 0-2); `hand-supermimic-fast --wm_batches 2` 0.69 min, 3.4 mm |
 |  | 🎯 most accurate | `hand-supertrack-fast --st_cost_mean --iterations 20000` | object position **2.9 / 1.6 / 2.3 mm** at a success of 100 % (seeds 0-2, A100 40GB); `hand-supermimic-fast --action_noise 0.2 --iterations 20000` **3.6 / 2.2 / 3.8 mm** |
@@ -175,12 +175,12 @@ both methods are on offer for every task.
 | | fastest, one GPU | `two-g1-supertrack`: return 0.88 in 3.48 ± 0.49 min, root-relative MPJPE there 16.8 mm (seeds 0-3, A100 40GB SXM4) | `two-g1-supermimic`: 2.70 ± 0.27 min, 20.5 mm |
 | | fastest, three GPUs (`--layout AWL`) | `two-g1-supertrack-3gpu`: 1.63 ± 0.15 min, 16.1 mm (seeds 0-2, three A100 40GB SXM4) | `two-g1-supermimic-3gpu`: 1.48 ± 0.16 min, 20.6 mm |
 | **Two G1s**, RigidFormer | | `two-g1-supertrack-rf`: 0.894 ± 0.002, 47.2 / 14.7 mm (0.5 h, 4,373 iterations) | `two-g1-supermimic-rf`: 0.904 ± 0.001, 45.8 / 17.0 mm (0.5 h, 5,718 iterations) |
-| **Inspire hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`: object 2.4 / 1.3 / 2.0 mm | `hand-supermimic-accurate`: 5.2 / 2.5 / 11.2 mm |
-| | fastest, one GPU, with the speed options | `hand-supertrack-fast`: the target in 1.0 / 0.8 / 2.0 min (9 of 9 runs, mean 1.30) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min (8 of 9, mean 2.19) |
-| | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 0.9 min (9 of 9 runs, mean 0.70) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.6 / 1.0 min (7 of 9, mean 1.46) |
-| **Allegro hand** (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --st_fail_w 5 --iterations 20000`: object 2.6 / 1.3 / 2.0 mm | `hand-supermimic-fast --action_noise 0.2 --iterations 20000`: 3.7 / 11.7 / 3.4 mm |
-| | fastest, one GPU, with the speed options | `hand-supertrack-fast --st_fail_w 5`: the target in 1.1 / 0.8 / 3.9 min (9 of 9 runs, mean 1.96) | `hand-supermimic-fast`: 1.0 / 3.7 / 1.1 min (9 of 9, mean 1.96) |
-| | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast --st_fail_w 5`: the target in 0.7 / 0.7 / 2.7 min (8 of 9 runs, mean 1.40) | `hand-supermimic-fast`: 0.7 / 0.9 / 0.8 min (7 of 9, mean 1.44) |
+| **Inspire hand** (`train_hand`, add `--clip`) | most accurate, smooth targets | `hand-supertrack-fast --st_imag_noise 0.1 --target_rate_w 12.5 --st_cost_mean --noise_free_frac 0.25 --iterations 20000`: object 2.5 / 1.4 / 2.8 mm | `hand-supermimic-accurate --pi_opt muon --wm_opt muon --pi_ema 0.995 --pi_lr_mult 2 --lr_decay_ret 0.95 --lr_decay_by 1400 --lr_decay_len 300 --target_rate_w 12.5 --noise_free_frac 0.25`: 4.9 / 2.9 / 3.6 mm |
+| | fastest, one GPU, with the speed options, without the target-rate penalty | `hand-supertrack-fast`: the target in 1.0 / 0.8 / 2.0 min (9 of 9 runs, mean 1.30) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.8 / 4.0 min (8 of 9, mean 2.19) |
+| | fastest, three GPUs (`--layout AWL`), with the speed options, without the target-rate penalty | `hand-supertrack-fast`: the target in 0.6 / 0.6 / 0.9 min (9 of 9 runs, mean 0.70) | `hand-supermimic-fast --lr 2e-4`: 1.0 / 0.6 / 1.0 min (7 of 9, mean 1.46) |
+| **Allegro hand** (`train_hand`, add `--clip`) | most accurate, smooth targets | `hand-supertrack-fast --st_fail_w 5 --target_rate_w 4 --st_cost_mean --iterations 20000`: object 2.6 / 1.5 / 2.6 mm | `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`: 3.7 / 3.3 / 3.7 mm |
+| | fastest, one GPU, with the speed options, without the target-rate penalty | `hand-supertrack-fast --st_fail_w 5`: the target in 1.1 / 0.8 / 3.9 min (9 of 9 runs, mean 1.96) | `hand-supermimic-fast`: 1.0 / 3.7 / 1.1 min (9 of 9, mean 1.96) |
+| | fastest, three GPUs (`--layout AWL`), with the speed options, without the target-rate penalty | `hand-supertrack-fast --st_fail_w 5`: the target in 0.7 / 0.7 / 2.7 min (8 of 9 runs, mean 1.40) | `hand-supermimic-fast`: 0.7 / 0.9 / 0.8 min (7 of 9, mean 1.44) |
 | **XHand**, smooth targets (`train_hand`, add `--clip`) | most accurate | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000`: object 2.9 / 1.6 / 2.3 mm | `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`: 3.6 / 2.2 / 3.8 mm |
 | | fastest, one GPU, with the speed options | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --st_no_imag_r`: the target in 0.7 / 0.8 / 1.3 min (mean 0.93, 18.4 it/s), object 2.5 mm | `hand-supermimic-fast --wm_batches 2 --target_rate_w 4`: 0.8 / 0.8 / 1.0 min (mean 0.86, 19.5 it/s), 3.5 mm |
 | | fastest, three GPUs (`--layout AWL`), with the speed options | `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --st_no_imag_r`: the target in 0.5 / 0.6 / 0.8 min (mean 0.62, 39.4 it/s), object 2.2 mm | `hand-supermimic-fast --wm_batches 2 --target_rate_w 4`: 0.6 / 0.7 / 0.8 min (mean 0.69, 30.4 it/s), 3.4 mm |
@@ -210,8 +210,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
 - **[2026-11] Tasks:** [human-object interaction](#human-object-interaction-hdmis-tasks) (HDMI's 13 tasks, policies on
   12), a [muscle-actuated character](#muscle-actuated-character) (MuscleVAE's), [two G1s](#two-g1s-one-two-person-clip)
   on a two-person clip ([three training seeds](benchmarks/g1_boxing/results.md#training-seeds-0-2)),
-  [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand (the XHand's with
-  smooth position targets, its finger motion checked against the reference),
+  [hand-object tracking](#hand-object-tracking) on the XHand, the Allegro hand and the Inspire hand (with smooth position
+  targets, the finger motion checked against the reference; the Allegro hand's and the Inspire hand's time rows without them),
   [quadrotor trajectory tracking](#quadrotor-trajectory-tracking) on Race Against the Machine's flights, autonomous and piloted,
   [Adroit Door tracking](#adroit-door-tracking) and
   [Adroit Pen, Hammer and Relocate tracking](#adroit-pen-hammer-and-relocate-tracking), each from one of DAPG's demonstrations,
@@ -420,7 +420,7 @@ python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/roll
 # a task and seed of the benchmark (benchmarks/xhand_tracking/tasks.json): SuperTrack, then SuperMimic's defaults
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_st --algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights
 benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/xhand_sm
-# another hand of the task list (allegro, inspire): each algorithm's time configuration on the Allegro hand
+# another hand of the task list (allegro, inspire): each algorithm's time configuration on the Allegro hand, without the target-rate penalty
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
 ```
@@ -924,92 +924,112 @@ kinematic retarget of the captured hand and of the object's pose. Contributed by
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|
-| Inspire | most accurate | `--config hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000` | object 2.4 / 1.3 / 2.0 mm at 99.7-100 % |
-| | fastest, one GPU | `--config hand-supertrack-fast` with the speed options | 1.0 / 0.8 / 2.0 min, every run |
-| | fastest, three GPUs | `--config hand-supertrack-fast` with the speed options and `--layout AWL` | 0.6 / 0.6 / 0.9 min, every run |
-| Allegro | most accurate | `--config hand-supertrack-fast --st_fail_w 5 --iterations 20000` | object 2.6 / 1.3 / 2.0 mm at 99.7-100 % |
-| | fastest, one GPU | `--config hand-supertrack-fast --st_fail_w 5` and `--config hand-supermimic-fast`, each with the speed options, level | 1.1 / 0.8 / 3.9 and 1.0 / 3.7 / 1.1 min, every run, both a mean of 1.96 min |
-| | fastest, three GPUs | `--config hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL` | 0.7 / 0.7 / 2.7 min, 8 of 9 runs, mean 1.40 min; `hand-supermimic-fast` 0.7 / 0.9 / 0.8 min, 7 of 9, mean 1.44 min |
-| XHand | most accurate | `--config hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000` | object 2.9 / 1.6 / 2.3 mm at 100 %; `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000` 3.6 / 2.2 / 3.8 mm |
+| Inspire | most accurate, smooth targets | `--config hand-supertrack-fast --st_imag_noise 0.1 --target_rate_w 12.5 --st_cost_mean --noise_free_frac 0.25 --iterations 20000` | object 2.5 / 1.4 / 2.8 mm at 99.9-100 %; `hand-supermimic-accurate` with [HOI's optimizer options](benchmarks/xhand_tracking/results.md#the-allegro-hand-and-the-inspire-hand-with-the-target-rate-penalty), `--target_rate_w 12.5 --noise_free_frac 0.25`, 4.9 / 2.9 / 3.6 mm at 100 % |
+| | fastest, one GPU, without the target-rate penalty | `--config hand-supertrack-fast` with the speed options | 1.0 / 0.8 / 2.0 min, every run |
+| | fastest, three GPUs, without the target-rate penalty | `--config hand-supertrack-fast` with the speed options and `--layout AWL` | 0.6 / 0.6 / 0.9 min, every run |
+| Allegro | most accurate, smooth targets | `--config hand-supertrack-fast --st_fail_w 5 --target_rate_w 4 --st_cost_mean --iterations 20000` | object 2.6 / 1.5 / 2.6 mm at 99.6-100 %; `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000` 3.7 / 3.3 / 3.7 mm at 99.7-100 % |
+| | fastest, one GPU, without the target-rate penalty | `--config hand-supertrack-fast --st_fail_w 5` and `--config hand-supermimic-fast`, each with the speed options, level | 1.1 / 0.8 / 3.9 and 1.0 / 3.7 / 1.1 min, every run, both a mean of 1.96 min |
+| | fastest, three GPUs, without the target-rate penalty | `--config hand-supertrack-fast --st_fail_w 5` with the speed options and `--layout AWL` | 0.7 / 0.7 / 2.7 min, 8 of 9 runs, mean 1.40 min; `hand-supermimic-fast` 0.7 / 0.9 / 0.8 min, 7 of 9, mean 1.44 min |
+| XHand, smooth targets | most accurate | `--config hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000` | object 2.9 / 1.6 / 2.3 mm at 100 %; `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000` 3.6 / 2.2 / 3.8 mm |
 | | fastest, one GPU | `--config hand-supermimic-fast --wm_batches 2 --target_rate_w 4` with the speed options | 0.8 / 0.8 / 1.0 min, every run, mean 0.86 min, object 3.5 mm; `hand-supertrack-fast --st_cost_mean --target_rate_w 4` mean 0.93 min with the lower object error, 2.5 mm |
 | | fastest, three GPUs | `--config hand-supertrack-fast --st_cost_mean --target_rate_w 4` with the speed options and `--layout AWL` | 0.5 / 0.6 / 0.8 min, every run, mean 0.62 min, object 2.2 mm; `hand-supermimic-fast --wm_batches 2 --target_rate_w 4` mean 0.69 min, 3.4 mm |
 
-Mean of training seeds 0-2 on A100 40GB GPUs, each timed run alone on its GPU or its three GPUs. Object: position error
-over 256 perturbed starts, at the last of 20,000 iterations (Inspire, Allegro) or once converged (XHand: at the first
-checkpoint from 6,000 iterations on, every 1,000, with a success of at least 0.99 and an object error less than 3 % better
-than 2,000 iterations earlier, both read on 64 other starts; SuperTrack's runs stopped at 6,000-7,000, SuperMimic's at
-6,000-11,000). Time: minutes to a success of 0.99 with the object within 10 mm, with the speed options and a warm compile
-cache (a configuration's first run on a machine compiles for about 3 minutes more): `--compile_updates --elementwise_3x3
---combo_kernels --wm_palm_fk --compile_collect --autotune_gemm`, SuperMimic also `--sm_reuse_input`, the XHand's
-SuperTrack also `--st_no_imag_r`; the XHand's time rows give the object error at 6,000 iterations. The table's
-configuration has the lower mean over its nine runs. The XHand's rows train with smooth targets (below). Per phase and
-every run: [results](benchmarks/xhand_tracking/results.md#the-xhand-with-the-target-rate-penalty).
+Means over the training seeds (the XHand and every time row 0-2, the Allegro hand's most accurate row 0-2 and 17-19, the Inspire
+hand's 20-22) on A100 40GB GPUs, each timed run alone on its GPU or its three GPUs. Object: position error over 256 perturbed
+starts once converged, at the first checkpoint from 6,000 iterations on (every 1,000) with a success of at least 0.99 and an
+object error less than 3 % better than 2,000 iterations earlier, both read on 64 other starts, at most 20,000 iterations (the
+runs' stops: [results](benchmarks/xhand_tracking/results.md)). Time: minutes to a success of 0.99 with the object within 10 mm,
+with the speed options and a warm compile cache (a configuration's first run on a machine compiles for about 3 minutes more):
+`--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk --compile_collect --autotune_gemm`, SuperMimic also
+`--sm_reuse_input`, the XHand's SuperTrack also `--st_no_imag_r`; the XHand's time rows give the object error at 6,000
+iterations. The table's configuration has the lower mean over its runs. The most accurate rows and the XHand's time rows
+train with smooth targets (below); the Allegro hand's and the Inspire hand's time rows train without them. Per phase and every
+run: [results](benchmarks/xhand_tracking/results.md).
 
-**In short:** SuperTrack's configurations have the lower object error on all three hands. With the speed options, the
-lower mean time to the target over the nine runs is SuperTrack's on the Inspire hand; on the XHand SuperMimic's on one GPU
-(0.86 against 0.93 min) and SuperTrack's on three (0.62 against 0.69 min); on the Allegro hand the two are level (1.96 min
-each on one GPU, 1.40 and 1.44 on three).
+**In short:** SuperTrack's configurations have the lower object error on all three hands. The fingertip error is lower
+with SuperTrack on four of the nine pairs of hand and clip and with SuperMimic on five; its mean rises with the penalty for
+both algorithms on every hand (the smooth-targets table below). With the speed options, the lower mean time to the target
+over the nine runs is SuperTrack's on the Inspire hand; on the Allegro hand the two are level (1.96 min each on one GPU, 1.40
+and 1.44 on three), both hands without the penalty; on the XHand, with it, it is SuperMimic's on one GPU (0.86 against 0.93
+min) and SuperTrack's on three (0.62 against 0.69 min).
 
-<p align="center"><img src="docs/media/hand/grid.webp" alt="The XHand, the Allegro hand and the Inspire hand tracking the apple, the spray bottle and the can with SuperTrack and SuperMimic" width="100%"/></p>
-<p align="center"><i>Three hands on the apple, the spray bottle and the can, with SuperTrack and with SuperMimic (half speed, the reference in blue).<br>The XHand with smooth targets; from the unperturbed start, a tile holding its last frame (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs</a>).</i></p>
+<p align="center"><img src="docs/media/hand/grid.webp" alt="The XHand, the Allegro hand and the Inspire hand tracking the apple, the spray bottle and the can with SuperTrack and SuperMimic; the Inspire hand's can is empty" width="100%"/></p>
+<p align="center"><i>Three hands on the apple, the spray bottle and the can, with SuperTrack and with SuperMimic, trained with smooth targets (half speed, the reference in blue).<br>From the unperturbed start, a tile holding its last frame; the Inspire hand's can has no animation (<a href="benchmarks/xhand_tracking/results.md#the-readmes-animations">which runs, and why</a>).</i></p>
 <p align="center"><sub>Renders of policies tracking SPIDER's retargets of HRDexDB, OakInk and DexYCB demonstrations, with their object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 **Smooth targets.** A policy's action is an offset about the next reference pose. Nothing in SuperTrack's loss, and only a
 weak term in SuperMimic's reward (0.05 times the actions' mean squared change), tied one step's offset to the next, so the
-fingers' position targets could jump back and forth at every control step. On the XHand the finger joints' share of
-velocity power above 5 Hz was 35 % (SuperTrack) and 37 % (SuperMimic; seed 0 of each clip), against 2.4 % in the
-reference. The target-rate penalty (`--target_rate_w 4`) charges each step's change of the policy's offsets, each joint's
-over its tracking kernel's width, squared: a jump costs, following the reference does not. It brings that share to 3.2 %
-and 1.4 % (nine runs each), and the mean object error from 2.01 to 2.27 mm and from 3.21 to 3.20 mm against the same
-configurations without it. SuperTrack's loss takes the cost as its mean over the imagined window (`--st_cost_mean`), the
-scale of its tracking terms, so that it weighs against them as in the reward. Every XHand row passes the motion check: the
-finger joints' share of velocity power above 5 Hz, their jerk and the targets' change per step at most 2, 1.5 and 2 times
-the reference's (`tools/hand_motion_check.py`).
+fingers' position targets could jump back and forth at every control step. The target-rate penalty (`--target_rate_w`) charges
+each step's change of the policy's offsets, each joint's over its tracking kernel's width, squared: a jump costs, following the
+reference does not. SuperTrack's loss takes the cost as its mean over the imagined window (`--st_cost_mean`), the scale of its
+tracking terms, so that it weighs against them as in the reward. The weight is 4 on the XHand and on the Allegro hand and 12.5 on
+the Inspire hand, whose reference moves its joints least per step (0.0075 rad against 0.0133 and 0.0135). On the Inspire hand a
+quarter of the worlds collects without the exploration noise (`--noise_free_frac 0.25`), so that the states the policy reaches
+without it are in the replay and among the imagined rollouts' starts.
+
+| hand | | share of finger-joint velocity power above 5 Hz (reference), without → with | object error, without → with | fingertips, without → with |
+|---|---|---|---|---|
+| XHand | SuperTrack | 35.0 → 3.2 % (2.4) | 2.01 → 2.27 mm | 5.39 → 6.28 mm |
+| | SuperMimic | 37.3 → 1.4 % (2.4) | 3.21 → 3.20 mm | 6.00 → 6.42 mm |
+| Allegro | SuperTrack | 30.5 → 3.8 % (2.3) | 2.09 → 2.24 mm | 7.13 → 7.90 mm |
+| | SuperMimic | 28.3 → 3.6 % (2.3) | 4.68 → 3.57 mm | 7.96 → 8.38 mm |
+| Inspire | SuperTrack | 43.0 → 2.4 % (3.1) | 1.91 → 2.23 mm | 6.16 → 8.37 mm |
+| | SuperMimic | 36.1 → 3.1 % (3.1) | 4.13 → 3.80 mm | 6.30 → 7.73 mm |
+
+The share is the mean of the finger joints' shares (without: seed 0 of each clip; with: all the row's runs). Without: the
+same configuration without the penalty (the Inspire hand's also without the noise-free worlds), nine runs, seeds 0-2, stopped
+by the same rule. Every row of the table, and the XHand's time rows, pass the motion check: the finger joints' share, their jerk and the targets' change per step at
+most 2, 1.5 and 2 times the reference's (`tools/hand_motion_check.py`; on the Allegro and the Inspire hand the share weighted
+by the joints' power as well,
+[results](benchmarks/xhand_tracking/results.md#the-allegro-hand-and-the-inspire-hand-with-the-target-rate-penalty)).
 
 - **Hands:** the XHand; with the same code, the Allegro hand (16 finger joints, four fingers) and the Inspire hand
   (12 finger joints), from SPIDER's retargets to them, read from their scenes (`ndm_gym/robots/hands.py`)
   ([task](docs/tasks/hand.md)).
-- **Runs:** 2,048 worlds on one A100 40GB, 20,000 iterations for accuracy (the XHand's: until converged) and 6,000 for
-  time; the last checkpoint (the XHand's: the one at the stop) plays 256 rollouts of the whole clip from perturbed starts.
+- **Runs:** 2,048 worlds on one A100 40GB, until converged for accuracy and 6,000 iterations for time; the checkpoint at the stop
+  (the last one of the timed runs) plays 256 rollouts of the whole clip from perturbed starts.
 - **XHand:** SuperTrack with `--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`, SuperMimic with its
   defaults, each chosen from its own tuning runs by the same rule ([results](benchmarks/xhand_tracking/results.md)). With
   smooth targets, each algorithm's configuration with the lowest object error among its candidates, the same rule for
   both, and the penalty ([with the penalty](benchmarks/xhand_tracking/results.md#the-xhand-with-the-target-rate-penalty)).
 - **Allegro and Inspire:** each algorithm trained its two XHand configurations (fast and accurate) and the changes that a
-  screen of four single changes of its own chose by the same rules; below, each algorithm's most accurate configuration on
-  each hand ([more hands](benchmarks/xhand_tracking/results.md#more-hands)).
+  screen of four single changes of its own chose by the same rules ([more hands](benchmarks/xhand_tracking/results.md#more-hands));
+  with smooth targets, each algorithm's configuration with the lowest object error among its candidates
+  ([which](benchmarks/xhand_tracking/results.md#the-allegro-hand-and-the-inspire-hand-with-the-target-rate-penalty)), the same rule for
+  both, and the penalty (the Inspire hand's also with `--noise_free_frac 0.25`).
 
-| hand | training seeds 0, 1, 2 | apple | spray bottle | can |
+| hand, smooth targets | mean ± SD over the training seeds | apple | spray bottle | can |
 |---|---|---|---|---|
-| **XHand**, smooth targets | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
+| **XHand** (seeds 0-2) | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 100.0 / 100.0 % |
 | | object position ↓, reference targets | 20.0 mm | 198.3 mm | 113.3 mm |
 | | object position ↓, SuperTrack | 2.9 ± 0.0 mm | 1.6 ± 0.0 mm | 2.3 ± 0.1 mm |
 | | object position ↓, SuperMimic | 3.6 ± 0.2 mm | 2.2 ± 0.1 mm | 3.8 ± 0.2 mm |
 | | fingertips ↓, reference targets | 26.6 mm | 29.7 mm | 32.6 mm |
 | | fingertips ↓, SuperTrack | 5.2 ± 0.4 mm | 6.0 ± 0.1 mm | 7.7 ± 1.0 mm |
 | | fingertips ↓, SuperMimic | 6.3 ± 0.6 mm | 5.8 ± 0.1 mm | 7.2 ± 0.4 mm |
-| **Allegro** | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 82.7 % | 99.7 / 99.6 % |
+| **Allegro** (seeds 0-2 and 17-19) | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 99.9 % | 99.6 / 99.7 % |
 | | object position ↓, reference targets | 98.0 mm | 134.5 mm | 175.3 mm |
-| | object position ↓, SuperTrack | 2.6 ± 0.1 mm | 1.3 ± 0.0 mm | 2.0 ± 0.7 mm |
-| | object position ↓, SuperMimic | 3.7 ± 0.2 mm | 11.7 ± 5.1 mm | 3.4 ± 0.2 mm |
+| | object position ↓, SuperTrack | 2.6 ± 0.1 mm | 1.5 ± 0.0 mm | 2.6 ± 0.4 mm |
+| | object position ↓, SuperMimic | 3.7 ± 0.2 mm | 3.3 ± 0.3 mm | 3.7 ± 0.6 mm |
 | | fingertips ↓, reference targets | 20.2 mm | 19.6 mm | 21.5 mm |
-| | fingertips ↓, SuperTrack | 6.1 ± 0.2 mm | 7.2 ± 0.1 mm | 7.5 ± 0.2 mm |
-| | fingertips ↓, SuperMimic | 7.6 ± 0.3 mm | 12.0 ± 0.3 mm | 7.2 ± 0.4 mm |
-| **Inspire** | success ↑, SuperTrack / SuperMimic | 99.7 / 99.9 % | 100.0 / 100.0 % | 99.9 / 93.8 % |
+| | fingertips ↓, SuperTrack | 6.7 ± 0.3 mm | 9.4 ± 0.4 mm | 7.6 ± 0.3 mm |
+| | fingertips ↓, SuperMimic | 9.0 ± 1.7 mm | 7.7 ± 0.2 mm | 8.4 ± 0.3 mm |
+| **Inspire** (seeds 20-22) | success ↑, SuperTrack / SuperMimic | 100.0 / 100.0 % | 100.0 / 100.0 % | 99.9 / 100.0 % |
 | | object position ↓, reference targets | 97.1 mm | 29.9 mm | 161.4 mm |
-| | object position ↓, SuperTrack | 2.4 ± 0.1 mm | 1.3 ± 0.0 mm | 2.0 ± 0.5 mm |
-| | object position ↓, SuperMimic | 5.2 ± 0.7 mm | 2.5 ± 0.1 mm | 11.2 ± 13.7 mm |
+| | object position ↓, SuperTrack | 2.5 ± 0.0 mm | 1.4 ± 0.0 mm | 2.8 ± 0.2 mm |
+| | object position ↓, SuperMimic | 4.9 ± 0.5 mm | 2.9 ± 0.4 mm | 3.6 ± 0.1 mm |
 | | fingertips ↓, reference targets | 13.9 mm | 17.2 mm | 18.2 mm |
-| | fingertips ↓, SuperTrack | 7.9 ± 0.2 mm | 5.6 ± 0.1 mm | 4.1 ± 0.1 mm |
-| | fingertips ↓, SuperMimic | 10.2 ± 1.7 mm | 5.0 ± 0.1 mm | 6.5 ± 1.4 mm |
+| | fingertips ↓, SuperTrack | 8.7 ± 0.6 mm | 6.0 ± 0.0 mm | 10.4 ± 0.9 mm |
+| | fingertips ↓, SuperMimic | 10.8 ± 2.1 mm | 5.7 ± 0.4 mm | 6.7 ± 1.1 mm |
 
 - **Reference targets:** the same rollouts with the reference's joint positions as the position targets.
 - **XHand:** SuperTrack `hand-supertrack-fast --target_rate_w 4 --st_cost_mean --iterations 20000`, SuperMimic
   `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`, each run at its stop checkpoint.
-- **Allegro:** SuperTrack `hand-supertrack-fast --st_fail_w 5 --iterations 20000`, SuperMimic
-  `hand-supermimic-fast --action_noise 0.2 --iterations 20000`.
-- **Inspire:** SuperTrack `hand-supertrack-fast --st_imag_noise 0.1 --iterations 20000`, SuperMimic
-  `hand-supermimic-accurate`.
+- **Allegro:** SuperTrack `hand-supertrack-fast --st_fail_w 5 --target_rate_w 4 --st_cost_mean --iterations 20000`, SuperMimic
+  `hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000`, each run at its stop checkpoint.
+- **Inspire:** SuperTrack `hand-supertrack-fast --st_imag_noise 0.1 --target_rate_w 12.5 --st_cost_mean --noise_free_frac 0.25
+  --iterations 20000`, SuperMimic `hand-supermimic-accurate --pi_opt muon --wm_opt muon --pi_ema 0.995 --pi_lr_mult 2 --lr_decay_ret 0.95 --lr_decay_by 1400 --lr_decay_len 300 --target_rate_w 12.5 --noise_free_frac 0.25`,
+  each run at its stop checkpoint.
 
 **Why the speed options are fast.** About 90 % of an iteration is the GPU work of two update graphs, the world model's
 and the policy's. Outside their matrix products, that time is the number of kernels, not their arithmetic. The speed
@@ -1021,7 +1041,7 @@ options:
 - give the world model the palm's kinematics alone, the only part of them it reads.
 
 Results are equal up to rounding; each option is off by default ([options](docs/tasks/hand.md#systems-options)). Per
-iteration on the Allegro hand's apple (one A100 40GB, ms):
+iteration on the Allegro hand's apple, without the penalty (one A100 40GB, ms):
 
 | phase | SuperTrack | SuperTrack, speed options | SuperMimic | SuperMimic, speed options |
 |---|---|---|---|---|
@@ -1030,15 +1050,15 @@ iteration on the Allegro hand's apple (one A100 40GB, ms):
 | policy's update (SuperMimic's with the critic's) | 41.2 | 24.8 | 61.8 | 33.9 |
 | iterations/s | 10.6 | 17.2 | 8.6 | 14.7 |
 
-On the three hands the mean time to the target drops 1.4-2.7x, the iterations/s rise 1.6-1.7x. Times and iterations per
-second of every run: [with the speed options](benchmarks/xhand_tracking/results.md#training-time-with-the-speed-options),
+On the three hands, without the penalty, the mean time to the target drops 1.4-2.7x, the iterations/s rise 1.6-1.7x. Times and
+iterations per second of every run: [with the speed options](benchmarks/xhand_tracking/results.md#training-time-with-the-speed-options),
 before them for the [XHand](benchmarks/xhand_tracking/results.md#training-time) and the
 [Allegro and Inspire hand](benchmarks/xhand_tracking/results.md#time-to-the-target-6000-iterations).
 
 **Three GPUs** (`--layout AWL`): the collection with the simulator, the world model's updates and the policy's update
 run at once, each on its own GPU and on the others' results of the previous iteration. An iteration then takes about as
-long as its slowest step instead of their sum. Per phase on the Allegro hand's apple, three A100 40GB (ms, the phases
-timed one after another):
+long as its slowest step instead of their sum. Per phase on the Allegro hand's apple, without the penalty, three A100 40GB
+(ms, the phases timed one after another):
 
 | phase | SuperTrack | SuperMimic |
 |---|---|---|
@@ -1048,8 +1068,8 @@ timed one after another):
 | exchange between the GPUs | 1.5 | 1.4 |
 | iterations/s, the steps at once | 39.6 | 29.6 |
 
-The iterations/s rise 2.1-2.2x (SuperTrack) and 1.9x (SuperMimic) over one GPU; the mean time to the target drops another
-1.4-1.9x. Reading the previous iteration's results changes the training: the object error moves by -0.05 to +0.12 mm
+Without the penalty, the iterations/s rise 2.1-2.2x (SuperTrack) and 1.9x (SuperMimic) over one GPU; the mean time to the target
+drops another 1.4-1.9x. Reading the previous iteration's results changes the training: the object error moves by -0.05 to +0.12 mm
 (SuperTrack) and +0.09 to +1.19 mm (SuperMimic); runs at the target, SuperTrack / SuperMimic: Inspire 9 / 7, Allegro 8 / 7,
 XHand 9 / 9 of 9 ([every run](benchmarks/xhand_tracking/results.md#training-time-on-three-gpus)).
 
@@ -1068,15 +1088,16 @@ python -m ndm_gym.train_hand --config hand-supermimic-fast --action_noise 0.2 --
 # the motion check of a run: its evaluation with the targets, then the measures against the reference
 python -m ndm_gym.evaluate_hand --ckpt logs/xhand_smooth/apple_st_s0/last.pt --out logs/xhand_smooth/apple_st_s0/evaluation --save_targets
 python tools/hand_motion_check.py st=logs/xhand_smooth/apple_st_s0/evaluation
-# the Allegro hand: the clip's path chooses the hand; each algorithm's most accurate configuration on it (the Inspire hand's: the table above)
+# the Allegro hand: the clip's path chooses the hand; each algorithm's most accurate configuration on it (the Inspire hand's: the table above);
+# the reported runs stopped once converged, at 6,000-20,000 iterations (each run's on the results page; --iterations that many stops there)
 CLIP=data/spider/processed/hrdexdb_24f/allegro/right/apple-0/0
-python -m ndm_gym.train_hand --config hand-supertrack-fast --st_fail_w 5 --iterations 20000 --clip $CLIP --seed 0 \
-       --log_dir logs/allegro/apple_st_s0   # seeds 0-2
-python -m ndm_gym.train_hand --config hand-supermimic-fast --action_noise 0.2 --iterations 20000 --clip $CLIP --seed 0 \
-       --log_dir logs/allegro/apple_sm_s0   # seeds 0-2
+python -m ndm_gym.train_hand --config hand-supertrack-fast --st_fail_w 5 --target_rate_w 4 --st_cost_mean --iterations 20000 --clip $CLIP \
+       --seed 0 --log_dir logs/allegro/apple_st_s0   # seeds 0-2 and 17-19
+python -m ndm_gym.train_hand --config hand-supermimic-fast --action_noise 0.2 --target_rate_w 4 --iterations 20000 --clip $CLIP \
+       --seed 0 --log_dir logs/allegro/apple_sm_s0   # seeds 0-2 and 17-19
 # the fastest configurations: a fast configuration with the speed options (SuperMimic also --sm_reuse_input; the XHand's
 # SuperTrack rows also --st_no_imag_r, with smooth targets: hand-supertrack-fast --st_cost_mean --target_rate_w 4 --st_no_imag_r
-# and hand-supermimic-fast --wm_batches 2 --target_rate_w 4 --sm_reuse_input)
+# and hand-supermimic-fast --wm_batches 2 --target_rate_w 4 --sm_reuse_input); the Allegro hand's here are without the penalty
 HAND_SPEED="--compile_updates --elementwise_3x3 --combo_kernels --wm_palm_fk --compile_collect --autotune_gemm"
 python -m ndm_gym.train_hand --config hand-supertrack-fast --st_fail_w 5 $HAND_SPEED --clip $CLIP --seed 0 \
        --log_dir logs/allegro/apple_st_fast_s0   # seeds 0-2
