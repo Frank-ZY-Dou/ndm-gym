@@ -129,18 +129,21 @@ CONFIGS = {
     },
     "train_hand": {
         "hand-supertrack-accurate": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HAND_SYSTEMS}",
-                                     "XHand, 20,000 iterations: object 2.4 / 1.6 / 2.3 mm on the apple, the spray bottle and the can (A100 40GB, seeds 0-2)"),
+                                     "XHand, 20,000 iterations, without --target_rate_w: object 2.4 / 1.6 / 2.3 mm on the apple, the spray bottle "
+                                     "and the can (A100 40GB, seeds 0-2)"),
         "hand-supermimic-accurate": (f"--algo supermimic {HAND_SYSTEMS}",
-                                     "XHand, 20,000 iterations: object 3.5 / 2.9 / 3.2 mm on the apple, the spray bottle and the can; Inspire hand "
-                                     "5.2 / 2.5 / 11.2 mm (A100 40GB, seeds 0-2)"),
+                                     "XHand, 20,000 iterations, without --target_rate_w: object 3.5 / 2.9 / 3.2 mm on the apple, the spray bottle "
+                                     "and the can; Inspire hand 5.2 / 2.5 / 11.2 mm (A100 40GB, seeds 0-2)"),
         "hand-supertrack-fast": (f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 0.7 / 0.9 / 1.8 min with the speed options, without "
-                                 "--target_rate_w (results page); Inspire hand 1.0 / 0.8 / 2.0 min (A100 40GB, mean of seeds 0-2)"),
+                                 "a success of 0.99 with the object within 10 mm after 0.7 / 0.9 / 1.8 min on the XHand and 1.0 / 0.8 / 2.0 min on "
+                                 "the Inspire hand, with the speed options, without --target_rate_w (A100 40GB, seeds 0-2; "
+                                 "the XHand's with it: results page)"),
         "hand-supermimic-fast": (f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} "
                                  "--iterations 6000 --ckpt_every 200",
-                                 "XHand: a success of 0.99 with the object within 10 mm after 0.8 / 1.1 / 1.2 min with the speed options, without "
-                                 "--target_rate_w (results page); Allegro hand 1.0 / 3.7 / 1.1 min (A100 40GB, mean of seeds 0-2)"),
+                                 "a success of 0.99 with the object within 10 mm after 0.8 / 1.1 / 1.2 min on the XHand and 1.0 / 3.7 / 1.1 min on "
+                                 "the Allegro hand, with the speed options, without --target_rate_w (A100 40GB, seeds 0-2; "
+                                 "the XHand's with it: results page)"),
     },
     "train_muscles": {
         "muscles-supertrack": (f"--algo supertrack --st_fail_w 5 --st_balance_w 4 {MUSCLE_RECIPE} {MUSCLE_SYS} --wm_batches 8 --pi_lr_mult 4 --wm_lr 2.5e-3 "

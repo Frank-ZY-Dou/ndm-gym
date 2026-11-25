@@ -88,9 +88,11 @@ from .blinkmimic import Graphed, policy_average
 from .common import adam_kwargs, ema_step, gated_step, survival, zero_nonfinite_grads
 
 # the options a resumed run must share with its checkpoint (the algorithm and SuperTrack's terms, the optimizers' layouts and
-# states, the policy average, the task's target-rate cost); the defaults are those of a checkpoint written before the option existed
+# states, the policy average, the task's target-rate cost, the collection's noise-free worlds, the imagined states' gradient decay);
+# the defaults are those of a checkpoint written before the option existed
 RESUME_MATCH = {"algo": "supermimic", "st_vel_terms": False, "st_unit_scales": False, "st_task_weights": False, "fused_adam": False,
-                "update_graphs": False, "pi_opt": "adam", "wm_opt": "adam", "pi_ema": 0.0, "target_rate_w": 0.0}  # fmt: skip
+                "update_graphs": False, "pi_opt": "adam", "wm_opt": "adam", "pi_ema": 0.0, "target_rate_w": 0.0, "noise_free_frac": 0.0,
+                "bptt_decay": 1.0}  # fmt: skip
 ACC_KEYS = ("r", "steps", "done", "term", "ep_len", "object_err")  # the log's sums over a row's collection steps (train_hand)
 PHASES = ("collect", "wm", "policy", "critic", "log", "ckpt", "host")  # --phase_times: an iteration's phases (PhaseTimes)
 LAYOUT_PHASES = (*PHASES[:4], "exchange", *PHASES[4:])  # with --layout: the exchange between the devices too (algos.hand_layout)
@@ -193,7 +195,8 @@ def check_hand_fast_args(args: argparse.Namespace):
 
 
 def check_resume(ck_args: dict, args: argparse.Namespace):
-    """A resumed run must have its checkpoint's algorithm, SuperTrack's terms, optimizers and policy average; raises ValueError."""
+    """A resumed run must have its checkpoint's algorithm, SuperTrack's terms, optimizers, policy average, target-rate cost, noise-free
+    worlds and gradient decay (RESUME_MATCH; another task's training calls it with its own options too); raises ValueError."""
     for k, default in RESUME_MATCH.items():
         if ck_args.get(k, default) != getattr(args, k, default):  # (an option the task's training does not have: its default)
             raise ValueError(f"--resume: --{k} must match the checkpoint's run ({ck_args.get(k, default)!r})")
@@ -506,6 +509,39 @@ class PhaseTimes:
         return "\n".join(lines)
 
 
+def noise_free_on(args: argparse.Namespace) -> bool:
+    """Whether --noise_free_frac is given (train_hand): any value but the default, checked by check_noise_free."""
+    return getattr(args, "noise_free_frac", 0.0) != 0.0
+
+
+def check_noise_free(args: argparse.Namespace) -> None:
+    """--noise_free_frac f (0 <= f < 1) shapes --action_noise's noise, which must be on."""
+    if not args.action_noise > 0:
+        raise ValueError("--noise_free_frac shapes --action_noise's exploration noise: give --action_noise > 0")
+    if not 0.0 <= args.noise_free_frac < 1.0:
+        raise ValueError(f"--noise_free_frac: at least 0 and below 1, got {args.noise_free_frac}")
+
+
+class NoiseFree:
+    """--noise_free_frac f (train_hand; both algorithms, off by default): the first round(f N) worlds collect without the exploration
+    noise, so that the policy's own states reach the replay. A multiplier per world of the noise's standard normal draws, (N, 1) on
+    the device (a CUDA graph of the step reads its memory): zero in those worlds, one in the others. The draws are the default
+    step's own (torch.randn_like of the previous action, in its order)."""
+
+    def __init__(self, args: argparse.Namespace, n: int, device):
+        check_noise_free(args)
+        free = int(round(args.noise_free_frac * n))
+        if not 0 < free < n:
+            raise ValueError(f"--noise_free_frac {args.noise_free_frac}: round(f N) = {free} of {n} worlds would collect without the noise: "
+                             "at least 1, not all")  # fmt: skip
+        self.mult = torch.ones(n, 1, device=device)
+        self.mult[:free] = 0.0
+
+    def noise(self, like: torch.Tensor) -> torch.Tensor:
+        """The step's standard normal draws, the default step's (torch.randn_like(``like``)), times the multiplier."""
+        return torch.randn_like(like) * self.mult
+
+
 class Collector:
     """train_hand's collection step for --no_sync: the default step's computations (train_hand.collect) on the loop's
     state kept in fixed tensors (the previous action, the episode lengths, the log's sums ``acc``), without a host read.
@@ -527,8 +563,9 @@ class Collector:
         """The task's errors of a step's next states, into the log's sums."""
         self.acc["object_err"] += errors["object_pos"].sum()
 
-    def __init__(self, sim, task, algo, buffer, args):
+    def __init__(self, sim, task, algo, buffer, args, noise_free: NoiseFree | None = None):
         self.sim, self.task, self.algo, self.buffer, self.args = sim, task, algo, buffer, args
+        self.noise_free = noise_free  # --noise_free_frac: the action noise's multiplier per world (None: the default noise)
         self.graphed = bool(args.collect_graph)
         if self.graphed and buffer.size_t is None:
             raise ValueError("--collect_graph writes at the replay's device-side head (ReplayBuffer.use_device_ptr(device_size=True))")
@@ -552,7 +589,10 @@ class Collector:
         sim, task, algo, acc, a_prev = self.sim, self.task, self.algo, self.acc, self.a_prev
         s, f = sim.state(), sim.f.clone()
         S = self.unflatten(s)
-        a = algo.act(S, a_prev, f, noise=self.args.action_noise)
+        if self.noise_free is None:
+            a = algo.act(S, a_prev, f, noise=self.args.action_noise)
+        else:
+            a = algo.act(S, a_prev, f, noise=self.args.action_noise, z=self.noise_free.noise(a_prev))
         u = task.setpoint(a, f)
         s1, term, done = sim.step_nosync(u, physics, self.fk)
         S1, f1 = self.unflatten(s1), task.ref.next_frame(f)
@@ -580,7 +620,10 @@ class Collector:
         the resets'), so that the step draws the same numbers; the replay write and the previous action's update stay
         outside (the replay's fields are written in place)."""
         sim = self.sim
-        z = torch.randn_like(self.a_prev) if self.args.action_noise > 0 else None
+        if self.noise_free is None:
+            z = torch.randn_like(self.a_prev) if self.args.action_noise > 0 else None
+        else:
+            z = self.noise_free.noise(self.a_prev)
         draws = sim.reset_draws()
         s, f, a, u = self.before(z)
         sim.advance(physics)

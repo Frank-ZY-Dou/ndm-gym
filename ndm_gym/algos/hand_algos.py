@@ -3,7 +3,7 @@ of simulator transitions and train the policy through imagined rollouts of the f
 
 SuperTrack (algos/supertrack.py, hoi_algos.HOISuperTrack; ``HandSuperTrack``): the acceleration world model; the policy
 minimizes L1 errors of the quantities the task tracks over the imagined window, each term weighted once to 1 at
-calibration or by the task's weights; no reward, no critic.
+calibration or by the task's weights; no reward, no critic; ``--bptt_decay lam`` as SuperMimic's.
 
 SuperMimic (algos/supermimic.py; Liao et al., CoRL 2026; ``HandSuperMimic``): the increment world model; the policy
 maximizes the imagined tracking return with a soft survival weight and a critic beyond the horizon (paper §3, Eq. 1-3).
@@ -295,8 +295,9 @@ class HandSuperTrack(HandSuperMimic):
     the loss trades the hand's pose against the object as the task does; the fingertips about the palm, which the task
     does not track, weigh nothing. Plus the failure penalty on the task's soft termination (``--st_fail_w``, as LAFAN1's
     and HOI's: every imagined step after a failure costs that many steps' worth of loss) and the regularizer on the
-    actions (``--st_reg``), which are offsets about the reference pose. ``--st_imag_noise`` adds Gaussian noise to the imagined actions. With the
-    task's target-rate penalty (``--target_rate_w``) its cost at every imagined step, summed over the window (``--st_cost_mean``: its mean). No
+    actions (``--st_reg``), which are offsets about the reference pose. ``--st_imag_noise`` adds Gaussian noise to the imagined actions.
+    ``--bptt_decay lam``: as SuperMimic's, the policy's gradient through every imagined state times lam (1: none). With the task's
+    target-rate penalty (``--target_rate_w``) its cost at every imagined step, summed over the window (``--st_cost_mean``: its mean). No
     reward, no critic: ``policy_update`` returns NaN for the value loss and the imagined reward of the same rollouts for the log
     (``--st_no_imag_r``: not computed, NaN)."""
 
@@ -310,8 +311,6 @@ class HandSuperTrack(HandSuperMimic):
 
     def __init__(self, args: argparse.Namespace, kin: HandKinematics, task: HandTask, dev: str) -> None:
         super().__init__(args, kin, task, dev)
-        if self.bptt_decay != 1.0:
-            raise ValueError("--bptt_decay is SuperMimic's option here")
         self.critic = self.opt_v = None
         self.vel_terms = bool(getattr(args, "st_vel_terms", False))
         self.terms = self.TERMS + (self.VEL_TERMS if self.vel_terms else ())
@@ -381,6 +380,8 @@ class HandSuperTrack(HandSuperMimic):
         task = self.task
         a = self.pi(task.obs(S, fk, a_prev), task.goal(S, f, self.goal_frames))
         S = self.wm.step(S, fk, task.setpoint(a + noise, f))
+        if self.bptt_decay != 1.0:  # --bptt_decay: as SuperMimic's, the gradient through the imagined state, scaled at every step
+            S = tuple(self.bptt_decay * x + (1 - self.bptt_decay) * x.detach() for x in S)
         fk, f = self.kin.forward(S[0]), task.ref.next_frame(f)
         r = task.reward(S, fk, f, a, a_prev) if self.imag_r else None
         return S, fk, f, a, self._errors(S, fk, f), task.soft_termination(S, fk, f), r, task.smooth_cost(S, a, a_prev)

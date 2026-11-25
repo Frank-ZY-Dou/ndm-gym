@@ -10,7 +10,8 @@ share a label (a configuration's clips and seeds): the label's line is the mean 
 - joint acceleration and jerk: the RMS over the control steps of the second and third differences of each finger joint's position,
   over dt^2 and dt^3, then the mean over the finger joints (rad/s^2, rad/s^3); the palm's three hinges the same way, apart;
 - the high-frequency share of joint velocity: per finger joint the share of the spectral power of its velocity (its mean removed)
-  above ``--cutoff_hz``, then the mean over the finger joints;
+  above ``--cutoff_hz``, then the mean over the finger joints; and power-weighted (``hf_share_power``): the finger joints' power above
+  the cutoff summed over the joints, over their total power, so that a joint that barely moves weighs as little as its power;
 - action change per step: the RMS of the step-to-step change of each finger joint's position target, then the mean (rad); for the
   policy also of its raw action (in the action's own units);
 - joint-limit hits: the share of (step, finger joint) pairs within ``--limit_frac`` of the joint's range from a limit;
@@ -46,12 +47,13 @@ def joint_measures(q: np.ndarray, dt: float, cutoff_hz: float, lo: np.ndarray, h
     v = v - v.mean(0)
     power = np.abs(np.fft.rfft(v, axis=0)) ** 2
     freq = np.fft.rfftfreq(v.shape[0], dt)
-    total = power[freq > 0].sum(0)
-    share = np.where(total > 0, power[freq > cutoff_hz].sum(0) / np.where(total > 0, total, 1), 0.0)
+    total, above = power[freq > 0].sum(0), power[freq > cutoff_hz].sum(0)
+    share = np.where(total > 0, above / np.where(total > 0, total, 1), 0.0)
     rng = hi - lo
     near = (q - lo < frac * rng) | (hi - q < frac * rng)
     rms = lambda x: np.sqrt((x**2).mean(0))  # noqa: E731
-    return {"acc": float(rms(acc).mean()), "jerk": float(rms(jerk).mean()), "hf_share": float(share.mean()), "limit_hits": float(near.mean())}
+    return {"acc": float(rms(acc).mean()), "jerk": float(rms(jerk).mean()), "hf_share": float(share.mean()),
+            "hf_share_power": float(above.sum() / total.sum()) if total.sum() > 0 else 0.0, "limit_hits": float(near.mean())}  # fmt: skip
 
 
 def change(x: np.ndarray) -> float:
@@ -139,7 +141,7 @@ def measure(path: str, cutoff_hz: float, frac: float, scenes: dict, clip_root: s
     return out
 
 
-KEYS = ("acc", "jerk", "hf_share", "target_change", "limit_hits", "fingertip_slip_mm", "object_slip_mm")
+KEYS = ("acc", "jerk", "hf_share", "hf_share_power", "target_change", "limit_hits", "fingertip_slip_mm", "object_slip_mm")
 
 
 def mean_of(rows: list, part: str) -> dict:
@@ -169,6 +171,7 @@ def main() -> None:
         "acc": ".1f",
         "jerk": ".0f",
         "hf_share": ".3f",
+        "hf_share_power": ".3f",
         "target_change": ".4f",
         "limit_hits": ".4f",
         "fingertip_slip_mm": ".2f",

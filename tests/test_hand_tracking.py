@@ -183,14 +183,16 @@ def test_training_arguments():
     for refused in (["--algo", "blinkmimic"], ["--wm_backbone", "rigidformer"], ["--hist", "4"], ["--utd", "1"], ["--st_fail_w", "2"],
                     ["--st_vel_terms"], ["--st_obj_w", "2"], ["--st_unit_scales"], ["--st_task_weights"], ["--st_imag_noise", "0.2"],
                     ["--algo", "supertrack", "--st_task_weights", "--st_vel_terms"], ["--algo", "supertrack", "--st_task_weights", "--st_unit_scales"],
-                    ["--algo", "supertrack", "--gamma", "0.995"], ["--algo", "supertrack", "--lam", "0.9"], ["--algo", "supertrack", "--critic_epochs", "3"],
-                    ["--algo", "supertrack", "--bptt_decay", "0.95"]):  # fmt: skip
+                    ["--algo", "supertrack", "--gamma", "0.995"], ["--algo", "supertrack", "--lam", "0.9"],
+                    ["--algo", "supertrack", "--critic_epochs", "3"]):  # fmt: skip
         with pytest.raises(SystemExit):
             parse_args(["--clip", "clip"] + refused)
     st = parse_args(["--clip", "clip", "--algo", "supertrack", "--st_fail_w", "2", "--st_vel_terms", "--st_obj_w", "2", "--st_imag_noise", "0.2"])
     assert (st.algo, st.st_fail_w, st.st_vel_terms, st.st_obj_w, st.st_imag_noise) == ("supertrack", 2, True, 2, 0.2)
     assert not st.st_unit_scales and parse_args(["--clip", "clip", "--algo", "supertrack", "--st_unit_scales"]).st_unit_scales
-    assert parse_args(["--clip", "clip", "--bptt_decay", "0.95"]).bptt_decay == 0.95  # SuperMimic's
+    for algo in ("supermimic", "supertrack"):  # both algorithms' option, 1 (off) unless given
+        assert parse_args(["--clip", "clip", "--algo", algo, "--bptt_decay", "0.95"]).bptt_decay == 0.95
+        assert parse_args(["--clip", "clip", "--algo", algo]).bptt_decay == 1.0
 
 
 def test_accel_world_model_round_trip(setup):
@@ -383,6 +385,16 @@ def test_resume_requires_the_checkpoints_algorithm_and_terms():
     check_resume(vars(run), run)
     with pytest.raises(ValueError, match="--resume: --target_rate_w must match"):
         check_resume(vars(parse_args(["--clip", "clip"])), run)
+    # and the collection's noise-free worlds, and the gradient's decay (both algorithms'), each a run's own from before the option
+    for name, value in (("noise_free_frac", "0.25"), ("bptt_decay", "0.95")):
+        for algo in ("supermimic", "supertrack"):
+            base = ["--clip", "clip", "--algo", algo]
+            run = parse_args(base + [f"--{name}", value])
+            check_resume(vars(run), run)
+            for a, b in ((parse_args(base), run), (run, parse_args(base))):
+                with pytest.raises(ValueError, match=f"--resume: --{name} must match"):
+                    check_resume(vars(a), b)
+            check_resume({k: v for k, v in vars(parse_args(base)).items() if k != name}, parse_args(base))
 
 
 def test_systems_arguments():
@@ -550,11 +562,15 @@ class KinematicSim:
         return s1, term, done
 
 
-def default_collect(sim, task, algo, buffer, st: dict, noise: float):
-    """train_hand's default collection step (its closure ``collect``) on the loop's state ``st``."""
+def default_collect(sim, task, algo, buffer, st: dict, noise: float, noise_free=None):
+    """train_hand's default collection step (its closure ``collect``) on the loop's state ``st``; ``noise_free``: --noise_free_frac's
+    multiplier of the noise's draws (hand_fast.NoiseFree)."""
     s, f = sim.state(), sim.f.clone()
     S = unflatten_state(s)
-    a = algo.act(S, st["a_prev"], f, noise=noise)
+    if noise_free is None:
+        a = algo.act(S, st["a_prev"], f, noise=noise)
+    else:
+        a = algo.act(S, st["a_prev"], f, noise=noise, z=noise_free.noise(st["a_prev"]))
     u = task.setpoint(a, f)
     s1, term, done = sim.step(u)
     S1, f1 = unflatten_state(s1), task.ref.next_frame(f)
@@ -1078,7 +1094,8 @@ def test_collect_graph_replays_the_eager_step(gpu_setup, monkeypatch, extra):
 
 
 @GPU
-@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+@pytest.mark.parametrize("extra", [[], ST_ARM, ["--bptt_decay", "0.9"], [*ST_ARM, "--bptt_decay", "0.9"]],
+                         ids=["supermimic", "supertrack", "supermimic_decay", "supertrack_decay"])  # fmt: skip
 def test_update_graphs_replay_the_eager_updates(gpu_setup, monkeypatch, extra):
     """--update_graphs: the world-model updates and the policy update (with the policy average's step) captured as CUDA
     graphs and replayed return the values and leave the parameters, normalizers, optimizer states and average that the
@@ -1106,7 +1123,7 @@ def test_update_graphs_replay_the_eager_updates(gpu_setup, monkeypatch, extra):
         runs.append((torch.stack(outs), trained(algo) + list(avg.avg.state_dict().values()), [x for s in state for x in s.values()]))
     (out0, t0, s0), (out1, t1, s1) = runs
     finite = torch.isfinite(out0)
-    assert torch.equal(finite, torch.isfinite(out1)) and int(finite.sum()) == 7 * (6 if not extra else 5)
+    assert torch.equal(finite, torch.isfinite(out1)) and int(finite.sum()) == 7 * (6 if args.algo == "supermimic" else 5)
     assert torch.equal(out0[finite], out1[finite]), float((out0[finite] - out1[finite]).abs().max())
     assert all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
     assert len(s0) == len(s1) and all(torch.equal(a, b) for a, b in zip(s0, s1, strict=True))
@@ -1508,3 +1525,324 @@ def test_st_no_imag_r_with_the_systems_options(gpu_setup, monkeypatch, tmp_path,
     log = np.loadtxt(run / "train_log.csv", delimiter=",", skiprows=1)
     cols = [train_hand.LOG_COLUMNS.index(k) for k in ("wm_loss", "pi_loss", "pi_gradnorm", "imag_survival", "sim_r", "ep_len")]
     assert log[:, 0].tolist() == [4, 8, 12] and np.isfinite(log[1:, cols]).all() and np.isnan(log[:, train_hand.LOG_COLUMNS.index("imag_r")]).all()
+
+
+# ------------------------------------------------- --noise_free_frac (both algorithms' option, off by default)
+def test_noise_free_values():
+    """--noise_free_frac f, worked by hand: the multiplier of the noise's draws is zero in the first round(f N) worlds and one in the
+    others; the draws are the default step's own (torch.randn_like of the previous action). Off by default; refused without the noise
+    or with f outside [0, 1)."""
+    args = parse_args(small(["--noise_free_frac", "0.25"]))
+    nf = hand_fast.NoiseFree(args, 8, "cpu")
+    assert torch.equal(nf.mult[:, 0], torch.tensor([0.0, 0.0] + [1.0] * 6))
+    torch.manual_seed(1)
+    z = torch.randn(8, NUM_J)
+    torch.manual_seed(1)
+    assert torch.equal(nf.noise(torch.zeros(8, NUM_J)), z * nf.mult) and torch.equal(nf.noise(torch.zeros(8, NUM_J))[:2], torch.zeros(2, NUM_J))
+    for n, k in ((10, 3), (9, 3)):  # round(3.0) and round(2.7), not the truncated 2
+        assert torch.equal(hand_fast.NoiseFree(parse_args(small(["--noise_free_frac", "0.3"])), n, "cpu").mult[:, 0],
+                           torch.tensor([0.0] * k + [1.0] * (n - k)))  # fmt: skip
+    for f in ("0.01", "0.99"):  # round(0.08) = 0 worlds and round(7.92) = all of them: refused, not silently off
+        with pytest.raises(ValueError, match="at least 1, not all"):
+            hand_fast.NoiseFree(parse_args(small(["--noise_free_frac", f])), 8, "cpu")
+    default = parse_args(small([]))
+    assert default.noise_free_frac == 0.0 and not hand_fast.noise_free_on(default)
+    for bad in (["--noise_free_frac", "1.0"], ["--noise_free_frac", "-0.1"], ["--noise_free_frac", "0.25", "--action_noise", "0"]):
+        with pytest.raises(SystemExit):
+            parse_args(small(bad))
+
+
+@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+@pytest.mark.parametrize("graphed,compiled", [(False, False), (True, False), (True, True), (False, True)],
+                         ids=["collector", "graphed", "graphed_compiled", "compiled"])  # fmt: skip
+def test_noise_free_collector_paths(setup, monkeypatch, extra, graphed, compiled):
+    """With --noise_free_frac each collector path (hand_fast.Collector's step, its --collect_graph bookkeeping, its --compile_collect
+    form) collects what the default step does: the same replay, log sums, previous actions and normalizers, bit for bit."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    n, steps, opts, runs = 8, 60, ["--noise_free_frac", "0.25"], []
+    for collector in (False, True):
+        monkeypatch.setattr(RunningNorm, "no_sync", collector)
+        torch.manual_seed(0)
+        flags = (["--collect_graph", "--compile_eager"] if graphed else []) + (["--compile_collect"] if compiled else [])
+        args = parse_args(small(extra + opts + ((SYSTEMS + flags) if collector else [])))
+        algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
+        sim = KinematicSim(task, n)
+        buffer = ReplayBuffer(32, n, "cpu", fields=replay_fields(task), priorities=False)
+        if collector and graphed:
+            buffer.use_device_ptr(device_size=True)
+        nf = hand_fast.NoiseFree(args, n, "cpu")
+        st = {"a_prev": torch.zeros(n, NUM_J), "ep_len": torch.zeros(n), "acc": {k: torch.zeros(()) for k in hand_fast.ACC_KEYS}}
+        c = hand_fast.Collector(sim, task, algo, buffer, args, noise_free=nf) if collector else None
+        for k in range(steps):
+            torch.manual_seed(k)
+            if c is None:
+                default_collect(sim, task, algo, buffer, st, args.action_noise, noise_free=nf)
+                continue
+            c.core()
+            if graphed:
+                buffer.advance_host()
+        if c is not None:
+            st = {"a_prev": c.a_prev, "ep_len": c.ep_len, "acc": c.acc}
+        runs.append((buffer, st, sim, trained(algo)))
+    (b0, st0, sim0, t0), (b1, st1, sim1, t1) = runs
+    for k in b0.data:
+        assert torch.equal(b0.data[k], b1.data[k]), k
+    for k in hand_fast.ACC_KEYS:
+        assert torch.equal(st0["acc"][k], st1["acc"][k]), k
+    assert torch.equal(st0["a_prev"], st1["a_prev"]) and torch.equal(sim0.s, sim1.s)
+    assert all(torch.equal(a, b) for a, b in zip(t0, t1, strict=True))
+
+
+def test_noise_free_worlds_act_as_the_policy(setup, monkeypatch):
+    """--noise_free_frac 0.25 on 8 worlds: in a collection step the first two worlds' targets are the policy's own action's (its output
+    on the step's inputs, clamped), the others' are not."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    torch.manual_seed(0)
+    args = parse_args(small(["--noise_free_frac", "0.25"]))
+    algo = HAND_ALGOS[args.algo](args, kin, task, "cpu")
+    sim = KinematicSim(task, 8)
+    buffer = ReplayBuffer(8, 8, "cpu", fields=replay_fields(task), priorities=False)
+    nf = hand_fast.NoiseFree(args, 8, "cpu")
+    st = {"a_prev": 0.1 * torch.ones(8, NUM_J), "ep_len": torch.zeros(8), "acc": {k: torch.zeros(()) for k in hand_fast.ACC_KEYS}}
+    s, f, a_prev = sim.state(), sim.f.clone(), st["a_prev"].clone()
+    default_collect(sim, task, algo, buffer, st, args.action_noise, noise_free=nf)
+    S = unflatten_state(s)
+    with torch.no_grad():  # the policy's output on the step's inputs (its normalizer as the step left it)
+        own = algo.pi(task.obs(S, algo.fk(S[0]), a_prev), task.goal(S, f, algo.goal_frames)).clamp(-1, 1)
+    u, want = buffer.data["u"][0], task.setpoint(own, f)
+    assert torch.equal(u[:2], want[:2]) and not torch.allclose(u[2:], want[2:])
+
+
+class RecordingSim(KinematicSim):
+    """KinematicSim recording every position target it is given (train_hand's step, hand_fast.Collector's step_nosync and, with
+    --compile_collect, its set_targets)."""
+
+    def __init__(self, task, n: int, record: list):
+        super().__init__(task, n)
+        self.record = record
+
+    def step(self, u, reset: bool = True):
+        self.record.append(u.clone())
+        return super().step(u, reset)
+
+    def step_nosync(self, u, physics=None, fk=None):
+        self.record.append(u.clone())
+        return super().step_nosync(u, physics, fk)
+
+    def set_targets(self, u):
+        self.record.append(u.clone())
+        super().set_targets(u)
+
+
+@pytest.mark.parametrize("path", [[], SYSTEMS, [*SYSTEMS, "--compile_collect"]], ids=["collect", "collector", "collector_compiled"])
+def test_noise_free_in_training(setup, monkeypatch, tmp_path, path):
+    """train_hand on the CPU, a simulator without physics in HandSim's place, on each collection path: with --noise_free_frac the first
+    step's targets of the other worlds are the default run's and the first two worlds' are not, and every step of the warm-up and of
+    the iterations draws its noise through the multiplier, zero in those two worlds; the option reaches the checkpoint's arguments,
+    and a resume without it is refused."""
+    import ndm_gym.train_hand as train_hand
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", False)  # main() sets it; restored after the test
+    monkeypatch.setattr(train_hand, "DEVICE", "cpu")
+    monkeypatch.setattr(hand_fast.Collector, "__call__", lambda self: self.core())  # the step itself: its stream is CUDA's
+    record: list = []
+    model, kin, task = setup
+    monkeypatch.setattr(train_hand, "build", lambda clip, device, reward_std_scale=1.0, smooth=None: (model, kin, task))
+    hand_sim = types.ModuleType("ndm_gym.sim.rigid.hand_sim")  # HandSim's module, which needs the simulator and a GPU
+    hand_sim.HandSim = lambda model, task, num_envs, device, stagger=False, **_: RecordingSim(task, num_envs, record)
+    monkeypatch.setitem(sys.modules, "ndm_gym.sim.rigid.hand_sim", hand_sim)
+    argv = [*small(path), "--num_envs", "8", "--buffer_steps", "16", "--warmup_steps", "4", "--wm_only_iters", "1", "--log_every", "2",
+            "--ckpt_every", "2", "--iterations", "3"]  # fmt: skip
+    targets, drawn, noise = {}, [], hand_fast.NoiseFree.noise
+    monkeypatch.setattr(hand_fast.NoiseFree, "noise", lambda self, like: (drawn.append(noise(self, like)), drawn[-1])[1])
+    for name, flag in (("plain", []), ("free", ["--noise_free_frac", "0.25"])):
+        record.clear()
+        monkeypatch.setattr(sys, "argv", ["train_hand", *argv, *flag, "--log_dir", str(tmp_path / name)])
+        train_hand.main()
+        targets[name] = [u.clone() for u in record]
+    assert len(drawn) == 7 and all(not z[:2].any() and (z[2:] != 0).all() for z in drawn)
+    assert len(targets["plain"]) == len(targets["free"]) == 7  # four warm-up steps and three iterations
+    a, b = targets["plain"][0], targets["free"][0]  # the first step: the same policy, state and draws; later the normalizers differ
+    assert torch.equal(a[2:], b[2:]) and not torch.equal(a[:2], b[:2])
+    ck = torch.load(tmp_path / "free" / "last.pt", map_location="cpu", weights_only=False)
+    assert ck["args"]["noise_free_frac"] == 0.25
+    monkeypatch.setattr(sys, "argv", ["train_hand", *argv, "--log_dir", str(tmp_path / "free"), "--iterations", "4", "--resume",
+                                      str(tmp_path / "free" / "last.pt")])  # fmt: skip
+    with pytest.raises(ValueError, match="noise_free_frac"):
+        train_hand.main()
+
+
+@GPU
+@pytest.mark.parametrize("extra", [[], ST_ARM], ids=["supermimic", "supertrack"])
+def test_collect_graph_with_noise_free_worlds(gpu_setup, monkeypatch, extra):
+    """--noise_free_frac with --collect_graph on the GPU: the captured step, replayed, computes what the step run eagerly on Warp's stream
+    does under the same draws, on each collector path, up to the rounding by which two simulations differ; and the option acts in the
+    graph (the targets differ from a run without it)."""
+    from ndm_gym.sim.rigid.hand_sim import HandSim
+
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    model, kin, task = gpu_setup
+    n, steps, runs = 64, 40, []
+    for flags in ([], ["--collect_graph"], ["--collect_graph", "--compile_eager"], ["--compile_collect"], ["--collect_graph", "--compile_collect"],
+                  ["--collect_graph", "NONE"]):  # fmt: skip
+        plain = "NONE" in flags
+        flags = [x for x in flags if x != "NONE"]
+        torch.manual_seed(0)
+        args = parse_args(small(extra + SYSTEMS + flags + ([] if plain else ["--noise_free_frac", "0.25"])))
+        algo = HAND_ALGOS[args.algo](args, kin, task, CUDA)
+        sim = HandSim(model, task, n, CUDA, stagger=True)
+        buffer = ReplayBuffer(32, n, CUDA, fields=replay_fields(task), priorities=False)
+        if "--collect_graph" in flags:
+            buffer.use_device_ptr(device_size=True)
+        c = hand_fast.Collector(sim, task, algo, buffer, args, noise_free=None if plain else hand_fast.NoiseFree(args, n, CUDA))
+        for k in range(steps):
+            torch.manual_seed(100 + k)
+            c()
+        torch.cuda.synchronize()
+        runs.append((buffer, c, sim, trained(algo)))
+    b0, c0, sim0, t0 = runs[0]
+    for b1, c1, sim1, t1 in runs[1:-1]:
+        for k in ("f", "done"):
+            assert torch.equal(b0.data[k], b1.data[k]), k
+        for k in ("s", "s1", "u", "a_prev"):
+            assert torch.allclose(b0.data[k], b1.data[k], atol=1e-3), (k, float((b0.data[k] - b1.data[k]).abs().max()))
+        assert torch.equal(c0.ep_len, c1.ep_len) and torch.allclose(c0.a_prev, c1.a_prev, atol=1e-3)
+        assert all(torch.allclose(a, b, rtol=1e-3, atol=1e-4) for a, b in zip(t0, t1, strict=True))
+    assert not torch.allclose(runs[-1][0].data["u"], b0.data["u"], atol=1e-3)  # without the option: other targets
+
+
+# ------------------------------------------------- --bptt_decay (both algorithms' option; SuperTrack's is SuperMimic's operation)
+RATE = ["--target_rate_w", "4.0"]
+DECAY_ARMS = {
+    "supermimic": [], "supermimic_reuse_input": ["--sm_reuse_input"], "supermimic_costs": RATE,
+    "supertrack": ["--algo", "supertrack"], "supertrack_vel_fail": ["--algo", "supertrack", "--st_fail_w", "2", "--st_vel_terms"],
+    "supertrack_weights_noise": ["--algo", "supertrack", "--st_task_weights", "--st_imag_noise", "0.2", "--st_fail_w", "2"],
+    "supertrack_costs": ["--algo", "supertrack", "--st_task_weights", "--st_cost_mean", *RATE],
+}  # fmt: skip
+
+
+def decay_task(kin, task, extra):
+    """The task with the target-rate cost of ``extra``'s options (as train_hand makes it)."""
+    import dataclasses
+
+    from ndm_gym.train_hand import smoothing
+
+    return HandTask(kin, task.ref, dataclasses.replace(task.cfg, **smoothing(parse_args(small(extra)))))
+
+
+@pytest.mark.parametrize("arm,lam,exact,rollout", [(arm, lam, exact, rollout) for arm in DECAY_ARMS for lam, exact, rollout in
+                                                   ((0.5, True, False), (0.95, False, False), (0.5, True, True))])  # fmt: skip
+def test_bptt_decay(setup, monkeypatch, arm, lam, exact, rollout):
+    """--bptt_decay, the same operation for both algorithms (the target-rate cost on too): 1 (the default) is the
+    unchanged update, bit for bit, the rollout as one function too; lam < 1 leaves the imagined forward pass but for a float32 rounding
+    (``lam x + (1 - lam) x.detach()`` is the identity only at some lam: exactly at 0.5), and the whole policy update is then the one whose
+    world model's step is wrapped, in the policy update alone, in algos.common.decay_rollout_grads (its own tests): bit for bit at 0.5,
+    within rounding at 0.95."""
+    from ndm_gym.algos.common import decay_rollout_grads
+
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    monkeypatch.setattr(RunningNorm, "no_sync", True)
+    _, kin, task = setup
+    task = decay_task(kin, task, DECAY_ARMS[arm])
+    extra = DECAY_ARMS[arm] + SYSTEMS + (["--compile_updates", "--compile_rollout"] if rollout else [])
+
+    def update(flags, before_policy=None):
+        args, algo, buffer = agent_and_replay(kin, task, extra + flags)
+        torch.manual_seed(2)
+        for _ in range(3):  # an untrained world model's last layer is zero: its step would not depend on the actions
+            algo.wm_update(buffer)
+        if before_policy is not None:
+            before_policy(algo)
+        torch.manual_seed(3)
+        out = algo.policy_update(buffer)
+        return [torch.nan_to_num(x) for x in out], [p.detach().clone() for p in algo.pi.parameters()], algo
+
+    plain, one, half = update([]), update(["--bptt_decay", "1"]), update(["--bptt_decay", str(lam)])
+    for a, b in zip(plain[0] + plain[1], one[0] + one[1], strict=True):
+        assert torch.equal(a, b)  # the default is bit for bit the update with the option at 1
+
+    def wrap(algo):  # the world model's step in the policy update wrapped in the generic operation (not in its own fit)
+        step = algo.wm.step
+        monkeypatch.setattr(algo.wm, "step", lambda *a: decay_rollout_grads(step(*a), lam), raising=False)
+
+    same = update([], wrap)
+    pairs = list(zip(half[0] + half[1], same[0] + same[1], strict=True))
+    if exact:
+        assert all(torch.equal(a, b) for a, b in pairs)  # the class's own decay is the generic operation, bit for bit
+        assert torch.equal(half[0][0], plain[0][0])  # the loss: the same forward pass, so the policy's change is the decay's alone
+        assert any(not torch.equal(a, b) for a, b in zip(half[1], plain[1], strict=True))  # the decay acts
+    else:
+        assert all(torch.allclose(a, b, rtol=1e-4, atol=1e-5) for a, b in pairs)
+        assert torch.allclose(half[0][0], plain[0][0], rtol=1e-5)  # the forward pass but for the rounding of 1 - lam
+        if "supertrack" in arm:  # the policy gradient's norm (SuperMimic's moves too little to tell it from the rounding)
+            assert abs(float(half[0][3]) / float(plain[0][3]) - 1) > 1e-4
+
+
+@pytest.mark.parametrize("algo_name", ["supermimic", "supertrack"])
+def test_bptt_decay_arguments(setup, algo_name):
+    """A run's arguments from before the option build the agent with it off; outside (0, 1] the agent refuses it."""
+    _, kin, task = setup
+    extra = ["--algo", algo_name] + SYSTEMS
+    args, _, _ = agent_and_replay(kin, task, extra)
+    args_before = argparse.Namespace(**{k: v for k, v in vars(args).items() if k != "bptt_decay"})
+    torch.manual_seed(0)
+    assert HAND_ALGOS[algo_name](args_before, kin, task, "cpu").bptt_decay == 1.0
+    for bad in ("0", "-0.5", "1.5"):
+        with pytest.raises(ValueError, match="bptt_decay"):
+            agent_and_replay(kin, task, extra + ["--bptt_decay", bad])
+
+
+@pytest.mark.parametrize("algo_name", ["supermimic", "supertrack"])
+def test_bptt_decay_by_hand(setup, monkeypatch, algo_name):
+    """The gradient's weights by hand on a chain of known maps (a constant policy; the joints, the velocities and the object's position
+    times 0.9 at every step, the object's rotation kept): what the d-th imagined step reads (SuperTrack's errors in every term, SuperMimic's
+    reward) reaches the start state with lam**d through every path (weights 1 without the option), and the same gradient comes from the
+    step's values weighted lam**d without it. The decay multiplies the state's gradient, not the actions'."""
+    monkeypatch.setattr(torch, "compile", lambda f, **_: f)
+    _, kin, task = setup
+    horizon, lam, B = 4, 0.6, 5
+
+    def contract(S, fk, u):  # the world model's step stand-in
+        q, qd, p, R, v, w = S
+        return 0.9 * q, 0.9 * qd, 0.9 * p, R, 0.9 * v, 0.9 * w
+
+    torch.manual_seed(1)
+    f0 = torch.randint(0, task.ref.frames - horizon - 1, (B,))
+    start = [x.clone() for x in task.ref.state(f0)]
+    for k, s in ((0, 0.1), (1, 0.3), (2, 0.05), (4, 0.3), (5, 0.3)):
+        start[k] = start[k] + s * torch.randn_like(start[k])
+    paths = (0, 1, 2, 4, 5)  # the joints, their velocities, the object's position, its velocities: not its rotation
+
+    def chain(extra, weights):
+        torch.manual_seed(0)
+        arm = ["--algo", "supertrack", "--st_vel_terms", "--st_no_imag_r"] if algo_name == "supertrack" else []
+        algo = HAND_ALGOS[algo_name](parse_args(small(arm + extra)), kin, task, "cpu")
+        algo.pi = lambda obs, goal: torch.zeros(B, kin.num_joints)
+        monkeypatch.setattr(algo.wm, "step", contract, raising=False)
+        x = [s.clone().requires_grad_(k in paths) for k, s in enumerate(start)]
+        S, fk, f, a_prev, parts = tuple(x), kin.forward(x[0]), f0, torch.zeros(B, kin.num_joints), []
+        for d in range(1, horizon + 1):
+            if algo_name == "supertrack":
+                S, fk, f, a_prev, e, _, _, _ = algo._st_step(S, fk, f, a_prev, torch.zeros(B, kin.num_joints))
+            else:
+                S, fk, f, a_prev, e, _, _ = algo._imag_step(S, fk, f, a_prev)
+            parts.append((weights(d) * e).sum())
+        return parts, [x[k] for k in paths]
+
+    parts, x = chain(["--bptt_decay", str(lam)], lambda d: 1.0)
+    total = torch.autograd.grad(sum(parts), x, allow_unused=True)
+    plain, x1 = chain([], lambda d: 1.0)
+    ref = [torch.zeros_like(y) for y in x1]
+    for d, e in enumerate(plain, 1):
+        ref = [r + lam**d * (g if g is not None else 0) for r, g in zip(ref, torch.autograd.grad(e, x1, retain_graph=True, allow_unused=True), strict=True)]
+    weighted, x2 = chain([], lambda d: lam**d)
+    again = torch.autograd.grad(sum(weighted), x2, allow_unused=True)
+    total, again = ([torch.zeros_like(y) if g is None else g for g, y in zip(gs, x1, strict=True)] for gs in (total, again))
+    for name, g, r, w in zip(("joints", "joint velocities", "object position", "object velocity", "object angular velocity"), total, ref, again, strict=True):
+        assert torch.allclose(g, r, atol=1e-5, rtol=1e-5) and torch.allclose(g, w, atol=1e-5, rtol=1e-5), name
+    assert float(total[0].abs().max()) > 1e-4 and float(total[2].abs().max()) > 1e-4  # the joints' and the object's paths carry the gradient
+    if algo_name == "supertrack":  # the velocities' too, in the velocity terms
+        assert all(float(g.abs().max()) > 1e-4 for g in total)

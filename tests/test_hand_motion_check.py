@@ -1,5 +1,6 @@
 """tools/hand_motion_check.py's measures on made-up signals and ndm_gym.evaluate_hand's recording of a rollout's targets."""
 
+import json
 import os
 import sys
 
@@ -30,6 +31,45 @@ def test_joint_measures():
     held[100:, 0] = hi[0]
     assert abs(hmc.joint_measures(held, DT, 5.0, lo, hi, 0.01)["limit_hits"] - 100 / 800) < 1e-9
     assert abs(hmc.change(np.arange(10.0)[:, None] * 0.5) - 0.5) < 1e-12
+
+
+def test_power_weighted_share():
+    """The share above the cutoff per joint and power-weighted, worked by hand: a joint swinging 0.5 rad at 1 Hz and a joint held
+    still but for a 0.1 mrad jitter at 10 Hz, each a whole number of cycles over the 100 velocity samples (one frequency bin each).
+    The joint mean of the shares is (0 + 1) / 2; the power-weighted share is the jitter's velocity power over both joints', each a
+    sine's discrete derivative of amplitude 2 sin(pi f dt) / dt times its own: the still joint weighs as little as it moves."""
+    t = np.arange(101)[:, None] * DT
+    q = np.concatenate((0.5 * np.sin(2 * np.pi * 1.0 * t), 0.3 + 1e-4 * np.sin(2 * np.pi * 10.0 * t)), axis=1)
+    m = hmc.joint_measures(q, DT, 5.0, -np.ones(2), np.ones(2), 0.01)
+    amp = lambda f, a: 2 * np.sin(np.pi * f * DT) / DT * a  # noqa: E731
+    want = amp(10.0, 1e-4) ** 2 / (amp(1.0, 0.5) ** 2 + amp(10.0, 1e-4) ** 2)
+    assert abs(m["hf_share"] - 0.5) < 1e-9 and abs(m["hf_share_power"] - want) < 1e-9 * want and want < 1e-5
+    both = hmc.joint_measures(q[:, [1, 1]], DT, 5.0, -np.ones(2), np.ones(2), 0.01)
+    assert abs(both["hf_share"] - 1.0) < 1e-9 and abs(both["hf_share_power"] - 1.0) < 1e-9  # one joint's measure: both readings agree
+    still = hmc.joint_measures(np.zeros((101, 2)), DT, 5.0, -np.ones(2), np.ones(2), 0.01)
+    assert still["hf_share"] == 0.0 and still["hf_share_power"] == 0.0
+    # the cutoff itself is not above it: 5 Hz is a bin of the 100 samples, 5.5 Hz (the next) is above, whatever the two joints' mean speed
+    sine = lambda f: 0.1 * np.sin(2 * np.pi * f * t) * np.ones((1, 2)) + 0.5 * t  # noqa: E731
+    at, over = (hmc.joint_measures(sine(f), DT, 5.0, -np.ones(2), np.ones(2), 0.01) for f in (5.0, 5.5))
+    assert at["hf_share"] < 1e-9 and at["hf_share_power"] < 1e-9 and over["hf_share"] > 1 - 1e-9 and over["hf_share_power"] > 1 - 1e-9
+
+
+def test_main_prints_every_measure(monkeypatch, capsys, tmp_path):
+    """The table and the JSON lines hold every measure, hf_share_power beside hf_share, as the mean over a label's dirs."""
+    part = lambda k: {x: k + i for i, x in enumerate(hmc.KEYS)} | {"action_change": 9.0, "palm_acc": 1.0, "palm_jerk": 2.0}  # noqa: E731
+    monkeypatch.setattr(hmc, "measure", lambda path, *a: {"dir": path, "policy": part(0.0 if path == "a" else 1.0), "reference_targets": part(0.0),
+                                                          "reference_kinematic": part(0.0)})  # fmt: skip
+    monkeypatch.setattr(sys, "argv", ["hand_motion_check.py", "x=a", "x=b", "--json", str(tmp_path / "m.jsonl")])
+    hmc.main()
+    lines = capsys.readouterr().out.split("\n")
+    k = hmc.KEYS.index("hf_share_power")
+    assert "hf_share" in hmc.KEYS and lines[1].split()[2 + k] == "hf_share_power"
+    policy = next(line for line in lines[2:] if line.startswith("x ") and " policy " in line)
+    assert policy.split()[2 + k] == f"{k + 0.5:.3f}"
+    out = [json.loads(line) for line in lines if line.startswith("{")]
+    assert out[0]["rollout"] == "policy" and out[0]["n"] == 2 and out[0]["hf_share_power"] == k + 0.5
+    rows = [json.loads(line) for line in open(tmp_path / "m.jsonl")]
+    assert [r["dir"] for r in rows] == ["a", "b"] and rows[1]["policy"]["hf_share_power"] == k + 1.0
 
 
 def test_slips():

@@ -63,7 +63,7 @@ Transport at four times over 12-36 s of its demonstration; their marks left out:
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
       --block "Two G1s" 2 2 --clip two_g1s.mp4 0 120 216 1440 1080 2 2 \\
       --block Muscles 2 2 --clip walk.mp4 0.5 0 195 1920 714 1 2 --clip run.mp4 0.5 0 195 1920 714 1 2 \\
-      --block Hand-object 2 2 --clip xhand_spray_bottle.mp4 0 260 20 1333 1000 --clip inspire_can.mp4 0 330 140 1120 840 \\
+      --block Hand-object 2 2 --clip xhand_spray_bottle.mp4 0 260 20 1333 1000 --clip inspire_apple.mp4 0 450 180 1000 750 \\
       --clip allegro_spray_bottle.mp4 0 290 0 1040 780 --clip xhand_apple.mp4 0 450 180 1000 750 \\
       --block "Human-object interaction" 2 2 --clip carry_box_over_shoulder.mp4 0 410 170 1080 810 \\
       --clip open_foldchair-sit.mp4 0 344 98 1152 864 --clip roll_ball-hand.mp4 0 414 118 1152 864 \\

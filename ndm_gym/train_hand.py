@@ -51,7 +51,7 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    from ndm_gym.algos.hand_fast import add_hand_fast_args, check_hand_fast_args
+    from ndm_gym.algos.hand_fast import add_hand_fast_args, check_hand_fast_args, check_noise_free, noise_free_on
     from ndm_gym.algos.hand_layout import add_hand_layout_args, check_hand_layout_args
 
     parser = argparse.ArgumentParser()
@@ -62,6 +62,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target_rate_w", type=float, default=0.0,
                         help="both algorithms: a cost per step of this weight times the mean over the joints of the policy's part of the "
                         "targets' change over the joint's kernel width, squared (0: off)")  # fmt: skip
+    parser.add_argument("--noise_free_frac", type=float, default=0.0,
+                        help="both algorithms: this fraction of the worlds (the first round(f N)) collect without the exploration noise "
+                        "(--action_noise) throughout, so that the policy's own states reach the replay (hand_fast.NoiseFree; 0: off)")  # fmt: skip
     parser.add_argument("--st_vel_terms", action="store_true",
                         help="supertrack: also the L1 errors of the joints' velocities and of the object's linear and angular velocity")  # fmt: skip
     parser.add_argument("--st_obj_w", type=float, default=1.0,
@@ -92,7 +95,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("hand training implements --algo supertrack and --algo supermimic")
     st_only = {"st_vel_terms": False, "st_obj_w": 1.0, "st_unit_scales": False, "st_task_weights": False, "st_cost_mean": False,
                **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w", "st_no_imag_r")}}  # fmt: skip
-    sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches",  # its critic and return
+    sm_only = {k: parser.get_default(k) for k in ("gamma", "lam", "critic_epochs", "critic_minibatches",  # its critic and return
                                                   "sm_reuse_input")}  # fmt: skip
     if args.algo == "supermimic":
         for name, default in st_only.items():
@@ -106,6 +109,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--st_task_weights weighs the task's five tracked quantities: not with --st_vel_terms or --st_unit_scales")
     if args.st_cost_mean and not args.st_task_weights:  # the mean is the tracking terms' scale under the task's weights only
         parser.error("--st_cost_mean takes the tracking terms' scale from --st_task_weights: give both")
+    if noise_free_on(args):
+        try:
+            check_noise_free(args)
+        except ValueError as e:
+            parser.error(str(e))
     for name in UNSUPPORTED:
         if getattr(args, name) != parser.get_default(name):
             parser.error(f"--{name} is an option of LAFAN1 training (ndm_gym.train) that hand training does not implement")
@@ -207,13 +215,17 @@ def main() -> None:
     a_prev = torch.zeros(N, kin.num_joints, device=dev)
     ep_len = torch.zeros(N, device=dev)
     acc = {k: torch.zeros((), device=dev) for k in ("r", "steps", "done", "term", "ep_len", "object_err")}
+    noise_free = hand_fast.NoiseFree(args, N, dev) if hand_fast.noise_free_on(args) else None  # --noise_free_frac
 
     @torch.no_grad()
     def collect():
         nonlocal a_prev
         s, f = sim.state(), sim.f.clone()
         S = unflatten_state(s)
-        a = algo.act(S, a_prev, f, noise=args.action_noise)
+        if noise_free is None:
+            a = algo.act(S, a_prev, f, noise=args.action_noise)
+        else:  # the default step's draws, times the multiplier per world
+            a = algo.act(S, a_prev, f, noise=args.action_noise, z=noise_free.noise(a_prev))
         u = task.setpoint(a, f)
         s1, term, done = sim.step(u, reset=not args.reset_masked)
         if args.reset_masked:  # the ended worlds reset by masked writes, the draws made for all worlds
@@ -233,7 +245,7 @@ def main() -> None:
         a_prev = torch.where(done.unsqueeze(-1), torch.zeros_like(a), a)
 
     if args.no_sync:  # the same step without a host read; --collect_graph: as one CUDA graph (hand_fast.Collector)
-        collect = hand_fast.Collector(sim, task, algo, buffer, args)
+        collect = hand_fast.Collector(sim, task, algo, buffer, args, noise_free=noise_free)
         acc = collect.acc
     # the iteration's updates; --update_graphs: each as a CUDA graph; --pi_ema: the average's step with the policy's
     wm_update, policy_update = hand_fast.update_functions(algo, buffer, args, average)
