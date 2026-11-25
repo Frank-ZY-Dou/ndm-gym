@@ -20,6 +20,8 @@ counted (``wm_skips``, ``pi_skips``).
 
 from __future__ import annotations
 
+import re
+
 import torch
 import torch.nn as nn
 
@@ -113,6 +115,17 @@ def soft_terminations(errors, thresholds, min_steps, count, rel_tau: float = 0.1
     return 1 - torch.prod(1 - fired, -1), count
 
 
+def action_indices(body, pattern: str) -> list[int]:
+    """The actions (the body's first ``num_actions`` joints) whose joint names match ``pattern`` (a regular expression; ""
+    none)."""
+    if not pattern:
+        return []
+    found = [i for i, name in enumerate(body.joint_names[: body.num_actions]) if re.fullmatch(pattern, name)]
+    if not found:
+        raise ValueError(f"no action's joint matches {pattern!r}")
+    return found
+
+
 class HOIAgent:
     """One HDMI task's learner; ``kind`` is the dynamics model's parameterization (SuperTrack: "accel", SuperMimic:
     "increment"). Built from the training environment (HDMISim) for its task constants."""
@@ -137,6 +150,12 @@ class HOIAgent:
         self.groups = policy_groups(getattr(args, "priv_obs", False))
         self.pi = HOIPolicy(dims["command"], dims["policy"], dims["object"], priv_dim=dims["priv"] if "priv" in self.groups else 0,
                            num_actions=self.body.num_actions).to(dev)  # fmt: skip
+        # --pi_fixed_joints: those joints follow the reference (HDMI's residual base), the policy's residual on them zeroed
+        fixed = action_indices(self.body, getattr(args, "pi_fixed_joints", ""))
+        self.act_mask = None
+        if fixed:
+            self.act_mask = torch.ones(self.body.num_actions, device=dev)
+            self.act_mask[fixed] = 0.0
         self.opt_wm = torch.optim.Adam(self.wm.parameters(), lr=args.lr)
         self.opt_pi = torch.optim.Adam(self.pi.parameters(), lr=args.lr, betas=(0.9, 0.95))
         self.imag = HOIImagination(env.cfg, env.clip, consts, env.hinge_frames() if env.hinged else None, self.layout, dev)
@@ -198,7 +217,21 @@ class HOIAgent:
         return (self.clip.joint_pos[t.clamp(max=self.L - 1)] - self.q0_act) / self.scale
 
     def act(self, obs: dict, t: torch.Tensor) -> torch.Tensor:
-        return self.pi(obs) + self.base_action(t)
+        a = self.pi(obs)
+        if self.act_mask is not None:
+            a = a * self.act_mask
+        return a + self.base_action(t)
+
+    def init_from(self, ck: dict, zero_joints: str = ""):
+        """--init: another run's world model, policy and critic (with their normalizers; not its optimizers' states), the
+        policy's last layer zeroed for the actions of ``zero_joints`` (--init_zero_joints), so that their residual on the
+        reference starts at 0."""
+        self.wm.load_state_dict(ck["wm"]), self.pi.load_state_dict(ck["pi"])
+        if getattr(self, "critic", None) is not None and "critic" in ck:
+            self.critic.load_state_dict(ck["critic"])
+        with torch.no_grad():
+            for i in action_indices(self.body, zero_joints):
+                self.pi.dec[-1].weight[i].zero_(), self.pi.dec[-1].bias[i].zero_()
 
     # ------------------------------------------------------------------ world model
     def _wm_norm_data(self, tr: dict) -> tuple:

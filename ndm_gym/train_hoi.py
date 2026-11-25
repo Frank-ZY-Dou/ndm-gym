@@ -57,6 +57,13 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--st_ref_replay", type=float, default=0.0,
                         help="supertrack: DiffMimic's demonstration replay in the imagined window: a rollout whose keypoints are on average "
                         "more than this many metres from the reference continues from the reference's state (0: off)")  # fmt: skip
+    parser.add_argument("--pi_fixed_joints", type=str, default="",
+                        help="a regular expression of joint names whose actions follow the reference, the policy's residual on them "
+                        "zeroed (a body prior with the fingers given)")  # fmt: skip
+    parser.add_argument("--init", type=str, default=None,
+                        help="start from this run's world model, policy and critic (a last.pt), not its optimizers' states")
+    parser.add_argument("--init_zero_joints", type=str, default="",
+                        help="with --init: the policy's last layer zeroed for these joints' actions (a regular expression)")
     parser.add_argument("--priv_obs", action="store_true",
                         help="the policy also reads HDMI's privileged observation group, as HDMI's PPO teacher does (both algorithms)")  # fmt: skip
     add_launcher_args(parser)
@@ -121,6 +128,8 @@ def main():
         task = HDMITask(cfg, args.num_envs, env.joint_limits, env.robot_mass, noise=True, device=dev)
         algo = HOI_ALGOS[args.algo](args, env, dev)
         start_it, wall_offset = 0, 0.0
+        if args.init and resume_ck is None:
+            algo.init_from(torch.load(args.init, map_location=dev, weights_only=False), args.init_zero_joints)
         if resume_ck is not None:
             algo.load_state_dict(resume_ck)
             start_it, wall_offset = resume_ck["iteration"], resume_ck["wall_time"]
