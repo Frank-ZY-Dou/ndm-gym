@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from render_hand import SHOWN_GROUPS, studio_scene  # noqa: E402
 
 STILLS = (0.03, 0.3, 0.5, 0.7, 0.97)  # the frames of the stills, as fractions of the sequence
+WALK_SHADOW_CLIP = 12.0  # m, the shadow map's range while the G1 walks
 
 
 def policy_sequence(task: str, model: mujoco.MjModel, qpos: np.ndarray, reach: int, rollout: str) -> np.ndarray:
@@ -58,8 +59,8 @@ def main():
     model = studio_scene(os.path.join(demo, "scene.xml"), width, args.height, ghost=False)
     model.vis.quality.shadowsize, model.vis.quality.offsamples, model.vis.map.shadowclip = args.shadow, args.samples, 2.5
     walking = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "floating_base_joint") >= 0
-    if walking:  # the shadow's range past the floor in view
-        model.vis.map.shadowclip, model.vis.quality.shadowsize = 3.0, max(args.shadow, 8192)
+    if walking:  # the walk's shadows reach the far floor: a shorter range leaves acne and an edge on the floor where it ends
+        model.vis.quality.shadowsize = max(args.shadow, 16384)
     if args.rollout:
         qpos = policy_sequence(args.task, model, qpos, reach, args.rollout)
     data = mujoco.MjData(model)
@@ -106,10 +107,13 @@ def main():
                                 "-r", str(args.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", args.out],
                                stdin=subprocess.PIPE)  # fmt: skip
     renderer = mujoco.Renderer(model, args.height, width)
+    # the shadow map's range per frame: the walk's, then the table's finer one (the context copies it from the model when made)
+    shadow_range = lambda source: WALK_SHADOW_CLIP if walking and source < reach else model.vis.map.shadowclip  # noqa: E731
     stills, column, small = {int(round(s * (len(frames) - 1))) for s in STILLS}, [], []
     for index, frame in enumerate(frames):
         data.qpos[:] = frame
         mujoco.mj_forward(model, data)
+        renderer._mjr_context.shadowClip = shadow_range(x[index])
         if walking:
             ahead = frame[root : root + 2] + 0.2 * forward
             wide.lookat[:2] = ahead if index == 0 else wide.lookat[:2] + follow * (ahead - wide.lookat[:2])
