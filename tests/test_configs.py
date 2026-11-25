@@ -22,7 +22,7 @@ def parse(trainer, argv):
     return mod.parse_args(argv)
 
 
-EXTRA = {"train": [], "train_hand": ["--clip", "clip"], "train_muscles": [], "train_quadrotor": ["--flight", "flight"], "train_quadruped": []}
+EXTRA = {"train": [], "train_hand": ["--clip", "clip"], "train_muscles": [], "train_quadrotor": ["--flight", "flight"], "train_quadruped": [], "train_animal": []}
 
 
 @pytest.mark.parametrize("trainer, name", [(t, n) for t, names in configs.CONFIGS.items() for n in names])

@@ -59,6 +59,14 @@ QUAD_TIMED = "--iterations 1500 --lr_decay_iters 6000 --ckpt_every 50 --ckpt_kee
 GO2_ST = f"--algo supertrack {HAND_SYSTEMS} --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights"
 GO2_SM = f"--algo supermimic {HAND_SYSTEMS} --lr 4e-4 --action_noise 0.3 --bptt_decay 0.95 {HOI_OPT} --gamma 0.95"
 GO2_TIMED = "--ckpt_every 500 --keep_ckpts"  # the checkpoints evaluate_quadruped --ckpts times
+# the animals' settings (benchmarks/mimic_mjx_animal_tracking): the hand task's fast configurations with LAFAN1's world-model rate,
+# a policy batch of 2,048 and the fused forward kinematics; one policy on clips 0-9 of a body's reference
+ANIMAL_SPEED = "--pi_batch 2048 --wm_lr 2e-3 --fused_fk --clip_ids 0-9"
+ANIMAL_ST = f"--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
+ANIMAL_SM = f"--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95 {HOI_OPT} {HAND_SYSTEMS} {ANIMAL_SPEED}"
+ANIMAL_ITERS = {"stick": 4000, "fly": 6000, "rat": 10000}
+# the reference's velocities from its own positions: at the pinned revision the files' qvel is not theirs (train_animal --ref_qvel)
+ANIMAL_REF = "--ref_qvel positions"
 
 # trainer -> name -> (options, what the README measured with them)
 CONFIGS = {
@@ -178,6 +186,20 @@ CONFIGS = {
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
         "go2-supermimic-clip": (f"{GO2_SM} --iterations 6000 --lr_decay_iters 6000 {GO2_TIMED}",
                                 "Go2, one Lifelike clip (add --clips <name>), 6,000 iterations"),
+    },
+    "train_animal": {
+        f"{animal}-{algo}": (f"{opts} --animal {animal} {ANIMAL_REF} --iterations {ANIMAL_ITERS[animal]} --lr_decay_iters {ANIMAL_ITERS[animal]} --ckpt_every 250 --ckpt_keep",
+                             f"{body}, clips 0-9, {ANIMAL_ITERS[animal]:,} iterations: {result} (seeds 0-2, A100 80GB SXM4)")
+        for animal, body in (("stick", "stick insect"), ("fly", "fruit fly"), ("rat", "rat"))
+        for algo, opts in (("supertrack", ANIMAL_ST), ("supermimic", ANIMAL_SM))
+        for result in [{
+            ("stick", "supertrack"): "no episode ended, bodies 0.35 mm; held-out clips 10.7 % ended, 0.64 mm",
+            ("stick", "supermimic"): "no episode ended, bodies 0.33 mm; held-out clips none ended, 0.74 mm",
+            ("fly", "supertrack"): "1.3 % of the episodes ended, bodies 0.066 mm; held-out clips 9.3 % ended, 0.091 mm",
+            ("fly", "supermimic"): "no episode ended, bodies 0.049 mm; held-out clips none ended, 0.064 mm",
+            ("rat", "supertrack"): "39 % of the episodes ended, bodies 13.6 mm (not solved)",
+            ("rat", "supermimic"): "16 % of the episodes ended, bodies 20.1 mm (not solved)",
+        }[animal, algo]]
     },
 }
 

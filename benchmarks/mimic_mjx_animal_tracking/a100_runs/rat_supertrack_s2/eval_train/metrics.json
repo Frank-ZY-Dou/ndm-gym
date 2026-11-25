@@ -1,0 +1,15 @@
+{
+  "checkpoint": "logs/mimic_mjx_formal/rat_supertrack_s2/last.pt",
+  "iteration": 10000,
+  "minutes": 22.340275132656096,
+  "animal": "rat",
+  "ref_qvel": "positions",
+  "clips": 10,
+  "episodes": 50,
+  "ended_share": 0.5199999809265137,
+  "body_mm": 15.648306846618652,
+  "end_eff_mm": 14.647893905639648,
+  "root_pos_mm": 8.968056678771973,
+  "joint_deg": 10.89374362236743,
+  "lived_share": 0.7214056253433228
+}
