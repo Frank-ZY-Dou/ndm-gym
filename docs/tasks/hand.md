@@ -196,4 +196,24 @@ elsewhere the lowest object error among that algorithm's configurations of recor
 | Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/inspire_supertrack_can.webp" alt="Inspire, SuperTrack, can" width="320"/> |
 | Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/inspire_supermimic_can.webp" alt="Inspire, SuperMimic, can" width="320"/> |
 
+## A G1 with Inspire hands
+
+GigaHands' making tea carried out by a Unitree G1 with the two Inspire hands in place of its rubber hands
+([`build_g1_hand_task.py`](../../tools/build_g1_hand_task.py), [`g1_hands.py`](../../ndm_gym/robots/g1_hands.py)). The
+policy drives each arm's seven hinges and each hand's twelve finger joints. The arms are position servos of stiffness
+1,000 on joints of armature 1, as SPIDER's floating palms' hinges; the G1's own shapes take no contacts; the pelvis, the
+legs and the waist are fixed. Standing at the table, or after a walk: the G1 walks 4.35 m to the table (LAFAN1's
+`walk1_subject1` retargeted to the G1), the walk replayed from the reference, and the task is the reach and the tea.
+
+```bash
+TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
+python tools/build_g1_hand_task.py --clip $TEA --out data/g1_hands/tea                    # standing
+python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
+python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --log_dir logs/g1_walk_tea
+```
+
+<p align="center"><img src="../media/hand/g1_walk_tea.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea" width="76%"/></p>
+<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (SuperMimic, seed 0, from the unperturbed start).</i></p>
+<p align="center"><sub>A render of a policy tracking SPIDER's retarget of a GigaHands demonstration (CC BY-NC 4.0) after LAFAN1's walk1_subject1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0) retargeted to the G1, with Unitree's G1 model (BSD-3-Clause) and SPIDER's Inspire hands, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="../../NOTICE">NOTICE</a>).</sub></p>
+
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

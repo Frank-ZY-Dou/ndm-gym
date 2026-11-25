@@ -498,7 +498,9 @@ GigaHands' making tea carried out by a Unitree G1 with the two Inspire hands on 
 ([`build_g1_hand_task.py`](../../tools/build_g1_hand_task.py), [`g1_hands.py`](../../ndm_gym/robots/g1_hands.py)). The
 hands' bases replace the G1's rubber hands; the G1 stands at a small table whose top is the clip's floor, and its arms are
 solved by inverse kinematics so that each base keeps the clip's pose, clear of the robot's body. The policy drives each
-arm's seven hinges and each hand's twelve finger joints; the pelvis, the legs and the waist are fixed. Two tasks:
+arm's seven hinges and each hand's twelve finger joints. The arms' model: position servos of stiffness 1,000 on joints of
+armature 1 (a damping ratio of 1), as SPIDER's floating palms' hinges; the G1's own shapes without contacts; the pelvis,
+the legs and the waist fixed; after a walk, the walk replayed. Two tasks:
 
 - **standing:** the G1 at the table for the whole clip (338 frames);
 - **walk, then tea:** the G1 walks 4.35 m to the table (LAFAN1's `walk1_subject1` retargeted to the G1, up to its frame
@@ -523,7 +525,7 @@ MUJOCO_GL=egl python tools/render_g1_hands.py --task data/g1_hands/walk_tea --ro
 |  | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 98.4 % | 11.7 / 12.4 / 14.5 mm | 9.9 / 8.8 / 12.0 mm | 21.2 / 23.1 / 26.0 mm |
 
 - **Training:** `--config hand-supermimic-fast --iterations 12000`, the two-hand tea task's, 2,048 worlds, training seeds
-  0-2.
+  0-2, on GH200 GPUs.
 - **Evaluation:** the last checkpoint, 256 rollouts from perturbed starts.
 
 ## Training time

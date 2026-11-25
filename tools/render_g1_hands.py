@@ -6,7 +6,7 @@ view of the table and the hands, side by side; while the G1 walks the first view
 
 The reference's sequence, or with --rollout a policy's: the walk up to the reach as the reference's, then the rollout's
 arms, fingers and object, the pelvis, the legs and the waist held as at the reach. Also writes <out>.png, five frames in a
-column, and with --webp an animated WebP at half the size.
+column, and with --webp an animated WebP at half the size. Each frame carries the NDM Gym mark (``--no_mark``: none).
 """
 
 import argparse
@@ -17,9 +17,10 @@ import sys
 
 import mujoco
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from render import _font, draw_mark  # noqa: E402  (tools/render.py: the NDM Gym mark)
 from render_hand import SHOWN_GROUPS, studio_scene  # noqa: E402
 
 STILLS = (0.03, 0.3, 0.5, 0.7, 0.97)  # the frames of the stills, as fractions of the sequence
@@ -50,6 +51,7 @@ def main():
     parser.add_argument("--speed", type=float, default=1.0, help="playback speed (1: real time)")
     parser.add_argument("--shadow", type=int, default=2048, help="the shadow map's size")
     parser.add_argument("--samples", type=int, default=4, help="antialiasing samples")
+    parser.add_argument("--no_mark", action="store_true", help="frames without the NDM Gym mark")
     args = parser.parse_args()
 
     demo = os.path.join(args.task, "demo")
@@ -107,6 +109,7 @@ def main():
                                 "-r", str(args.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", args.out],
                                stdin=subprocess.PIPE)  # fmt: skip
     renderer = mujoco.Renderer(model, args.height, width)
+    bold = _font(0, round(20 * args.height / 432))
     # the shadow map's range per frame: the walk's, then the table's finer one (the context copies it from the model when made)
     shadow_range = lambda source: WALK_SHADOW_CLIP if walking and source < reach else model.vis.map.shadowclip  # noqa: E731
     stills, column, small = {int(round(s * (len(frames) - 1))) for s in STILLS}, [], []
@@ -122,6 +125,10 @@ def main():
             renderer.update_scene(data, camera, option)
             views.append(renderer.render().copy())
         image = np.concatenate(views, axis=1)
+        if not args.no_mark:
+            over = Image.new("RGBA", (2 * width, args.height), (0, 0, 0, 0))
+            draw_mark(ImageDraw.Draw(over), 2 * width, args.height, bold)
+            image = np.asarray(Image.alpha_composite(Image.fromarray(image).convert("RGBA"), over).convert("RGB"))
         encoder.stdin.write(image.tobytes())
         if index in stills:
             column.append(image)

@@ -21,7 +21,7 @@ from ..core.rotations import axis_angle_to_mat, quat_to_mat
 SIDES = ("right", "left")
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 OBJECT_BODY = "right_object"
-NUM_PALM = 6  # a floating palm's joints, three slides then three hinges, first in its hand's (tools/hand_motion_check.py)
+NUM_PALM = 6  # a floating palm's joints, three slides then three hinges, first in its hand's (the single-hand expressions' slices)
 
 # the largest offset of a position target from the reference pose: palm translation (m), palm rotation and fingers (rad);
 # an arm's hinges move the palm as a floating palm's hinges do, and take the palm rotation's

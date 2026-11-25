@@ -932,18 +932,8 @@ ALGO=supertrack ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.jso
 ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
 
-**A G1 with Inspire hands.** Making tea on a Unitree G1 with the two Inspire hands on its wrists: it walks to a table,
-reaches and makes tea, each hand driven by its arm's seven hinges and its twelve finger joints. SuperMimic, success
-100.0 / 100.0 / 98.4 % (seeds 0-2; [results](benchmarks/xhand_tracking/results.md#a-g1-with-inspire-hands)).
-
-```bash
-TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
-python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
-python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --log_dir logs/g1_walk_tea
-```
-
-<p align="center"><img src="docs/media/hand/g1_walk_tea.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea" width="76%"/></p>
-<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (seed 0, from the unperturbed start).</i></p>
+**A G1 with Inspire hands.** Making tea with the two Inspire hands on a Unitree G1's wrists, each hand driven by its
+arm's seven hinges and its twelve finger joints ([the task](docs/tasks/hand.md#a-g1-with-inspire-hands)).
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|

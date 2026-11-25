@@ -19,7 +19,8 @@ share a label (a configuration's clips and seeds): the label's line is the mean 
 - object slip: per hand, at the steps where at least two of its fingertips touch the object, the step-to-step displacement of
   the object in its palm's frame; the mean over those (mm per step).
 
-With two hands the finger joints and fingertips are both hands', the palm's hinges both palms'.
+With two hands the finger joints and fingertips are both hands', the palm's hinges both palms'; with hands on arms (a G1's) the
+palm's hinges are the arms'.
 
 Contacts come from MuJoCo on the CPU at each recorded qpos (``mj_forward``); a fingertip is the body of its site. The kinematic
 reference has no contacts: it gives the joint measures, its own pose's change per step standing for the action change.
@@ -37,7 +38,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ndm_gym.motion.sources.spider import load_scene  # noqa: E402
-from ndm_gym.robots.hands import NUM_PALM, OBJECT_BODY, hand_joints, hand_keypoints  # noqa: E402
+from ndm_gym.robots.hands import OBJECT_BODY, hand_joints, hand_keypoints  # noqa: E402
 
 
 def joint_measures(q: np.ndarray, dt: float, cutoff_hz: float, lo: np.ndarray, hi: np.ndarray, frac: float) -> dict:
@@ -68,12 +69,13 @@ class Scene:
     def __init__(self, clip: str):
         self.model = load_scene(clip)
         self.data = mujoco.MjData(self.model)
-        joints, starts = hand_joints(self.model)
+        joints, _, palm = hand_joints(self.model)
         self.qadr = np.array([int(self.model.jnt_qposadr[j]) for j in joints])
         self.lo, self.hi = self.model.jnt_range[joints].T
-        stops = starts[1:] + [len(joints)]
-        self.fingers = np.array([c for a, b in zip(starts, stops, strict=True) for c in range(a + NUM_PALM, b)])
-        self.palm_hinges = np.array([c for a in starts for c in range(a + 3, a + NUM_PALM)])
+        hinge = int(mujoco.mjtJoint.mjJNT_HINGE)
+        self.fingers = np.array([c for c, j in enumerate(joints) if j not in palm])
+        # the hinges that move a palm: a floating palm's three, or the arm's it is on
+        self.palm_hinges = np.array([c for c, j in enumerate(joints) if j in palm and int(self.model.jnt_type[j]) == hinge])
         hands = hand_keypoints(self.model)
         self.palm_sites = [h[0] for h in hands]
         self.tip_sites = [s for h in hands for s in h[1:]]

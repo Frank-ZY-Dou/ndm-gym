@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from ndm_gym.robots import g1_hands
+from ndm_gym.robots.g1 import MJCF_PATH as G1_MJCF
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 from build_g1_hand_task import WALK_FPS, resample  # noqa: E402
@@ -74,3 +75,59 @@ def test_resample():
     np.testing.assert_allclose(np.linalg.norm(out[:, 3:7], axis=1), 1.0)
     half = resample(walk, 2.5, 1, 1.0 / WALK_FPS)
     np.testing.assert_allclose(half[0, :3], (walk[2, :3] + walk[3, :3]) / 2)
+
+
+TEA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "spider", "processed", "gigahand", "inspire", "bimanual", "p36-tea")
+
+
+@pytest.mark.skipif(not os.path.exists(os.path.join(TEA, "0", "trajectory_kinematic.npz")), reason="the tea clip (tools/download_hand_clips.py)")
+@pytest.mark.skipif(not os.path.exists(G1_MJCF), reason="the G1's model (scripts/setup.sh)")
+def test_build_and_compile(tmp_path, monkeypatch):
+    """The standing G1 task from the tea clip's first 40 frames, on the CPU: its scene compiles, each hand is its arm's seven
+    hinges (position servos of stiffness 1,000 on joints of armature 1) then its twelve finger joints, the G1's own shapes
+    take no contacts, the kinematics follow MuJoCo's and train_hand builds the task."""
+    import torch
+
+    import build_g1_hand_task
+    from ndm_gym.robots.hands import HandKinematics, hand_joints, hand_keypoints
+    from ndm_gym.train_hand import build
+
+    # the clip's directory and its three parents mirrored (the scene's meshes are relative to them), its trial cut short
+    real, task = os.path.dirname(os.path.dirname(os.path.dirname(TEA))), tmp_path / "gigahand"
+    for child in ("inspire", "bimanual", "p36-tea", "0"):
+        task.mkdir()
+        for entry in os.listdir(real):
+            if entry != child:
+                os.symlink(os.path.join(real, entry), task / entry)
+        real, task = os.path.join(real, child), task / child
+    task.mkdir()
+    task = task.parent
+    qpos = np.load(os.path.join(TEA, "0", "trajectory_kinematic.npz"))["qpos"][:40]
+    np.savez(task / "0" / "trajectory_kinematic.npz", qpos=qpos)
+    out = tmp_path / "g1"
+    monkeypatch.setattr(sys, "argv", ["build_g1_hand_task.py", "--clip", str(task / "0"), "--out", str(out)])
+    build_g1_hand_task.main()
+
+    model = mujoco.MjModel.from_xml_path(str(out / "scene.xml"))
+    joints, starts, palm = hand_joints(model)
+    assert starts == [0, 19] and len(joints) == 38 == model.nu
+    arms = [j for j in joints if j in palm]
+    assert len(arms) == 14 and all(model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE for j in arms)
+    assert all(model.dof_armature[model.jnt_dofadr[j]] == 1.0 for j in arms)
+    servos = [a for a in range(model.nu) if int(model.actuator_trnid[a, 0]) in palm]
+    assert all(model.actuator_gainprm[a, 0] == 1000.0 and model.actuator_biasprm[a, 1] == -1000.0 for a in servos)
+    g1_shapes = [g for g in range(model.ngeom) if model.body(model.geom_bodyid[g]).name.split("_")[0] in ("pelvis", "torso", "waist")]
+    assert g1_shapes and all(model.geom_contype[g] == 0 and model.geom_conaffinity[g] == 0 for g in g1_shapes)
+
+    kin = HandKinematics(model, "cpu")
+    assert kin.num_hands == 2 and kin.palm_translations == []
+    data = mujoco.MjData(model)
+    sites = [s for hand in hand_keypoints(model) for s in hand]
+    q = kin.q_lo + (kin.q_hi - kin.q_lo) * torch.rand(3, kin.num_joints, generator=torch.Generator().manual_seed(0))
+    keypoints, _ = kin.forward(q)
+    for i in range(3):
+        data.qpos[model.jnt_qposadr[joints]] = q[i].double().numpy()
+        mujoco.mj_kinematics(model, data)
+        np.testing.assert_allclose(keypoints[i].numpy(), data.site_xpos[sites], atol=1e-4)
+    _, _, built = build(str(out / "0"), "cpu")
+    assert built.ref.frames > 0 and built.kin.num_joints == 38
