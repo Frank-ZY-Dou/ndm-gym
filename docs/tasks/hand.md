@@ -1,11 +1,19 @@
 # Hand-object tracking
 
-Contributed by [Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
-([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+Contributed by [Dechen Gao](https://github.com/gaodechen) ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2),
+[#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)): the task
+with SuperMimic on it, three hands (the XHand, the Allegro hand and the Inspire hand) and eight tasks, one of them with
+two hands at once.
 
-A dexterous hand tracks a human hand-object demonstration: a right hand on a position-controlled floating palm (the XHand, the Allegro hand or the Inspire hand) reaches an object, grasps it and lifts it, on MuJoCo-Warp directly (no Isaac Lab;
+A dexterous hand tracks a human hand-object demonstration: a right hand on a position-controlled floating palm (the XHand, the Allegro hand or the Inspire hand) reaches an object, grasps it and lifts it, or a right and a left hand handle one object together, on MuJoCo-Warp directly (no Isaac Lab;
 `ndm_gym/sim/rigid/hand_sim.py`). The clips and scenes are [SPIDER](https://github.com/facebookresearch/spider)'s
-(`retarget/retarget_full`: DexYCB, HRDexDB and OakInk demonstrations retargeted to robot hands).
+demonstrations retargeted to robot hands, in three task lists of `benchmarks/xhand_tracking/`, each pinned to a revision:
+
+| task list | source | tasks | hands |
+|---|---|---|---|
+| `tasks.json` | `retarget/retarget_full`: HRDexDB, OakInk and DexYCB | apple, spray bottle, can, mustard bottle, mug | right |
+| `tool_tasks.json` | `retarget/retarget_example`: OakInk2 | stir beaker, pour tube (OakInk2's `hold` of a tube; one hand, one object) | right |
+| `two_hand_tasks.json` | `retarget/retarget_example`: GigaHands | making tea | right and left |
 
 The reference is SPIDER's **kinematic** retarget of the demonstration (inverse kinematics of the human hand's motion, `trajectory_kinematic.npz`), resampled to 50 Hz, with the last pose held for 0.5 s. No physics shaped it: the fingers may float off or cut into the object, as a retargeted humanoid motion's feet do with the floor. The policy has to find
 the contacts that make the object follow.
@@ -27,31 +35,37 @@ python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/roll
 
 A hand is read from its scene (`ndm_gym/robots/hands.py`), so a clip's path chooses it: its joints are the actuated ones
 in the actuators' order (the palm's three slides and three hinges, then the fingers' hinges), its keypoints the palm's
-site and the fingertip sites it has. The task, the world model, the policy and the replay take their sizes from it.
+site and the fingertip sites it has. A scene with a right and a left hand has both, the right's first: one state, one
+policy and one world model for the two, the observation in each palm's frame and the termination on either palm. The
+task, the world model, the policy and the replay take their sizes from it.
 
 | hand | finger joints | keypoints | clip |
 |---|---|---|---|
 | XHand | 12 | palm, 5 fingertips | `.../xhand/right/<task>/0` |
 | Allegro | 16 | palm, 4 fingertips | `.../allegro/right/<task>/0` |
 | Inspire | 12 | palm, 5 fingertips | `.../inspire/right/<task>/0` |
+| two hands | twice the hand's | each hand's | `.../<hand>/bimanual/<task>/0` |
 
 ```bash
 python tools/download_hand_clips.py --robots allegro inspire      # default: every hand of the task list
 # each algorithm's time configuration on the Allegro hand
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
+# two Inspire hands making tea, with SuperMimic's arguments for the task (settings.json)
+python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json --robots inspire
+ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
 
 ## Task
 
 | | |
 |---|---|
-| state | the hand's joint positions and velocities (the palm's 6, then the fingers'; 18 joints in all on the XHand and the Inspire hand, 22 on the Allegro hand); the object's position, rotation, linear and angular velocity |
+| state | the hand's joint positions and velocities (the palm's 6, then the fingers'; 18 joints in all on the XHand and the Inspire hand, 22 on the Allegro hand, twice that with two hands); the object's position, rotation, linear and angular velocity |
 | action | one offset per joint in [-1, 1] about the next reference frame's pose (3 cm palm translation, 0.3 rad palm rotation, 0.4 rad fingers), as position targets |
 | observation | the joints, the fingertips and the object in the palm's frame, the previous action |
 | goal | the next 5 reference frames about the state: joint offsets, the object's offset and relative rotation |
 | reward | tracking kernels on the keypoints (palm and fingertips), the finger joints, the palm's rotation and the object's position and rotation; an action-rate penalty; with `--target_rate_w`, a target-rate penalty ([smooth targets](#smooth-targets)) |
-| termination | the object or the palm more than 15 cm from its reference |
+| termination | the object or a palm more than 15 cm from its reference |
 | episode | from the reference's first frame (joints and the object's position perturbed) to its last |
 
 Everything is an analytic function of the state and the reference frame (`ndm_gym/tasks/hand_tracking.py`), so the
@@ -181,5 +195,25 @@ elsewhere the lowest object error among that algorithm's configurations of recor
 | Allegro, SuperMimic | <img src="../media/hand/allegro_supermimic_apple.webp" alt="Allegro, SuperMimic, apple" width="320"/> | <img src="../media/hand/allegro_supermimic_oakink_a01002.webp" alt="Allegro, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/allegro_supermimic_can.webp" alt="Allegro, SuperMimic, can" width="320"/> |
 | Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/inspire_supertrack_can.webp" alt="Inspire, SuperTrack, can" width="320"/> |
 | Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/inspire_supermimic_can.webp" alt="Inspire, SuperMimic, can" width="320"/> |
+
+## A G1 with Inspire hands
+
+GigaHands' making tea carried out by a Unitree G1 with the two Inspire hands in place of its rubber hands
+([`build_g1_hand_task.py`](../../tools/build_g1_hand_task.py), [`g1_hands.py`](../../ndm_gym/robots/g1_hands.py)). The
+policy drives each arm's seven hinges and each hand's twelve finger joints. The arms are position servos of stiffness
+1,000 on joints of armature 1, as SPIDER's floating palms' hinges; the G1's own shapes take no contacts; the pelvis, the
+legs and the waist are fixed. Standing at the table, or after a walk: the G1 walks 4.35 m to the table (LAFAN1's
+`walk1_subject1` retargeted to the G1), the walk replayed from the reference, and the task is the reach and the tea.
+
+```bash
+TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
+python tools/build_g1_hand_task.py --clip $TEA --out data/g1_hands/tea                    # standing
+python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
+python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --log_dir logs/g1_walk_tea
+```
+
+<p align="center"><img src="../media/hand/g1_walk_tea.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea" width="76%"/></p>
+<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (SuperMimic, seed 0, from the unperturbed start).</i></p>
+<p align="center"><sub>A render of a policy tracking SPIDER's retarget of a GigaHands demonstration (CC BY-NC 4.0) after LAFAN1's walk1_subject1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0) retargeted to the G1, with Unitree's G1 model (BSD-3-Clause) and SPIDER's Inspire hands, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="../../NOTICE">NOTICE</a>).</sub></p>
 
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

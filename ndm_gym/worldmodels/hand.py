@@ -1,8 +1,8 @@
-"""World model of a hand and the object it handles, on the hand-object state (tasks.hand_tracking), in the two
+"""World model of one or two hands and the object they handle, on the hand-object state (tasks.hand_tracking), in the two
 parameterizations of the LAFAN1 world models. ``increment`` (SuperMimic's, worldmodels.increment): an MLP predicts the
 increments of every state component. ``accel`` (SuperTrack's, worldmodels.accel): it predicts the accelerations of the
 joints and of the object (linear and angular, world frame), integrated with semi-implicit Euler over one control step.
-Both read the hand's joints, the object about the palm and in the world (its height and tilt decide the contact with the
+Both read the hands' joints, the object about each palm and in the world (its height and tilt decide the contact with the
 floor), and the position targets' offsets from the joints, and both are fit with the same error: the next state's, in
 units of the spread of one true step's increments."""
 
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 KINDS = ("increment", "accel")
-# the hand-object state tuple S = (q, qd, p, R, v, w) of tasks.hand_tracking: the hand's joint positions and velocities
+# the hand-object state tuple S = (q, qd, p, R, v, w) of tasks.hand_tracking: the hands' joint positions and velocities
 # (..., num_joints), the object's position (..., 3), rotation matrix (..., 3, 3), world linear and angular velocity (..., 3)
 HandState = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -30,14 +30,19 @@ HandState = tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.
 class HandWorldModel(nn.Module):
     """Deterministic dynamics s_{t+1} = f(s_t, u_t), u_t the joints' position targets."""
 
-    def __init__(self, num_joints: int, hidden: Sequence[int] = (1024, 1024, 1024), act: str = "silu", layer_norm: bool = True,
-                 kind: str = "increment") -> None:
+    def __init__(self, num_joints: int, palm_translations: Sequence[int] = (0, 1, 2), palm_keypoints: Sequence[int] = (0,),
+                 hidden: Sequence[int] = (1024, 1024, 1024), act: str = "silu", layer_norm: bool = True, kind: str = "increment") -> None:  # fmt: skip
+        """``palm_translations``: the columns of the palms' slides; ``palm_keypoints``: the palms among the keypoints
+        (HandKinematics' of the same names)."""
         super().__init__()
         if kind not in KINDS:
             raise ValueError(f"kind must be one of {KINDS}, got {kind!r}")
         self.kind, self.num_joints = kind, num_joints
-        # the palm's translations are left out of the input: the dynamics do not depend on them
-        inp = (num_joints - 3) + num_joints + 3 + 6 + 3 + 3 + 1 + 6 + num_joints
+        self.palm_keypoints = list(palm_keypoints)
+        # the palms' translations are left out of the input: the dynamics do not depend on them
+        posed = [j for j in range(num_joints) if j not in set(palm_translations)]
+        self.register_buffer("posed", torch.tensor(posed), persistent=False)
+        inp = len(posed) + num_joints + len(self.palm_keypoints) * (3 + 6) + 3 + 3 + 1 + 6 + num_joints
         increments = num_joints + num_joints + 3 + 3 + 3 + 3
         out = increments if kind == "increment" else num_joints + 3 + 3  # or the joints' and the object's accelerations
         self.net = mlp(inp, list(hidden), out, act=ACTIVATIONS[act], layer_norm=layer_norm)
@@ -54,9 +59,16 @@ class HandWorldModel(nn.Module):
     def inputs(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> torch.Tensor:
         q, qd, p, R, v, w = S
         keypoints, palm_R = fk
-        Rt = palm_R.transpose(-1, -2)
-        return torch.cat((q[..., 3:], qd, (Rt @ (p - keypoints[..., 0, :]).unsqueeze(-1)).squeeze(-1), mat_to_6d(Rt @ R), v, w, p[..., 2:3],
-                          mat_to_6d(R), u - q), -1)  # fmt: skip
+        if len(self.palm_keypoints) == 1:
+            Rt = palm_R.transpose(-1, -2)
+            return torch.cat((q[..., 3:], qd, (Rt @ (p - keypoints[..., 0, :]).unsqueeze(-1)).squeeze(-1), mat_to_6d(Rt @ R), v, w, p[..., 2:3],
+                              mat_to_6d(R), u - q), -1)  # fmt: skip
+        palms_alone = keypoints.shape[-2] == len(self.palm_keypoints)  # HandKinematics.palm's keypoints, not forward's
+        about = []  # the object about each palm, in the palm's frame
+        for hand, k in enumerate(range(len(self.palm_keypoints)) if palms_alone else self.palm_keypoints):
+            Rt = palm_R[..., hand, :, :].transpose(-1, -2)
+            about += [(Rt @ (p - keypoints[..., k, :]).unsqueeze(-1)).squeeze(-1), mat_to_6d(Rt @ R)]
+        return torch.cat((q[..., self.posed], qd, *about, v, w, p[..., 2:3], mat_to_6d(R), u - q), -1)
 
     @staticmethod
     def increments(S: HandState, S1: HandState) -> torch.Tensor:
@@ -74,7 +86,7 @@ class HandWorldModel(nn.Module):
 
     def step(self, S: HandState, fk: tuple[torch.Tensor, torch.Tensor], u: torch.Tensor) -> HandState:
         """The next state from ``S``, its forward kinematics ``fk`` (HandKinematics.forward, or its ``palm``: only the
-        palm's pose is read) and the targets ``u``."""
+        palms' poses are read) and the targets ``u``."""
         q, qd, p, R, v, w = S
         y = run_mlp(self.net, self.in_norm(self.inputs(S, fk, u)))
         d = y * self.out_norm.std() + self.out_norm.mean

@@ -6,6 +6,8 @@
   "tasks": [
     {"id": "apple", "dataset": "hrdexdb_24f", "task": "apple-0", "trial": 0},
     {"id": "oakink_a01002", "dataset": "oakink_lifted", "task": "oakink_0000_right_A01002_00", "trial": 0},
-    {"id": "can", "dataset": "dexycb_lifted", "task": "dexycb_01_right_002_master_chef_can_20200709_141754_00", "trial": 0}
+    {"id": "can", "dataset": "dexycb_lifted", "task": "dexycb_01_right_002_master_chef_can_20200709_141754_00", "trial": 0},
+    {"id": "mustard_bottle", "dataset": "dexycb_lifted", "task": "dexycb_01_right_006_mustard_bottle_20200709_143211_00", "trial": 0},
+    {"id": "mug", "dataset": "dexycb_lifted", "task": "dexycb_01_right_025_mug_20200709_150949_00", "trial": 0}
   ]
 }

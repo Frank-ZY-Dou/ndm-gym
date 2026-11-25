@@ -1,0 +1,26 @@
+{
+  "supertrack": {
+    "default": "--config hand-supertrack-fast",
+    "xhand": {
+      "tea": "--iterations 12000"
+    },
+    "allegro": {
+      "tea": "--iterations 12000"
+    },
+    "inspire": {
+      "tea": "--iterations 12000"
+    }
+  },
+  "supermimic": {
+    "default": "--config hand-supermimic-fast",
+    "xhand": {
+      "tea": "--iterations 12000"
+    },
+    "allegro": {
+      "tea": "--iterations 12000"
+    },
+    "inspire": {
+      "tea": "--iterations 12000"
+    }
+  }
+}
