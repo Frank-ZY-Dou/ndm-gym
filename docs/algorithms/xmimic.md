@@ -1,8 +1,8 @@
 # XMimic: why it is fast, and its techniques as options
 
 [XMimic](https://github.com/nico-bohlinger/xmimic) (N. Bohlinger, J. Peters, *XMimic and XSoma: Learning Humanoid Motion
-Tracking and Locomotion in Under a Minute*, 2026; MIT;
-[paper](https://nico-bohlinger.github.io/papers/2026_xmimic_xsoma.pdf)) is [BlinkMimic](../blinkmimic.md)'s trainer rebuilt
+Tracking and Locomotion in Under a Minute*, arXiv preprint, 2026; MIT;
+[arXiv:2611.20452](https://arxiv.org/abs/2611.20452)) is [BlinkMimic](../blinkmimic.md)'s trainer rebuilt
 in JAX: the same algorithm, hyperparameters, task and evaluation, and other machinery. This page says where its speed comes
 from (section 1), how much of each part carries over to this library's PyTorch pipeline, measured (section 2), and what
 the options are that hold its techniques here (sections 3 and 4): options of `ndm-train`, all off by default

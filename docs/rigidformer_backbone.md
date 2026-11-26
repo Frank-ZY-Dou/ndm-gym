@@ -307,4 +307,4 @@ same bits when the compiler is replaced by the identity) and, on a GPU, the comp
 ## Reference
 
 [1] Z. Dou, M. Guo, H. Wu, D. Roble, T. Stuyck, W. Matusik. RigidFormer: Learning Rigid Dynamics using Transformers.
-[arXiv:2605.09196](https://arxiv.org/abs/2605.09196), 2026.
+NeurIPS 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196)

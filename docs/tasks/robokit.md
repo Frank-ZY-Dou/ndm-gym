@@ -87,10 +87,10 @@ step does nothing (the planner's own share of the time).
 - G1 box carrying's clip: OMOMO (J. Li, J. Wu, C. K. Liu. *Object Motion Guided Human Motion Synthesis.* ACM Transactions
   on Graphics 42(6), 2023. [DOI](https://doi.org/10.1145/3618333)), as InterMimic processed it (S. Xu et al., CVPR 2025,
   [arXiv:2502.20390](https://arxiv.org/abs/2502.20390)).
-- G1 climbing's motion: OmniRetarget (L. Yang et al., 2025, [arXiv:2509.26633](https://arxiv.org/abs/2509.26633)), from
+- G1 climbing's motion: OmniRetarget (L. Yang et al., ICRA 2026, [arXiv:2509.26633](https://arxiv.org/abs/2509.26633)), from
   [Holosoma](https://github.com/amazon-far/holosoma).
 - The G1's scene: SPIDER's example data
-  ([retarget/retarget_example](https://huggingface.co/datasets/retarget/retarget_example); C. Pan et al., 2025,
+  ([retarget/retarget_example](https://huggingface.co/datasets/retarget/retarget_example); C. Pan et al., IROS 2026,
   [arXiv:2511.09484](https://arxiv.org/abs/2511.09484)). Go2: [MuJoCo Menagerie](https://github.com/google-deepmind/mujoco_menagerie).
 - The simulator: [MuJoCo Warp](https://github.com/google-deepmind/mujoco_warp).
 

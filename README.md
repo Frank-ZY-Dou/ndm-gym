@@ -1906,10 +1906,10 @@ Implemented:
   GPU.* 2026. [code](https://github.com/fuyichen0725/blinkmimic) · built on InstantTrack
   ([code](https://github.com/Huy-Quang-Dao/instantTrack))
 - **XMimic** (the options of [`docs/algorithms/xmimic.md`](docs/algorithms/xmimic.md)): N. Bohlinger, J. Peters. *XMimic and XSoma:
-  Learning Humanoid Motion Tracking and Locomotion in Under a Minute.* 2026.
-  [paper](https://nico-bohlinger.github.io/papers/2026_xmimic_xsoma.pdf) · [code](https://github.com/nico-bohlinger/xmimic)
+  Learning Humanoid Motion Tracking and Locomotion in Under a Minute.* arXiv preprint, 2026.
+  [arXiv:2611.20452](https://arxiv.org/abs/2611.20452) · [code](https://github.com/nico-bohlinger/xmimic)
 - **RigidFormer:** Z. Dou, M. Guo, H. Wu, D. Roble, T. Stuyck, W. Matusik. *RigidFormer: Learning Rigid Dynamics using
-  Transformers.* arXiv preprint, 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196) ·
+  Transformers.* NeurIPS 2026. [arXiv:2605.09196](https://arxiv.org/abs/2605.09196) ·
   [project page](https://frank-zy-dou.github.io/projects/RigidFormer/)
 - **HDMI** (the human-object interaction tasks): H. Weng, Y. Li, N. Sobanbabu, Z. Wang, Z. Luo, T. He, D. Ramanan,
   G. Shi. *HDMI: Learning Interactive Humanoid Whole-Body Control from Human Videos.* arXiv preprint, 2025.
@@ -1922,11 +1922,11 @@ Implemented:
 
 Data:
 - **LAFAN1** (motions and the held-out split, subject 5): F. G. Harvey, M. Yurick, D. Nowrouzezahrai, C. Pal. *Robust
-  Motion In-betweening.* SIGGRAPH 2020. [DOI](https://doi.org/10.1145/3386569.3392480)
+  Motion In-betweening.* ACM Transactions on Graphics 39(4), 2020. [DOI](https://doi.org/10.1145/3386569.3392480)
 - **LAFAN1 Retargeting Dataset** (LAFAN1 on the G1, and the G1's URDF that `tools/download_data.sh` fetches):
   [Hugging Face](https://huggingface.co/datasets/lvhaidong/LAFAN1_Retargeting_Dataset)
-- **InterHuman** (the two-person clip): H. Liang, W. Zhang, W. Li, J. Yu, L. Xu. *InterGen: Diffusion-based
-  Multi-human Motion Generation under Complex Interactions.* International Journal of Computer Vision, 2024.
+- **InterHuman** (the two-person clip): H. Liang, W. Zhang, W. Li, J. Yu, L. Xu. *InterGen: Diffusion-Based
+  Multi-human Motion Generation Under Complex Interactions.* International Journal of Computer Vision 132(9), 2024.
   [DOI](https://doi.org/10.1007/s11263-024-02042-6) · [data](https://github.com/tr3e/InterGen)
 - **SMPL** (the body model of InterHuman's clips, read by `tools/convert_interhuman.py` from the user's licensed copy):
   M. Loper, N. Mahmood, J. Romero, G. Pons-Moll, M. J. Black. *SMPL: A Skinned Multi-Person Linear Model.* ACM
@@ -1939,15 +1939,16 @@ Data:
   [project page](https://sirui-xu.github.io/InterMimic/)
 - **OmniRetarget** (the motion of RoboKit's G1 climbing): L. Yang, X. Huang, Z. Wu, A. Kanazawa, P. Abbeel,
   C. Sferrazza, C. K. Liu, R. Duan, G. Shi. *OmniRetarget: Interaction-Preserving Data Generation for Humanoid
-  Whole-Body Loco-Manipulation and Scene Interaction.* arXiv preprint, 2025.
+  Whole-Body Loco-Manipulation and Scene Interaction.* ICRA 2026. [DOI](https://doi.org/10.1109/ICRA57385.2026.11696487) ·
   [arXiv:2509.26633](https://arxiv.org/abs/2509.26633) · [Holosoma](https://github.com/amazon-far/holosoma)
 - **SPIDER** (the hands' clips and its models of the XHand, the Allegro hand and the Inspire hand; the G1 scene of RoboKit's G1 examples): C. Pan et al. *SPIDER: Scalable
-  Physics-Informed Dexterous Retargeting.* arXiv preprint, 2025. [arXiv:2511.09484](https://arxiv.org/abs/2511.09484) ·
+  Physics-Informed DExterous Retargeting.* IROS 2026. [DOI](https://doi.org/10.1109/IROS61738.2026.11776456) ·
+  [arXiv:2511.09484](https://arxiv.org/abs/2511.09484) ·
   [code](https://github.com/facebookresearch/spider) · [data](https://huggingface.co/datasets/retarget/retarget_full) ·
   [examples](https://huggingface.co/datasets/retarget/retarget_example)
 - **Race Against the Machine** (the quadrotor's flights and its specification): M. Bosello, D. Aguiari, Y. Keuter,
-  E. Pallotta, S. Kiade, G. Caminati, F. Pinzarrone, J. Halepota, J. Panerati, G. Pau. *Race Against the Machine: a
-  Fully-annotated, Open-design Dataset of Autonomous and Piloted High-speed Flight.* IEEE Robotics and Automation Letters
+  E. Pallotta, S. Kiade, G. Caminati, F. Pinzarrone, J. Halepota, J. Panerati, G. Pau. *Race Against the Machine: A
+  Fully-Annotated, Open-Design Dataset of Autonomous and Piloted High-Speed Flight.* IEEE Robotics and Automation Letters
   9(4), 2024. [DOI](https://doi.org/10.1109/LRA.2024.3371288) · [arXiv:2311.02667](https://arxiv.org/abs/2311.02667) ·
   [data](https://github.com/tii-racing/drone-racing-dataset)
 - **On Your Own** (the professional pilot's race-track flights, released with it in the data's v3.0.0): M. Bosello,
@@ -1975,7 +1976,7 @@ Data:
 - **HRDexDB**, **OakInk** and **DexYCB** (the demonstrations SPIDER retargets for the hands' clips): J. Lim, T. Ha, S. Cha,
   K. Cho, M. Choi, S. Jeon, J. Kim, B. Kim, H. Joo. *HRDexDB: A 4D Dexterous Grasping Dataset Across Human and Multiple
   Robot Embodiments.* arXiv preprint, 2026. [arXiv:2604.14944](https://arxiv.org/abs/2604.14944) · L. Yang, K. Li,
-  X. Zhan, F. Wu, A. Xu, L. Liu, C. Lu. *OakInk: A Large-scale Knowledge Repository for Understanding Hand-Object
+  X. Zhan, F. Wu, A. Xu, L. Liu, C. Lu. *OakInk: A Large-Scale Knowledge Repository for Understanding Hand-Object
   Interaction.* CVPR 2022. [arXiv:2203.15709](https://arxiv.org/abs/2203.15709) · Y.-W. Chao et al. *DexYCB: A
   Benchmark for Capturing Hand Grasping of Objects.* CVPR 2021. [arXiv:2104.04631](https://arxiv.org/abs/2104.04631)
 - **OakInk2** and **GigaHands** (the demonstrations SPIDER retargets for stir beaker, pour tube and making tea): X. Zhan,
@@ -1984,7 +1985,7 @@ Data:
   [project page](https://oakink.net/v2) · [data](https://huggingface.co/datasets/kelvin34501/OakInk-v2) (CC BY-SA 4.0) ·
   R. Fu, D. Zhang, A. Jiang, W. Fu, A. Funk, D. Ritchie, S. Sridhar. *GigaHands: A Massive Annotated Dataset of Bimanual
   Hand Activities.* CVPR 2025. [arXiv:2412.04244](https://arxiv.org/abs/2412.04244) ·
-  [data](https://github.com/brown-ivl/gigahands) (CC BY-NC 4.0)
+  [data](https://github.com/brown-ivl/GigaHands) (CC BY-NC 4.0)
 - **MASS** (MuscleVAE's skeleton and the bone meshes of our renders): S. Lee, M. Park, K. Lee, J. Lee. *Scalable
   Muscle-Actuated Human Simulation and Control.* ACM Transactions on Graphics 38(4), 2019.
   [DOI](https://doi.org/10.1145/3306346.3322972) · [code](https://github.com/lsw9021/MASS)
@@ -2009,7 +2010,8 @@ Robot models:
 - **RoboPianist** (the keyboard model, through Eden's assets): K. Zakka, P. Wu, L. Smith, N. Gileadi, T. Howell, X. B. Peng,
   S. Singh, Y. Tassa, P. Florence, A. Zeng, P. Abbeel. *RoboPianist: Dexterous Piano Playing with Deep Reinforcement
   Learning.* CoRL 2023. [paper](https://proceedings.mlr.press/v229/zakka23a.html) · [code](https://github.com/google-research/robopianist)
-- **Wuji Hand 2** (the piano task's hand models, beta2): Wuji Technology. [code](https://github.com/wuji-technology/wuji-description)
+- **Wuji Hand 2** (the piano task's hand models, Beta 2): Wuji Technology.
+  [code](https://github.com/wuji-technology/wuji-description/tree/v2026.9.11/hand2/hand2_beta2) (release v2026.9.11)
 - **Gymnasium-Robotics** (the Adroit hand and its door, pen, hammer and relocate scenes): R. de Lazcano, K. Andreas, J. J. Tai, S. R. Lee,
   J. Terry. *Gymnasium Robotics.* 2024. [code](https://github.com/Farama-Foundation/Gymnasium-Robotics) ·
   [documentation](https://robotics.farama.org/)
@@ -2025,9 +2027,9 @@ Simulation and planning:
   the differentiable-simulator comparison
 - **Newton:** The Newton Contributors. *Newton: GPU-accelerated physics simulation for robotics and simulation research.*
   2025. [code](https://github.com/newton-physics/newton)
-- **Steel** (timed beside the G1's world models): Skild AI. *Steel: Scaling Simulation Across Robots, Tasks, and Worlds.*
-  2026. [post](https://www.skild.ai/blogs/steel) · [code](https://github.com/skild-ai/newton) (Skild AI's Newton fork,
-  run at `baffc2a`) · [documentation](https://github.com/skild-ai/steel)
+- **Steel** (timed beside the G1's world models): Skild AI, in collaboration with NVIDIA. *Steel: Scaling Simulation Across
+  Robots, Tasks, and Worlds.* 2026. [post](https://www.skild.ai/blogs/steel) · [code](https://github.com/skild-ai/newton)
+  (Skild AI's Newton fork, run at `baffc2a`) · [documentation](https://github.com/skild-ai/steel)
 - **∇Mimic** and its simulator **NablaEngine** (the differentiable-simulator comparison; ∇Mimic's own code timed on
   LAFAN1): W. Lu, Y. Chen. *∇Mimic: Ultra-Efficient Humanoid Control with Differentiable Simulation.* arXiv preprint, 2026.
   [arXiv:2610.41654](https://arxiv.org/abs/2610.41654) · [code](https://github.com/sailab-ai/NablaMimic) ·
