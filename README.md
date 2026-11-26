@@ -923,9 +923,19 @@ python -m ndm_gym.train_muscles --algo supermimic --reward_std_scale 0.5 --actio
 A floating hand tracks human grasp-and-lift demonstrations on MuJoCo-Warp: the XHand, the Allegro hand and the Inspire
 hand, each on an apple, a spray bottle and a can. The reference is [SPIDER](https://github.com/facebookresearch/spider)'s
 kinematic retarget of the captured hand and of the object's pose. Contributed by
-[Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
-([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand
-([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+[Dechen Gao](https://github.com/gaodechen) ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2),
+[#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)): the task with SuperMimic, three hands and eight tasks, one of them with two hands.
+
+Five more tasks, one with two hands at once: the mustard bottle and the mug on the three hands, stir beaker and pour tube
+(OakInk2's `hold` of a tube) on the XHand, making tea with two of each hand ([the task lists](docs/tasks/hand.md)).
+`run.sh` takes an algorithm's arguments for a hand and a task from
+[`settings.json`](benchmarks/xhand_tracking/settings.json) with `ALGO`:
+
+```bash
+python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json
+ALGO=supertrack ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0   # <task id> <seed>
+ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
+```
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|
@@ -1873,6 +1883,12 @@ Data:
   X. Zhan, F. Wu, A. Xu, L. Liu, C. Lu. *OakInk: A Large-scale Knowledge Repository for Understanding Hand-Object
   Interaction.* CVPR 2022. [arXiv:2203.15709](https://arxiv.org/abs/2203.15709) · Y.-W. Chao et al. *DexYCB: A
   Benchmark for Capturing Hand Grasping of Objects.* CVPR 2021. [arXiv:2104.04631](https://arxiv.org/abs/2104.04631)
+- **OakInk2** and **GigaHands** (the demonstrations SPIDER retargets for stir beaker, pour tube and making tea): X. Zhan,
+  L. Yang, Y. Zhao, K. Mao, H. Xu, Z. Lin, K. Li, C. Lu. *OAKINK2: A Dataset of Bimanual Hands-Object Manipulation in
+  Complex Task Completion.* CVPR 2024. [arXiv:2403.19417](https://arxiv.org/abs/2403.19417) ·
+  [data](https://oakink.net/v2) (CC BY-SA 4.0) · R. Fu, D. Zhang, A. Jiang, W. Fu, A. Funk, D. Ritchie, S. Sridhar.
+  *GigaHands: A Massive Annotated Dataset of Bimanual Hand Activities.* CVPR 2025.
+  [arXiv:2412.04244](https://arxiv.org/abs/2412.04244) · [data](https://github.com/brown-ivl/gigahands) (CC BY-NC 4.0)
 - **MASS** (MuscleVAE's skeleton and the bone meshes of our renders): S. Lee, M. Park, K. Lee, J. Lee. *Scalable
   Muscle-Actuated Human Simulation and Control.* ACM Transactions on Graphics 38(4), 2019.
   [DOI](https://doi.org/10.1145/3306346.3322972) · [code](https://github.com/lsw9021/MASS)

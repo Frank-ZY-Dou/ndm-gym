@@ -1,8 +1,15 @@
-"""The README's hand grid: hand_grid.py <dir of the renders> <out.webp> [--fps 20] [--quality 70] [--hold 0.8] [--none NAME ...]. The renders of
-tools/render_hand.py (`<hand>_<algorithm>_<clip>.mp4` for xhand, allegro, inspire; supertrack, supermimic; apple, oakink_a01002, can) as
-one synchronized loop: rows hand and algorithm, columns clip, tiles 320x180; a tile holds its last frame until the longest clip has
-ended and the hold has passed, then all restart. A name given by --none (for example inspire_supertrack_can) has no render: its cell
-stays empty; any other render must be there. Labels in the margins only. Needs ffmpeg and Pillow."""
+"""The README's hand grids: hand_grid.py <dir of the renders> <out.webp> [--fps 20] [--quality 70] [--hold 0.8] [--hands ...]
+[--clips ...] [--algorithms ...] [--none NAME ...]. The renders of tools/render_hand.py (`<hand>_<algorithm>_<clip>.mp4`, by default for
+xhand, allegro, inspire; supertrack, supermimic; apple, oakink_a01002, can) as one synchronized loop: rows hand and algorithm, columns
+clip, tiles 320x180; a tile holds its last frame until the longest clip has ended and the hold has passed, then all restart. A name
+given by --none (for example inspire_supertrack_can) has no render: its cell stays empty; any other render must be there. Labels in the
+margins only. Needs ffmpeg and Pillow.
+
+The more tasks' grids, from the renders' directory:
+  python hand_grid.py . more_tasks.webp --clips mustard_bottle="mustard bottle" mug=mug
+  python hand_grid.py . tea.webp --clips tea="making tea"
+  python hand_grid.py . tool_use.webp --hands xhand=XHand --clips stir_beaker="stir beaker" pour_tube="pour tube"
+"""
 
 import argparse
 import os
@@ -11,9 +18,9 @@ import subprocess
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-HANDS = (("xhand", "XHand"), ("allegro", "Allegro"), ("inspire", "Inspire"))
-ALGOS = (("supertrack", "SuperTrack"), ("supermimic", "SuperMimic"))
-CLIPS = (("apple", "apple"), ("oakink_a01002", "spray bottle"), ("can", "can"))
+HANDS = ("xhand=XHand", "allegro=Allegro", "inspire=Inspire")
+ALGOS = ("supertrack=SuperTrack", "supermimic=SuperMimic")
+CLIPS = ("apple=apple", "oakink_a01002=spray bottle", "can=can")
 W, H, LEFT, TOP = 320, 180, 92, 24
 BACK, TEXT = (17, 18, 22), (214, 217, 224)
 FONTS = ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/dejavu/DejaVuSans.ttf")
@@ -32,14 +39,20 @@ def main():
     parser.add_argument("--fps", type=int, default=20)
     parser.add_argument("--quality", type=int, default=70)
     parser.add_argument("--hold", type=float, default=0.8, help="seconds the last frames are held before the loop restarts")
+    parser.add_argument("--hands", nargs="+", default=HANDS, metavar="NAME=LABEL", help="the rows' hands, top to bottom")
+    parser.add_argument("--clips", nargs="+", default=CLIPS, metavar="NAME=LABEL", help="the columns' clips, left to right")
+    parser.add_argument("--algorithms", nargs="+", default=ALGOS, metavar="NAME=LABEL", help="each hand's rows' algorithms")
     parser.add_argument("--none", nargs="*", default=[], metavar="NAME", help="the renders that do not exist (their cells stay empty)")
     args = parser.parse_args()
+    hands, clips, algos = (tuple(tuple(item.split("=", 1)) for item in items) for items in (args.hands, args.clips, args.algorithms))
+    if any(len(item) != 2 for item in hands + clips + algos):
+        parser.error("--hands, --clips and --algorithms take NAME=LABEL items")
     font_path = next((p for p in FONTS if os.path.exists(p)), None)
     if font_path is None:
         raise FileNotFoundError(f"no label font among {FONTS}")
     font = ImageFont.truetype(font_path, 13)
-    rows = [(hand, alg, f"{hand_label}\n{alg_label}") for hand, hand_label in HANDS for alg, alg_label in ALGOS]
-    names = {(i, j): f"{hand}_{alg}_{clip}" for i, (hand, alg, _) in enumerate(rows) for j, (clip, _) in enumerate(CLIPS)}
+    rows = [(hand, alg, f"{hand_label}\n{alg_label}") for hand, hand_label in hands for alg, alg_label in algos]
+    names = {(i, j): f"{hand}_{alg}_{clip}" for i, (hand, alg, _) in enumerate(rows) for j, (clip, _) in enumerate(clips)}
     unknown = set(args.none) - set(names.values())
     if unknown:
         parser.error(f"--none: no such cell: {', '.join(sorted(unknown))}")
@@ -48,9 +61,9 @@ def main():
             parser.error(f"--none {name}: its render is there")
     tiles = {cell: tile_frames(os.path.join(args.src, f"{name}.mp4"), args.fps) for cell, name in names.items() if name not in args.none}
     length = max(len(t) for t in tiles.values()) + round(args.hold * args.fps)
-    back = Image.new("RGB", (LEFT + len(CLIPS) * W, TOP + len(rows) * H), BACK)
+    back = Image.new("RGB", (LEFT + len(clips) * W, TOP + len(rows) * H), BACK)
     draw = ImageDraw.Draw(back)
-    for j, (_, label) in enumerate(CLIPS):
+    for j, (_, label) in enumerate(clips):
         draw.text((LEFT + j * W + W // 2, TOP // 2), label, fill=TEXT, font=font, anchor="mm")
     for i, (_, _, label) in enumerate(rows):
         draw.multiline_text((LEFT // 2, TOP + i * H + H // 2), label, fill=TEXT, font=font, anchor="mm", align="center", spacing=3)

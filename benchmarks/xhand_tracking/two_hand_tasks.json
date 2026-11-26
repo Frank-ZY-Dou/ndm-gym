@@ -1,0 +1,9 @@
+{
+  "dataset_repository": "retarget/retarget_example",
+  "revision": "3d44b12d9b0a8f1d082ec932945a4e19d94f4c5f",
+  "robots": ["xhand", "allegro", "inspire"],
+  "hand": "bimanual",
+  "tasks": [
+    {"id": "tea", "dataset": "gigahand", "task": "p36-tea", "trial": 0}
+  ]
+}

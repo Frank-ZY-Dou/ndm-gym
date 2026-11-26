@@ -1,0 +1,10 @@
+{
+  "dataset_repository": "retarget/retarget_example",
+  "revision": "3d44b12d9b0a8f1d082ec932945a4e19d94f4c5f",
+  "robots": ["xhand"],
+  "hand": "right",
+  "tasks": [
+    {"id": "stir_beaker", "dataset": "oakinkv2", "task": "stir_beaker", "object": "O02_0033_00001", "trial": 0},
+    {"id": "pour_tube", "dataset": "oakinkv2", "task": "pour_tube", "object": "O02_0011_00003", "trial": 0}
+  ]
+}

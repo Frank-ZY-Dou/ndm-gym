@@ -74,6 +74,8 @@ def main() -> None:
     algo = HAND_ALGOS[targs.algo](targs, kin, task, dev)
     algo.load_state_dict(ck)
     ref, frames = task.ref, torch.arange(task.ref.frames, device=dev)
+    # the palms' and the fingertips' keypoints; with one hand the plain slices
+    palms, tips = (0, slice(1, None)) if kin.num_hands == 1 else (kin.palm_keypoints, kin.fingertip_keypoints)
 
     def summarize(states: torch.Tensor, failed: torch.Tensor) -> dict:
         S = unflatten_state(states)
@@ -83,8 +85,8 @@ def main() -> None:
         mm = lambda x: float(x.mean() * 1000)  # noqa: E731
         return {"success_rate": float(ok.float().mean()), "terminated": float(failed.float().mean()),
                 "object_pos_mm": mm(e["object_pos"]), "object_pos_final_mm": mm(final), "object_pos_max_mm": float(e["object_pos"].max() * 1000),
-                "object_ori_rad": float(e["object_ori_sq"].sqrt().mean()), "fingertip_mm": mm(e["keypoint"][..., 1:]),
-                "palm_mm": mm(e["keypoint"][..., 0]), "palm_ori_rad": float(e["palm_ori_sq"].sqrt().mean()),
+                "object_ori_rad": float(e["object_ori_sq"].sqrt().mean()), "fingertip_mm": mm(e["keypoint"][..., tips]),
+                "palm_mm": mm(e["keypoint"][..., palms]), "palm_ori_rad": float(e["palm_ori_sq"].sqrt().mean()),
                 "object_lift_m": float((S[2][-1, :, 2] - S[2][0, :, 2]).mean())}  # fmt: skip
 
     sim = HandSim(model, task, 1, dev, joint_noise=0.0, object_noise=0.0)
