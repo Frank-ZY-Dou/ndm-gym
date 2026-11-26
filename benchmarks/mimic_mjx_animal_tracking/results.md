@@ -105,6 +105,30 @@ No episode on the training clips ended in any of these runs. Without the term, e
 3.03, SuperMimic 1.60 / 1.54 / 1.61 times the reference's; its share above 27 Hz: SuperTrack 4.27 / 4.43 / 4.40, SuperMimic
 2.12 / 1.87 / 1.91 times (seeds 13 / 14 / 15). The reference's share above 27 Hz is 4.7 %.
 
+## The world model as the simulator
+
+One step of the world model, one network evaluation, stands in for the 5 physics steps of the 10 ms control step it
+predicts, each with its collision detection and its constraint solve. `ndm_gym.wmbench.speed_animal` times both on one A100
+40GB SXM4: MuJoCo-Warp's control step of the training's body (one CUDA graph) and the world model of each configuration's
+seed-13 run (its stop checkpoint) in fp32 (its step one CUDA graph) and as a bf16 inference copy (compiled, one CUDA graph).
+Every world starts at a frame of the run's clips and holds that frame's controls of action 0. World-steps per second, the
+median of 5 runs of 200 steps after a warm-up pass; not engineered (no per-phase table). Other jobs ran on the machine's other
+GPUs, the same ones before and after each pass; there the card read 1,095 MHz (its SM clock at rest; 1,410 at most) and
+1,215 MHz (memory, its maximum), 38-48 °C and 60-64 W.
+
+| world model | worlds | MuJoCo-Warp | fp32 | bf16 | bf16 against MuJoCo-Warp |
+|---|---|---|---|---|---|
+| SuperTrack's acceleration model | 1,024 | 173,936 | 1.14 M | 7.14 M | 41.1x |
+| | 4,096 | 336,357 | 2.14 M | 15.46 M | 46.0x |
+| | 16,384 | 429,297 | 2.93 M | 19.18 M | 44.7x |
+| SuperMimic's increment model | 1,024 | 173,963 | 1.13 M | 7.03 M | 40.4x |
+| | 4,096 | 336,223 | 2.15 M | 15.48 M | 46.1x |
+| | 16,384 | 429,454 | 2.90 M | 19.77 M | 46.0x |
+
+At 4,096 worlds MuJoCo-Warp takes 12.18 ms a control step and the bf16 copies 0.265 ms. The bodies' open-loop error of the
+world models, 256 worlds from frames of the clips under the policy's controls in the simulator: 0.136 / 0.202 / 0.363 mm after
+1 / 8 / 16 control steps for SuperTrack's acceleration model, 0.050 / 0.169 / 0.327 mm for SuperMimic's increment model.
+
 ## Configurations
 
 Each algorithm's configuration came from the task's presets (the hand task's fast configurations, with `--ref_qvel

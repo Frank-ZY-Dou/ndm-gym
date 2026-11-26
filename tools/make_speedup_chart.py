@@ -20,6 +20,8 @@ FONT_DIR = "/usr/share/fonts/truetype/dejavu/"
 # robomimic's Transport: the acceleration and the increment model of the configurations' seed-0 runs without the smoothness term as bf16
 # copies (compiled, one CUDA graph) against MuJoCo Warp's control step of the training's scene
 # (benchmarks/robomimic_manipulation_tracking/results.md),
+# MIMIC-MJX's stick insect: the acceleration and the increment model of the configurations' seed-13 runs as bf16 copies (compiled, one CUDA
+# graph) against MuJoCo Warp's control step of the training's body (benchmarks/mimic_mjx_animal_tracking/results.md),
 # RoboKit's, whose bars are its examples' whole planning time at the planner's own worlds on the acceleration and on the
 # increment model, the median over twenty plans (planner seeds 0-9, twice), with the simulation step's speedup in the second
 # line and the model in a third (benchmarks/robokit_ndm/results.md), and mbrl-lib's, whose bars
@@ -37,6 +39,8 @@ ROWS = [
     ("NDM simulation", "Wuji piano", 1530.5, "vs MuJoCo Warp"),
     ("NDM simulation", "robomimic's Transport\nacceleration model", 765.1, "vs MuJoCo Warp"),
     ("NDM simulation", "robomimic's Transport\nincrement model", 756.9, "vs MuJoCo Warp"),
+    ("NDM simulation", "MIMIC-MJX's stick insect\nacceleration model", 46.0, "vs MuJoCo Warp"),
+    ("NDM simulation", "MIMIC-MJX's stick insect\nincrement model", 46.1, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 carrying; step 10.0×\nacceleration model", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 carrying; step 8.7×\nincrement model", 3.0, "vs MuJoCo Warp"),
     ("RoboKit planning", "G1 climbing; step 3.8×\nacceleration model", 1.8, "vs MuJoCo Warp"),
