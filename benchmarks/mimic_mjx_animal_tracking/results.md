@@ -157,5 +157,7 @@ Every run's metrics, time to the target and training summary, as JSON records: [
 
 `tools/render_animal.py` renders a rollout recorded by `final.py` (`evaluate_animal --record`), the reference laid over it
 as a translucent ghost, in MIMIC-MJX's arena. `docs/media/animals/` holds, per algorithm, the run with the lowest bodies'
-error (seed 14 for both; every run passes the motion check), clip CLIP from its first frame, and the grid of the two
-(`tools/make_grid.py`). The teaser's tile is SuperTrack's.
+error (seed 14 for both; every run passes the motion check), clip 3 from its first frame (`--world 3 --distance 2`), and the
+grid of the two (`tools/make_grid.py`). Clip 3's own episode passes the check for both: jerk 1.18 and 0.93 times the
+reference's, the share above 27 Hz 1.01 and 0.74 times. The teaser's tile is SuperTrack's (`--distance 2.5`, so that the
+insect stays inside the tile's 4:3 frame).

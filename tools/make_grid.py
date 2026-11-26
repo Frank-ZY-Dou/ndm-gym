@@ -44,16 +44,16 @@ The README's grids, from the repository's root:
       $(for r in st sm; do for t in lift square transport; do echo --clip $M/robomimic/${t}_$r.webp; done; done)
       (tools/render_robomimic.py's renders of each case's run with the lowest object error among those whose own unperturbed
       rollout passes the success test and the motion check, 640 x 360 at 20 fps, Transport at --speed 4 and --quality 55)
-  python tools/make_grid.py $M/animals/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
-      --col_labels "stick insect" "fruit fly (quarter speed)" rat --row_labels SuperTrack SuperMimic \\
-      $(for r in st sm; do for t in stick fly rat; do echo --clip $M/animals/${t}_$r.webp; done; done)
-      (tools/render_animal.py's renders, 640 x 360 at 20 fps, of each case's run with the lowest bodies' error on clips 0-9;
-      stick insect clip 3 at --distance 2, fruit fly clip 3 at --speed 0.25, rat clip 2)
+  python tools/make_grid.py $M/animals/grid.webp --columns 2 --tile 512 288 --quality 50 --hold 0.8 --max_mb 6 \\
+      --col_labels SuperTrack SuperMimic --clip $M/animals/stick_st.webp --clip $M/animals/stick_sm.webp
+      (tools/render_animal.py's renders, 640 x 360 at 20 fps, of each algorithm's run with the lowest bodies' error on clips
+      0-9, seed 14 for both: clip 3 from its first frame, --world 3 --distance 2 --title SuperTrack / SuperMimic)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above. The
 third: three tools/render_quadrotor.py renders (the chase camera at 1.25 m, --lens_clear 0.4, 6 s windows of the flights at
-20 fps, 1050 x 776; their marks left out). The fourth: the Adroit door's rollout of SuperTrack with the door and latch
+20 fps, 1050 x 776; their marks left out) and the stick insect's clip 3 from SuperTrack's run of seed 14 (tools/render_animal.py
+--no_labels --world 3 --distance 2.5, 1040 x 780 at 20 fps, as stick_teaser.mp4, in real time; its mark left out). The fourth: the Adroit door's rollout of SuperTrack with the door and latch
 started open (--door-latch-offset 0.3, seed 0, the nominal start), drawn brighter at half speed, and SuperTrack's Adroit pen,
 hammer and relocate renders ($M/adroit_suite/v2: pen seed 0, hammer seed 1, relocate seed 0; boxes below their labels), each
 frame shown twice as long (half speed), written losslessly as <task>_half.mkv (25 fps, ffv1); the hammer from 1 s of its
@@ -62,7 +62,7 @@ robomimic_<task>.mp4) of the run with the lowest object error per task among bot
 rollout passes the success test and the motion check (robomimic-supertrack's Lift seed 11 and Square seed 10,
 robomimic-supermimic's Transport seed 10), from the unperturbed start: Lift in real time, Square at 1.5 times the speed,
 Transport at four times over 12-36 s of its demonstration; their marks left out:
-  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 1 5 1 --tile 256 192 --seconds 6 --quality 45 --max_mb 12 \\
+  python tools/make_grid.py $M/teaser.webp --light --mark --columns 4 --row_blocks 4 3 2 5 1 --tile 256 192 --seconds 6 --quality 40 --max_mb 12 \\
       --block "LAFAN1 tracking" 2 2 --clip $M/final/dance1_subject2.webp 2.33 40 0 281 211 \\
       --clip $M/final/fight1_subject2.webp 3.42 93 13 245 184 --clip $M/final/fallAndGetUp2_subject2.webp 1.17 55 34 267 200 \\
       --clip $M/final/sprint1_subject2.webp 1.5 61 26 260 195 \\
@@ -77,7 +77,7 @@ Transport at four times over 12-36 s of its demonstration; their marks left out:
       --clip g1_climb_1440x936.webp 1 310 150 960 720 --clip $M/robokit/go2_jump.webp 1 150 80 640 480 \\
       --block "mbrl-lib planning" 2 1 522 388 --clip cartpole_nomark.mp4 --clip pusher_nomark.mp4 \\
       --block "Racing quadrotor" 3 1 522 388 --clip race_track.mp4 0 44 0 961 714 --clip race_track_piloted.mp4 0 44 0 961 714 \\
-      --clip ellipse.mp4 0 44 0 961 714 \\
+      --clip ellipse.mp4 0 44 0 961 714 --block "Stick insect tracking" 1 1 522 388 --clip stick_teaser.mp4 0 35 0 969 720 \\
       --block "Adroit door" 1 1 414 388 --clip door.mkv 0 104 0 421 395 --block "Adroit pen" 1 1 414 388 --clip pen_half.mkv 0 120 70 400 375 \\
       --block "Adroit hammer" 1 1 414 388 --clip hammer_half.mkv 2 120 70 400 375 \\
       --block "Adroit relocate" 1 1 414 388 --clip relocate_half.mkv 0 80 70 400 375 \\
