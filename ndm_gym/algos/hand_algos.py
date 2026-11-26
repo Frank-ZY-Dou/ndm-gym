@@ -367,12 +367,12 @@ class HandSuperTrack(HandSuperMimic):
         keypoints, palm_R = fk
         ref = self.task.ref
         local = self.kin.fingertips_about_palms(keypoints, palm_R)
+        errs = [(keypoints - ref.keypoints[f]).abs().sum(-1).mean(-1), (local - self.ref_local[f]).abs().sum(-1).mean(-1)]
         if self.kin.num_hands == 1:
-            palm, fingers = rot_angle(relative_rot(ref.palm_R[f], palm_R)), (q[..., NUM_PALM:] - ref.q[f][..., NUM_PALM:]).abs().mean(-1)
+            errs += [rot_angle(relative_rot(ref.palm_R[f], palm_R)), (q[..., NUM_PALM:] - ref.q[f][..., NUM_PALM:]).abs().mean(-1)]
         else:
-            palm, fingers = rot_angle(relative_rot(ref.palm_R[f], palm_R)).mean(-1), (q - ref.q[f])[..., self.kin.finger_joints].abs().mean(-1)
-        errs = [(keypoints - ref.keypoints[f]).abs().sum(-1).mean(-1), (local - self.ref_local[f]).abs().sum(-1).mean(-1), palm, fingers,
-                (p - ref.p[f]).abs().sum(-1), rot_angle(relative_rot(ref.R[f], R))]  # fmt: skip
+            errs += [rot_angle(relative_rot(ref.palm_R[f], palm_R)).mean(-1), (q - ref.q[f])[..., self.kin.finger_joints].abs().mean(-1)]
+        errs += [(p - ref.p[f]).abs().sum(-1), rot_angle(relative_rot(ref.R[f], R))]
         if self.vel_terms:
             errs += [(qd - ref.qd[f]).abs().mean(-1), (v - ref.v[f]).abs().sum(-1), (w - ref.w[f]).abs().sum(-1)]
         return torch.stack(errs, -1)

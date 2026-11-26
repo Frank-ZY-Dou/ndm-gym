@@ -131,6 +131,9 @@ def test_one_hand_keeps_the_plain_slices(setup):
     u = torch.rand(n, kin.num_joints)
     inputs = torch.cat((q[..., 3:], qd, local(p - keypoints[..., 0, :]), mat_to_6d(Rt @ R), v, w, p[..., 2:3], mat_to_6d(R), u - q), -1)
     assert torch.equal(wm.inputs(S, fk, u), inputs) and torch.equal(wm.inputs(S, kin.palm(q), u), inputs)
+    assert all(b.dtype == torch.float32 for b in wm.buffers())  # none but the normalizers' and the error's floors
+    two = HandWorldModel(2 * NUM_J, [0, 1, 2, NUM_J, NUM_J + 1, NUM_J + 2], [0, 6])
+    assert two.posed.tolist() == [*range(3, NUM_J), *range(NUM_J + 3, 2 * NUM_J)] and "posed" not in two.state_dict()
 
 
 @pytest.mark.parametrize("fingers,sides,sizes", [(ALLEGRO_FINGERS, ("right",), (22, 57, 3 * 22 + 3 * 4 + 21)),

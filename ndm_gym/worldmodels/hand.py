@@ -41,7 +41,8 @@ class HandWorldModel(nn.Module):
         self.palm_keypoints = list(palm_keypoints)
         # the palms' translations are left out of the input: the dynamics do not depend on them
         posed = [j for j in range(num_joints) if j not in set(palm_translations)]
-        self.register_buffer("posed", torch.tensor(posed), persistent=False)
+        if len(self.palm_keypoints) > 1:  # one hand reads a plain slice (``inputs``): no buffer more for --layout to copy
+            self.register_buffer("posed", torch.tensor(posed), persistent=False)
         inp = len(posed) + num_joints + len(self.palm_keypoints) * (3 + 6) + 3 + 3 + 1 + 6 + num_joints
         increments = num_joints + num_joints + 3 + 3 + 3 + 3
         out = increments if kind == "increment" else num_joints + 3 + 3  # or the joints' and the object's accelerations

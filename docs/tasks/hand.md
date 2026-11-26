@@ -35,9 +35,10 @@ python tools/render_hand.py --clip $CLIP --rollout logs/apple_st/evaluation/roll
 
 A hand is read from its scene (`ndm_gym/robots/hands.py`), so a clip's path chooses it: its joints are the actuated ones
 in the actuators' order (the palm's three slides and three hinges, then the fingers' hinges), its keypoints the palm's
-site and the fingertip sites it has. A scene with a right and a left hand has both, the right's first: one state, one
-policy and one world model for the two, the observation in each palm's frame and the termination on either palm. The
-task, the world model, the policy and the replay take their sizes from it.
+site and the fingertip sites it has. A scene with a right and a left hand has both, in the order of their actuators (in
+SPIDER's scenes the right's first): one state, one policy and one world model for the two, the observation in each
+palm's frame and the termination on either palm. The task, the world model, the policy and the replay take their sizes
+from it.
 
 | hand | finger joints | keypoints | clip |
 |---|---|---|---|
@@ -51,8 +52,9 @@ python tools/download_hand_clips.py --robots allegro inspire      # default: eve
 # each algorithm's time configuration on the Allegro hand, without the target-rate penalty
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
-# two Inspire hands making tea, with SuperMimic's arguments for the task (settings.json)
+# two Inspire hands making tea, with each algorithm's arguments for the task (settings.json)
 python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json --robots inspire
+ALGO=supertrack ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
 

@@ -147,13 +147,17 @@ class HandTask:
         and the squared rotation angles of the palms (their mean) and the object."""
         q, _, p, R, _, _ = S
         keypoints, palm_R = fk
-        one = self.kin.num_hands == 1
-        fingers = (q[..., NUM_PALM:] - self.ref.q[f][..., NUM_PALM:]) if one else (q - self.ref.q[f])[..., self.kin.finger_joints]
-        palm_ori_sq = rot_angle_sq(palm_R, self.ref.palm_R[f])
+        keypoint = torch.linalg.vector_norm(keypoints - self.ref.keypoints[f], dim=-1)  # first, as the compiled graphs have it
+        if self.kin.num_hands == 1:
+            finger = (q[..., NUM_PALM:] - self.ref.q[f][..., NUM_PALM:]).pow(2).mean(-1).sqrt()
+            palm_ori_sq = rot_angle_sq(palm_R, self.ref.palm_R[f])
+        else:
+            finger = (q - self.ref.q[f])[..., self.kin.finger_joints].pow(2).mean(-1).sqrt()
+            palm_ori_sq = rot_angle_sq(palm_R, self.ref.palm_R[f]).mean(-1)
         return {
-            "keypoint": torch.linalg.vector_norm(keypoints - self.ref.keypoints[f], dim=-1),
-            "finger": fingers.pow(2).mean(-1).sqrt(),
-            "palm_ori_sq": palm_ori_sq if one else palm_ori_sq.mean(-1),
+            "keypoint": keypoint,
+            "finger": finger,
+            "palm_ori_sq": palm_ori_sq,
             "object_pos": torch.linalg.vector_norm(p - self.ref.p[f], dim=-1),
             "object_ori_sq": rot_angle_sq(R, self.ref.R[f]),
         }

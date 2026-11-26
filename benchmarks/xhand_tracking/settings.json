@@ -2,9 +2,15 @@
   "supertrack": {
     "default": "--config hand-supertrack-fast",
     "xhand": {
+      "apple": "--target_rate_w 4 --st_cost_mean",
+      "oakink_a01002": "--target_rate_w 4 --st_cost_mean",
+      "can": "--target_rate_w 4 --st_cost_mean",
       "tea": "--iterations 12000"
     },
     "allegro": {
+      "apple": "--st_fail_w 5",
+      "oakink_a01002": "--st_fail_w 5",
+      "can": "--st_fail_w 5",
       "tea": "--iterations 12000"
     },
     "inspire": {
@@ -14,12 +20,18 @@
   "supermimic": {
     "default": "--config hand-supermimic-fast",
     "xhand": {
+      "apple": "--wm_batches 2 --target_rate_w 4",
+      "oakink_a01002": "--wm_batches 2 --target_rate_w 4",
+      "can": "--wm_batches 2 --target_rate_w 4",
       "tea": "--iterations 12000"
     },
     "allegro": {
       "tea": "--iterations 12000"
     },
     "inspire": {
+      "apple": "--lr 2e-4",
+      "oakink_a01002": "--lr 2e-4",
+      "can": "--lr 2e-4",
       "tea": "--iterations 12000"
     }
   }

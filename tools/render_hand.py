@@ -229,8 +229,12 @@ def main():
         raise ValueError("the studio scene's qpos does not match the rollout's")
 
     # the camera follows the reference's palms and object over the floor at a fixed height, whatever the source, by default
-    # facing the palm of the final grasp from its side
-    palm_positions, object_positions = followed_positions(mujoco.MjModel.from_xml_path(scene_xml), followed)
+    # facing the palm of the final grasp from its side; with one hand from its slides and the object's free joint
+    scene = mujoco.MjModel.from_xml_path(scene_xml)
+    if len(hand_keypoints(scene)) == 1:
+        palm_positions, object_positions = followed[:, indices["qpos"][:3]], followed[:, object_qpos : object_qpos + 3]
+    else:
+        palm_positions, object_positions = followed_positions(scene, followed)
     track = np.concatenate((palm_positions, object_positions))
     lowest, highest = track.min(0), track.max(0)
     grasp_direction = object_positions[-1, :2] - palm_positions[-1, :2]  # from the palm through the object

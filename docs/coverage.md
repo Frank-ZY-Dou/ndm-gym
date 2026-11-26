@@ -61,8 +61,10 @@ this repository yet.
 | InterMimic | [project page](https://sirui-xu.github.io/InterMimic/) | OMOMO's clip as it processed it |
 | OmniRetarget (holosoma) | [amazon-far/holosoma](https://github.com/amazon-far/holosoma) | RoboKit's G1 climbing |
 | DAPG's demonstrations | [aravindr93/hand_dapg](https://github.com/aravindr93/hand_dapg), [paper](https://arxiv.org/abs/1709.10087) | the Adroit door's demonstration (clip 23); the pen, hammer and relocate demonstrations |
-| SPIDER's retargets | [retarget/retarget_full](https://huggingface.co/datasets/retarget/retarget_full) | the hands' clips |
+| SPIDER's retargets | [retarget/retarget_full](https://huggingface.co/datasets/retarget/retarget_full), [retarget/retarget_example](https://huggingface.co/datasets/retarget/retarget_example) | the hands' clips |
 | HRDexDB, OakInk, DexYCB | [HRDexDB](https://arxiv.org/abs/2604.14944), [OakInk](https://arxiv.org/abs/2203.15709), [DexYCB](https://arxiv.org/abs/2104.04631) | the demonstrations behind the hands' clips |
+| OakInk2 | [kelvin34501/OakInk-v2](https://huggingface.co/datasets/kelvin34501/OakInk-v2), [paper](https://arxiv.org/abs/2403.19417) | the demonstrations behind the XHand's stir beaker and pour tube ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)) |
+| GigaHands | [brown-ivl/gigahands](https://github.com/brown-ivl/gigahands), [paper](https://arxiv.org/abs/2412.04244) | the demonstrations behind making tea with two hands ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)) |
 | Race Against the Machine | [tii-racing/drone-racing-dataset](https://github.com/tii-racing/drone-racing-dataset), [paper](https://doi.org/10.1109/LRA.2024.3371288) | the quadrotor's flights, autonomous and piloted |
 | On Your Own | [paper](https://doi.org/10.1109/LRA.2026.3653405), [release v3.0.0](https://github.com/tii-racing/drone-racing-dataset/releases/tag/v3.0.0) | the professional pilot's race-track flights |
 | robomimic | [ARISE-Initiative/robomimic](https://github.com/ARISE-Initiative/robomimic), [data](https://huggingface.co/datasets/robomimic/robomimic_datasets), [paper](https://arxiv.org/abs/2108.03298) | its proficient-human demonstrations of Lift, Square and Transport, for manipulation tracking |
