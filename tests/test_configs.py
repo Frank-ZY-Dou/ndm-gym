@@ -144,9 +144,9 @@ def test_the_manipulation_configurations_are_their_runs(name):
 @pytest.mark.parametrize("name", ["stick-supertrack", "stick-supermimic"])
 def test_the_stick_insect_configurations_are_their_runs(name):
     """Each of the stick insect's configurations parses to the arguments a run of its results recorded (seed 13's,
-    tests/data/configs/<name>.args.json, kept without the configuration's name and the run's directories; the record's other
-    options, those of the development code the runs ran on that this code does not have, were all off): every recorded argument
-    but the seed, none of them unknown to the trainer, and the option added after the runs at its default."""
+    tests/data/configs/<name>.args.json, kept without the configuration's name, the run's directories and the options this
+    code does not have, each of those off in the runs): every recorded argument but the seed, none of them unknown to the
+    trainer, and the option added after the runs at its default."""
     import json
     import os
 

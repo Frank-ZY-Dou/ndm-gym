@@ -5,14 +5,19 @@ fly and stick insect (Zhang, Yang et al., "MIMIC-MJX: Neuromechanical Emulation 
 the clips of its dataset ([talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX), MIT) and the bodies of
 [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) (BSD-3-Clause; the fly is
 [flybody](https://github.com/TuragaLab/flybody)'s, Apache-2.0). They are the library's first non-human animal bodies.
+Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#8](https://github.com/Frank-ZY-Dou/ndm-gym/pull/8)).
+Results: the stick insect ([results](../../benchmarks/mimic_mjx_animal_tracking/results.md)); the rat and the fruit fly are in
+progress.
 
 ```bash
 pip install -e '.[hand]'                                         # MuJoCo-Warp
 python tools/download_mimic_mjx.py                               # the clips and the bodies at pinned revisions into data/mimic_mjx (2.9 GB)
 python -m ndm_gym.train_animal --config stick-supertrack --log_dir logs/stick_st     # <animal>-<algorithm>: the benchmark's settings
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 4 --record --out logs/stick_st/eval
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --out logs/stick_st/eval_heldout   # held-out clips
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 19 --seed 0 --record --out logs/stick_st/eval
+python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --repeats 19 --seed 0 --out logs/stick_st/eval_heldout
 MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/eval/rollout.npz --world 3 --out stick.webp   # or .mp4
+benchmarks/mimic_mjx_animal_tracking/run.sh stick supertrack 13 logs/animals   # one benchmark run: trained to its stop rule, read
+python benchmarks/mimic_mjx_animal_tracking/motion.py logs/animals/stick_supertrack_s13   # the motion check
 ```
 
 ## The bodies
@@ -59,7 +64,7 @@ filters) reads the mean and the start activation in the controls' place, which f
 | observation | the root's height, its tilt, its velocities in its frame, the joints, the activations, the end effectors about the root in its frame, the previous action |
 | goal | 5 reference frames ahead about the state in the root's frame: the root's offset and relative rotation, the joints' offsets, the root's velocity, the end effectors about the reference's root |
 | reward | kernels on the root's position and rotation, the joints and their velocities, the tracked bodies' and the end effectors' positions; lengths in fractions of the body's size (the bodies' median largest distance from the root), so one setting serves the three bodies' units; an action-rate and a control cost |
-| termination | MIMIC-MJX's: the root farther than 0.1 m (rat), 0.5 cm (fly) or 0.05 m (stick insect) from its reference, turned more than 120 / 30 / 120 degrees away, or the joints' L2 error above 4.5 / 20 / 4.5 rad |
+| termination | MIMIC-MJX's: the root farther than 0.1 m (rat), 0.5 cm (fly) or 0.05 m horizontally (stick insect, its height left out as vnl-playground's stick environment measures it) from its reference, turned more than 120 / 30 / 120 degrees away, or the joints' L2 error above 4.5 / 20 / 4.5 rad |
 | episode | from a random frame of a clip at the reference's state (its velocities by `--ref_qvel`; noise of 0.02 rad on the joints), to its clip's end |
 
 ## Method
@@ -71,11 +76,22 @@ the root, the joints, the bodies and the end effectors; SuperMimic with the incr
 The systems options are the hand task's; `--wm_lr` (the world model's own rate) and `--fused_fk` (the forward kinematics body
 by body, far fewer kernels once compiled) come from the G1 path.
 
-`--config list` prints the six configurations (`stick`, `fly`, `rat` with `supertrack` or `supermimic`) with what each
-measured. Results: [benchmarks/mimic_mjx_animal_tracking](../../benchmarks/mimic_mjx_animal_tracking/results.md).
+Options, each off by default and the same for both algorithms where both have the part it changes:
 
-![SuperTrack and SuperMimic on a stick insect, a fruit fly and a rat clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/grid.webp)
+| option | what it changes |
+|---|---|
+| `--bptt_decay`, `--bptt_clip_k`, `--pi_rollout_clip` | the policy's gradient through the imagined rollout: scaled at every imagined step, capped per imagined state, capped per rollout (the main trainer's options) |
+| `--target_rate_w` | a smoothness cost per step on the change of the policy's part of each actuator's command, over its width (a position servo's joint kernel; a torque actuator's half range), squared, in the place of the action-rate terms: in SuperMimic's reward and SuperTrack's task-weighted loss |
+| `--st_rate_w` | SuperTrack: a cost on the action's change in its loss, as the task's reward has one for SuperMimic's return |
+| `--wm_pos_lead` | SuperTrack's acceleration model: how far through the control step the velocity's change advances the position (default: a constant acceleration over the body's physics steps); SuperMimic's increment model has no such part |
 
-Each case's run with the lowest bodies' error on a clip it lives through (the fly at a quarter of real time), the reference
-in translucent blue. The animations: [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_st.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_st.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_st.webp)
-(SuperTrack); [stick insect](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_sm.webp), [fruit fly](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/fly_sm.webp), [rat](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/rat_sm.webp) (SuperMimic).
+`--config list` prints the configurations (`stick`, `fly`, `rat` with `supertrack` or `supermimic`) with what each
+measured: the stick insect's are its results' ([how they were chosen](../../benchmarks/mimic_mjx_animal_tracking/results.md#configurations));
+the rat's and the fruit fly's are the starting ones, their results in progress.
+
+![SuperTrack and SuperMimic tracking a stick insect clip](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/grid.webp)
+
+Per algorithm the run with the lowest bodies' error on the training clips (every run passes the motion check), one clip from
+its first frame, the reference in translucent blue. The animations:
+[SuperTrack](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_st.webp),
+[SuperMimic](https://raw.githubusercontent.com/Frank-ZY-Dou/ndm-gym/main/docs/media/animals/stick_sm.webp).

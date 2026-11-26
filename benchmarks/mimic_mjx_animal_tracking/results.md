@@ -1,120 +1,161 @@
 # Animal motion tracking: results
 
-MIMIC-MJX's rat, fruit fly and stick insect track their animals' recorded kinematics on MuJoCo-Warp, with SuperTrack and
-SuperMimic ([task](../../docs/tasks/animals.md)): one configuration per algorithm, three training seeds each, at a fixed
-budget.
+Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#8](https://github.com/Frank-ZY-Dou/ndm-gym/pull/8)).
 
-## How the numbers were obtained
+SuperTrack and SuperMimic, with the library's MLP world model of generalized coordinates, make MIMIC-MJX's stick insect
+track ten clips of its recorded kinematics on MuJoCo-Warp ([the task](../../docs/tasks/animals.md), [the rules](README.md)).
+The rat and the fruit fly run with the same code; their results are in progress.
 
-- **Clips:** one policy per body on clips 0-9 of its reference; held-out: clips 10-19, never trained on.
-- **Runs:** SuperTrack with `hand-supertrack-fast`'s options (`--lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights`,
-  Muon, the policy average, the learning-rate ramp, the hand task's systems options), SuperMimic with `hand-supermimic-fast`'s
-  (`--lr 4e-4 --action_noise 0.3 --gamma 0.99 --bptt_decay 0.95` and the same). Both with the same changes:
-  `--ref_qvel positions` (the reference's velocities from its positions; the files' are not theirs at the pinned revision,
-  [the task](../../docs/tasks/animals.md)), `--pi_batch 2048 --fused_fk` (from the rat's SuperTrack iteration time,
-  Development notes), `--wm_lr 2e-3` (LAFAN1's
-  configurations'), the iterations below with the learning rate decayed over them (`--lr_decay_iters`), a checkpoint every
-  250 (`--ckpt_every 250 --ckpt_keep`); `train_animal`'s defaults otherwise, 2,048 worlds. No other tuning on the bodies
-  for either algorithm. `benchmarks/mimic_mjx_animal_tracking/run_formal.sh` runs them (`--config <body>-<algorithm>`).
-- **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat);
-  seeds 0, 1, 2. Over the last 1,000 iterations (five checkpoints) the stick insect's bodies' error changes by at most
-  0.011 mm and the fly's with SuperMimic by at most 0.001 mm; the fly's with SuperTrack by less than 0.001 mm in seed 0,
-  by 0.022 mm in seed 1 (0.083 mm at 5,250 iterations) and by 0.010 mm in seed 2 (Time to the target). The rat's mean
-  episode length in training still rose over the last 2,000 iterations in every SuperMimic run (from 159-167 to 170-176
-  steps) and in two of SuperTrack's three (seeds 1 and 2: from 199 and 200 to 205 and 204; seed 0: 211 and 210), so the
-  rat's numbers are the budget's, not final.
-- **Evaluation:** `evaluate_animal` on each run's last checkpoint: every clip played from its first frame and four more times
-  from perturbed starts (0.02 rad on the joints), the policy without exploration noise, to the clip's end. Errors over the steps
-  the episodes lived: the tracked bodies' and the end effectors' positions (mm; the fly's centimetres converted), the joints'
-  RMS error. Ended: the share of episodes ended by a termination (MIMIC-MJX's) before their clip's end.
-- **Target:** at most 2 % of the episodes ended with the bodies' error within 3 % of the body's size (the bodies' median
-  largest distance from the root: stick insect 17.6 mm, fruit fly 2.62 mm, rat 157 mm). It is this benchmark's, a proxy:
-  MIMIC-MJX reports its own metrics (below).
-- **Timing:** each run alone on one A100 80GB SXM4. The clock starts at the first training iteration, after the simulator's
-  setup and the warm-up collection; evaluations are not in it. The kernels' compilation was in the cache before these runs:
-  on an empty cache a run takes 6 to 13 min longer (each configuration's first seed-0 run, in `a100_runs/cold_cache_seed0/`).
-  Without a per-phase time table of each path: time to the target, not engineered.
-- **Table:** mean ± sample SD over the seeds. Each run's metrics, time to the target and training summary:
-  [`a100_runs/`](a100_runs/README.md).
+## Setup
+
+- **Reference:** clips 0-9 of the stick insect's file (MIMIC-MJX at revision `b4e53a7`), 225 frames each at 50 Hz (4.5 s),
+  resampled to the 10 ms control step, with the velocities of the clips' own positions (`--ref_qvel positions`: at this
+  revision the file's are not theirs). Held out: clips 10-19, never trained on.
+- **Configurations** (`ndm_gym/configs.py`), each chosen by the same rules for both algorithms ([below](#configurations)):
+  - `stick-supertrack`: `--algo supertrack --lr 4e-4 --st_fail_w 2 --st_imag_noise 0.2 --st_task_weights --action_noise 0.3
+    --bptt_decay 0.95 --pi_rollout_clip 10 --wm_pos_lead 0.8 --target_rate_w 0.5`;
+  - `stick-supermimic`: `--algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.95 --horizon 32 --bptt_decay 0.9
+    --pi_rollout_clip 10 --wm_batches 8 --target_rate_w 0.5`;
+  - both: the hand task's optimizer and systems options (Muon, the policy average, the learning-rate ramp, CUDA-graphed
+    collection and updates), `--pi_batch 2048 --wm_lr 2e-3 --fused_fk`, 2,048 worlds, a cap of 8,000 iterations with the
+    learning rate's decay over it, a checkpoint kept every 250; training seeds 13, 14, 15.
+- **Training:** one run at a time on one A100 40GB SXM4; each kept checkpoint was evaluated for the stop rule as it
+  appeared, on the same GPU, and the training ended at the stop. Not timed: other work shared the machine.
+- **Stop rule, the same for both algorithms** (`watch.py`): each kept checkpoint on the training clips, each from its first
+  frame and from 9 perturbed starts (evaluation seed 1). With S(i) and E(i) the means over the evaluations at i, i - 250 and
+  i - 500 of the share of episodes ended and of the bodies' error, a run stops at the first i of at least 2,000 where
+  E(i) > 0.97 E(i - 1,000) and either S(i) <= 0.01 or S(i) > S(i - 1,000) - 0.01; otherwise at 8,000. The checkpoint at the
+  stop, not the best one, is the run's result.
+- **Evaluation** (`final.py`): the stop checkpoint plays the training clips and the held-out clips, each from its first
+  frame and from 19 perturbed starts (0.02 rad on the joints, evaluation seed 0: other starts than the stop rule's), 200
+  episodes per set, without exploration noise. Ended: the share of episodes ended by MIMIC-MJX's terminations before their
+  clip's end. Errors are the completed episodes' means over their steps: the tracked bodies' positions (mm), the six claws'
+  (the end effectors), the root's, and the joints' RMS angle (deg). The body is 17.6 mm long (the bodies' median largest
+  distance from the root).
+- **Motion check** (`motion.py`, the same for both algorithms): on the recorded rollouts of the ten unperturbed starts of the
+  training clips, against the reference's same frames: the joints' jerk at most 1.5 times the reference's, their share of
+  velocity power above 27 Hz (power over power) at most 2 times, and the steps at a joint limit at most the reference's. 27 Hz
+  is the lowest whole frequency above which the reference's joint velocity holds at most 5 % of its power.
+- Mean ± sample SD over the three training seeds.
+
+```bash
+for algo in supertrack supermimic; do for seed in 13 14 15; do
+  benchmarks/mimic_mjx_animal_tracking/run.sh stick $algo $seed logs/animals
+  python benchmarks/mimic_mjx_animal_tracking/motion.py logs/animals/stick_${algo}_s$seed
+done; done
+python benchmarks/mimic_mjx_animal_tracking/summarize.py logs/animals --seeds 13 14 15
+```
 
 ## Results
 
-| body | algorithm | ended ↓ | bodies ↓ | end effectors ↓ | joints ↓ | held-out: ended ↓ | held-out: bodies ↓ | training (min) | env steps |
+| | stick insect, SuperTrack / SuperMimic |
+|---|---|
+| episodes ended ↓ | 0 / 0 % |
+| bodies ↓ | 0.2564 ± 0.0014 / 0.2831 ± 0.0011 mm |
+| end effectors ↓ | 0.491 ± 0.002 / 0.490 ± 0.005 mm |
+| root ↓ | 0.084 ± 0.001 / 0.141 ± 0.001 mm |
+| joints ↓ | 7.98 ± 0.05 / 4.84 ± 0.04° |
+| held-out clips: episodes ended ↓ | 0.0 ± 0.0 / 3.3 ± 3.3 % |
+| held-out clips: bodies ↓ | 0.552 ± 0.009 / 0.644 ± 0.029 mm |
+| held-out clips: joints ↓ | 10.28 ± 0.08 / 6.56 ± 0.16° |
+| motion: jerk, the reference's = 1 | 1.25 / 0.99 |
+| motion: share above 27 Hz, the reference's = 1 | 1.13 / 0.79 |
+| motion: steps at a joint limit (the reference's 25.8 %) | 18.8 / 16.9 % |
+| stop (iteration) | 3,333 ± 144 / 3,417 ± 144 |
+
+SuperTrack's configuration has the lower bodies' and root errors on the training clips and the held-out ones, and ends no
+held-out episode; SuperMimic's has the lower joint-angle error, and its end effectors' error is level.
+
+### Every seed
+
+| algorithm | seed | stop | ended | bodies | end effectors | joints | held-out: ended | held-out: bodies | jerk | share above 27 Hz | at a limit |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| SuperTrack | 13 | 3,250 | 0 % | 0.2568 mm | 0.493 mm | 7.95° | 0 % | 0.557 mm | 1.23 | 1.10 | 18.9 % |
+| | 14 | 3,500 | 0 % | 0.2549 mm | 0.489 mm | 7.94° | 0 % | 0.556 mm | 1.25 | 1.14 | 18.7 % |
+| | 15 | 3,250 | 0 % | 0.2577 mm | 0.492 mm | 8.04° | 0 % | 0.542 mm | 1.26 | 1.14 | 18.9 % |
+| SuperMimic | 13 | 3,500 | 0 % | 0.2843 mm | 0.496 mm | 4.87° | 0.5 % | 0.658 mm | 0.97 | 0.75 | 17.0 % |
+| | 14 | 3,500 | 0 % | 0.2824 mm | 0.487 mm | 4.80° | 2.5 % | 0.664 mm | 0.99 | 0.81 | 17.1 % |
+| | 15 | 3,250 | 0 % | 0.2825 mm | 0.487 mm | 4.85° | 7.0 % | 0.611 mm | 1.02 | 0.81 | 16.5 % |
+
+Jerk and share: the policy's over the reference's same frames. Every run passes the motion check.
+
+## Smooth motion
+
+A policy's action sets the stick insect's 41 torque actuators each control step (10 ms). The task's only cost on how the
+action changes from one step to the next was small: 0.05 times the action's mean squared change, in SuperMimic's reward and,
+with `--st_rate_w 0.05`, in SuperTrack's loss. At that weight the torques could alternate from step to step at little cost,
+and the joints' motion showed it: their jerk was 3.06 and 1.59 times the reference's (SuperTrack / SuperMimic) and their
+share of velocity power above 27 Hz 4.37 and 1.97 times. The smoothness term (`--target_rate_w 0.5`, in both
+configurations) charges each step's change of the policy's part of each actuator's command, over its width (half the
+actuator's control range), squared, in the place of the action-rate cost: a jump costs, following the reference does not. On
+this body, whose actuators are all torques, it is the same cost at ten times the weight. With it the jerk is 1.25 and 0.99
+times the reference's and the share 1.13 and 0.79 times, and the tracking is unchanged: the bodies' error is 0.99 and 1.01
+times the runs' without it.
+
+The same configurations without the term, on the same seeds (SuperTrack with `--st_rate_w 0.05` in its place):
+
+| | weight | bodies | held-out: ended | held-out: bodies | jerk | share above 27 Hz | at a limit | at a limit the reference is not at | motion check |
 |---|---|---|---|---|---|---|---|---|---|
-| stick insect (17.6 mm) | SuperTrack | 0.0 ± 0.0 % | 0.35 ± 0.01 mm | 0.60 ± 0.02 mm | 8.4 ± 0.2° | 10.7 ± 1.2 % | 0.64 ± 0.01 mm | 6.4 ± 0.1 | 8.2 M |
-| | SuperMimic | 0.0 ± 0.0 % | 0.33 ± 0.00 mm | 0.56 ± 0.00 mm | 4.2 ± 0.1° | 0.0 ± 0.0 % | 0.74 ± 0.03 mm | 7.6 ± 0.1 | 8.2 M |
-| fruit fly (2.62 mm) | SuperTrack | 1.3 ± 2.3 % | 0.066 ± 0.006 mm | 0.123 ± 0.008 mm | 4.6 ± 0.6° | 9.3 ± 7.6 % | 0.091 ± 0.012 mm | 11.2 ± 0.0 | 12.3 M |
-| | SuperMimic | 0.0 ± 0.0 % | 0.049 ± 0.002 mm | 0.086 ± 0.003 mm | 4.1 ± 0.4° | 0.0 ± 0.0 % | 0.064 ± 0.001 mm | 12.9 ± 0.0 | 12.3 M |
-| rat (157 mm) | SuperTrack | 39 ± 12 % | 13.6 ± 1.8 mm | 12.5 ± 1.9 mm | 10.7 ± 0.2° | 64 ± 16 % | 24.9 ± 5.7 mm | 22.4 ± 0.1 | 20.5 M |
-| | SuperMimic | 16 ± 7 % | 20.1 ± 0.8 mm | 15.8 ± 0.3 mm | 9.1 ± 0.3° | 40 ± 2 % | 27.4 ± 1.9 mm | 25.0 ± 0.1 | 20.5 M |
+| SuperTrack | 0.5 | 0.2564 ± 0.0014 mm | 0.0 ± 0.0 % | 0.552 ± 0.009 mm | 1.25 | 1.13 | 18.8 % | 1.89 % | 3 of 3 runs |
+| | 0 | 0.2598 ± 0.0020 mm | 1.0 ± 1.3 % | 0.540 ± 0.006 mm | 3.06 | 4.37 | 18.6 % | 1.90 % | 0 of 3 runs |
+| SuperMimic | 0.5 | 0.2831 ± 0.0011 mm | 3.3 ± 3.3 % | 0.644 ± 0.029 mm | 0.99 | 0.79 | 16.9 % | 0.88 % | 3 of 3 runs |
+| | 0 | 0.2792 ± 0.0024 mm | 1.8 ± 1.3 % | 0.654 ± 0.031 mm | 1.59 | 1.97 | 16.8 % | 0.88 % | 0 of 3 runs |
 
-**In short:** with SuperTrack / SuperMimic, the stick insect's bodies are tracked to 0.35 / 0.33 mm and the fly's to
-0.066 / 0.049 mm (2.0 / 1.9 % and 2.5 / 1.9 % of the body's size). On the training clips no episode ended in any run
-except SuperTrack's fly run of seed 2 (2 of its 50 episodes, 4 %); on the held-out clips 10.7 / 0 % and 9.3 / 0 % ended.
-The rat, torque-driven through 40 ms activation filters with 67 joints, is not solved at this budget by either: 39 / 16 %
-of its episodes ended after 20.5 M environment steps, with the bodies within 13.6 / 20.1 mm (8.7 / 12.8 % of its size).
-MIMIC-MJX's PPO reaches 95 % of its test reward after about 650 M steps (6 to 20 hours on one GPU, as published).
+No episode on the training clips ended in any of these runs. Without the term, every seed's jerk: SuperTrack 3.03 / 3.12 /
+3.03, SuperMimic 1.60 / 1.54 / 1.61 times the reference's; its share above 27 Hz: SuperTrack 4.27 / 4.43 / 4.40, SuperMimic
+2.12 / 1.87 / 1.91 times (seeds 13 / 14 / 15). The reference's share above 27 Hz is 4.7 %.
 
-Not comparable as they stand: MIMIC-MJX reports the rat's median keypoint error against stac-mjx's keypoints (about 10 mm on
-held-out clips); the bodies' error here is a mean over the body frames' origins, and the rat does not yet finish its clips.
+## Configurations
 
-## Time to the target
+Each algorithm's configuration came from the task's presets (the hand task's fast configurations, with `--ref_qvel
+positions`) through screens of the same kinds of change for both algorithms, on training seeds 5-12, never the results':
 
-The target: at most 2 % of the episodes ended, with the bodies' error within 3 % of the body's size (stick insect 17.58 mm,
-fly 2.623 mm, rat 156.6 mm: 0.53, 0.079 and 4.7 mm), set after earlier runs of these configurations. `time_to.py`
-evaluates every kept checkpoint (every 250 iterations) as the last one is, and reports the wall time of the first
-checkpoint from which every later one meets the target. The times are the runs' own wall clock, each run alone on its
-GPU; the checkpoints are 250 iterations apart, so a time is its checkpoint's and an upper bound.
+- **Training options,** in three rounds, each on the previous round's pick:
+  1. one change at a time: exploration noise, the learning rate, and one option of each algorithm's own (SuperTrack's
+     failure weight, SuperMimic's discount);
+  2. the decay of the policy's gradient through the imagined states at its two other values of 1, 0.95 and 0.9, a cap on
+     each rollout's part of the policy gradient, a cap on each imagined state's gradient, the horizon doubled, two of these
+     together, and one more option of each algorithm's own (SuperTrack: a cost on the action's change; SuperMimic: reward
+     kernels 0.7 times as wide);
+  3. the world model's training: a 16-step window, 8 updates per iteration, and SuperTrack's acceleration model's position
+     lead at 0.8 (SuperMimic's increment model has none: the window and the updates together in its place).
 
-```bash
-python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/{stick,fly}_*_s?
-```
+  Each round's rule, the same for both: the lowest share of the selection episodes ended, ties within one point broken by
+  the lower bodies' error, on one to four seeds. SuperTrack's picks: action noise 0.3, `--bptt_decay 0.95`,
+  `--pi_rollout_clip 10` with `--st_rate_w 0.05`, and the position lead 0.8; SuperMimic's: discount 0.95, horizon 32,
+  `--bptt_decay 0.9` with `--pi_rollout_clip 10`, and 8 world-model updates per iteration.
+- **The smoothness term:** weights 0, 0.5, 1, 2, 4, 8 and 16, the same grid for both, at seeds 5-8. The rule: the lowest
+  weight at which every run passes the motion check and the accuracy holds (the bodies' error at most 1.10 times weight 0's,
+  the ended share at most one point above it). Both algorithms: 0.5, confirmed at seeds 9-12.
 
-| body | algorithm | minutes to the target ↓ | iteration | seeds 0 / 1 / 2 (min) |
-|---|---|---|---|---|
-| stick insect | SuperTrack | 1.7 ± 0.1 | 1,000, every run | 1.8 / 1.6 / 1.6 |
-| | SuperMimic | 2.1 ± 0.4 | 1,250 / 1,000 / 1,000 | 2.6 / 1.9 / 1.9 |
-| fruit fly | SuperTrack | 8.4 ± 3.2 (2 of 3 runs) | 3,250 / 5,750 / not reached | 6.2 / 10.7 / not reached |
-| | SuperMimic | 2.8 ± 0.0 | 1,250, every run | 2.8 / 2.8 / 2.9 |
-| rat | both | not reached | | |
+## The contributed runs
 
-On the stick insect SuperTrack's runs hold the target from 1,000 iterations and SuperMimic's from 1,250 (seed 0) and
-1,000 (seeds 1 and 2); no episode ends at any checkpoint from 750 (SuperTrack) and 500 (SuperMimic). On the fly,
-SuperMimic's runs hold the target from 1,250 and end no episode at any checkpoint from 750. SuperTrack's fly runs meet
-the target early and then miss it at some later checkpoints, at each of which 1 to 3 of the 50 episodes ended (2-6 %)
-with the bodies' error at 0.069 to 0.083 mm:
+The contributor's runs ([Jingdong Zhang](https://github.com/Evergreen0929)): seeds 0-2, each run alone on an A100 80GB
+SXM4. They differ from the runs above in four ways:
 
-- seed 0 first meets it at 1,750 (3.4 min), misses it at 2,500 and 3,000 and holds it from 3,250;
-- seed 1 first meets it at 1,500 (2.9 min), misses it at 2,500, 2,750, 5,250 (the bodies' error, 0.083 mm, with 2 % of
-  the episodes ended) and 5,500, and holds it from 5,750;
-- seed 2 first meets it at 1,250 (2.4 min), misses it at 1,500, 2,250, 2,500, 3,000, 3,750 and at its last checkpoint,
-  6,000 (2 of the 50 episodes ended, 4 %), so it has no time to the target.
+- the configurations before the screens, the hand task's fast configurations with `--ref_qvel positions`: SuperTrack at the
+  trainer's action noise of 0.1, without the decay, the cap and the action-rate cost, its position lead the constant
+  acceleration's 0.6; SuperMimic at discount 0.99, horizon 16 and `--bptt_decay 0.95`, without the cap, with 4 world-model
+  updates per iteration;
+- no smoothness term on either algorithm;
+- a fixed budget of 4,000 iterations, the last checkpoint evaluated;
+- an evaluation of each clip from its first frame and four perturbed starts (50 episodes per set), errors over the steps the
+  episodes lived.
 
-## The rat with a longer budget
+| | stick insect, SuperTrack / SuperMimic |
+|---|---|
+| episodes ended | 0 / 0 % |
+| bodies | 0.35 ± 0.01 / 0.33 ± 0.00 mm |
+| end effectors | 0.60 ± 0.02 / 0.56 ± 0.00 mm |
+| joints | 8.4 ± 0.2 / 4.2 ± 0.1° |
+| held-out clips: ended | 10.7 ± 1.2 / 0.0 ± 0.0 % |
+| held-out clips: bodies | 0.64 ± 0.01 / 0.74 ± 0.03 mm |
 
-One extra run: `rat-supermimic`'s options with 40,000 iterations, the learning rate decayed over them (seed 0, 1.7 h,
-alone on an A100 80GB SXM4). SuperTrack was not run at this budget, so this is not a comparison of the algorithms.
-
-| | ended ↓ | bodies ↓ | end effectors ↓ | joints ↓ | held-out: ended ↓ | held-out: bodies ↓ |
-|---|---|---|---|---|---|---|
-| 10,000 iterations (seeds 0-2) | 16 ± 7 % | 20.1 ± 0.8 mm | 15.8 ± 0.3 mm | 9.1 ± 0.3° | 40 ± 2 % | 27.4 ± 1.9 mm |
-| 40,000 iterations (seed 0) | 20 % | 13.2 mm | 11.6 mm | 9.1° | 12 % | 18.9 mm |
-
-With four times the iterations the held-out clips' ended share goes from 40 to 12 % and their bodies' error from 27.4 to
-18.9 mm; on the training clips the bodies' error goes from 20.1 to 13.2 mm and the ended share does not fall (20 %; 16 %
-over the three seeds at 10,000 iterations, 20 % in seed 0). The training curve still rose at 40,000 iterations (episode
-length 177 to 182 steps over the last 4,000). Not a configuration of its own.
+Every run's metrics, time to the target and training summary, as JSON records: [`a100_runs/`](a100_runs/README.md).
 
 ## Renders
 
-`tools/render_animal.py` renders a rollout recorded by `evaluate_animal`; `docs/media/animals/` holds each case's run with
-the lowest bodies' error (stick insect SuperTrack seed 0 and SuperMimic seed 2, fly SuperTrack seed 1 and SuperMimic
-seed 2, rat SuperTrack seed 0 and SuperMimic seed 2) from the reference's start (the fly at a quarter of real time), and
-the grid of the six (`tools/make_grid.py`).
-
-## Development notes
-
-- **Iteration time** (rat, SuperTrack, 2,048 worlds, an A100 80GB SXM4 alone; `run_formal.sh`'s command, iterations 500 to
-  1,000): 132 ms with `--pi_batch 2048 --fused_fk`, 306 ms with the default batch of 4,096 and the level-by-level kinematics.
-  On an empty cache the rat's runs take 11 to 13 min longer (`a100_runs/cold_cache_seed0/`); the training times above are
-  with the kernels cached.
+`tools/render_animal.py` renders a rollout recorded by `final.py` (`evaluate_animal --record`), the reference laid over it
+as a translucent ghost, in MIMIC-MJX's arena. `docs/media/animals/` holds, per algorithm, the run with the lowest bodies'
+error (seed 14 for both; every run passes the motion check), clip CLIP from its first frame, and the grid of the two
+(`tools/make_grid.py`). The teaser's tile is SuperTrack's.

@@ -4,7 +4,7 @@ Anatomically detailed bodies of three animals track their animals' recorded kine
 grooming), a fruit fly (walking) and a stick insect (walking), with SuperTrack and SuperMimic on MuJoCo-Warp
 ([the task](../../docs/tasks/animals.md), [results](results.md)). It adds the library's first non-human animal bodies,
 torque-driven skeletons with many passive degrees of freedom; MIMIC-MJX's PPO trains them in 6 to 20 hours on one GPU, as
-published.
+published. Results: the stick insect; the rat and the fruit fly are in progress.
 
 - **Kinematics:** the reference clips of MIMIC-MJX (Zhang, Yang et al., "MIMIC-MJX: Neuromechanical Emulation of Animal
   Behavior", arXiv 2511.20532), [talmolab/MIMIC-MJX](https://huggingface.co/datasets/talmolab/MIMIC-MJX) on Hugging Face
@@ -30,21 +30,38 @@ published.
 
 ## Rules
 
-Fixed before the three-seed runs.
+Fixed before the runs of the results, the same for both algorithms.
 
 - **Clips:** one policy per body on clips 0-9 of its reference; clips 10-19 held out, never trained on.
-- **Configurations:** one per algorithm, the same for the three bodies apart from the budget (`--config <body>-<algorithm>`,
-  [results](results.md#how-the-numbers-were-obtained)).
-- **Reference velocities:** those of the reference's positions at the control rate (`--ref_qvel positions`), for both
-  algorithms.
-- **Budget:** fixed and the same for both algorithms: 4,000 iterations (stick insect), 6,000 (fruit fly), 10,000 (rat); a
-  checkpoint kept every 250.
-- **Seeds:** three training seeds per configuration (0, 1, 2); mean and sample SD; the GPU stated.
-- **Evaluation:** the last checkpoint plays every clip from its first frame and four more times from perturbed starts
-  (0.02 rad on the joints), without exploration noise, to the clip's end: the share of episodes ended by MIMIC-MJX's
-  terminations, the tracked bodies', the end effectors' and the root's position errors and the joints' error, over the steps
-  the episodes lived; the same on the held-out clips.
+- **Configurations:** one per algorithm and body (`--config <body>-<algorithm>`), chosen by the same rules for both on
+  training seeds other than the results' ([how](results.md#configurations)). The stick insect's are its results'; the rat's
+  and the fruit fly's are the starting ones, their results in progress.
+- **Reference velocities:** those of the reference's positions at the control rate (`--ref_qvel positions`).
+- **Runs** (`run.sh`): a cap of 8,000 iterations (stick insect), 12,000 (fruit fly) or 40,000 (rat), the learning rate decayed
+  over it, a checkpoint kept every 250 (the rat's every 500). Each run ends by the stop rule (`watch.py`): each kept
+  checkpoint on the training clips, each clip from its first frame and from 9 perturbed starts (the rat's 19); with S(i) and
+  E(i) the means over three evaluations (i and the two before) of the share of episodes ended and of the bodies' error, a run
+  stops at the first i from a quarter of the cap on where the error improved by less than 3 % over the window (1,000
+  iterations; the rat's 2,000) and the ended share is at most 1 % or fell by less than one point over it; else at the cap.
+  The checkpoint at the stop, not the best one, is the run's result.
+- **Seeds:** three training seeds per configuration; mean and sample SD; the GPU stated.
+- **Evaluation** (`final.py`): the stop checkpoint plays the training clips and the held-out clips, each from its first frame
+  and from 19 perturbed starts (0.02 rad on the joints; other starts than the stop rule's), without exploration noise, to
+  the clip's end: the share of episodes ended by MIMIC-MJX's terminations, and the completed episodes' errors over their
+  steps (the tracked bodies', the end effectors' and the root's positions, the joints' angles).
+- **Motion check** (`motion.py`): on the recorded rollouts of the training clips' unperturbed starts, against the reference's
+  same frames: the joints' jerk at most 1.5 times the reference's, their share of velocity power above the body's frequency
+  (the stick insect's 27 Hz: the lowest whole frequency above which the reference's joint velocity holds at most 5 % of its
+  power) at most 2 times, the steps at a joint limit at most the reference's. A shown motion passes it.
+- **Time to the target** (`final.py`): the training clock of the first kept checkpoint from which every later one up to the
+  stop has at most 1 % of the episodes ended and the bodies within 5 % of the body's size, read backward from the stop.
+  Reported only for runs timed alone on their GPU; the stick insect's results are not.
 
-The target of the time to the target (at most 2 % of the episodes ended, the bodies within 3 % of the body's size) was set
-after earlier runs of these configurations, on their kept checkpoints. MIMIC-MJX's median keypoint error against stac-mjx's keypoints is not computed
-here: the bodies' error is a mean over the body frames' origins.
+MIMIC-MJX's median keypoint error against stac-mjx's keypoints is not computed here: the bodies' error is a mean over the
+body frames' origins.
+
+```bash
+benchmarks/mimic_mjx_animal_tracking/run.sh stick supertrack 13 logs/animals   # train, stop by the rule, read (final.py)
+python benchmarks/mimic_mjx_animal_tracking/motion.py logs/animals/stick_supertrack_s13
+python benchmarks/mimic_mjx_animal_tracking/summarize.py logs/animals --seeds 13 14 15
+```

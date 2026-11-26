@@ -32,7 +32,7 @@ The algorithms share one pipeline within each task:
   (MuJoCo-Warp).
 - **Manipulation:** one or two Franka Pandas tracking robomimic's human demonstrations of Lift, Square and Transport, the
   objects with them (MuJoCo-Warp).
-- **Animals:** MIMIC-MJX's rat, fruit fly and stick insect tracking their animals' recorded kinematics (MuJoCo-Warp).
+- **Animals:** MIMIC-MJX's stick insect tracking its recorded kinematics (MuJoCo-Warp); its rat and fruit fly in progress.
 
 World models also stand in for the physics inside planners: RoboKit's sampling MPC (G1 box carrying, G1 climbing, Go2
 jumping) and mbrl-lib's CEM controller (PETS' cart-pole and pusher) score their candidates on a world model of the task's
@@ -106,8 +106,7 @@ of 0.99 with the object within 10 mm. Quadrotor: ellipse / lemniscate / race tra
 the position within 20 mm. Adroit Pen, Hammer
 and Relocate: native final success and normalized tracking RMSE over 256 starts, from contributed runs on an L40S, not
 re-verified on an A100. Manipulation: Lift / Square / Transport; the target is the hand task's, a success of 0.99
-(robosuite's test at the last frame, a tracking proxy) with the object within 10 mm. Animals: the target is at most 2 % of
-the episodes ended with the bodies within 3 % of the body's size. Commands:
+(robosuite's test at the last frame, a tracking proxy) with the object within 10 mm. Commands:
 [Recommended settings](#-recommended-settings), [Results](#-results).
 
 | Task | Goal | Configuration | Result |
@@ -141,9 +140,8 @@ the episodes ended with the bodies within 3 % of the body's size. Commands:
 | **[Wuji Hand piano](#wuji-hand-piano-playing)**, two hands, Eden's *Ode to Joy* | 🎯 most accurate | `run.sh supertrack --horizon 3 --st-reg 0.01` | Eden F1 **0.903 ± 0.015** on 256 held-out starts, SuperMimic's `--horizon 3 --gamma 0.95 --bptt-decay 0.95` **0.833 ± 0.079** (seeds 0-2, A100 40GB); in an earlier set of finals with the same configurations, seeds and GPU type, 0.804 ± 0.140 and 0.708 ± 0.115, with SuperTrack's horizon-8 configuration the most accurate (0.888 ± 0.092) |
 | **[Manipulation demonstration tracking](#manipulation-demonstration-tracking)**, one or two Pandas, robomimic's Lift / Square / Transport | ⏱ time to the target, not engineered | `robomimic-supertrack` | **1.03 / 2.12 / 15.76 min** on Lift / Square / Transport, every run, at an object error of 0.58 / 5.02 / 3.75 mm there (seeds 10-12, A100 40GB SXM4; `robomimic-supermimic` 1.11 / 4.53 min at 2.68 / 5.34 mm, Transport not reached) |
 |  | 🎯 most accurate | `robomimic-supertrack` | object position **0.26 / 1.48 / 4.24 mm** at a success of 100 / 100 / 99.9 % (seeds 10-12, A100 40GB SXM4; `robomimic-supermimic` 1.01 / 2.55 / 4.50 mm at 100 / 100 / 89.2 %) |
-| **[Animal motion tracking](#animal-motion-tracking)**, stick insect / fruit fly, ten clips each | ⏱ time to the target, not engineered | `stick-supertrack` / `stick-supermimic`, `fly-supertrack` / `fly-supermimic` | stick insect 1.7 / 2.1 min; fruit fly 8.4 (2 of 3 runs) / 2.8 min (the mean of the runs that reach it, seeds 0-2, each run alone on an A100 80GB SXM4) |
-|  | 🎯 most accurate | the same | bodies 0.35 / 0.33 mm (stick insect) and 0.066 / 0.049 mm (fruit fly), 0 / 0 and 1.3 / 0 % of the episodes ended; held-out clips 0.64 / 0.74 and 0.091 / 0.064 mm (seeds 0-2, A100 80GB SXM4) |
-| **Animal motion tracking**, rat, ten clips | 🎯 most accurate | `rat-supertrack` / `rat-supermimic` | not solved at a fixed budget of 10,000 iterations: 39 / 16 % of the episodes ended, bodies 13.6 / 20.1 mm (seeds 0-2, A100 80GB SXM4) |
+| **[Animal motion tracking](#animal-motion-tracking)**, MIMIC-MJX's stick insect, ten clips, smooth targets | 🎯 most accurate | `stick-supertrack` | bodies **0.256 mm** with no episode ended, held-out clips 0.552 mm with none ended (seeds 13-15, A100 40GB SXM4); `stick-supermimic` **0.283 mm**, held-out 0.644 mm with 3.3 % ended |
+|  | ⏱ time to the target | not measured | |
 | **[Muscles](#muscle-actuated-character)**, MuscleVAE's character | 🎯 most accurate | `muscles-supertrack-rf` (the body-token RigidFormer, width 128, 2 blocks), 3 h on an A100 40GB PCIe | MPJPE **34.9 ± 0.7 mm** in the root frame, episodes ended 0.0004 ± 0.0008 (seeds 1-3); `muscles-supermimic-rf` **60.2 ± 2.0 mm** (heading frame: 35.1 ± 0.7 and 38.5 ± 3.4 mm), with the lower joint error, 8.7 ± 0.4 against 10.1 ± 0.3 deg; with the MLP, `muscles-supertrack` 38.1 ± 1.0 mm and `muscles-supermimic` 65.6 ± 8.1 mm, joint error 10.6 ± 1.1 and 9.7 ± 0.4 deg (four tuning rounds to the RigidFormer's nine) |
 |  | 🚀 fastest | not compared yet | |
 | **[NDM in RoboKit's planner](#ndms-in-robokits-planner)**, G1 box carrying / climbing, Go2 jumping, one A100 40GB | ⏱ planning time, not engineered | SuperTrack's acceleration model and SuperMimic's increment model, MLPs as bf16 copies, level | planning **3.0x / 1.8x / 2.1x** and **3.0x / 1.8x / 2.2x** faster than on MuJoCo Warp (9 → 3 / 3, 7 → 4 / 4, 65 → 31 / 30 s); **20 of 20** plans pass on each task for each, MuJoCo Warp's 10 of 10 ([results](benchmarks/robokit_ndm/results.md)) |
@@ -200,9 +198,7 @@ both methods are on offer for every task.
 | | most accurate, Hammer | `--method supertrack`: 100.0 %, 0.0485 | `--method supermimic --nail-tracking-std .001`: 73.0 %, 0.0762 |
 | | most accurate, Relocate | `--method supertrack`: 100.0 %, 0.0508 | `--method supermimic`: 100.0 %, 0.2059 |
 | **Manipulation**, smooth targets, one demonstration (`train_robomimic`, add `--task`) | most accurate, and time to the target | `robomimic-supertrack`: object 0.26 / 1.48 / 4.24 mm at a success of 100 / 100 / 99.9 % (Lift / Square / Transport); the target in 1.03 / 2.12 / 15.76 min (A100 40GB SXM4) | `robomimic-supermimic`: 1.01 / 2.55 / 4.50 mm at 100 / 100 / 89.2 %; 1.11 / 4.53 min, Transport not reached |
-| **Stick insect**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `stick-supertrack`: bodies 0.35 mm; the target in 1.7 min (seeds 0-2, each run alone on an A100 80GB SXM4) | `stick-supermimic`: 0.33 mm; 2.1 min |
-| **Fruit fly**, clips 0-9 (`train_animal`) | most accurate, and time to the target | `fly-supertrack`: bodies 0.066 mm; the target in 8.4 min, 2 of 3 runs (seeds 0-2, each run alone on an A100 80GB SXM4) | `fly-supermimic`: 0.049 mm; 2.8 min, every run |
-| **Rat**, clips 0-9 (`train_animal`) | not solved | `rat-supertrack`: 39 % of the episodes ended, bodies 13.6 mm (seeds 0-2, A100 80GB SXM4) | `rat-supermimic`: 16 %, 20.1 mm |
+| **Stick insect**, smooth targets, clips 0-9 (`train_animal`) | most accurate | `stick-supertrack`: bodies 0.256 mm, held-out clips 0.552 mm, no episode ended (seeds 13-15, A100 40GB SXM4) | `stick-supermimic`: 0.283 mm, held-out 0.644 mm with 3.3 % ended |
 | **Wuji piano** (`benchmarks/wuji_piano/run.sh`) | most accurate, horizon 3 | `supertrack --horizon 3 --st-reg 0.01`: Eden F1 0.903 (A100 40GB) | `supermimic --horizon 3 --gamma 0.95 --bptt-decay 0.95`: 0.833 |
 | | horizon 8 | `supertrack --horizon 8 --st-imag-noise 0.1 --st-reg 0.01`: 0.801 | `supermimic --horizon 8 --gamma 0.95 --bptt-decay 0.95 --critic-epochs 10`: 0.820 |
 
@@ -228,7 +224,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   [Wuji Hand piano playing](#wuji-hand-piano-playing): two hands play Eden's *Ode to Joy* with no fingering given,
   [manipulation demonstration tracking](#manipulation-demonstration-tracking): Panda arms on robomimic's human demonstrations
   (with smooth position targets, the arms' motion checked against the demonstrations),
-  [animal motion tracking](#animal-motion-tracking): MIMIC-MJX's rat, fruit fly and stick insect.
+  [animal motion tracking](#animal-motion-tracking): MIMIC-MJX's stick insect (with smooth targets; the rat and the fruit
+  fly in progress).
 - **[2026-11] World models:** the small RigidFormer's configurations on LAFAN1, SuperTrack-RF and SuperMimic-RF on seeds
   7-9 ([results](#-results)), with its read-out's and input features' kernels; a body-token RigidFormer on the muscle-actuated
   character, its most accurate configuration ([results](#muscle-actuated-character)); world models of MuJoCo models in
@@ -280,8 +277,8 @@ What the experiments showed (details under [Ablations](#-ablations) and [Trainin
   fatigue; a floating XHand, Allegro hand or Inspire hand tracking human hand-object demonstrations; a racing quadrotor tracking
   flown trajectories of up to 21.7 m/s; the Adroit hand opening a door, turning a pen, hammering a nail and relocating a ball, each from one demonstration; a Unitree Go2 tracking a Labrador's walks, runs, jumps and play; two
   Wuji hands playing Eden's *Ode to Joy* with no fingering given; one or two Panda arms tracking robomimic's
-  human demonstrations of lifting, nut assembly and a two-arm hand-over; MIMIC-MJX's rat, fruit fly and stick insect
-  tracking their animals' recorded kinematics; RoboKit's G1 box carrying,
+  human demonstrations of lifting, nut assembly and a two-arm hand-over; MIMIC-MJX's stick insect tracking its recorded
+  kinematics; RoboKit's G1 box carrying,
   G1 climbing and Go2 jumping, and PETS' cart-pole and
   pusher, planned on world models.
 - **NDMs as simulators:** throughput and open-loop accuracy against physics on HDMI's scenes, with fused Triton inference
@@ -528,15 +525,15 @@ benchmarks/robomimic_manipulation_tracking/run_formal.sh
 pip install -e '.[hand]'                             # MuJoCo-Warp
 python tools/download_mimic_mjx.py                   # MIMIC-MJX's clips and vnl-playground's bodies, pinned, into data/mimic_mjx
 
-# one body on clips 0-9: train, evaluate on them and on held-out clips, render a clip over the reference
-python -m ndm_gym.train_animal --config stick-supertrack --log_dir logs/stick_st     # also fly-, rat-; -supermimic
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --repeats 4 --record --out logs/stick_st/evaluation
-python -m ndm_gym.evaluate_animal --ckpt logs/stick_st/last.pt --clip_ids 10-19 --repeats 4 --out logs/stick_st/heldout
-MUJOCO_GL=egl python tools/render_animal.py --rollout logs/stick_st/evaluation/rollout.npz --world 3 --out stick.webp
+# the stick insect on clips 0-9: train to the benchmark's stop rule and read the stop checkpoint on them and on held-out
+# clips (SuperTrack, then SuperMimic), check the motion against the reference, render a clip over the reference
+benchmarks/mimic_mjx_animal_tracking/run.sh stick supertrack 13 logs/animals
+benchmarks/mimic_mjx_animal_tracking/run.sh stick supermimic 13 logs/animals
+python benchmarks/mimic_mjx_animal_tracking/motion.py logs/animals/stick_supertrack_s13
+MUJOCO_GL=egl python tools/render_animal.py --rollout logs/animals/stick_supertrack_s13/final/train/rollout.npz --world 3 --out stick.webp
 
-# the benchmark's runs of one algorithm (three bodies, seeds 0-2), then a run's time to the target
-benchmarks/mimic_mjx_animal_tracking/run_formal.sh supertrack   # and supermimic
-python benchmarks/mimic_mjx_animal_tracking/time_to.py logs/mimic_mjx_formal/stick_supertrack_s0
+# the results' table from the runs of seeds 13-15
+python benchmarks/mimic_mjx_animal_tracking/summarize.py logs/animals --seeds 13 14 15
 ```
 
 </details>
@@ -1489,51 +1486,60 @@ Every seed (10 / 11 / 12): Lift and Square, 100 % in every run of both; Transpor
 
 ### Animal motion tracking
 
-MIMIC-MJX's rat, fruit fly and stick insect (Zhang, Yang et al., [arXiv:2511.20532](https://arxiv.org/abs/2511.20532)) track
-their animals' recorded kinematics on MuJoCo-Warp, with the bodies of
-[vnl-playground](https://github.com/talmolab/vnl-playground) at MIMIC-MJX's solver settings and terminations: a rat with
-67 joints and 38 torque actuators behind 40 ms activation filters, a fruit fly with 36 leg servos at 0.2 ms physics steps,
-a stick insect with 41 torque actuators. One policy per body on ten clips; ten more clips are held out.
+MIMIC-MJX's stick insect (Zhang, Yang et al., [arXiv:2511.20532](https://arxiv.org/abs/2511.20532)) tracks ten clips of its
+recorded kinematics on MuJoCo-Warp, with its body from [vnl-playground](https://github.com/talmolab/vnl-playground) at
+MIMIC-MJX's solver settings and terminations: 41 torque actuators on milligram legs, six claws on the floor, a 10 ms control
+step. Ten more clips are held out. The rat and the fruit fly run with the same code; their results are in progress.
+Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#8](https://github.com/Frank-ZY-Dou/ndm-gym/pull/8)).
 
-| goal | configuration (`train_animal`) | result, SuperTrack / SuperMimic |
+| goal | configuration (`train_animal`) | result |
 |---|---|---|
-| most accurate, stick insect | `--config stick-supertrack` / `--config stick-supermimic` | bodies 0.35 / 0.33 mm, no episode ended; held-out clips 0.64 / 0.74 mm, 10.7 / 0 % ended (seeds 0-2, A100 80GB SXM4) |
-| most accurate, fruit fly | `--config fly-supertrack` / `--config fly-supermimic` | bodies 0.066 / 0.049 mm, 1.3 / 0 % of the episodes ended; held-out clips 0.091 / 0.064 mm, 9.3 / 0 % ended (seeds 0-2, A100 80GB SXM4) |
-| time to the target, not engineered | the same | stick insect 1.7 / 2.1 min; fruit fly 8.4 (2 of 3 runs) / 2.8 min (the mean of the runs that reach it; seeds 0-2, each run alone on an A100 80GB SXM4) |
-| rat, a fixed budget of 10,000 iterations | `--config rat-supertrack` / `--config rat-supermimic` | not solved: 39 / 16 % of the episodes ended, bodies 13.6 / 20.1 mm (seeds 0-2, A100 80GB SXM4) |
+| most accurate | `--config stick-supertrack` | bodies' position error 0.256 mm with no episode ended; held-out clips 0.552 mm, none ended (seeds 13-15, A100 40GB SXM4) |
 
-**In short:** both algorithms track the stick insect and the fruit fly to 1.9-2.5 % of the body's size. No episode ends
-on their training clips except in one of SuperTrack's three fly runs (4 %), the one run of the two bodies without a time
-to the target. Neither solves the rat within 10,000 iterations.
+**In short:** SuperTrack's configuration has the lower bodies' error on the training and the held-out clips (SuperMimic's:
+0.283 and 0.644 mm, 3.3 % of the held-out episodes ended); SuperMimic's has the lower joint-angle error (4.84° against 7.98°).
 
-<p align="center"><img src="docs/media/animals/grid.webp" alt="SuperTrack and SuperMimic tracking a stick insect, a fruit fly and a rat clip of MIMIC-MJX" width="100%"/></p>
-<p align="center"><i>A stick insect, a fruit fly (a quarter of real time) and a rat clip with SuperTrack and SuperMimic: each case's run with the lowest bodies' error, from the reference's start.<br>The reference is the translucent blue ghost (<a href="docs/tasks/animals.md">the task</a>).</i></p>
-<p align="center"><sub>Renders of policies tracking MIMIC-MJX's clips (MIT) with vnl-playground's bodies (BSD-3-Clause; the fly flybody's, Apache-2.0); see <a href="NOTICE">NOTICE</a>.</sub></p>
+<p align="center"><img src="docs/media/animals/grid.webp" alt="SuperTrack and SuperMimic tracking a stick insect clip of MIMIC-MJX" width="100%"/></p>
+<p align="center"><i>The stick insect on clip CLIP: per algorithm the run with the lowest bodies' error (every run passes the motion check), from the unperturbed start.<br>The reference is the translucent blue ghost (<a href="docs/tasks/animals.md">the task</a>).</i></p>
+<p align="center"><sub>Renders of policies tracking MIMIC-MJX's clips (MIT) with vnl-playground's stick insect (BSD-3-Clause); see <a href="NOTICE">NOTICE</a>.</sub></p>
 
-- **Runs:** a fixed budget, the same for both algorithms: 4,000 (stick insect), 6,000 (fruit fly) and 10,000 (rat)
-  iterations in 2,048 worlds, the learning rate decayed over them. Each run's last checkpoint plays every clip from its
-  first frame and four more times from perturbed starts. The rat's mean episode length in training still rose over the
-  last 2,000 iterations in every SuperMimic run and in two of SuperTrack's three, so its numbers are the budget's, not
-  final ones ([results](benchmarks/mimic_mjx_animal_tracking/results.md), [task](docs/tasks/animals.md)).
-- **Settings:** SuperTrack takes `hand-supertrack-fast`'s options and SuperMimic `hand-supermimic-fast`'s, each with the
-  same changes: `--ref_qvel positions` (the reference's velocities from its positions: the clips' stored velocities are
-  not theirs, [task](docs/tasks/animals.md)), `--pi_batch 2048 --wm_lr 2e-3 --fused_fk`, the iterations above and a
-  checkpoint every 250. No other tuning on the bodies for either algorithm.
-- **Timing:** wall clock from the first training iteration (after the simulator's setup and the warm-up collection;
-  the kernels' compilation was cached before the runs), each run alone on an A100 80GB SXM4; no per-phase table, so
-  time to the target, not engineered. The target (at most 2 % of the episodes ended, the bodies within 3 % of the body's
-  size) is this benchmark's, not MIMIC-MJX's.
+**Smooth targets.** A policy's action sets the 41 torques each control step. The task's cost on the action's change was
+small (0.05 times its mean square, in SuperMimic's reward and, with `--st_rate_w 0.05`, in SuperTrack's loss), so the
+torques could alternate from step to step at little cost to the tracking: the joints' jerk was 3.06 and 1.59 times the
+reference's (SuperTrack / SuperMimic, seeds 13-15) and their share of velocity power above 27 Hz 4.37 and 1.97 times. The
+smoothness term (`--target_rate_w 0.5`, in both configurations, in the place of that cost) charges each step's change of
+each actuator's command, over half its control range, squared: a jump costs, following the reference does not. On this
+body it is the same cost at ten times the weight. With it the jerk is 1.25 and 0.99 times the reference's and the share
+1.13 and 0.79 times, at the same accuracy (the bodies' error 0.99 and 1.01 times the runs' without it)
+([each row](benchmarks/mimic_mjx_animal_tracking/results.md#smooth-motion)). Every run passes the motion check: the joints'
+jerk at most 1.5 times and their share above 27 Hz (power over power) at most 2 times the reference's, the steps at a joint
+limit at most the reference's.
 
-| | stick insect | fruit fly | rat |
-|---|---|---|---|
-| seeds | 0, 1, 2 | 0, 1, 2 | 0, 1, 2 |
-| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % | 1.3 / 0 % | 39 / 16 % |
-| bodies ↓, SuperTrack / SuperMimic | 0.35 / 0.33 mm | 0.066 / 0.049 mm | 13.6 / 20.1 mm |
-| joints ↓, SuperTrack / SuperMimic | 8.4 / 4.2° | 4.6 / 4.1° | 10.7 / 9.1° |
-| held-out clips: ended ↓, SuperTrack / SuperMimic | 10.7 / 0 % | 9.3 / 0 % | 64 / 40 % |
-| held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.64 / 0.74 mm | 0.091 / 0.064 mm | 24.9 / 27.4 mm |
-| training (min), SuperTrack / SuperMimic, each run alone on an A100 80GB SXM4 | 6.4 / 7.6 | 11.2 / 12.9 | 22.4 / 25.0 |
-| to the target ↓, SuperTrack / SuperMimic, mean ± SD | 1.7 ± 0.1 / 2.1 ± 0.4 min | 8.4 ± 3.2 (2 of 3 runs) / 2.8 ± 0.0 min | not reached |
+- **Runs:** clips 0-9, 2,048 worlds; each run stops by one rule for both algorithms (the bodies' error flat within 3 % over
+  1,000 iterations, the share of episodes ended at most 1 % or flat; a cap of 8,000), and its stop checkpoint plays every
+  clip from its first frame and from 19 perturbed starts, on the training clips and on held-out clips 10-19
+  ([results](benchmarks/mimic_mjx_animal_tracking/results.md), [task](docs/tasks/animals.md)). The time to the target is
+  not measured.
+- **Configurations:** each algorithm's from the task's presets in three rounds of the same kinds of change for both, and
+  one weight of the smoothness term, all chosen by the same rules on other seeds: SuperTrack's with action noise 0.3,
+  `--bptt_decay 0.95`, `--pi_rollout_clip 10` and its acceleration model's position lead at 0.8; SuperMimic's with
+  discount 0.95, horizon 32, `--bptt_decay 0.9`, `--pi_rollout_clip 10` and 8 world-model updates per iteration
+  ([how](benchmarks/mimic_mjx_animal_tracking/results.md#configurations)).
+- **Reference velocities:** at MIMIC-MJX's pinned revision the clips' stored velocities are not those of their positions
+  (the root's 10 times), so both algorithms take them from the positions (`--ref_qvel positions`, [task](docs/tasks/animals.md)).
+
+| | stick insect |
+|---|---|
+| seeds | 13, 14, 15 |
+| episodes ended ↓, SuperTrack / SuperMimic | 0 / 0 % |
+| bodies ↓, SuperTrack / SuperMimic | 0.256 / 0.283 mm |
+| joints ↓, SuperTrack / SuperMimic | 7.98 / 4.84° |
+| held-out clips: episodes ended ↓, SuperTrack / SuperMimic | 0 / 3.3 % |
+| held-out clips: bodies ↓, SuperTrack / SuperMimic | 0.552 / 0.644 mm |
+| motion: jerk and share above 27 Hz, the reference's = 1, SuperTrack / SuperMimic | 1.25 and 1.13 / 0.99 and 0.79 |
+
+Every seed (13 / 14 / 15): the bodies' error SuperTrack 0.257 / 0.255 / 0.258 mm and SuperMimic 0.284 / 0.282 / 0.283 mm;
+SuperMimic ended 0.5 / 2.5 / 7.0 % of its held-out episodes, SuperTrack none.
 
 ### BlinkMimic's options
 
@@ -1879,7 +1885,8 @@ Pull requests from outside contributors, each merged with its runs and results:
 - [Jionghao Wang](https://github.com/shanemankiw): quadruped motion tracking: a Unitree Go2 on the Lifelike Labrador motion
   capture ([#4](https://github.com/Frank-ZY-Dou/ndm-gym/pull/4), [#14](https://github.com/Frank-ZY-Dou/ndm-gym/pull/14)).
 - [Jingdong Zhang](https://github.com/Evergreen0929): manipulation demonstration tracking, Panda arms on robomimic's Lift,
-  Square and Transport ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)).
+  Square and Transport ([#10](https://github.com/Frank-ZY-Dou/ndm-gym/pull/10)); animal motion tracking on MIMIC-MJX's
+  data: a rat, a fruit fly and a stick insect ([#8](https://github.com/Frank-ZY-Dou/ndm-gym/pull/8)).
 
 ## 📄 Papers and repositories
 
