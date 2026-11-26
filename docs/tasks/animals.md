@@ -7,7 +7,9 @@ the clips of its dataset ([talmolab/MIMIC-MJX](https://huggingface.co/datasets/t
 [flybody](https://github.com/TuragaLab/flybody)'s, Apache-2.0). They are the library's first non-human animal bodies.
 Contributed by [Jingdong Zhang](https://github.com/Evergreen0929) ([#8](https://github.com/Frank-ZY-Dou/ndm-gym/pull/8)).
 Results: the stick insect ([results](../../benchmarks/mimic_mjx_animal_tracking/results.md)); the rat and the fruit fly are in
-progress.
+progress. As the simulator, SuperTrack's and SuperMimic's world models (bf16 copies) run 46.0 and 46.1 times MuJoCo-Warp's
+control step on the stick insect at 4,096 worlds (15.46 M and 15.48 M world-steps per second on one A100 40GB SXM4; not
+engineered; [details](../../benchmarks/mimic_mjx_animal_tracking/results.md#the-world-model-as-the-simulator)).
 
 ```bash
 pip install -e '.[hand]'                                         # MuJoCo-Warp
