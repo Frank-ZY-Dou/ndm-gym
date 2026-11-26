@@ -535,6 +535,8 @@ WHOLE_BODY_TASKS = (
     walk_tea("g1_inspire_walk_tea", "SPIDER's kinematic retarget", 638, ((0.098, -0.057, -0.187), (-0.108, 0.129, -0.11))),
     # SPIDER's physics-optimised retarget (trajectory_mjwp.npz): the fingers out of the teapot
     walk_tea("g1_inspire_walk_tea_mjwp", "SPIDER's physics-optimised retarget", 640, ((0.132, -0.11, -0.114), (-0.099, 0.023, -0.149))),
+    # the arms-and-hands policy's rollout on the physics-optimised task (the hands' prior): its arms, fingers and teapot
+    walk_tea("g1_inspire_walk_tea_prior", "the arms-and-hands policy's rollout", 665, ((0.121, -0.097, -0.131), (-0.101, 0.039, -0.153))),
 )
 HDMI_TASKS: dict[str, HDMITaskCfg] = {c.name: c for c in _TASKS}  # HDMI's 13, on its G1
 TASKS: dict[str, HDMITaskCfg] = {**HDMI_TASKS, **{c.name: c for c in WHOLE_BODY_TASKS}}
