@@ -22,12 +22,17 @@ class AnimalWorldModel(MjcfWorldModel):
         if n_act and kw.get("backbone", "mlp") != "mlp":
             raise ValueError("AnimalWorldModel: the start activation is an input of the MLP backbone only")
         object.__setattr__(self, "n_act", int(n_act))
+        object.__setattr__(self, "_sizing", True)  # MjcfWorldModel.__init__ sizes its input with the controls alone
         super().__init__(lay, **kw)
+        object.__setattr__(self, "_sizing", False)
 
     def inputs(self, qpos: torch.Tensor, qvel: torch.Tensor, ctrl: torch.Tensor) -> torch.Tensor:
         if not self.n_act:
             return super().inputs(qpos, qvel, ctrl)
         nu = self.lay.nu
-        if ctrl.shape[-1] == nu:  # MjcfWorldModel's own call for the input width: no start activation
+        if self._sizing:  # the input width: the start activations' columns beside the controls (their values are not read)
             ctrl = torch.cat((ctrl, ctrl.new_zeros(ctrl.shape[:-1] + (self.n_act,))), -1)
+        if ctrl.shape[-1] != nu + self.n_act:
+            raise ValueError(f"AnimalWorldModel: the control input holds the {nu} controls and the {self.n_act} start activations, got "
+                             f"{ctrl.shape[-1]} columns")  # fmt: skip
         return torch.cat((super().inputs(qpos, qvel, ctrl[..., :nu]), ctrl[..., nu:]), -1)

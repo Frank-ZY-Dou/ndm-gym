@@ -139,3 +139,22 @@ def test_the_manipulation_configurations_are_their_runs(name):
     if name == "robomimic-supertrack":
         plain = vars(parse("train_robomimic", ["--algo", "supertrack", "--task", "lift"]))
         assert (got["st_imag_noise"], plain["st_imag_noise"]) == (0.0, 0.1)
+
+
+@pytest.mark.parametrize("name", ["stick-supertrack", "stick-supermimic"])
+def test_the_stick_insect_configurations_are_their_runs(name):
+    """Each of the stick insect's configurations parses to the arguments a run of its results recorded (seed 13's,
+    tests/data/configs/<name>.args.json, kept without the configuration's name and the run's directories; the record's other
+    options, those of the development code the runs ran on that this code does not have, were all off): every recorded argument
+    but the seed, none of them unknown to the trainer, and the option added after the runs at its default."""
+    import json
+    import os
+
+    rec = json.load(open(os.path.join(os.path.dirname(__file__), "data", "configs", f"{name}.args.json")))
+    got = vars(parse("train_animal", ["--config", name]))
+    assert got["config"] == name and set(rec) <= set(got)
+    assert {k: v for k, v in got.items() if k in rec and k != "seed"} == {k: v for k, v in rec.items() if k != "seed"}
+    added = set(got) - set(rec) - {"config", "log_dir", "data_dir", "motion_dir"}  # options added after the runs: off here
+    plain = vars(parse("train_animal", ["--animal", "stick", "--clip_ids", "0"]))
+    assert added == {"st_no_imag_r"} and all(got[k] == plain[k] for k in added)
+

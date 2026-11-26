@@ -8,7 +8,8 @@ An ``--out`` ending in ``.webp`` is an animated WebP at ``--quality`` (the READM
 any other is a video through ffmpeg.
 
 ``--world``: which of the rollout's episodes (the clips in order, then their perturbed repeats); ``--speed``: playback speed
-(the fly's clips last 1.2 s: 0.25 shows them at a quarter); ``--first``, ``--seconds``: a window of the episode, in its seconds.
+(the fly's clips last 1.2 s: 0.25 shows them at a quarter); ``--first``, ``--seconds``: a window of the episode, in its seconds;
+``--no_labels``: the frames without the title and the body and time label (the mark stays).
 The episode's frames after it ended are not drawn. A video needs ffmpeg (or the imageio-ffmpeg package's).
 """
 
@@ -47,6 +48,7 @@ def main():
     ap.add_argument("--first", type=float, default=0.0, help="the window's start in the episode's seconds")
     ap.add_argument("--seconds", type=float, default=None, help="the window's length in the episode's seconds (default: to its end)")
     ap.add_argument("--quality", type=int, default=None, help=".webp: the lossy WebP's quality (default 70)")
+    ap.add_argument("--no_labels", action="store_true", help="no title and no body and time label (the teaser's tiles); the mark stays")
     a = ap.parse_args()
     if a.speed <= 0 or a.fps <= 0 or (a.distance is not None and a.distance <= 0):
         ap.error("--speed > 0, --fps > 0, --distance > 0")
@@ -79,7 +81,8 @@ def main():
 
             ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         ff = subprocess.Popen([ffmpeg, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{a.width}x{a.height}",
-                               "-r", str(a.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out], stdin=subprocess.PIPE)  # fmt: skip
+                               "-r", str(a.fps), "-i", "-", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "18", a.out],
+                              stdin=subprocess.PIPE)  # fmt: skip
     step = 1.0 / spec.ctrl_dt * a.speed / a.fps  # control steps per video frame
     look = None
     t = a.first / spec.ctrl_dt
@@ -101,9 +104,10 @@ def main():
         over = Image.new("RGBA", img.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(over)
         m = round(12 * s)
-        if a.title:
+        if a.title and not a.no_labels:
             _pill(draw, (m, m), [(a.title, bold, INK)])
-        _pill(draw, (a.width - m, m), [(f"{animal}   {(frame[k] - start) * spec.ctrl_dt:4.2f} s", small, MUTED)], anchor="ra")
+        if not a.no_labels:
+            _pill(draw, (a.width - m, m), [(f"{animal}   {(frame[k] - start) * spec.ctrl_dt:4.2f} s", small, MUTED)], anchor="ra")
         draw_mark(draw, a.width, a.height, bold)
         out = Image.alpha_composite(img, over).convert("RGB")
         if webp:

@@ -11,8 +11,9 @@ same clip, and imagined rollouts stay on a clip's last frame once they reach it 
 
 Lengths are in the body's units (the fly's centimetres, the others' metres): the kernels' widths are fractions of the body's
 size ``length`` (the median over the reference of the bodies' largest distance from the root), and the terminations are
-MIMIC-MJX's per animal: the root farther than ``term_dist`` from its reference, turned more than ``term_deg`` away, or the
-joints' L2 distance from the reference's above ``term_joint_l2``. The action is one value in [-1, 1] per actuator: an offset
+MIMIC-MJX's per animal: the root farther than ``term_dist`` from its reference (the stick insect's: horizontally, its height
+left out, as vnl-playground's stick environment measures it), turned more than ``term_deg`` away, or the joints' L2 distance
+from the reference's above ``term_joint_l2``. The action is one value in [-1, 1] per actuator: an offset
 about the reference's joint position for a position servo (the fly's), the control over its range for a torque actuator (the
 rat's, through its activation filter; the stick insect's).
 """
@@ -28,8 +29,10 @@ import torch.nn as nn
 from ..core.rotations import mat_to_6d, quat_to_mat, rot_angle_sq, yaw_mat
 from ..worldmodels.mjcf import MjcfLayout, MjcfWorldModel
 
-# MIMIC-MJX's terminations (vnl-playground's imitation environments): root distance (body units), rotation (deg), joint L2 (rad)
-TERMINATION = {"rat": (0.1, 120.0, 4.5), "fly": (0.5, 30.0, 20.0), "stick": (0.05, 120.0, 4.5)}
+# MIMIC-MJX's terminations (vnl-playground's imitation environments at c154805): root distance (body units), rotation (deg), joint
+# L2 (rad), and whether the root's distance is horizontal (the stick insect's tasks/stick/imitation.py, _root_too_far: x and y
+# only; the rat's and the fly's: in 3D)
+TERMINATION = {"rat": (0.1, 120.0, 4.5, False), "fly": (0.5, 30.0, 20.0, False), "stick": (0.05, 120.0, 4.5, True)}
 
 
 class AnimalKinematics(nn.Module):
@@ -107,6 +110,10 @@ class RewardCfg:
     w_end_eff: float = 1.0
     w_action_rate: float = -0.05
     w_ctrl: float = -0.02
+    # train_animal --target_rate_w (0: off): a smoothness cost per step on the change of the policy's part of each actuator's target, each over its
+    # width (a position servo: the joints' kernel width; a torque actuator: half its control range), squared, mean over the actuators; in the
+    # reward with a minus sign in the place of w_action_rate's term (the same for both algorithms), in SuperTrack's loss as it is
+    w_target_rate: float = 0.0
 
     def scaled(self, k: float) -> RewardCfg:
         """The tracking kernels' widths scaled by ``k`` (training's --reward_std_scale)."""
@@ -142,7 +149,7 @@ class AnimalTask:
         self.length = float(reach.median())
         jv = ref.qvel[:, self.jd]
         self.joint_speed = float(jv.pow(2).mean().sqrt())  # the reference's RMS joint speed
-        self.term_dist, self.term_deg, self.term_joint_l2 = TERMINATION[animal]
+        self.term_dist, self.term_deg, self.term_joint_l2, self.term_xy = TERMINATION[animal]
         # the actions: offsets about the reference's joint for position servos (affine bias), the control range otherwise
         servo = model.actuator_biastype == 1
         lo = np.where(model.actuator_ctrllimited > 0, model.actuator_ctrlrange[:, 0], -1.0)
@@ -155,6 +162,9 @@ class AnimalTask:
         self.act_joint_q = torch.tensor(np.where(joint_trn, model.jnt_qposadr[np.where(joint_trn, model.actuator_trnid[:, 0], 0)], 0), device=dev)
         self.u_lo, self.u_hi = torch.tensor(lo, dtype=torch.float32, device=dev), torch.tensor(hi, dtype=torch.float32, device=dev)
         self.action_scale = action_scale
+        # the targets' change per unit of action change, over each actuator's width (w_target_rate): a servo's target moves action_scale rad, its
+        # width the joints' kernel's; a torque actuator's control moves half its range, its width that half
+        self.rate_k = torch.where(self.servo, torch.full((self.nu,), action_scale / cfg.joint_std, device=dev), torch.ones(self.nu, device=dev))
         # the filtered actuators, in their activations' order (MuJoCo's actuator_actadr), with the filters' factors
         filt = [i for i in np.argsort(model.actuator_actadr) if model.actuator_actadr[i] >= 0]
         if [int(model.actuator_actadr[i]) for i in filt] != list(range(self.na)) or (model.actuator_actnum[filt] != 1).any():
@@ -231,8 +241,9 @@ class AnimalTask:
         gp, gR = self.root(gq)
         rows = R.unsqueeze(-3)
         ee = self._local(gR.unsqueeze(-3), ref.bodies[g][..., self.ee, :] - gp.unsqueeze(-2)) / L
-        parts = (self._local(rows, gp - p.unsqueeze(-2)) / L, mat_to_6d(rows.transpose(-1, -2) @ gR), gq[..., self.jq] - qpos[..., self.jq].unsqueeze(-2),
-                 self._local(rows, ref.qvel[g][..., self.rd : self.rd + 3]) / L, ee.flatten(-2))  # fmt: skip
+        parts = (self._local(rows, gp - p.unsqueeze(-2)) / L, mat_to_6d(rows.transpose(-1, -2) @ gR),
+                 gq[..., self.jq] - qpos[..., self.jq].unsqueeze(-2), self._local(rows, ref.qvel[g][..., self.rd : self.rd + 3]) / L,
+                 ee.flatten(-2))  # fmt: skip
         return torch.cat(parts, -1).flatten(-2)
 
     def critic_features(self, S, fk: torch.Tensor, f: torch.Tensor, a_prev: torch.Tensor, goal_frames: int) -> torch.Tensor:
@@ -268,10 +279,17 @@ class AnimalTask:
             + c.w_joint_vel * torch.exp(-e["joint_vel"].pow(2) / (c.joint_vel_std * self.joint_speed) ** 2)
             + c.w_body_pos * torch.exp(-e["body"].pow(2).mean(-1) / (c.body_pos_std * L) ** 2)
             + c.w_end_eff * torch.exp(-e["end_eff"].pow(2).mean(-1) / (c.end_eff_std * L) ** 2)
-            + c.w_action_rate * (a - a_prev).pow(2).mean(-1)
+            # the action's change: the task's own term, or (--target_rate_w) the smoothness cost in its place
+            + (-self.smooth_cost(a, a_prev) if c.w_target_rate else c.w_action_rate * (a - a_prev).pow(2).mean(-1))
             + c.w_ctrl * a.pow(2).mean(-1)
         )
         return r * self.ctrl_dt
+
+    def smooth_cost(self, a: torch.Tensor, a_prev: torch.Tensor) -> torch.Tensor:
+        """The smoothness cost of action ``a`` after ``a_prev`` (per step, before the control step): ``w_target_rate`` times the mean over
+        the actuators of the policy's part of the target's change over its width, squared (a change of the width on every
+        actuator costs the weight)."""
+        return self.cfg.w_target_rate * (self.rate_k * (a - a_prev)).pow(2).mean(-1)
 
     def _fail_margins(self, S, f: torch.Tensor) -> tuple[torch.Tensor, ...]:
         qpos = S[0]
@@ -279,7 +297,8 @@ class AnimalTask:
         rp, rR = self.root(self.ref.qpos[f])
         dq = qpos[..., self.jq] - self.ref.qpos[f][..., self.jq]
         deg = torch.rad2deg(rot_angle_sq(R, rR).sqrt())
-        return (torch.linalg.vector_norm(p - rp, dim=-1) - self.term_dist, deg - self.term_deg,
+        off = (p - rp)[..., :2] if self.term_xy else p - rp  # the root's offset: horizontal for the stick insect
+        return (torch.linalg.vector_norm(off, dim=-1) - self.term_dist, deg - self.term_deg,
                 torch.linalg.vector_norm(dq, dim=-1) - self.term_joint_l2)  # fmt: skip
 
     def termination(self, S, f: torch.Tensor) -> torch.Tensor:

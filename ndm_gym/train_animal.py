@@ -11,13 +11,15 @@ An iteration is one control step of every world, ``--wm_batches`` world-model st
 ``ckpt_<iteration>.pt`` at every ``--ckpt_every``). ``--resume`` continues from a run's ``last.pt``; the replay is not saved.
 ``ANIMAL_PROFILE=1`` prints each part's time with every log row.
 
-Run: ``python -m ndm_gym.train_animal --animal rat --clips 0-99 --log_dir logs/<run>``
+Run: ``python -m ndm_gym.train_animal --config rat-supertrack --log_dir logs/<run>`` (``--config list``: the named configurations), or
+``python -m ndm_gym.train_animal --animal rat --clip_ids 0-9 --log_dir logs/<run>`` with the trainer's defaults
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -29,10 +31,11 @@ LOG_COLUMNS = ("iteration", "wall_h", "sim_steps", "wm_loss", "pi_loss", "v_loss
                "ep_len", "term_frac", "it_per_s", "lr")  # fmt: skip
 # ndm_gym.train's defaults that this training replaces (hand-object tracking's)
 ANIMAL_DEFAULTS = {"algo": "supermimic", "num_envs": 2048, "iterations": 6000, "lr_decay_iters": 6000, "buffer_steps": 256, "warmup_steps": 32,
-                   "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4, "amp": "none"}  # fmt: skip
+                   "wm_only_iters": 300, "horizon": 16, "goal_frames": 5, "wm_hidden": [1024, 1024, 1024], "wm_batches": 4,
+                   "amp": "none"}  # fmt: skip
 # ndm_gym.train's arguments that this training does not implement; each is refused unless at its default
-UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance_w", "imag_start_perturb", "bptt_clip_k",
-               "pi_rollout_clip", "wm_bptt_fp32", "imag_fail_starts", "imag_fail_window", "sm_residual", "st_com", "st_quad_w",
+UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance_w", "imag_start_perturb",
+               "wm_bptt_fp32", "imag_fail_starts", "imag_fail_window", "sm_residual", "st_com", "st_quad_w",
                "st_late_w", "st_fail_margin", "utd", "hist", "wm_input_noise", "wm_smooth_w", "wm_smooth_eps", "wm_smooth_dirs",
                "wm_backbone", "rf_dim", "rf_layers", "rf_heads", "rf_registers", "rf_no_tree_bias", "rf_no_rope", "rf_rope_detach",
                "rf_fused_rope", "rf_anchors", "rf_anchor_mode", "rf_rope_center", "rf_merge", "wm_sample", "wm_prio_alpha",
@@ -41,12 +44,14 @@ UNSUPPORTED = ("st_no_root_terms", "st_no_task_regs", "st_substeps", "st_balance
 # hand training's systems options (algos.hand_fast) that this training does not implement; each is refused unless at its
 # default: train_hand's own (the kernels' options, its phase times), HandSuperMimic's, and hand_fast.Collector's
 # --compile_collect (AnimalCollector compiles the forward kinematics only: --compile_eager)
-UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "elementwise_3x3",
-                       "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
+UNSUPPORTED_SYSTEMS = ("compile_updates", "compile_rollout", "compile_collect", "wm_palm_fk", "sm_reuse_input", "st_no_imag_r",
+                       "elementwise_3x3", "combo_kernels", "mix_order_reductions", "autotune_gemm", "phase_times")  # fmt: skip
+# the reference's velocities (--ref_qvel): the dataset's stored ones, or its positions' own (motion.sources.mimic_mjx)
+REF_QVEL = ("stored", "positions")
+# the options a resumed run must share with its checkpoint, with their value in a checkpoint of before each option
+RESUME_DEFAULTS = (("ref_qvel", "stored"), ("wm_pos_lead", None), ("target_rate_w", 0.0))
 # the options a resumed run must share with its checkpoint
-RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema", "ref_qvel")
-# what a checkpoint written before an option existed ran with
-RESUME_ABSENT = {"ref_qvel": "stored"}
+RESUME_MATCH = ("algo", "animal", "st_task_weights", "fused_adam", "update_graphs", "pi_opt", "wm_opt", "pi_ema")
 
 
 def parse_clips(tokens: list[str]) -> list[int]:
@@ -70,7 +75,7 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--goal_stride", type=int, default=1, help="the goal's frames are 1, 1 + stride, 1 + 2 stride, ... control steps ahead")
     parser.add_argument("--episode", type=int, default=1000, help="an episode's longest length in control steps")
     parser.add_argument("--action_scale", type=float, default=0.5, help="a position servo's offset from the reference's joint at action 1 (rad)")
-    parser.add_argument("--ref_qvel", type=str, default="stored", choices=["stored", "positions"],
+    parser.add_argument("--ref_qvel", type=str, default="stored", choices=REF_QVEL,
                         help="the reference's velocities (the episodes' starts, the goal, the joint-velocity reward and its scale): the "
                         "reference file's qvel, or the velocities of its positions at the control rate. At the pinned revision the file's "
                         "are not those of its positions (the root's linear velocity 10 or 0.1 times, joint speeds clipped at 20 rad/s)")  # fmt: skip
@@ -80,6 +85,22 @@ def parse_args(argv: list[str] | None = None):
     parser.add_argument("--st_task_weights", action="store_true",
                         help="supertrack: no calibration; each tracked quantity weighs, per unit of error, the task's reward weight over its "
                         "kernel's width")  # fmt: skip
+    parser.add_argument("--st_rate_w", type=float, default=0.0,
+                        help="supertrack: this times the imagined window's mean squared change of the action from step to step, added to "
+                        "the loss (0: off). The loss has no cost on the action's change (--st_reg is on its magnitude); the task's reward, "
+                        "which SuperMimic's return holds, costs it 0.05 against 1 per tracking term, and with --st_task_weights the loss "
+                        "is in the reward's units")  # fmt: skip
+    parser.add_argument("--target_rate_w", type=float, default=0.0,
+                        help="both algorithms: a smoothness cost per step of this weight times the mean over the actuators of the change of the "
+                        "policy's part of the target over its width (a position servo: the joints' kernel width; a torque actuator: half its "
+                        "control range), squared, in SuperMimic's reward and SuperTrack's loss (with --st_task_weights) in the place of the "
+                        "action-rate terms (0: off)")  # fmt: skip
+    parser.add_argument("--wm_pos_lead", type=float, default=None,
+                        help="supertrack: its acceleration world model's position lead L in (0, 1]: the next position is the position "
+                        "advanced by the control step times v + L (v' - v). Default: mean_velocity_lead's value for the body's physics "
+                        "steps a control step (a constant acceleration over them: 0.55 for the fly's ten, 0.6 for the rat's and the stick "
+                        "insect's five); 1 is the velocity at the step's end, one semi-implicit Euler step. SuperMimic's model predicts "
+                        "increments and has none")  # fmt: skip
     parser.add_argument("--ckpt_keep", action="store_true", help="also keep ckpt_<iteration>.pt at every --ckpt_every (the policy and its arguments)")
     for action in parser._actions:
         if action.dest == "algo":
@@ -95,8 +116,9 @@ def parse_args(argv: list[str] | None = None):
     args = parser.parse_args(argv)
     if args.algo not in ("supertrack", "supermimic"):
         parser.error("animal training implements --algo supertrack and --algo supermimic")
-    st_only = {"st_task_weights": False, **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w")}}
-    sm_only = {k: parser.get_default(k) for k in ("bptt_decay", "gamma", "lam", "critic_epochs", "critic_minibatches")}  # its critic and return
+    st_only = {"st_task_weights": False, "wm_pos_lead": None,
+               **{k: parser.get_default(k) for k in ("st_reg", "st_imag_noise", "st_fail_w", "st_rate_w")}}  # fmt: skip
+    sm_only = {k: parser.get_default(k) for k in ("gamma", "lam", "critic_epochs", "critic_minibatches")}  # its critic and return
     if args.algo == "supermimic":
         for name, default in st_only.items():
             if getattr(args, name) != default:
@@ -113,6 +135,16 @@ def parse_args(argv: list[str] | None = None):
             parser.error(f"--{name} is an option of hand training (ndm_gym.train_hand) that animal training does not implement")
     if args.goal_stride < 1 or args.episode < 2 or args.action_scale <= 0:
         parser.error("--goal_stride >= 1, --episode >= 2, --action_scale > 0")
+    if not 0 < args.bptt_decay <= 1 or args.bptt_clip_k < 0 or args.pi_rollout_clip < 0 or args.st_rate_w < 0:  # the policy's BPTT, both algorithms
+        parser.error("--bptt_decay in (0, 1]; --bptt_clip_k, --pi_rollout_clip and --st_rate_w >= 0 (0: off)")
+    if not (math.isfinite(args.target_rate_w) and args.target_rate_w >= 0):
+        parser.error("--target_rate_w: a finite number >= 0 (0: off)")
+    if args.target_rate_w and args.st_rate_w:
+        parser.error("--target_rate_w stands in the place of the action-rate terms: not with --st_rate_w")
+    if args.target_rate_w and args.algo == "supertrack" and not args.st_task_weights:
+        parser.error("--target_rate_w enters SuperTrack's loss at the scale of its task-weighted terms: give --st_task_weights too")
+    if args.wm_pos_lead is not None and not 0 < args.wm_pos_lead <= 1:
+        parser.error("--wm_pos_lead in (0, 1] (default: the constant acceleration's value)")
     try:
         check_hand_fast_args(args)
     except ValueError as e:
@@ -121,9 +153,10 @@ def parse_args(argv: list[str] | None = None):
 
 
 def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_std_scale: float = 1.0, action_scale: float = 0.5,
-          goal_stride: int = 1, fused_fk: bool = False, ref_qvel: str = "stored"):  # fmt: skip
+          goal_stride: int = 1, fused_fk: bool = False, ref_qvel: str = "stored", target_rate_w: float = 0.0):  # fmt: skip
     """The body's MjModel, the world model's layout and its position lead, and the task of the clips. ``ref_qvel``: the
-    reference's velocities are the file's ("stored") or those of its positions at the control rate ("positions")."""
+    reference's velocities are the file's ("stored") or those of its positions at the control rate ("positions");
+    ``target_rate_w``: the weight of the smoothness cost on the targets' change (0: off)."""
     import dataclasses
 
     import torch
@@ -133,6 +166,8 @@ def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_s
     from ndm_gym.tasks.animal_tracking import AnimalKinematics, AnimalTask, RewardCfg, build_reference
     from ndm_gym.worldmodels.mjcf import MjcfLayout, mean_velocity_lead
 
+    if ref_qvel not in REF_QVEL:
+        raise ValueError(f"--ref_qvel is one of {REF_QVEL}, got {ref_qvel!r}")
     spec = ANIMALS[animal]
     model = build_model(animal, data_dir)
     substeps = round(spec.ctrl_dt / model.opt.timestep)
@@ -146,15 +181,35 @@ def build(animal: str, clip_ids: list[int], data_dir: str, device: str, reward_s
     kin.fused = fused_fk  # --fused_fk
     data = load_clips(data_dir, animal, clip_ids)
     quat = [lay.anchor[0] + 3]
-    clips = [resample(torch.from_numpy(q), torch.from_numpy(v), spec.mocap_hz, spec.ctrl_dt, quat) for q, v in zip(data["qpos"], data["qvel"], strict=True)]
-    if ref_qvel == "positions":  # --ref_qvel
+    clips = [resample(torch.from_numpy(q), torch.from_numpy(v), spec.mocap_hz, spec.ctrl_dt, quat)
+             for q, v in zip(data["qpos"], data["qvel"], strict=True)]
+    if ref_qvel == "positions":  # --ref_qvel positions: the velocities of the resampled positions themselves
         clips = [(q, velocities_from_positions(model, q, spec.ctrl_dt)) for q, _ in clips]
-    elif ref_qvel != "stored":
-        raise ValueError(f"ref_qvel is 'stored' or 'positions', not {ref_qvel!r}")
     ref = build_reference(clips, kin, device)
     r, rbar = activation_filter(model, substeps)
-    task = AnimalTask(animal, model, kin, ref, ee, spec.ctrl_dt, r, rbar, RewardCfg().scaled(reward_std_scale), action_scale, goal_stride)
+    cfg = RewardCfg().scaled(reward_std_scale)
+    if target_rate_w:  # --target_rate_w: the smoothness cost's weight
+        cfg = dataclasses.replace(cfg, w_target_rate=float(target_rate_w))
+    task = AnimalTask(animal, model, kin, ref, ee, spec.ctrl_dt, r, rbar, cfg, action_scale, goal_stride)
     return model, wm_lay, mean_velocity_lead(model, substeps), task
+
+
+def resume_mismatch(saved: dict, args) -> str | None:
+    """The first option a resumed run does not share with its checkpoint's run (``saved``: its args), or None."""
+    for k in RESUME_MATCH:
+        if saved[k] != getattr(args, k):
+            return f"--resume: --{k} must match the checkpoint's run ({saved[k]!r})"
+    for k, before in RESUME_DEFAULTS:  # the task's options too (a checkpoint of before an option: that option's default)
+        if saved.get(k, before) != getattr(args, k):
+            return f"--resume: --{k} must match the checkpoint's run ({saved.get(k, before)!r})"
+    return None
+
+
+def world_model_lead(args, derived: float) -> float:
+    """The acceleration world model's position lead of a run: its --wm_pos_lead, else ``derived`` (``build``'s, the constant
+    acceleration's value for the body's physics steps). A run of before the option (no such argument): ``derived``."""
+    lead = getattr(args, "wm_pos_lead", None)
+    return derived if lead is None else float(lead)
 
 
 def main():
@@ -181,11 +236,8 @@ def main():
     os.makedirs(args.log_dir, exist_ok=True)
     log_path, header = os.path.join(args.log_dir, "train_log.csv"), ",".join(LOG_COLUMNS)
     resume_ck = torch.load(args.resume, map_location=dev, weights_only=False) if args.resume else None
-    if resume_ck is not None:
-        for k in RESUME_MATCH:
-            ran = resume_ck["args"][k] if k in resume_ck["args"] else RESUME_ABSENT[k]
-            if ran != getattr(args, k):
-                raise ValueError(f"--resume: --{k} must match the checkpoint's run ({ran!r})")
+    if resume_ck is not None and (why := resume_mismatch(resume_ck["args"], args)) is not None:
+        raise ValueError(why)
     if os.path.exists(log_path):
         if resume_ck is None:
             raise ValueError(f"{log_path} exists: continue that run with --resume (its last.pt) or use another --log_dir")
@@ -197,10 +249,11 @@ def main():
 
     spec = ANIMALS[args.animal]
     model, wm_lay, pos_lead, task = build(args.animal, parse_clips(args.clip_ids), args.data_dir, dev, args.reward_std_scale, args.action_scale,
-                                          args.goal_stride, args.fused_fk, args.ref_qvel)  # fmt: skip
+                                          args.goal_stride, args.fused_fk, args.ref_qvel, args.target_rate_w)  # fmt: skip
     print(f"{args.animal}: {task.ref.frames} reference frames, {task.nq} qpos, {task.nu} actuators, {task.na} activations, size {task.length:.4g}, "
           f"obs {task.obs_dim}, goal {task.goal_frame_dim} x {args.goal_frames}", flush=True)  # fmt: skip
     sim = AnimalSim(model, task, args.num_envs, dev, spec.ctrl_dt, episode=args.episode, stagger=True, nconmax=spec.nconmax, njmax=spec.njmax)
+    pos_lead = world_model_lead(args, pos_lead)  # --wm_pos_lead (SuperTrack's acceleration model; the increments have none)
     algo = ANIMAL_ALGOS[args.algo](args, task, wm_lay, dev, pos_lead)
     average = hand_fast.PolicyAverage(algo.pi, args.pi_ema) if args.pi_ema > 0 else None  # --pi_ema
     pi_lr = PolicyLR(args)  # --pi_lr_mult
@@ -248,8 +301,10 @@ def main():
         last = os.path.join(args.log_dir, "last.pt")
         torch.save(ck, last + ".tmp")
         os.replace(last + ".tmp", last)
-        if keep:  # what evaluate_animal reads of a checkpoint
-            torch.save({k: ck[k] for k in ("pi", "wm", "iteration", "wall_time", "args")}, os.path.join(args.log_dir, f"ckpt_{iteration:06d}.pt"))
+        if keep:  # what evaluate_animal reads of a checkpoint, under its name once complete (a watcher reads it as it appears)
+            kept = os.path.join(args.log_dir, f"ckpt_{iteration:06d}.pt")
+            torch.save({k: ck[k] for k in ("pi", "wm", "iteration", "wall_time", "args")}, kept + ".tmp")
+            os.replace(kept + ".tmp", kept)
 
     for _ in range(args.warmup_steps):
         collect()
