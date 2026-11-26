@@ -18,6 +18,7 @@ this repository yet.
 | RigidFormer | [paper](https://arxiv.org/abs/2605.09196) | world-model backbone |
 | DiffMimic | [paper](https://arxiv.org/abs/2304.03274) | its demonstration replay as an option (`--st_ref_replay`) |
 | NeRD | [NVlabs/neural-robot-dynamics](https://github.com/NVlabs/neural-robot-dynamics) | NeRD-style world model *(ongoing)* |
+| MIMIC-MJX | [paper](https://arxiv.org/abs/2511.20532), [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) | its rat, fruit fly and stick insect, their edits and terminations |
 | HDMI | [LeCAR-Lab/HDMI](https://github.com/LeCAR-Lab/HDMI) | its 13 human-object interaction tasks |
 | MuscleVAE | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | its muscle-actuated character |
 | SPIDER | [facebookresearch/spider](https://github.com/facebookresearch/spider) | hand-object clips and scenes |
@@ -89,6 +90,8 @@ this repository yet.
 | Sharpa hand | dexterous hand | [openrobokit/robokit](https://github.com/openrobokit/robokit) | RoboKit's pen *(ongoing)* |
 | Adroit hand | dexterous hand, 24-30 actuators by task | [Farama-Foundation/Gymnasium-Robotics](https://github.com/Farama-Foundation/Gymnasium-Robotics) | door opening ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/3)); pen turning, hammering and ball relocation ([contributed](https://github.com/Frank-ZY-Dou/ndm-gym/pull/11)); from DAPG demonstrations |
 | Franka Emika Panda | 7-DoF arm with a parallel gripper | [ARISE-Initiative/robosuite](https://github.com/ARISE-Initiative/robosuite) 1.5.0, in robomimic's scenes | manipulation demonstration tracking, one arm or two |
+| MIMIC-MJX's rat, stick insect | anatomically detailed animal bodies (67 and 41 joints, torque actuators) | [talmolab/vnl-playground](https://github.com/talmolab/vnl-playground) | animal motion tracking |
+| flybody's fruit fly | insect body, 36 leg servos | [TuragaLab/flybody](https://github.com/TuragaLab/flybody), through vnl-playground | animal motion tracking |
 | Race Against the Machine's racer | 5-inch racing quadrotor | written here from the paper's specification (`ndm_gym/robots/quadrotor.py`) | trajectory tracking |
 | MuscleVAE's character | muscle-actuated humanoid | [wangchek/MuscleVAE_](https://github.com/wangchek/MuscleVAE_) | tracking with muscles |
 | Cart-pole, pusher | PETS' MuJoCo models | [facebookresearch/mbrl-lib](https://github.com/facebookresearch/mbrl-lib) | mbrl-lib's planner on world models |

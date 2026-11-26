@@ -1,0 +1,118 @@
+{
+  "minutes_to_target": 7.743833255767822,
+  "iteration_to_target": 1000,
+  "checkpoints": [
+    {
+      "iteration": 250,
+      "minutes": 1.7103542606035869,
+      "ended_share": 1.0,
+      "body_mm": 8.027623176574707,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 6.951600972811381,
+      "ended_share": 0.6200000047683716,
+      "body_mm": 4.734909534454346,
+      "target": false
+    },
+    {
+      "iteration": 750,
+      "minutes": 7.348293713728586,
+      "ended_share": 0.0,
+      "body_mm": 0.8646429181098938,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 7.743833255767822,
+      "ended_share": 0.0,
+      "body_mm": 0.4952135980129242,
+      "target": true
+    },
+    {
+      "iteration": 1250,
+      "minutes": 8.139310145378113,
+      "ended_share": 0.0,
+      "body_mm": 0.3977196514606476,
+      "target": true
+    },
+    {
+      "iteration": 1500,
+      "minutes": 8.535229587554932,
+      "ended_share": 0.0,
+      "body_mm": 0.36618712544441223,
+      "target": true
+    },
+    {
+      "iteration": 1750,
+      "minutes": 8.930888505776723,
+      "ended_share": 0.0,
+      "body_mm": 0.35003066062927246,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 9.326638281345367,
+      "ended_share": 0.0,
+      "body_mm": 0.3478793203830719,
+      "target": true
+    },
+    {
+      "iteration": 2250,
+      "minutes": 9.723192111651104,
+      "ended_share": 0.0,
+      "body_mm": 0.33945590257644653,
+      "target": true
+    },
+    {
+      "iteration": 2500,
+      "minutes": 10.119465970993042,
+      "ended_share": 0.0,
+      "body_mm": 0.34113362431526184,
+      "target": true
+    },
+    {
+      "iteration": 2750,
+      "minutes": 10.51551992893219,
+      "ended_share": 0.0,
+      "body_mm": 0.34470975399017334,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 10.911476004123688,
+      "ended_share": 0.0,
+      "body_mm": 0.3449214696884155,
+      "target": true
+    },
+    {
+      "iteration": 3250,
+      "minutes": 11.307576545079549,
+      "ended_share": 0.0,
+      "body_mm": 0.3413773775100708,
+      "target": true
+    },
+    {
+      "iteration": 3500,
+      "minutes": 11.703535465399424,
+      "ended_share": 0.0,
+      "body_mm": 0.3379194140434265,
+      "target": true
+    },
+    {
+      "iteration": 3750,
+      "minutes": 12.099413454532623,
+      "ended_share": 0.0,
+      "body_mm": 0.33787718415260315,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 12.49538562297821,
+      "ended_share": 0.0,
+      "body_mm": 0.3400706946849823,
+      "target": true
+    }
+  ]
+}

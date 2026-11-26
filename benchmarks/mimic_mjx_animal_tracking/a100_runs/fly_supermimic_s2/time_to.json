@@ -1,0 +1,174 @@
+{
+  "minutes_to_target": 2.8804462989171347,
+  "iteration_to_target": 1250,
+  "checkpoints": [
+    {
+      "iteration": 250,
+      "minutes": 0.413820481300354,
+      "ended_share": 0.8999999761581421,
+      "body_mm": 1.4535694122314453,
+      "target": false
+    },
+    {
+      "iteration": 500,
+      "minutes": 1.2885347286860147,
+      "ended_share": 0.5999999642372131,
+      "body_mm": 1.9944167137145996,
+      "target": false
+    },
+    {
+      "iteration": 750,
+      "minutes": 1.819211224714915,
+      "ended_share": 0.0,
+      "body_mm": 0.2361142784357071,
+      "target": false
+    },
+    {
+      "iteration": 1000,
+      "minutes": 2.350004227956136,
+      "ended_share": 0.0,
+      "body_mm": 0.0857175812125206,
+      "target": false
+    },
+    {
+      "iteration": 1250,
+      "minutes": 2.8804462989171347,
+      "ended_share": 0.0,
+      "body_mm": 0.06872371584177017,
+      "target": true
+    },
+    {
+      "iteration": 1500,
+      "minutes": 3.4107778708140057,
+      "ended_share": 0.0,
+      "body_mm": 0.06627045571804047,
+      "target": true
+    },
+    {
+      "iteration": 1750,
+      "minutes": 3.941162594159444,
+      "ended_share": 0.0,
+      "body_mm": 0.06558737903833389,
+      "target": true
+    },
+    {
+      "iteration": 2000,
+      "minutes": 4.471458446979523,
+      "ended_share": 0.0,
+      "body_mm": 0.06391570717096329,
+      "target": true
+    },
+    {
+      "iteration": 2250,
+      "minutes": 5.002065587043762,
+      "ended_share": 0.0,
+      "body_mm": 0.05897435545921326,
+      "target": true
+    },
+    {
+      "iteration": 2500,
+      "minutes": 5.533632671833038,
+      "ended_share": 0.0,
+      "body_mm": 0.054965078830718994,
+      "target": true
+    },
+    {
+      "iteration": 2750,
+      "minutes": 6.064273869991302,
+      "ended_share": 0.0,
+      "body_mm": 0.05357012152671814,
+      "target": true
+    },
+    {
+      "iteration": 3000,
+      "minutes": 6.597791230678558,
+      "ended_share": 0.0,
+      "body_mm": 0.0527055598795414,
+      "target": true
+    },
+    {
+      "iteration": 3250,
+      "minutes": 7.128225255012512,
+      "ended_share": 0.0,
+      "body_mm": 0.05360297113656998,
+      "target": true
+    },
+    {
+      "iteration": 3500,
+      "minutes": 7.658956933021545,
+      "ended_share": 0.0,
+      "body_mm": 0.051118314266204834,
+      "target": true
+    },
+    {
+      "iteration": 3750,
+      "minutes": 8.189455286661785,
+      "ended_share": 0.0,
+      "body_mm": 0.05077223852276802,
+      "target": true
+    },
+    {
+      "iteration": 4000,
+      "minutes": 8.720360481739045,
+      "ended_share": 0.0,
+      "body_mm": 0.049982950091362,
+      "target": true
+    },
+    {
+      "iteration": 4250,
+      "minutes": 9.25089791615804,
+      "ended_share": 0.0,
+      "body_mm": 0.049608830362558365,
+      "target": true
+    },
+    {
+      "iteration": 4500,
+      "minutes": 9.781485378742218,
+      "ended_share": 0.0,
+      "body_mm": 0.049052417278289795,
+      "target": true
+    },
+    {
+      "iteration": 4750,
+      "minutes": 10.313154458999634,
+      "ended_share": 0.0,
+      "body_mm": 0.04870254173874855,
+      "target": true
+    },
+    {
+      "iteration": 5000,
+      "minutes": 10.849367149670918,
+      "ended_share": 0.0,
+      "body_mm": 0.048570651561021805,
+      "target": true
+    },
+    {
+      "iteration": 5250,
+      "minutes": 11.385309906800588,
+      "ended_share": 0.0,
+      "body_mm": 0.04825405403971672,
+      "target": true
+    },
+    {
+      "iteration": 5500,
+      "minutes": 11.91705557902654,
+      "ended_share": 0.0,
+      "body_mm": 0.04791067913174629,
+      "target": true
+    },
+    {
+      "iteration": 5750,
+      "minutes": 12.44776473045349,
+      "ended_share": 0.0,
+      "body_mm": 0.047898922115564346,
+      "target": true
+    },
+    {
+      "iteration": 6000,
+      "minutes": 12.978497298558553,
+      "ended_share": 0.0,
+      "body_mm": 0.04783918708562851,
+      "target": true
+    }
+  ]
+}

@@ -44,6 +44,11 @@ The README's grids, from the repository's root:
       $(for r in st sm; do for t in lift square transport; do echo --clip $M/robomimic/${t}_$r.webp; done; done)
       (tools/render_robomimic.py's renders of each case's run with the lowest object error among those whose own unperturbed
       rollout passes the success test and the motion check, 640 x 360 at 20 fps, Transport at --speed 4 and --quality 55)
+  python tools/make_grid.py $M/animals/grid.webp --columns 3 --tile 320 180 --quality 50 --hold 0.8 --max_mb 6 \\
+      --col_labels "stick insect" "fruit fly (quarter speed)" rat --row_labels SuperTrack SuperMimic \\
+      $(for r in st sm; do for t in stick fly rat; do echo --clip $M/animals/${t}_$r.webp; done; done)
+      (tools/render_animal.py's renders, 640 x 360 at 20 fps, of each case's run with the lowest bodies' error on clips 0-9;
+      stick insect clip 3 at --distance 2, fruit fly clip 3 at --speed 0.25, rat clip 2)
 The teaser: a block of 2 x 2 cells per task, from renders without labels (tools/render.py --no_labels and the other
 renderers; HDMI's tasks at 1.5 times the speed, the hand-object clips and mbrl-lib's at half speed) in boxes that leave their
 marks out (mbrl-lib's: tools/render_mbrl.py --no_mark); the third and fourth rows in cells as wide as the blocks above. The

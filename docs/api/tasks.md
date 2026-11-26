@@ -22,3 +22,4 @@ HDMI's human-object interaction tasks and MuscleVAE's muscle-actuated tracking.
 ::: ndm_gym.tasks.quadruped_tracking
 
 ::: ndm_gym.tasks.robomimic_tracking
+::: ndm_gym.tasks.animal_tracking

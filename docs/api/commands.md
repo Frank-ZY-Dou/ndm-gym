@@ -62,3 +62,11 @@ definitions import without it.
 ::: ndm_gym.evaluate_robomimic
     options:
       members: [main, rollout]
+
+::: ndm_gym.train_animal
+    options:
+      members: [main, parse_args, build]
+
+::: ndm_gym.evaluate_animal
+    options:
+      members: [main]
