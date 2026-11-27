@@ -1817,6 +1817,29 @@ Each task's results are in its section; these are the factors behind them.
 | ➖ | World model, offline | error-prioritized windows; input noise; 4 integration substeps; GELU / ELU / Mish instead of SiLU | open-loop error -3 to +2% in distribution, -3 to +2% out of it |
 <!-- ablations:end -->
 
+## 📉 Drift over long rollouts
+
+A world model run open loop drifts away from the simulator at a rate set by the system: the quadrotor integrates its
+errors, the balancing G1 amplifies them, and the Adroit hand's servos pull its joints back to their targets. Training
+never runs the model that far: each imagined rollout lasts the task's horizon (100, 32 and 16 steps here) from a state
+the simulator recorded, the simulator's actions and starts are perturbed, and the policy is scored closed loop in the
+simulator.
+
+| error after k open-loop steps | imagined horizon | k = 1 | 8 | 32 | 128 |
+|---|---:|---|---|---|---|
+| racing quadrotor: position (mm) | 100 | 0.016 / 0.92 | 0.22 / 2.1 | 1.4 / 3.1 | 13 / 16 |
+| G1 on LAFAN1: tracked bodies (mm) | 32 | 0.53 / 0.33 | 3.1 / 3.4 | 20 / 23 | 91 / 93 % fallen |
+| Adroit door: hand joints (mrad) | 16 | 7.1 / 6.5 | 26 / 28 | 47 / 49 | 60 / 52 |
+
+SuperTrack's / SuperMimic's world model of each task's most accurate configuration, mean of three seeds trained on
+A100s, run in fp32 on a CPU. Fallen: the rollouts that the task's own termination test has ended.
+
+**In short:** the error compounds fastest where the robot itself is unstable, but policies learn only from each
+rollout's first 16 to 100 steps, where it is 8.7 / 10.7 mm, 20 / 23 mm and 29 / 37 mrad. Trained this way, with noisy
+actions and perturbed starts, the policies end up tighter than their models drift: in the simulator they track the
+quadrotor's ellipse to 3.1 / 5.7 mm and the G1's clips to 10.8 / 16.7 mm, and open 99.3 / 99.5 % of the doors
+([the measurements and the training side](benchmarks/ndm_drift/results.md)).
+
 ## 📚 Documentation
 
 The documentation site: [frank-zy-dou.github.io/ndm-gym](https://frank-zy-dou.github.io/ndm-gym/).
