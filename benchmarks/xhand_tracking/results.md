@@ -1,10 +1,13 @@
 # Hand-object tracking: results
 
-Contributed by [Dechen Gao](https://github.com/gaodechen): the task with SuperMimic on it
-([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2)), the Allegro and the Inspire hand ([#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6)).
+Contributed by [Dechen Gao](https://github.com/gaodechen) ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2),
+[#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)): the task
+with SuperMimic on it, three hands (the XHand, the Allegro hand and the Inspire hand) and eight tasks, one of them with
+two hands at once.
 
 SuperTrack and SuperMimic, with MLP world models, track human grasp-and-lift clips with a floating right XHand
-([the task](../../docs/tasks/hand.md)); both also with the Allegro hand and the Inspire hand ([more hands](#more-hands)).
+([the task](../../docs/tasks/hand.md)); both also with the Allegro hand and the Inspire hand ([more hands](#more-hands)), and
+five more tasks, one of them with two hands ([more tasks](#more-tasks)).
 The README's XHand rows train with smooth position targets ([the target-rate penalty](#the-xhand-with-the-target-rate-penalty)).
 
 ## Setup
@@ -27,6 +30,8 @@ The README's XHand rows train with smooth position targets ([the target-rate pen
 | `apple` | HRDexDB `apple-0` | 102 | 26.2 cm |
 | `oakink_a01002` | OakInk `oakink_0000_right_A01002_00` (a spray bottle) | 86 | 24.3 cm |
 | `can` | DexYCB `dexycb_01_right_002_master_chef_can_20200709_141754_00` | 106 | 32.7 cm |
+| `mustard_bottle` | DexYCB `dexycb_01_right_006_mustard_bottle_20200709_143211_00` | 106 | 24.1 cm |
+| `mug` | DexYCB `dexycb_01_right_025_mug_20200709_150949_00` | 106 | 30.9 cm |
 
 ```bash
 python tools/download_hand_clips.py                    # the clips of tasks.json into data/spider
@@ -491,6 +496,149 @@ synchronized at each boundary, so their sum is not the running iteration:
 
 With three GPUs the steps run at once, so an iteration takes about as long as the slowest: 25.3 ms for SuperTrack (its
 two updates, 24.9 and 24.6 ms) and 33.8 ms for SuperMimic (its policy update with the critic's, 33.3 ms).
+
+## More tasks
+
+Five more demonstrations with the code above: the mustard bottle and the mug of DexYCB on the three hands, two of OakInk2
+on the XHand, the hand SPIDER's example dataset retargets them to (stir beaker and pour tube: one hand moves one object,
+in a stir and in OakInk2's `hold` of a tube), and GigaHands' making tea, a right and a left hand handling one teapot with one
+state, one policy and one world model ([the task](../../docs/tasks/hand.md#hands)).
+
+| task | task list | clip | frames (50 Hz) | hands |
+|---|---|---|---|---|
+| `mustard_bottle`, `mug` | `tasks.json` | DexYCB, as [above](#setup) | 106 | right |
+| `stir_beaker`, `pour_tube` | `tool_tasks.json` | OakInk2 `stir_beaker`, `pour_tube` (SPIDER's names; the latter OakInk2's `hold`) | 221 | right |
+| `tea` | `two_hand_tasks.json` | GigaHands `p36-tea`: the teapot lifted 15.2 cm, tilted and set down | 338 | right and left |
+
+**In short:** both algorithms start from each hand's configuration of record above, with the target-rate penalty
+(`--target_rate_w 4`, SuperTrack's cost as the mean over its window, `--st_cost_mean`) on every hand, and get the same four
+single changes where either one's tuning seed was below a success of 0.99. On the reported seeds every seed is at 0.99 or
+more on 7 of SuperTrack's 11 pairs and on 8 of SuperMimic's. The motion check passes on 6 of SuperTrack's and 7 of
+SuperMimic's: all on the XHand but stir beaker (both) and SuperTrack's pour tube, the Allegro's mustard bottle and tea
+and the Inspire's tea (both); only those runs are shown.
+
+| | SuperTrack | SuperMimic |
+|---|---|---|
+| pairs with every reported seed at a success of 0.99 or more | 7 of 11 | 8 of 11 |
+| pairs whose shown run (seed 0) passes the motion check | 6 of 11 | 7 of 11 |
+
+- **Configurations:** each hand's of record, SuperTrack's: XHand `--target_rate_w 4 --st_cost_mean`, Allegro
+  `--st_fail_w 5`, Inspire `--st_imag_noise 0.1`; SuperMimic's: XHand `--action_noise 0.2 --target_rate_w 4`, Allegro
+  `--action_noise 0.2`, Inspire none; making tea `--iterations 12000`. The Allegro's and the Inspire's reported runs add
+  `--target_rate_w 4` (SuperTrack also `--st_cost_mean`), as the XHand's have it ([below](#the-target-rate-penalty-on-the-allegro-and-the-inspire-hand)).
+  [`settings.json`](settings.json) holds each pair's arguments for `run.sh` with `ALGO`.
+- **Tuning:** on pairs where either algorithm's configuration had a tuning seed below a success of 0.99, both got the
+  same single changes (`--lr 2e-4`, `--action_noise 0.5`, `--reward_std_scale 2`, `--reward_std_scale 3`), on training
+  seeds 3-5 and evaluation seed 1, which the reported runs do not use; each pair keeps the one with the highest mean
+  success, then the lowest mean object error ([the tuning](#tuning)).
+- **Training:** 2,048 worlds, training seeds 0-2, 6,000 iterations, 12,000 on making tea, on L40S GPUs, four runs to a
+  GPU, so no times are given.
+- **Evaluation:** the last checkpoint, 256 rollouts of the whole clip from perturbed starts, evaluation seed 0, as
+  [above](#setup); with two hands a rollout also terminates when either palm is 15 cm from its reference. Every seed is
+  listed (0 / 1 / 2).
+- **Motion check:** `tools/hand_motion_check.py` on seed 0's unperturbed rollout against the kinematic reference: the finger
+  joints' jerk at most 1.5 times, their share of velocity power above 5 Hz and the position targets' change per step at
+  most 2 times the reference's ([the XHand's](#the-xhand-with-the-target-rate-penalty)). A run that fails is reported and not shown.
+
+```bash
+python tools/download_hand_clips.py                                                      # the mustard bottle and the mug
+python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/tool_tasks.json        # the two tool-use tasks
+python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json    # making tea with two hands
+ALGO=supertrack ROBOT=allegro benchmarks/xhand_tracking/run.sh mustard_bottle <seed>
+ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea <seed>
+```
+
+| hand | task | | configuration | success | object position | object position, last frame | fingertips | object lift | motion check (seed 0) |
+|---|---|---|---|---|---|---|---|---|---|
+| XHand | `mustard_bottle` | reference targets | | 1 % | 157.6 mm | 308.1 mm | 29.1 mm | -4.3 cm | |
+| | | SuperTrack | `--target_rate_w 4 --st_cost_mean` | 100.0 / 100.0 / 100.0 % | 1.6 / 1.6 / 1.6 mm | 0.4 / 0.4 / 0.4 mm | 7.0 / 7.0 / 7.0 mm | 24.1 / 24.1 / 24.1 cm | passes |
+| | | SuperMimic | `--action_noise 0.2 --target_rate_w 4` | 100.0 / 100.0 / 100.0 % | 2.5 / 2.6 / 2.4 mm | 1.4 / 1.4 / 1.2 mm | 7.4 / 7.0 / 6.8 mm | 24.2 / 24.2 / 24.1 cm | passes |
+|  | `mug` | reference targets | | 0 % | 137.1 mm | 313.0 mm | 30.3 mm | -0.2 cm | |
+| | | SuperTrack | `--target_rate_w 4 --st_cost_mean` | 99.6 / 100.0 / 100.0 % | 1.8 / 1.8 / 1.8 mm | 4.1 / 3.4 / 1.8 mm | 11.1 / 11.2 / 9.0 mm | 31.1 / 31.1 / 30.9 cm | passes |
+| | | SuperMimic | `--action_noise 0.2 --target_rate_w 4` | 100.0 / 100.0 / 100.0 % | 2.6 / 2.4 / 2.9 mm | 1.4 / 1.9 / 2.0 mm | 6.8 / 7.5 / 7.5 mm | 31.1 / 31.1 / 31.0 cm | passes |
+|  | `stir_beaker` | reference targets | | 0 % | 278.9 mm | 455.7 mm | 19.9 mm | -5.2 cm | |
+| | | SuperTrack | `--target_rate_w 4 --st_cost_mean` | 99.2 / 99.2 / 98.8 % | 4.3 / 3.6 / 5.6 mm | 7.3 / 5.9 / 8.9 mm | 5.9 / 5.9 / 6.2 mm | 3.8 / 3.8 / 3.8 cm | fails: target change 4.1x |
+| | | SuperMimic | `--action_noise 0.2 --target_rate_w 4 --lr 2e-4` | 100.0 / 100.0 / 99.6 % | 4.6 / 4.0 / 8.5 mm | 6.2 / 6.8 / 11.1 mm | 7.5 / 7.3 / 11.7 mm | 4.0 / 4.1 / 4.0 cm | fails: target change 3.7x |
+|  | `pour_tube` | reference targets | | 0 % | 113.6 mm | 313.7 mm | 18.0 mm | -0.9 cm | |
+| | | SuperTrack | `--target_rate_w 4 --st_cost_mean` | 100.0 / 100.0 / 100.0 % | 2.0 / 2.1 / 2.2 mm | 1.2 / 1.6 / 1.4 mm | 5.9 / 7.0 / 6.9 mm | 3.5 / 3.5 / 3.5 cm | fails: target change 2.4x |
+| | | SuperMimic | `--action_noise 0.2 --target_rate_w 4` | 100.0 / 100.0 / 96.1 % | 3.4 / 3.2 / 7.3 mm | 3.7 / 3.3 / 14.3 mm | 5.8 / 5.7 / 7.3 mm | 3.3 / 3.7 / 3.4 cm | passes |
+|  | `tea` | reference targets | | 58 % | 39.7 mm | 53.5 mm | 42.7 mm | 1.3 cm | |
+| | | SuperTrack | `--target_rate_w 4 --st_cost_mean --reward_std_scale 2 --iterations 12000` | 100.0 / 100.0 / 99.6 % | 2.5 / 2.6 / 2.6 mm | 6.5 / 6.6 / 6.9 mm | 17.0 / 16.8 / 14.4 mm | -0.1 / -0.1 / -0.1 cm | passes |
+| | | SuperMimic | `--target_rate_w 4 --action_noise 0.5 --iterations 12000` | 100.0 / 100.0 / 100.0 % | 5.6 / 5.4 / 5.9 mm | 6.6 / 7.6 / 7.1 mm | 14.0 / 13.3 / 14.9 mm | -0.1 / -0.1 / -0.1 cm | passes |
+| Allegro | `mustard_bottle` | reference targets | | 100 % | 22.9 mm | 22.2 mm | 22.7 mm | 23.0 cm | |
+| | | SuperTrack | `--st_fail_w 5 --target_rate_w 4 --st_cost_mean` | 100.0 / 100.0 / 100.0 % | 1.5 / 1.3 / 1.3 mm | 0.4 / 0.3 / 0.3 mm | 4.9 / 5.8 / 5.8 mm | 24.1 / 24.1 / 24.1 cm | passes |
+| | | SuperMimic | `--action_noise 0.2 --target_rate_w 4` | 100.0 / 100.0 / 100.0 % | 2.2 / 2.1 / 2.0 mm | 0.7 / 0.7 / 0.8 mm | 5.2 / 5.2 / 5.2 mm | 24.1 / 24.1 / 24.1 cm | passes |
+|  | `mug` | reference targets | | 88 % | 50.9 mm | 66.7 mm | 22.5 mm | 24.7 cm | |
+| | | SuperTrack | `--st_fail_w 5 --reward_std_scale 3 --target_rate_w 4 --st_cost_mean` | 99.6 / 99.6 / 99.6 % | 2.2 / 2.3 / 1.9 mm | 1.8 / 1.8 / 2.0 mm | 6.8 / 6.6 / 6.6 mm | 30.9 / 30.9 / 30.9 cm | fails: above 5 Hz 2.3x, target change 3.0x |
+| | | SuperMimic | `--action_noise 0.2 --reward_std_scale 3 --target_rate_w 4` | 99.2 / 99.2 / 99.6 % | 8.1 / 6.7 / 5.1 mm | 7.7 / 7.3 / 5.2 mm | 23.0 / 23.9 / 18.3 mm | 30.9 / 30.3 / 30.8 cm | fails: above 5 Hz 3.9x, target change 2.3x |
+|  | `tea` | reference targets | | 0 % | 150.7 mm | 103.7 mm | 11.6 mm | -0.0 cm | |
+| | | SuperTrack | `--st_fail_w 5 --iterations 12000 --target_rate_w 4 --st_cost_mean` | 99.6 / 0.0 / 100.0 % | 3.5 / 100.9 / 2.5 mm | 7.2 / 161.1 / 6.6 mm | 12.9 / 38.4 / 13.9 mm | -0.1 / -0.4 / -0.1 cm | passes |
+| | | SuperMimic | `--action_noise 0.2 --lr 2e-4 --iterations 12000 --target_rate_w 4` | 100.0 / 0.0 / 100.0 % | 4.5 / 106.6 / 4.7 mm | 6.9 / 163.9 / 6.9 mm | 15.8 / 30.0 / 15.3 mm | -0.1 / -0.2 / -0.1 cm | passes |
+| Inspire | `mustard_bottle` | reference targets | | 0 % | 135.0 mm | 303.5 mm | 17.7 mm | -4.3 cm | |
+| | | SuperTrack | `--st_imag_noise 0.1 --reward_std_scale 3 --target_rate_w 4 --st_cost_mean` | 22.3 / 10.9 / 7.0 % | 39.0 / 33.2 / 29.1 mm | 259.1 / 259.0 / 281.3 mm | 15.6 / 15.6 / 13.3 mm | 3.9 / 1.4 / -1.2 cm | fails: jerk 2.7x, above 5 Hz 5.6x, target change 10.8x |
+| | | SuperMimic | `--reward_std_scale 3 --target_rate_w 4` | 100.0 / 100.0 / 100.0 % | 6.4 / 5.3 / 8.4 mm | 6.0 / 5.1 / 13.2 mm | 14.3 / 16.1 / 14.8 mm | 24.0 / 24.1 / 23.5 cm | fails: above 5 Hz 4.1x, target change 3.4x |
+|  | `mug` | reference targets | | 0 % | 152.4 mm | 313.7 mm | 15.7 mm | -0.2 cm | |
+| | | SuperTrack | `--st_imag_noise 0.1 --target_rate_w 4 --st_cost_mean` | 50.4 / 12.1 / 18.4 % | 24.6 / 61.2 / 76.3 mm | 155.8 / 296.6 / 274.7 mm | 13.5 / 14.0 / 13.8 mm | 17.1 / 5.2 / 7.3 cm | fails: jerk 3.5x, above 5 Hz 5.2x, target change 10.9x |
+| | | SuperMimic | `--reward_std_scale 3 --target_rate_w 4` | 100.0 / 97.3 / 100.0 % | 5.7 / 11.0 / 7.0 mm | 5.1 / 14.2 / 7.0 mm | 13.8 / 12.4 / 16.3 mm | 30.6 / 30.4 / 31.4 cm | fails: jerk 1.9x, above 5 Hz 6.8x, target change 5.5x |
+|  | `tea` | reference targets | | 0 % | 124.3 mm | 73.3 mm | 11.6 mm | -0.0 cm | |
+| | | SuperTrack | `--st_imag_noise 0.1 --iterations 12000 --target_rate_w 4 --st_cost_mean` | 94.5 / 45.3 / 94.9 % | 13.5 / 61.8 / 15.4 mm | 22.8 / 109.5 / 26.0 mm | 10.5 / 19.4 / 9.8 mm | 0.4 / 0.1 / 0.2 cm | passes |
+| | | SuperMimic | `--reward_std_scale 3 --iterations 12000 --target_rate_w 4` | 99.6 / 99.2 / 100.0 % | 6.7 / 9.8 / 5.4 mm | 14.7 / 12.4 / 10.4 mm | 17.7 / 18.9 / 16.3 mm | 0.2 / -0.0 / 0.3 cm | passes |
+
+On making tea the fingertips are both hands' and the teapot is set down where it started, so its lift at the end is about 0.
+
+### Tuning
+
+Success on tuning seeds 3 / 4 / 5 (evaluation seed 1, 256 perturbed starts), each pair's configuration of record above with
+one change; the kept one in bold. Pairs where both configurations had every tuning seed at 0.99 or more got no changes.
+
+| hand, task | algorithm | no change | `--lr 2e-4` | `--action_noise 0.5` | `--reward_std_scale 2` | `--reward_std_scale 3` |
+|---|---|---|---|---|---|---|
+| XHand, mustard bottle | SuperTrack | **100.0 / 100.0 / 100.0 %** |  |  |  |  |
+| XHand, mustard bottle | SuperMimic | **100.0 / 100.0 / 100.0 %** |  |  |  |  |
+| XHand, mug | SuperTrack | **100.0 / 99.2 / 100.0 %** |  |  |  |  |
+| XHand, mug | SuperMimic | **100.0 / 100.0 / 100.0 %** |  |  |  |  |
+| XHand, stir beaker | SuperTrack | **98.8 / 99.6 / 99.6 %** | 98.8 / 98.8 / 98.8 % | 0.0 / 0.0 / 0.0 % | 98.8 / 98.8 / 99.2 % | 99.6 / 98.8 / 99.6 % |
+| XHand, stir beaker | SuperMimic | 100.0 / 100.0 / 99.6 % | **100.0 / 100.0 / 100.0 %** | 100.0 / 100.0 / 100.0 % | 100.0 / 100.0 / 17.2 % | 77.3 / 0.0 / 99.2 % |
+| XHand, pour tube | SuperTrack | **99.6 / 99.6 / 100.0 %** |  |  |  |  |
+| XHand, pour tube | SuperMimic | **100.0 / 99.6 / 100.0 %** |  |  |  |  |
+| XHand, tea | SuperTrack | 100.0 / 100.0 / 98.0 % | 100.0 / 100.0 / 100.0 % | 0.0 / 0.0 / 0.0 % | **100.0 / 100.0 / 100.0 %** | 100.0 / 100.0 / 99.2 % |
+| XHand, tea | SuperMimic | 100.0 / 99.6 / 100.0 % | 100.0 / 89.1 / 100.0 % | **100.0 / 100.0 / 100.0 %** | 100.0 / 100.0 / 100.0 % | 100.0 / 100.0 / 100.0 % |
+| Allegro, mustard bottle | SuperTrack | **100.0 / 100.0 / 100.0 %** |  |  |  |  |
+| Allegro, mustard bottle | SuperMimic | **100.0 / 100.0 / 100.0 %** |  |  |  |  |
+| Allegro, mug | SuperTrack | 99.6 / 99.6 / 99.6 % | 99.6 / 99.6 / 100.0 % | 100.0 / 99.2 / 99.6 % | 98.8 / 99.6 / 100.0 % | **100.0 / 100.0 / 99.6 %** |
+| Allegro, mug | SuperMimic | 95.3 / 99.6 / 99.6 % | 99.6 / 100.0 / 100.0 % | 100.0 / 99.6 / 99.6 % | 100.0 / 100.0 / 100.0 % | **100.0 / 100.0 / 100.0 %** |
+| Allegro, tea | SuperTrack | **77.7 / 82.0 / 11.3 %** | 18.0 / 81.6 / 20.3 % | 0.0 / 1.2 / 0.8 % | 2.3 / 48.0 / 46.1 % | 77.7 / 0.8 / 66.4 % |
+| Allegro, tea | SuperMimic | 0.4 / 77.7 / 84.8 % | **97.3 / 91.4 / 81.2 %** | 25.0 / 0.8 / 27.0 % | 87.1 / 89.1 / 88.3 % | 90.6 / 85.9 / 49.6 % |
+| Inspire, mustard bottle | SuperTrack | 73.8 / 16.0 / 100.0 % | 96.1 / 0.0 / 0.0 % | 4.3 / 5.9 / 1.2 % | 4.3 / 0.0 / 23.0 % | **29.3 / 92.2 / 94.5 %** |
+| Inspire, mustard bottle | SuperMimic | 14.1 / 0.4 / 4.3 % | 71.1 / 2.0 / 53.1 % | 42.6 / 9.0 / 55.9 % | 100.0 / 60.5 / 100.0 % | **99.2 / 96.5 / 98.4 %** |
+| Inspire, mug | SuperTrack | **79.7 / 36.7 / 96.5 %** | 10.2 / 3.5 / 0.0 % | 9.4 / 0.0 / 10.2 % | 0.4 / 74.2 / 82.0 % | 37.9 / 5.9 / 20.7 % |
+| Inspire, mug | SuperMimic | 46.5 / 92.2 / 95.3 % | 87.9 / 65.6 / 69.9 % | 80.9 / 44.5 / 42.6 % | 100.0 / 21.9 / 100.0 % | **98.0 / 100.0 / 100.0 %** |
+| Inspire, tea | SuperTrack | **71.9 / 95.7 / 91.0 %** | 73.0 / 84.4 / 73.0 % | 50.4 / 1.2 / 2.0 % | 2.0 / 96.9 / 98.4 % | 92.6 / 6.2 / 0.4 % |
+| Inspire, tea | SuperMimic | 82.4 / 98.0 / 94.5 % | 99.6 / 76.2 / 81.6 % | 87.9 / 90.6 / 88.3 % | 82.8 / 100.0 / 100.0 % | **98.8 / 100.0 / 93.8 %** |
+
+### The target-rate penalty on the Allegro and the Inspire hand
+
+Without the penalty, the Allegro's and the Inspire's runs (their configurations of record with the kept change) failed the
+motion check on every pair, the position targets' change per step at 4-30 times the reference's. With
+`--target_rate_w 4` (SuperTrack also `--st_cost_mean`), as on the XHand, success over seeds 0 / 1 / 2:
+
+| hand, task | algorithm | without the penalty: success | object position | with `--target_rate_w 4`: success | object position | motion check without / with |
+|---|---|---|---|---|---|---|
+| Allegro, mustard bottle | SuperTrack | 100.0 / 100.0 / 100.0 % | 1.4 / 1.3 / 1.2 mm | 100.0 / 100.0 / 100.0 % | 1.5 / 1.3 / 1.3 mm | fails / passes |
+| Allegro, mustard bottle | SuperMimic | 100.0 / 100.0 / 100.0 % | 2.1 / 2.2 / 2.0 mm | 100.0 / 100.0 / 100.0 % | 2.2 / 2.1 / 2.0 mm | fails / passes |
+| Allegro, mug | SuperTrack | 98.8 / 98.8 / 99.6 % | 3.1 / 2.8 / 2.2 mm | 99.6 / 99.6 / 99.6 % | 2.2 / 2.3 / 1.9 mm | fails / fails |
+| Allegro, mug | SuperMimic | 99.2 / 99.6 / 100.0 % | 6.3 / 10.7 / 4.3 mm | 99.2 / 99.2 / 99.6 % | 8.1 / 6.7 / 5.1 mm | fails / fails |
+| Allegro, tea | SuperTrack | 82.0 / 9.0 / 2.7 % | 27.4 / 95.8 / 106.7 mm | 99.6 / 0.0 / 100.0 % | 3.5 / 100.9 / 2.5 mm | fails / passes |
+| Allegro, tea | SuperMimic | 97.3 / 9.0 / 39.8 % | 10.2 / 115.1 / 65.1 mm | 100.0 / 0.0 / 100.0 % | 4.5 / 106.6 / 4.7 mm | fails / passes |
+| Inspire, mustard bottle | SuperTrack | 36.7 / 2.0 / 64.1 % | 9.6 / 101.1 / 16.7 mm | 22.3 / 10.9 / 7.0 % | 39.0 / 33.2 / 29.1 mm | fails / fails |
+| Inspire, mustard bottle | SuperMimic | 100.0 / 71.5 / 98.4 % | 4.7 / 32.4 / 10.3 mm | 100.0 / 100.0 / 100.0 % | 6.4 / 5.3 / 8.4 mm | fails / fails |
+| Inspire, mug | SuperTrack | 83.6 / 77.7 / 66.4 % | 15.5 / 18.0 / 31.5 mm | 50.4 / 12.1 / 18.4 % | 24.6 / 61.2 / 76.3 mm | fails / fails |
+| Inspire, mug | SuperMimic | 99.6 / 100.0 / 100.0 % | 6.5 / 4.3 / 6.9 mm | 100.0 / 97.3 / 100.0 % | 5.7 / 11.0 / 7.0 mm | fails / fails |
+| Inspire, tea | SuperTrack | 62.1 / 19.1 / 71.9 % | 45.1 / 118.9 / 40.5 mm | 94.5 / 45.3 / 94.9 % | 13.5 / 61.8 / 15.4 mm | fails / passes |
+| Inspire, tea | SuperMimic | 100.0 / 100.0 / 100.0 % | 7.2 / 6.6 / 7.6 mm | 99.6 / 99.2 / 100.0 % | 6.7 / 9.8 / 5.4 mm | fails / passes |
+
+With twice the weight (`--target_rate_w 8`, seed 0) the failing pairs still fail, as do the XHand's stir beaker and
+SuperTrack's pour tube at twice the XHand's weight.
 
 ## Training time
 

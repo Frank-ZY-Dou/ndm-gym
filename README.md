@@ -921,16 +921,30 @@ kinematic retarget of the captured hand and of the object's pose. Contributed by
 [Dechen Gao](https://github.com/gaodechen) ([#2](https://github.com/Frank-ZY-Dou/ndm-gym/pull/2),
 [#6](https://github.com/Frank-ZY-Dou/ndm-gym/pull/6), [#15](https://github.com/Frank-ZY-Dou/ndm-gym/pull/15)): the task with SuperMimic, three hands and eight tasks, one of them with two hands.
 
-Five more tasks, one with two hands at once: the mustard bottle and the mug on the three hands, stir beaker and pour tube
-(OakInk2's `hold` of a tube) on the XHand, making tea with two of each hand ([the task lists](docs/tasks/hand.md)).
-`run.sh` takes an algorithm's arguments for a hand and a task from
-[`settings.json`](benchmarks/xhand_tracking/settings.json) with `ALGO`:
+Five more tasks, one with two hands at once: the mustard bottle and the mug on the three hands, stir beaker and pour tube (OakInk2's `hold` of a tube)
+on the XHand, making tea on the three ([results](benchmarks/xhand_tracking/results.md#more-tasks)).
+
+| | SuperTrack | SuperMimic |
+|---|---|---|
+| pairs with every seed at a success of 0.99 or more | 7 of 11 | 8 of 11 |
+| pairs whose shown run passes the motion check | 6 of 11 | 7 of 11 |
+
+Both algorithms start from each hand's configuration of record with the target-rate penalty and get the same single
+changes, read on seeds other than the reported ones ([how](benchmarks/xhand_tracking/results.md#more-tasks)). Training seeds
+0-2, last checkpoint, 256 perturbed starts, L40S GPUs; only runs that pass the motion check are shown. `run.sh` takes an
+algorithm's arguments for a hand and a task from `settings.json` with `ALGO`:
 
 ```bash
 python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json
-ALGO=supertrack ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0   # <task id> <seed>
+ALGO=supertrack ROBOT=allegro benchmarks/xhand_tracking/run.sh mustard_bottle 0   # <task id> <seed>
 ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
+
+<p align="center"><img src="docs/media/hand/more_tasks.webp" alt="The XHand, the Allegro hand and the Inspire hand on the mustard bottle and the mug with SuperTrack and SuperMimic" width="76%"/>
+<img src="docs/media/hand/tool_use.webp" alt="The XHand stirring a beaker and holding a tube with SuperTrack and SuperMimic" width="76%"/>
+<img src="docs/media/hand/tea.webp" alt="Two XHands, two Allegro hands and two Inspire hands making tea with SuperTrack and SuperMimic" width="76%"/></p>
+<p align="center"><i>The five more tasks with the configurations above (half speed, the reference in blue): seed 0 from the unperturbed start; an empty cell's run fails the motion check.</i></p>
+<p align="center"><sub>Renders of policies tracking SPIDER's retargets of DexYCB, OakInk2 (CC BY-SA 4.0) and GigaHands (CC BY-NC 4.0) demonstrations, with their object meshes and SPIDER's models of the three hands; the OakInk2 renders under CC BY-SA 4.0, the others for non-commercial illustration only; not covered by this repository's MIT license (see <a href="NOTICE">NOTICE</a>).</sub></p>
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|

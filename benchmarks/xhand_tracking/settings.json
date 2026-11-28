@@ -2,25 +2,41 @@
   "supertrack": {
     "default": "--config hand-supertrack-fast",
     "xhand": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--target_rate_w 4 --st_cost_mean",
+      "mug": "--target_rate_w 4 --st_cost_mean",
+      "stir_beaker": "--target_rate_w 4 --st_cost_mean",
+      "pour_tube": "--target_rate_w 4 --st_cost_mean",
+      "tea": "--target_rate_w 4 --st_cost_mean --reward_std_scale 2 --iterations 12000"
     },
     "allegro": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--st_fail_w 5 --target_rate_w 4 --st_cost_mean",
+      "mug": "--st_fail_w 5 --reward_std_scale 3 --target_rate_w 4 --st_cost_mean",
+      "tea": "--st_fail_w 5 --iterations 12000 --target_rate_w 4 --st_cost_mean"
     },
     "inspire": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--st_imag_noise 0.1 --reward_std_scale 3 --target_rate_w 4 --st_cost_mean",
+      "mug": "--st_imag_noise 0.1 --target_rate_w 4 --st_cost_mean",
+      "tea": "--st_imag_noise 0.1 --iterations 12000 --target_rate_w 4 --st_cost_mean"
     }
   },
   "supermimic": {
     "default": "--config hand-supermimic-fast",
     "xhand": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--action_noise 0.2 --target_rate_w 4",
+      "mug": "--action_noise 0.2 --target_rate_w 4",
+      "stir_beaker": "--action_noise 0.2 --target_rate_w 4 --lr 2e-4",
+      "pour_tube": "--action_noise 0.2 --target_rate_w 4",
+      "tea": "--target_rate_w 4 --action_noise 0.5 --iterations 12000"
     },
     "allegro": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--action_noise 0.2 --target_rate_w 4",
+      "mug": "--action_noise 0.2 --reward_std_scale 3 --target_rate_w 4",
+      "tea": "--action_noise 0.2 --lr 2e-4 --iterations 12000 --target_rate_w 4"
     },
     "inspire": {
-      "tea": "--iterations 12000"
+      "mustard_bottle": "--reward_std_scale 3 --target_rate_w 4",
+      "mug": "--reward_std_scale 3 --target_rate_w 4",
+      "tea": "--reward_std_scale 3 --iterations 12000 --target_rate_w 4"
     }
   }
 }

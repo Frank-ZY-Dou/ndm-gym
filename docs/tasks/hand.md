@@ -51,7 +51,7 @@ python tools/download_hand_clips.py --robots allegro inspire      # default: eve
 # each algorithm's time configuration on the Allegro hand
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_st --config hand-supertrack-fast --st_fail_w 5
 ROBOT=allegro benchmarks/xhand_tracking/run.sh apple 0 data/spider logs/allegro_sm --config hand-supermimic-fast
-# two Inspire hands making tea, with SuperMimic's arguments for the task (settings.json)
+# two Inspire hands making tea, with SuperMimic's arguments for that hand and task (settings.json)
 python tools/download_hand_clips.py --tasks benchmarks/xhand_tracking/two_hand_tasks.json --robots inspire
 ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.json benchmarks/xhand_tracking/run.sh tea 0
 ```
@@ -179,7 +179,7 @@ the reference pose as the targets, `--source reference` the reference alone; `to
 reference over the frame as a blue silhouette. The README's animations use `--look noir --brightness 1.6 --orbit 30
 --zoom 0.72 --follow_z --elevation -12 --ghost_overlay` (the Allegro hand's `--zoom 0.9`);
 `benchmarks/xhand_tracking/scripts/hand_grid.py` tiles the 18 renders (three hands, two algorithms, three clips) into
-the README's grid as one synchronized loop, and the single animations are
+the README's grid as one synchronized loop (the more tasks' renders into their grids: its docstring), and the single animations are
 `docs/media/hand/<hand>_<algorithm>_<clip>.webp`. On the dark stage a hand darker than mid grey (the Allegro's, the
 Inspire's) is lifted to graphite.
 
@@ -195,5 +195,22 @@ elsewhere the lowest object error among that algorithm's configurations of recor
 | Allegro, SuperMimic | <img src="../media/hand/allegro_supermimic_apple.webp" alt="Allegro, SuperMimic, apple" width="320"/> | <img src="../media/hand/allegro_supermimic_oakink_a01002.webp" alt="Allegro, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/allegro_supermimic_can.webp" alt="Allegro, SuperMimic, can" width="320"/> |
 | Inspire, SuperTrack | <img src="../media/hand/inspire_supertrack_apple.webp" alt="Inspire, SuperTrack, apple" width="320"/> | <img src="../media/hand/inspire_supertrack_oakink_a01002.webp" alt="Inspire, SuperTrack, spray bottle" width="320"/> | <img src="../media/hand/inspire_supertrack_can.webp" alt="Inspire, SuperTrack, can" width="320"/> |
 | Inspire, SuperMimic | <img src="../media/hand/inspire_supermimic_apple.webp" alt="Inspire, SuperMimic, apple" width="320"/> | <img src="../media/hand/inspire_supermimic_oakink_a01002.webp" alt="Inspire, SuperMimic, spray bottle" width="320"/> | <img src="../media/hand/inspire_supermimic_can.webp" alt="Inspire, SuperMimic, can" width="320"/> |
+
+The more tasks' animations: seed 0 of each pair's reported configuration from the unperturbed start, where it passes the
+motion check ([results](../../benchmarks/xhand_tracking/results.md#more-tasks)):
+
+| | mustard bottle | mug | making tea |
+|---|---|---|---|
+| XHand, SuperTrack | <img src="../media/hand/xhand_supertrack_mustard_bottle.webp" alt="XHand, SuperTrack, mustard bottle" width="320"/> | <img src="../media/hand/xhand_supertrack_mug.webp" alt="XHand, SuperTrack, mug" width="320"/> | <img src="../media/hand/xhand_supertrack_tea.webp" alt="XHand, SuperTrack, making tea" width="320"/> |
+| XHand, SuperMimic | <img src="../media/hand/xhand_supermimic_mustard_bottle.webp" alt="XHand, SuperMimic, mustard bottle" width="320"/> | <img src="../media/hand/xhand_supermimic_mug.webp" alt="XHand, SuperMimic, mug" width="320"/> | <img src="../media/hand/xhand_supermimic_tea.webp" alt="XHand, SuperMimic, making tea" width="320"/> |
+| Allegro, SuperTrack | <img src="../media/hand/allegro_supertrack_mustard_bottle.webp" alt="Allegro, SuperTrack, mustard bottle" width="320"/> | not shown: fails the motion check | <img src="../media/hand/allegro_supertrack_tea.webp" alt="Allegro, SuperTrack, making tea" width="320"/> |
+| Allegro, SuperMimic | <img src="../media/hand/allegro_supermimic_mustard_bottle.webp" alt="Allegro, SuperMimic, mustard bottle" width="320"/> | not shown: fails the motion check | <img src="../media/hand/allegro_supermimic_tea.webp" alt="Allegro, SuperMimic, making tea" width="320"/> |
+| Inspire, SuperTrack | not shown: fails the motion check | not shown: fails the motion check | <img src="../media/hand/inspire_supertrack_tea.webp" alt="Inspire, SuperTrack, making tea" width="320"/> |
+| Inspire, SuperMimic | not shown: fails the motion check | not shown: fails the motion check | <img src="../media/hand/inspire_supermimic_tea.webp" alt="Inspire, SuperMimic, making tea" width="320"/> |
+
+| | stir beaker | pour tube |
+|---|---|---|
+| XHand, SuperTrack | not shown: fails the motion check | not shown: fails the motion check |
+| XHand, SuperMimic | not shown: fails the motion check | <img src="../media/hand/xhand_supermimic_pour_tube.webp" alt="XHand, SuperMimic, pour tube" width="320"/> |
 
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

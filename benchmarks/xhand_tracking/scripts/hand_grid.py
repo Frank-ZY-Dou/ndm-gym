@@ -1,7 +1,8 @@
 """The README's hand grids: hand_grid.py <dir of the renders> <out.webp> [--fps 20] [--quality 70] [--hold 0.8] [--hands ...]
 [--clips ...] [--algorithms ...]. The renders of tools/render_hand.py (`<hand>_<algorithm>_<clip>.mp4`, by default for xhand, allegro, inspire;
 supertrack, supermimic; apple, oakink_a01002, can) as one synchronized loop: rows hand and algorithm, columns clip, tiles 320x180; a
-tile holds its last frame until the longest clip has ended and the hold has passed, then all restart. Labels in the margins only.
+tile holds its last frame until the longest clip has ended and the hold has passed, then all restart. Labels in the margins only;
+a missing render (a run not shown: it fails the motion check) leaves its tile empty, marked "not shown".
 Needs ffmpeg and Pillow.
 
 The more tasks' grids, from the renders' directory:
@@ -50,8 +51,10 @@ def main():
         raise FileNotFoundError(f"no label font among {FONTS}")
     font = ImageFont.truetype(font_path, 13)
     rows = [(hand, alg, f"{hand_label}\n{alg_label}") for hand, hand_label in hands for alg, alg_label in algos]
-    tiles = {(i, j): tile_frames(os.path.join(args.src, f"{hand}_{alg}_{clip}.mp4"), args.fps)
-             for i, (hand, alg, _) in enumerate(rows) for j, (clip, _) in enumerate(clips)}  # fmt: skip
+    paths = {(i, j): os.path.join(args.src, f"{hand}_{alg}_{clip}.mp4") for i, (hand, alg, _) in enumerate(rows) for j, (clip, _) in enumerate(clips)}
+    tiles = {key: tile_frames(path, args.fps) for key, path in paths.items() if os.path.exists(path)}
+    if not tiles:
+        raise FileNotFoundError(f"no renders in {args.src}")
     length = max(len(t) for t in tiles.values()) + round(args.hold * args.fps)
     back = Image.new("RGB", (LEFT + len(clips) * W, TOP + len(rows) * H), BACK)
     draw = ImageDraw.Draw(back)
@@ -59,6 +62,8 @@ def main():
         draw.text((LEFT + j * W + W // 2, TOP // 2), label, fill=TEXT, font=font, anchor="mm")
     for i, (_, _, label) in enumerate(rows):
         draw.multiline_text((LEFT // 2, TOP + i * H + H // 2), label, fill=TEXT, font=font, anchor="mm", align="center", spacing=3)
+    for i, j in paths.keys() - tiles.keys():
+        draw.text((LEFT + j * W + W // 2, TOP + i * H + H // 2), "not shown", fill=(110, 112, 118), font=font, anchor="mm")
     canvas, frames = np.asarray(back).copy(), []
     for k in range(length):
         for (i, j), t in tiles.items():
