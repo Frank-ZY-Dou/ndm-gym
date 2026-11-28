@@ -209,11 +209,23 @@ legs and the waist are fixed. Standing at the table, or after a walk: the G1 wal
 TEA=data/spider/processed/gigahand/inspire/bimanual/p36-tea/0
 python tools/build_g1_hand_task.py --clip $TEA --out data/g1_hands/tea                    # standing
 python tools/build_g1_hand_task.py --clip $TEA --walk data/lafan1_g1/walk1_subject1.csv --stand 3600 --out data/g1_hands/walk_tea
-python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea/0 --log_dir logs/g1_walk_tea
+python -m ndm_gym.train_hand --config hand-supertrack-fast --iterations 12000 --lr 2e-4 --target_rate_w 4 --st_cost_mean \
+       --clip data/g1_hands/walk_tea/0 --seed 2 --log_dir logs/g1_walk_tea
 ```
 
 <p align="center"><img src="../media/hand/g1_walk_tea.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea" width="76%"/></p>
-<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (SuperMimic, seed 0, from the unperturbed start).</i></p>
+<p align="center"><i>The walk replays the reference; the reach and the tea are the policy's (SuperTrack, seed 2, from the unperturbed start; its run passes the motion check, <a href="../../benchmarks/xhand_tracking/results.md#a-g1-with-inspire-hands">results</a>).</i></p>
+<p align="center"><sub>A render of a policy tracking SPIDER's retarget of a GigaHands demonstration (CC BY-NC 4.0) after LAFAN1's walk1_subject1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0) retargeted to the G1, with Unitree's G1 model (BSD-3-Clause) and SPIDER's Inspire hands, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="../../NOTICE">NOTICE</a>).</sub></p>
+
+### The whole body
+
+The same task with the G1's whole body (`ndm_gym.train_hoi`): one policy drives all 53 joints, walks, keeps its balance,
+reaches and makes tea. Its reference is the walk and an arms-and-hands policy's rollout (the hands' prior), and it trains
+in two stages, the body with the fingers following the reference, then every joint from the body's networks
+([how, and the results](../../benchmarks/xhand_tracking/results.md#the-whole-body)).
+
+<p align="center"><img src="../media/hand/g1_walk_tea_wholebody.webp" alt="A Unitree G1 with two Inspire hands walking to a table and making tea with its whole body" width="76%"/></p>
+<p align="center"><i>The whole body (seed 0, from the clip's first frame): among 256 recorded episodes that reach the clip's end, one ranked by tracking and smoothness with the fingers at most 11.1 mm into the teapot.</i></p>
 <p align="center"><sub>A render of a policy tracking SPIDER's retarget of a GigaHands demonstration (CC BY-NC 4.0) after LAFAN1's walk1_subject1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0) retargeted to the G1, with Unitree's G1 model (BSD-3-Clause) and SPIDER's Inspire hands, for non-commercial illustration only; not covered by this repository's MIT license (see <a href="../../NOTICE">NOTICE</a>).</sub></p>
 
 Tasks and results: [`benchmarks/xhand_tracking`](../../benchmarks/xhand_tracking/results.md).

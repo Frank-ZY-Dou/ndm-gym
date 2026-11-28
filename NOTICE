@@ -20,12 +20,12 @@ MIT license in LICENSE.
 docs/media/hand holds renders of a policy tracking SPIDER's kinematic retargets
 (https://huggingface.co/datasets/retarget/retarget_full) of hand-object demonstrations from HRDexDB, OakInk and DexYCB,
 with the retargets drawn over it, those datasets' object meshes and SPIDER's models of the XHand, the Allegro hand and the Inspire hand. They are for non-commercial
-illustration only and are not covered by the MIT license in LICENSE. g1_walk_tea.webp renders a policy tracking SPIDER's retarget
+illustration only and are not covered by the MIT license in LICENSE. g1_walk_tea.webp and g1_walk_tea_wholebody.webp render policies tracking SPIDER's retarget
 (https://huggingface.co/datasets/retarget/retarget_example) of a GigaHands demonstration (https://github.com/brown-ivl/gigahands;
 CC BY-NC 4.0, https://creativecommons.org/licenses/by-nc/4.0/) on Unitree's G1 model (BSD-3-Clause) with SPIDER's Inspire hands
 on its wrists, after the G1 walks LAFAN1's walk1_subject1 (© 2018 Ubisoft Entertainment; CC BY-NC-ND 4.0;
-https://github.com/ubisoft/ubisoft-laforge-animation-dataset), retargeted to the G1 (LAFAN1 Retargeting Dataset); it is for
-non-commercial illustration only and is not covered by the MIT license in LICENSE.
+https://github.com/ubisoft/ubisoft-laforge-animation-dataset), retargeted to the G1 (LAFAN1 Retargeting Dataset); they are for
+non-commercial illustration only and are not covered by the MIT license in LICENSE.
 
 docs/media/robokit holds renders of RoboKit's (https://github.com/openrobokit/robokit; MIT) G1 box carrying, G1 climbing and
 Go2 jumping examples, planned on this library's world model and executed in MuJoCo Warp, with Unitree's G1 model

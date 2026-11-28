@@ -933,7 +933,8 @@ ALGO=supermimic ROBOT=inspire TASKS=benchmarks/xhand_tracking/two_hand_tasks.jso
 ```
 
 **A G1 with Inspire hands.** Making tea with the two Inspire hands on a Unitree G1's wrists, each hand driven by its
-arm's seven hinges and its twelve finger joints ([the task](docs/tasks/hand.md#a-g1-with-inspire-hands)).
+arm's seven hinges and its twelve finger joints, and with its whole body: one policy for all 53 joints that walks, balances
+and makes tea ([the task](docs/tasks/hand.md#a-g1-with-inspire-hands)).
 
 | hand | goal | configuration (`train_hand`, add `--clip`) | result: apple / spray bottle / can |
 |---|---|---|---|

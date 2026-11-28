@@ -517,16 +517,93 @@ MUJOCO_GL=egl python tools/render_g1_hands.py --task data/g1_hands/walk_tea --ro
        --out g1_walk_tea.mp4 --webp g1_walk_tea.webp
 ```
 
-| task | | seeds | success | object position | object position, last frame | fingertips |
-|---|---|---|---|---|---|---|
-| standing | reference targets |  | 0 % | 142.7 mm | 93.6 mm | 117.9 mm |
-|  | SuperMimic | 0 / 1 / 2 | 99.6 / 100.0 / 99.6 % | 15.7 / 9.5 / 15.0 mm | 14.2 / 8.9 / 12.0 mm | 26.4 / 22.5 / 24.6 mm |
-| walk, then tea | reference targets |  | 0 % | 127.8 mm | 95.9 mm | 100.9 mm |
-|  | SuperMimic | 0 / 1 / 2 | 100.0 / 100.0 / 98.4 % | 11.7 / 12.4 / 14.5 mm | 9.9 / 8.8 / 12.0 mm | 21.2 / 23.1 / 26.0 mm |
+**In short:** with the same options, seeds and tuning, SuperMimic holds 98.4-100 % on every seed standing and
+77.3-98.4 % after the walk; SuperTrack 39.8-81.6 % and 22.3-69.1 %. Three of the four pairs' runs pass the motion check;
+SuperMimic's after the walk does not (the targets' change per step 2.3 times the reference's) and is not shown.
 
-- **Training:** `--config hand-supermimic-fast --iterations 12000`, the two-hand tea task's, 2,048 worlds, training seeds
-  0-2, on GH200 GPUs.
-- **Evaluation:** the last checkpoint, 256 rollouts from perturbed starts.
+| task | | configuration | success | object position | object position, last frame | fingertips | motion check (seed 0) |
+|---|---|---|---|---|---|---|---|
+| standing | reference targets | | 0 % | 142.8 mm | 93.9 mm | 117.9 mm | |
+| | SuperTrack | `--config hand-supertrack-fast --iterations 12000 --lr 2e-4 --target_rate_w 4 --st_cost_mean` | 73.4 / 81.6 / 39.8 % | 19.0 / 24.1 / 33.2 mm | 36.3 / 27.6 / 18.8 mm | 27.6 / 37.0 / 31.7 mm | passes |
+| | SuperMimic | `--config hand-supermimic-fast --iterations 12000 --action_noise 0.5 --target_rate_w 4` | 100.0 / 98.4 / 100.0 % | 7.8 / 9.3 / 8.0 mm | 9.9 / 9.6 / 9.5 mm | 18.5 / 19.5 / 18.3 mm | passes |
+| walk, then tea | reference targets | | 0 % | 127.7 mm | 95.7 mm | 100.8 mm | |
+| | SuperTrack | `--config hand-supertrack-fast --iterations 12000 --lr 2e-4 --target_rate_w 4 --st_cost_mean` | 22.3 / 69.1 / 62.1 % | 45.7 / 26.9 / 26.1 mm | 57.0 / 46.3 / 43.2 mm | 31.8 / 27.4 / 30.4 mm | passes |
+| | SuperMimic | `--config hand-supermimic-fast --iterations 12000 --lr 2e-4 --target_rate_w 4` | 77.3 / 92.2 / 98.4 % | 25.1 / 16.1 / 8.0 mm | 17.6 / 23.4 / 8.6 mm | 21.0 / 18.8 / 16.3 mm | fails: target change 2.3x |
+
+- **Configurations:** each algorithm's fast configuration at 12,000 iterations with the target-rate penalty
+  (`--target_rate_w 4`, SuperTrack also `--st_cost_mean`, as the XHand's [above](#the-xhand-with-the-target-rate-penalty)),
+  and one single change, the same four tried for both ([below](#the-g1s-tuning)).
+- **Training:** 2,048 worlds, training seeds 0-2, on L40S GPUs, four runs to a GPU, so no times are given.
+- **Evaluation:** the last checkpoint, 256 rollouts from perturbed starts, evaluation seed 0.
+- **Motion check:** `tools/hand_motion_check.py` on seed 0's unperturbed rollout against the kinematic reference, the arms'
+  hinges counted as the palms': the finger joints' jerk at most 1.5 times, their share of velocity power above 5 Hz and the
+  position targets' change per step at most 2 times the reference's. A run that fails is reported and not shown.
+
+### The G1's tuning
+
+Both algorithms got the same single changes (`--lr 2e-4`, `--action_noise 0.5`, `--reward_std_scale 2`,
+`--reward_std_scale 3`) on training seeds 3-5 and evaluation seed 1, which the reported runs do not use; each pair keeps
+the one with the highest mean success, then the lowest mean object error (in bold). Success on seeds 3 / 4 / 5, without
+the penalty:
+
+| task | algorithm | no change | `--lr 2e-4` | `--action_noise 0.5` | `--reward_std_scale 2` | `--reward_std_scale 3` |
+|---|---|---|---|---|---|---|
+| standing | SuperTrack | 0.4 / 27.7 / 23.8 % | **10.2 / 21.5 / 35.5 %** | 0.0 / 27.3 / 34.8 % | 0.0 / 13.7 / 0.0 % | 2.3 / 27.3 / 17.6 % |
+| standing | SuperMimic | 99.2 / 98.8 / 100.0 % | 100.0 / 87.9 / 98.0 % | **100.0 / 100.0 / 100.0 %** | 98.4 / 99.6 / 98.0 % | 98.8 / 99.6 / 94.9 % |
+| walk, then tea | SuperTrack | 9.4 / 3.9 / 0.0 % | **40.2 / 43.4 / 14.8 %** | 22.7 / 1.2 / 0.8 % | 5.9 / 0.0 / 16.0 % | 14.5 / 0.4 / 19.1 % |
+| walk, then tea | SuperMimic | 98.8 / 97.3 / 98.0 % | **96.9 / 98.8 / 100.0 %** | 98.8 / 86.3 / 91.8 % | 100.0 / 96.1 / 99.6 % | 96.5 / 100.0 / 99.2 % |
+
+Without the target-rate penalty every pair's reported run failed the motion check; with it, success over seeds 0 / 1 / 2:
+
+| task | algorithm | without the penalty: success | object position | with it: success | object position | motion check without / with |
+|---|---|---|---|---|---|---|
+| standing | SuperTrack | 43.8 / 2.3 / 70.7 % | 55.6 / 91.6 / 46.9 mm | 73.4 / 81.6 / 39.8 % | 19.0 / 24.1 / 33.2 mm | fails / passes |
+| standing | SuperMimic | 99.2 / 100.0 / 100.0 % | 14.7 / 13.2 / 19.6 mm | 100.0 / 98.4 / 100.0 % | 7.8 / 9.3 / 8.0 mm | fails / passes |
+| walk, then tea | SuperTrack | 28.1 / 10.2 / 39.1 % | 58.5 / 60.3 / 45.2 mm | 22.3 / 69.1 / 62.1 % | 45.7 / 26.9 / 26.1 mm | fails / passes |
+| walk, then tea | SuperMimic | 100.0 / 98.0 / 100.0 % | 7.6 / 10.5 / 7.1 mm | 77.3 / 92.2 / 98.4 % | 25.1 / 16.1 / 8.0 mm | fails / fails |
+
+### The whole body
+
+The same making tea with the G1's whole body in the human-object pipeline (`ndm_gym.train_hoi`, HDMI's task on Isaac
+Lab with MuJoCo-Warp): one policy drives all 53 joints, the legs, the waist, the arms, the wrists and the fingers; it walks
+the 4.35 m, keeps its balance, reaches and makes tea. HDMI's rewards with the fingertips' and the finger joints' tracking
+added, each hand's contact force summed over its palm and its fingers, HDMI's terminations. The reference is the walk and,
+from the reach on, the rollout of an arms-and-hands SuperMimic policy on SPIDER's physics-optimised retarget
+(`trajectory_mjwp.npz`), in which the fingers stay out of the teapot: the hands' prior (`g1_inspire_walk_tea_prior`,
+[`build_g1_wholebody_clip.py`](../../tools/build_g1_wholebody_clip.py)). Training is staged:
+
+1. **The body:** the fingers follow the reference (`--pi_fixed_joints`: the policy's residual on them is zero), the rest
+   learns.
+2. **The whole body:** from the body's networks (`--init`), the policy's output rows of the fingers zeroed
+   (`--init_zero_joints`), so that it starts as the body's policy; then every joint learns.
+
+| | seeds | success | object position | keypoints |
+|---|---|---|---|---|
+| the body (the fingers following the reference) | 0 / 1 / 2 | 90.1 / 78.9 / 79.9 % | 107 / 75 / 114 mm | 182 / 187 / 204 mm |
+| the whole body, from the body | 0 / 1 / 2 | 93.1 / 96.2 / 86.6 % | 82 / 76 / 115 mm | 133 / 182 / 205 mm |
+
+- **Training:** SuperMimic with HDMI's settings (`--lr 4e-4 --action_noise 0.3 --gamma 0.995`), 3 h per stage, 2,048
+  worlds from the clip's first frame, seeds 0-2, on L40S GPUs.
+- **Evaluation:** `ndm_gym.evaluate_hoi` on the last checkpoint, 2,048 worlds, 1,000 steps; a success never terminates.
+  Object position and keypoints: the mean distance to the reference.
+
+```bash
+# the hands' prior: the arms-and-hands task on the physics-optimised retarget, SuperMimic, then its rollout as the clip
+python -m ndm_gym.train_hand --config hand-supermimic-fast --iterations 12000 --clip data/g1_hands/walk_tea_mjwp/0 --seed 0 --log_dir logs/g1_prior
+python -m ndm_gym.evaluate_hand --ckpt logs/g1_prior/last.pt --out logs/g1_prior/evaluation
+python tools/build_g1_wholebody_clip.py --task data/g1_hands/walk_tea_mjwp --rollout logs/g1_prior/evaluation/rollout.npz \
+       --name g1_inspire_walk_tea_prior --out data/g1_hands/wholebody_prior
+python tools/g1_wholebody_usd.py data/g1_hands/wholebody_prior data/hdmi/g1_inspire/g1_inspire_walk_tea_prior
+cp data/g1_hands/wholebody_prior/g1_inspire_walk_tea_prior.{npz,json} data/hdmi/clips/
+# the two stages
+FINGERS='.*_(thumb|index|middle|ring|pinky)_.*_joint'
+SM="--task g1_inspire_walk_tea_prior --algo supermimic --lr 4e-4 --action_noise 0.3 --gamma 0.995 --max_hours 3"
+python -m ndm_gym.train_hoi $SM --seed 0 --pi_fixed_joints "$FINGERS" --log_dir logs/wb/body_s0
+python -m ndm_gym.train_hoi $SM --seed 0 --init logs/wb/body_s0/last.pt --init_zero_joints "$FINGERS" --log_dir logs/wb/whole_s0
+```
+
+`data/g1_hands/walk_tea_mjwp` is `build_g1_hand_task.py --walk` on the tea clip with SPIDER's `trajectory_mjwp.npz`
+(the physics-optimised retarget, 100 Hz) taken every second step as its `trajectory_kinematic.npz`.
 
 ## Training time
 
